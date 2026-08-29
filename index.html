@@ -21,6 +21,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Noto+Sans+Sinhala:wght@300;400;500;600;700&family=Playfair+Display:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
 <style>
 /* ===== BRANDED LUXURY & MODERN DESIGN SYSTEM ===== */
@@ -1409,6 +1410,15 @@ const HISTORY_KEY = 'mydrybea_v31_history';
 const ORDERS_KEY = 'mydrybea_v31_orders';
 const CUSTOMERS_KEY = 'mydrybea_v31_customers';
 
+// ==================== SUPABASE SETUP ====================
+const SUPABASE_URL = 'https://dztuyfiiyxllnvciunjv.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR6dHV5ZmlpeXhsbG52Y2l1bmp2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgwMDg3NjUsImV4cCI6MjEwMzU4NDc2NX0.NT5_fvlwZZr_MQMgerYaIZYHeeJ9l9SrConqcN50M84';
+
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// Expose supabase to global scope
+window.supabase = supabase;
+
 // ==================== STATE ====================
 let state = {
   theme: 'dark',
@@ -1439,6 +1449,52 @@ let state = {
 let history = [];
 let orders = [];
 let customers = [];
+
+// ==================== SUPABASE SYNC FUNCTIONS ====================
+async function syncOrdersToSupabase() {
+    if (!orders || orders.length === 0) return;
+    const { error } = await supabase.from('orders').upsert(orders);
+    if (error) console.error('Error syncing orders:', error);
+}
+
+async function syncCustomersToSupabase() {
+    if (!customers || customers.length === 0) return;
+    const { error } = await supabase.from('customers').upsert(customers);
+    if (error) console.error('Error syncing customers:', error);
+}
+
+async function syncHistoryToSupabase() {
+    if (!history || history.length === 0) return;
+    const { error } = await supabase.from('activity_logs').insert(
+        history.map(h => ({ action: 'saved_order', details: h, created_at: new Date().toISOString() }))
+    );
+    if (error) console.error('Error syncing history:', error);
+}
+
+async function loadFromSupabase() {
+    // Load orders
+    const { data: ordersData, error: ordersErr } = await supabase.from('orders').select('*');
+    if (!ordersErr && ordersData && ordersData.length > 0) {
+        orders = ordersData;
+        saveOrders();
+        renderOrders();
+        renderDelivery();
+        updateOrderStats();
+    } else {
+        console.log('No orders in Supabase yet');
+    }
+
+    // Load customers
+    const { data: customersData, error: customersErr } = await supabase.from('customers').select('*');
+    if (!customersErr && customersData && customersData.length > 0) {
+        customers = customersData;
+        saveCustomers();
+        renderCustomers();
+        updateCustomerSelect();
+    } else {
+        console.log('No customers in Supabase yet');
+    }
+}
 
 // ==================== HELPERS ====================
 const $ = id => document.getElementById(id);
@@ -2160,9 +2216,9 @@ function clearHistory() {
 
 // ==================== STORAGE ====================
 function saveState() { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch(e) {} }
-function saveHistory() { try { localStorage.setItem(HISTORY_KEY, JSON.stringify(history)); } catch(e) {} }
-function saveOrders() { try { localStorage.setItem(ORDERS_KEY, JSON.stringify(orders)); } catch(e) {} }
-function saveCustomers() { try { localStorage.setItem(CUSTOMERS_KEY, JSON.stringify(customers)); } catch(e) {} }
+function saveHistory() { try { localStorage.setItem(HISTORY_KEY, JSON.stringify(history)); } catch(e) {} syncHistoryToSupabase(); }
+function saveOrders() { try { localStorage.setItem(ORDERS_KEY, JSON.stringify(orders)); } catch(e) {} syncOrdersToSupabase(); }
+function saveCustomers() { try { localStorage.setItem(CUSTOMERS_KEY, JSON.stringify(customers)); } catch(e) {} syncCustomersToSupabase(); }
 
 function loadState() {
   try { state = Object.assign({}, state, JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}); } catch(e) {}
@@ -2392,23 +2448,31 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 });
 
 // ==================== INIT ====================
-document.addEventListener('DOMContentLoaded', () => {
-  loadState();
-  loadHistory();
-  loadOrders();
-  loadCustomers();
-  $('printDate').textContent = 'Date: ' + new Date().toLocaleDateString();
-  $('year').textContent = new Date().getFullYear();
-  syncUI();
-  calcAll();
-  calcProduction();
-  renderHistory();
-  renderOrders();
-  renderCustomers();
-  renderDelivery();
-  updateOrderStats();
-  updateCustomerSelect();
-  saveState();
+document.addEventListener('DOMContentLoaded', async () => {
+    // ===== LOGIN CHECK (Auth) =====
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+        window.location.href = "login.html";
+        return;
+    }
+
+    loadState();
+    loadHistory();
+    loadOrders();
+    loadCustomers();
+    $('printDate').textContent = 'Date: ' + new Date().toLocaleDateString();
+    $('year').textContent = new Date().getFullYear();
+    syncUI();
+    calcAll();
+    calcProduction();
+    renderHistory();
+    renderOrders();
+    renderCustomers();
+    renderDelivery();
+    updateOrderStats();
+    updateCustomerSelect();
+    saveState();
+    await loadFromSupabase();
 });
 
 // ==================== EXPOSE ====================
