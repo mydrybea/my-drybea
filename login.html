@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="si">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - MY DRYBEA</title>
+    <style>
+        body {
+            background: #040d0a;
+            color: #f0fdf4;
+            font-family: 'Inter', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .login-box {
+            background: #0d1e18;
+            border: 1px solid rgba(16,185,129,0.3);
+            border-radius: 16px;
+            padding: 30px;
+            width: 90%;
+            max-width: 400px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+            text-align: center;
+        }
+        .logo-wrap {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 15px;
+        }
+        .logo {
+            width: 80px;
+            height: 80px;
+            border-radius: 16px;
+            object-fit: cover;
+            border: 2px solid #d4af37;
+            box-shadow: 0 4px 20px rgba(16,185,129,0.4);
+        }
+        h1 { color: #10b981; margin-bottom: 5px; font-size: 1.5rem; }
+        p { color: #6ee7b7; margin-bottom: 20px; font-size: 0.9rem; }
+        input {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 15px;
+            border-radius: 8px;
+            border: 1px solid rgba(16,185,129,0.3);
+            background: #0a1712;
+            color: white;
+            box-sizing: border-box;
+            font-size: 1rem;
+        }
+        button {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            background: #10b981;
+            color: black;
+            font-weight: bold;
+            font-size: 1rem;
+            cursor: pointer;
+        }
+        button:hover { background: #059669; }
+        #msg { color: #f87171; margin-top: 10px; font-size: 0.85rem; }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <div class="login-box">
+        <!-- Logo -->
+        <div class="logo-wrap">
+            <img src="logo.jpg" alt="MY DRYBEA Logo" class="logo" onerror="this.src='https://kommodo.ai/i/7zQwNJ1aSv6KnXu59Okw'">
+        </div>
+        
+        <h1>🐟 MY DRYBEA</h1>
+        <p>Owner / Staff Login</p>
+        <input type="email" id="email" placeholder="Email" required onkeypress="if(event.key==='Enter') login()">
+        <input type="password" id="password" placeholder="Password" required onkeypress="if(event.key==='Enter') login()">
+        <button onclick="login()">Login</button>
+        <div id="msg"></div>
+    </div>
+
+    <script>
+        const SUPABASE_URL = 'https://dztuyfiiyxllnvciunjv.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR6dHV5ZmlpeXhsbG52Y2l1bmp2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgwMDg3NjUsImV4cCI6MjEwMzU4NDc2NX0.NT5_fvlwZZr_MQMgerYaIZYHeeJ9l9SrConqcN50M84';
+        
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        // Check if user is already logged in (If yes, skip login page)
+        async function checkSession() {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session) {
+                window.location.href = "index.html";
+            }
+        }
+        checkSession();
+
+        async function login() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const msg = document.getElementById('msg');
+
+            // 1. Check empty fields
+            if (!email || !password) {
+                msg.textContent = "Please enter both email and password.";
+                msg.style.color = "#fbbf24";
+                return;
+            }
+
+            msg.textContent = "Logging in...";
+            msg.style.color = "#a3e635";
+
+            const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+
+            if (error) {
+                msg.textContent = error.message; // Show exact error from Supabase
+                msg.style.color = "#f87171";
+            } else {
+                msg.textContent = "Success! Redirecting...";
+                msg.style.color = "#10b981";
+                setTimeout(() => {
+                    window.location.href = "index.html";
+                }, 800); // Small delay for user to see success
+            }
+        }
+    </script>
+</body>
+</html>
