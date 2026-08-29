@@ -1,0 +1,19 @@
+{
+  "name": "MY DRYBEA",
+  "short_name": "DRYBEA",
+  "description": "MY DRYBEA Enterprise Umbalakada Management System",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#040d0a",
+  "theme_color": "#10b981",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "logo.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    }
+  ]
+}
