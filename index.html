@@ -157,14 +157,7 @@ body::before {
   left: 0;
   right: 0;
   height: 4px;
-  background: linear-gradient(
-    90deg,
-    var(--green) 0%,
-    var(--lime-accent) 25%,
-    var(--gold) 50%,
-    var(--lime-accent) 75%,
-    var(--green) 100%
-  );
+  background: linear-gradient(90deg, var(--green) 0%, var(--lime-accent) 25%, var(--gold) 50%, var(--lime-accent) 75%, var(--green) 100%);
   background-size: 200% 100%;
   animation: borderShimmer 4s linear infinite;
 }
@@ -226,14 +219,7 @@ body::before {
   font-weight: 900;
   letter-spacing: 0.06em;
   line-height: 1.1;
-  background: linear-gradient(
-    135deg,
-    #93c5fd 0%,
-    #a3e635 25%,
-    #f5e7a3 50%,
-    #10b981 75%,
-    #d4af37 100%
-  );
+  background: linear-gradient(135deg, #93c5fd 0%, #a3e635 25%, #f5e7a3 50%, #10b981 75%, #d4af37 100%);
   background-size: 300% 300%;
   -webkit-background-clip: text;
   background-clip: text;
@@ -2449,13 +2435,6 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 
 // ==================== INIT ====================
 document.addEventListener('DOMContentLoaded', async () => {
-    // ===== LOGIN CHECK (Auth) =====
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
-        window.location.href = "login.html";
-        return;
-    }
-
     loadState();
     loadHistory();
     loadOrders();
