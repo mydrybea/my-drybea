@@ -8,7 +8,6 @@
 <meta name="theme-color" content="#10b981">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<link rel="manifest" href="manifest.json">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="MY DRYBEA">
 
@@ -1518,7 +1517,14 @@ const SUPABASE_URL = 'https://dztuyfiiyxllnvciunjv.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR6dHV5ZmlpeXhsbG52Y2l1bmp2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgwMDg3NjUsImV4cCI6MjEwMzU4NDc2NX0.NT5_fvlwZZr_MQMgerYaIZYHeeJ9l9SrConqcN50M84';
 
 // ==================== SUPABASE ====================
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+let supabase = null;
+try {
+  if (window.supabase && typeof window.supabase.createClient === 'function') {
+    supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  }
+} catch (e) {
+  console.warn('Supabase initialization failed. Running in local mode.', e);
+}
 let currentUser = null;
 let currentRole = 'user';
 let isAuthModeLogin = true; // true=login, false=signup
@@ -2382,9 +2388,23 @@ function updateStatus(msg) {
 }
 
 // ==================== NORMALIZED CLOUD DATA ====================
+function stableUUID(seed) {
+  // Deterministic UUID-like value for stable per-user records.
+  let h1 = 0x811c9dc5, h2 = 0x9e3779b9, h3 = 0x85ebca6b, h4 = 0xc2b2ae35;
+  for (let i = 0; i < seed.length; i++) {
+    const c = seed.charCodeAt(i);
+    h1 = Math.imul(h1 ^ c, 16777619);
+    h2 = Math.imul(h2 ^ c, 2246822519);
+    h3 = Math.imul(h3 ^ c, 3266489917);
+    h4 = Math.imul(h4 ^ c, 668265263);
+  }
+  const x = [h1,h2,h3,h4].map(v => (v >>> 0).toString(16).padStart(8,'0')).join('');
+  return `${x.slice(0,8)}-${x.slice(8,12)}-4${x.slice(13,16)}-${((parseInt(x.slice(16,18),16)&0x3f)|0x80).toString(16).padStart(2,'0')}${x.slice(18,20)}-${x.slice(20,32)}`;
+}
+
 function productRows() {
   return Object.keys(PACKS).map(key => ({
-    id: `${currentUser.id}:pack-${key}`,
+    id: stableUUID(`${currentUser.id}:pack-${key}`),
     user_id: currentUser.id,
     name: `Umbalakada ${PACKS[key].label}`,
     pack_size_g: Number(key),
@@ -2402,9 +2422,9 @@ function costingRows() {
       mix, state.mode, state.targetProfit, state.customSp
     );
     return {
-      id: `${currentUser.id}:cost-${key}`,
+      id: stableUUID(`${currentUser.id}:cost-${key}`),
       user_id: currentUser.id,
-      product_id: `${currentUser.id}:pack-${key}`,
+      product_id: stableUUID(`${currentUser.id}:pack-${key}`),
       pack_size_g: Number(key),
       linna_cost: Number(r.linnaCost.toFixed(4)),
       balaya_cost: Number(r.balayaCost.toFixed(4)),
@@ -2428,7 +2448,7 @@ function costingRows() {
 function productionRow() {
   const p = state.production || {};
   return {
-    id: 'current',
+    id: stableUUID(`${currentUser.id}:production:current`),
     user_id: currentUser.id,
     raw_linna: Number(p.rawLinna || 0),
     raw_balaya: Number(p.rawBalaya || 0),
@@ -2451,7 +2471,7 @@ function productionRow() {
 
 function customerRows() {
   return customers.map(c => ({
-    id: String(c.id),
+    id: stableUUID(`${currentUser.id}:customer:${c.id}`),
     user_id: currentUser.id,
     name: c.name || '',
     phone: c.phone || '',
@@ -2463,9 +2483,9 @@ function customerRows() {
 
 function orderRows() {
   return orders.map(o => ({
-    id: String(o.id),
+    id: stableUUID(`${currentUser.id}:order:${o.id}`),
     user_id: currentUser.id,
-    customer_id: String(o.customerId),
+    customer_id: stableUUID(`${currentUser.id}:customer:${o.customerId}`),
     product_size_g: Number(o.product || 0),
     qty: Number(o.qty || 0),
     unit_price: Number(o.unitPrice || 0),
@@ -2483,7 +2503,7 @@ function historyRows() {
     if (!h.id) h.id = (crypto.randomUUID ? crypto.randomUUID() : `hist-${Date.now()}-${i}-${Math.random().toString(36).slice(2)}`);
     if (!h.createdAt) h.createdAt = new Date().toISOString();
     return {
-    id: String(h.id),
+    id: stableUUID(`${currentUser.id}:history:${h.id}`),
     user_id: currentUser.id,
     date_text: h.date || '',
     pack_size_g: Number(h.pack || 0),
@@ -2516,7 +2536,7 @@ async function syncRows(table, rows, options = {}) {
 }
 
 async function ensureProfile() {
-  if (!currentUser) return;
+  if (!supabase || !currentUser) return;
   const { data, error } = await supabase
     .from('profiles').select('id,email,role').eq('id', currentUser.id).maybeSingle();
   if (error) throw error;
@@ -2533,6 +2553,10 @@ async function ensureProfile() {
 }
 
 async function cloudSave({silent=false} = {}) {
+  if (!supabase) {
+    if (!silent) alert('Supabase library is not available. Local mode is active.');
+    return false;
+  }
   if (!currentUser) {
     if (!silent) alert('Please login first.');
     return false;
@@ -2572,6 +2596,10 @@ async function cloudSave({silent=false} = {}) {
 }
 
 async function cloudLoad() {
+  if (!supabase) {
+    updateStatus('Ready • Local mode');
+    return;
+  }
   if (!currentUser) {
     alert('Please login first.');
     return;
@@ -2685,6 +2713,11 @@ function toggleAuthMode() {
 }
 
 async function authAction() {
+  if (!supabase) {
+    $('authError').textContent = 'Supabase is unavailable. Check your internet connection and reload.';
+    $('authError').style.display = 'block';
+    return;
+  }
   const email = $('authEmail').value.trim();
   const password = $('authPassword').value.trim();
   if (!email || !password) {
@@ -2718,7 +2751,7 @@ async function authAction() {
 }
 
 async function logout() {
-  await supabase.auth.signOut();
+  if (supabase) await supabase.auth.signOut();
   currentUser = null;
   updateAuthUI();
   updateStatus('Logged out');
@@ -2988,12 +3021,18 @@ document.addEventListener('DOMContentLoaded', async () => {
   saveAll();
   updateStatus('Ready');
 
-  // Check auth session
-  const { data: { session } } = await supabase.auth.getSession();
-  if (session && session.user) {
-    currentUser = session.user;
-    updateAuthUI();
-    await cloudLoad();
+  // Check auth session when Supabase is available. Otherwise stay in local mode.
+  if (supabase) {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session && session.user) {
+      currentUser = session.user;
+      updateAuthUI();
+      await cloudLoad();
+    } else {
+      currentRole = 'user';
+      updateAuthUI();
+      updateStatus('Ready • Local mode');
+    }
   } else {
     currentRole = 'user';
     updateAuthUI();
@@ -3050,15 +3089,7 @@ window.restoreFromSnapshot = restoreFromSnapshot;
 })();
 </script>
 
-<script>
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js')
-      .then(reg => console.log('Service Worker registered!'))
-      .catch(err => console.log('Service Worker error:', err));
-  });
-}
-</script>
+
 
 </body>
 </html>
