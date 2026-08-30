@@ -8,21 +8,30 @@
 <meta name="theme-color" content="#10b981">
 
 <!-- ==================== APP LOCK GUARD ====================
-     Blocks access to this page unless a valid session (created by
-     login.html) exists. Runs synchronously before the page renders. -->
+     Fast client-side pre-check against the real Supabase session that
+     login.html creates. This only prevents the obvious "never logged in"
+     flash of content — the authoritative check (with token refresh) runs
+     again via supabase.auth.getSession() once the app boots. -->
 <script>
 (function(){
-  var SESSION_KEY = 'mydrybea_session_v1';
-  var session = null;
-  try { session = JSON.parse(localStorage.getItem(SESSION_KEY)); } catch(e) {}
-  var valid = session && session.expires && session.expires > Date.now();
-  if (!valid) {
-    if (session) localStorage.removeItem(SESSION_KEY);
+  var STORAGE_KEY = 'sb-dztuyfiiyxllnvciunjv-auth-token';
+  var AUTHORIZED_EMAIL = 'baybreezelk@gmail.com';
+  var raw = null;
+  try { raw = localStorage.getItem(STORAGE_KEY); } catch(e) {}
+  if (!raw) {
     window.location.replace('login.html');
-    // Stop the rest of the page from parsing/executing further.
     throw new Error('MYDRYBEA_LOCKED_REDIRECTING');
   }
-  window.__mydrybeaSessionUser = session.user;
+  var session = null;
+  try { session = JSON.parse(raw); } catch(e) {}
+  var email = session && session.user && session.user.email ? session.user.email.toLowerCase() : '';
+  if (email !== AUTHORIZED_EMAIL) {
+    try { localStorage.removeItem(STORAGE_KEY); } catch(e) {}
+    window.location.replace('login.html');
+    throw new Error('MYDRYBEA_LOCKED_REDIRECTING');
+  }
+  // Wrong/expired token but right email: let the async getSession() refresh
+  // or reject it authoritatively during app init instead of guessing here.
 })();
 </script>
 
@@ -2446,9 +2455,7 @@ async function authAction() {
 async function logout() {
   await supabase.auth.signOut();
   currentUser = null;
-  updateAuthUI();
-  updateStatus('Logged out');
-  location.reload(); // reset to clean state
+  window.location.replace('login.html');
 }
 
 function updateAuthUI() {
@@ -2568,8 +2575,9 @@ function toggleAcc() { $('overheadAcc').classList.toggle('open'); }
 // ==================== APP LOCK ====================
 function lockApp() {
   if (!confirm('Lock the app and return to the login screen?')) return;
-  try { localStorage.removeItem('mydrybea_session_v1'); } catch(e) {}
-  window.location.replace('login.html');
+  supabase.auth.signOut().finally(() => {
+    window.location.replace('login.html');
+  });
 }
 
 function openQR() {
@@ -2699,6 +2707,17 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 
 // ==================== INIT ====================
 document.addEventListener('DOMContentLoaded', async () => {
+  // ---- Authoritative Supabase auth gate (verifies/refreshes the real session) ----
+  const AUTHORIZED_EMAIL = 'baybreezelk@gmail.com';
+  const { data: { session } } = await supabase.auth.getSession();
+  const email = session && session.user && session.user.email ? session.user.email.toLowerCase() : null;
+  if (!session || email !== AUTHORIZED_EMAIL) {
+    if (session) { try { await supabase.auth.signOut(); } catch(e) {} }
+    window.location.replace('login.html');
+    return; // halt app initialization — redirecting away
+  }
+  currentUser = session.user;
+
   loadState();
   loadHistory();
   loadOrders();
@@ -2718,16 +2737,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   saveAll();
   updateStatus('Ready');
 
-  // Check auth session
-  const { data: { session } } = await supabase.auth.getSession();
-  if (session && session.user) {
-    currentUser = session.user;
-    updateAuthUI();
-    // Optionally load cloud data automatically
-    await cloudLoad();
-  } else {
-    updateAuthUI();
-  }
+  // Already verified above — wire up the UI and pull cloud data.
+  updateAuthUI();
+  await cloudLoad();
 });
 
 // ==================== EXPOSE ====================
