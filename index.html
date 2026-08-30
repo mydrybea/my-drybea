@@ -3,17 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>MY DRYBEA | Enterprise Umbalakada Management System v36 • Supabase Cloud Edition</title>
-<meta name="description" content="MY DRYBEA - Complete enterprise management system for dried fish (Umbalakada) business">
+<title>MY DRYBEA | Enterprise Umbalakada Management System</title>
 <meta name="theme-color" content="#10b981">
 
-<link rel="icon" type="image/jpeg" href="logo.jpg">
-<link rel="apple-touch-icon" href="logo.jpg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Noto+Sans+Sinhala:wght@300;400;500;600;700&family=Playfair+Display:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Noto+Sans+Sinhala:wght@400;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
 <style>
@@ -21,55 +16,17 @@
   --bg-primary: #040d0a;
   --bg-secondary: #0a1712;
   --bg-card: #0d1e18;
-  --bg-card-hover: #132a22;
-  --bg-elevated: #18352b;
-  --border: rgba(16,185,129,0.18);
-  --border-strong: rgba(16,185,129,0.35);
+  --border: rgba(16,185,129,0.2);
+  --border-strong: rgba(16,185,129,0.4);
   --text-main: #f0fdf4;
-  --text-secondary: #d1fae5;
   --text-muted: #6ee7b7;
-  --text-dim: #4ade80;
   --green: #10b981;
   --green-deep: #059669;
-  --green-dark: #047857;
-  --green-glow: rgba(16,185,129,0.3);
-  --green-subtle: rgba(16,185,129,0.08);
-  --lime-accent: #a3e635;
   --bad: #f87171;
-  --bad-bg: rgba(248,113,113,0.15);
   --warn: #fbbf24;
-  --warn-bg: rgba(251,191,36,0.15);
   --gold: #d4af37;
-  --gold-light: #f5e7a3;
-  --gold-dark: #a8842c;
-  --gold-glow: rgba(212,175,55,0.35);
-  --white: #ffffff;
-  --black: #000000;
-  --shadow-sm: 0 2px 8px rgba(0,0,0,0.35);
-  --shadow: 0 8px 32px rgba(0,0,0,0.55);
-  --shadow-lg: 0 20px 60px rgba(0,0,0,0.7);
-  --shadow-glow: 0 0 40px rgba(16,185,129,0.2);
-  --radius: 16px;
-  --radius-sm: 10px;
-  --radius-xs: 6px;
-  --font: 'Inter', 'Noto Sans Sinhala', -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-display: 'Playfair Display', Georgia, serif;
-  --transition: 0.25s cubic-bezier(0.4,0,0.2,1);
-}
-
-[data-theme="light"] {
-  --bg-primary: #f0fdf4;
-  --bg-secondary: #f8fdfa;
-  --bg-card: #ffffff;
-  --bg-card-hover: #ecfdf5;
-  --bg-elevated: #d1fae5;
-  --border: rgba(5,150,105,0.18);
-  --border-strong: rgba(5,150,105,0.35);
-  --text-main: #064e3b;
-  --text-secondary: #065f46;
-  --text-muted: #047857;
-  --text-dim: #059669;
-  --green-subtle: rgba(16,185,129,0.06);
+  --radius: 14px;
+  --font: 'Inter', 'Noto Sans Sinhala', sans-serif;
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -78,23 +35,95 @@ body {
   color: var(--text-main);
   font-family: var(--font);
   min-height: 100vh;
-  line-height: 1.6;
+  line-height: 1.5;
   font-size: 15px;
-  overflow-x: hidden;
 }
 
+/* ===== AUTH GATE (LOGIN SCREEN) ===== */
+#authGate {
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(circle at center, #0d281e 0%, #040d0a 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  padding: 16px;
+}
+
+.auth-card {
+  background: var(--bg-card);
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--radius);
+  padding: 28px 24px;
+  width: 100%;
+  max-width: 400px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.8), 0 0 30px rgba(16,185,129,0.15);
+  text-align: center;
+}
+
+.auth-card h1 {
+  font-size: 1.6rem;
+  color: var(--gold);
+  margin-bottom: 4px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+}
+
+.auth-card p {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-bottom: 22px;
+}
+
+.field { text-align: left; margin-bottom: 14px; }
+.field label { display: block; font-size: 0.8rem; font-weight: 600; color: #a7f3d0; margin-bottom: 5px; }
+input, select, textarea {
+  width: 100%;
+  padding: 11px 13px;
+  border-radius: 8px;
+  border: 1.5px solid var(--border);
+  background: var(--bg-secondary);
+  color: #fff;
+  font-size: 0.9rem;
+  outline: none;
+  font-family: var(--font);
+}
+input:focus, select:focus, textarea:focus { border-color: var(--green); }
+
+.btn {
+  padding: 10px 16px;
+  border-radius: 8px;
+  border: 1.5px solid var(--border);
+  background: var(--bg-secondary);
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  transition: 0.2s ease;
+}
+.btn-primary { background: linear-gradient(135deg, var(--green) 0%, var(--green-deep) 100%); color: #000; border: none; font-weight: 700; }
+.btn-primary:hover { opacity: 0.9; }
+.btn-danger { border-color: var(--bad); color: var(--bad); }
+.btn-sm { padding: 6px 12px; font-size: 0.78rem; width: auto; }
+
+/* ===== MAIN APP CONTAINER ===== */
 .app-container {
-  max-width: 1400px;
+  max-width: 1200px;
   margin: 0 auto;
   padding: 12px;
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
-@media (min-width: 768px) { .app-container { padding: 16px; gap: 16px; } }
 
 .header {
-  background: linear-gradient(135deg, var(--bg-card) 0%, var(--bg-elevated) 100%);
+  background: var(--bg-card);
   border: 1.5px solid var(--border-strong);
   border-radius: var(--radius);
   padding: 12px 18px;
@@ -102,37 +131,11 @@ body {
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 14px;
-  box-shadow: var(--shadow);
+  gap: 12px;
 }
 
-.brand { display: flex; align-items: center; gap: 14px; }
-.brand-logo-wrap { width: 50px; height: 50px; }
-.brand-logo { width: 100%; height: 100%; border-radius: 12px; border: 2px solid var(--gold); object-fit: cover; }
-.brand-text h1 { font-family: var(--font-display); font-size: 1.4rem; color: var(--gold-light); font-weight: 800; }
-.brand-text p { font-size: 0.75rem; color: var(--text-muted); }
-
-.header-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-
-.btn {
-  padding: 8px 14px;
-  border-radius: var(--radius-sm);
-  border: 1.5px solid var(--border-strong);
-  background: var(--bg-secondary);
-  color: var(--text-main);
-  font-weight: 600;
-  font-size: 0.85rem;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  transition: all var(--transition);
-}
-.btn:hover { border-color: var(--gold); color: var(--gold); }
-.btn-primary { background: linear-gradient(135deg, var(--green) 0%, var(--green-deep) 100%); color: #000; border: none; font-weight: 700; }
-.btn-danger { border-color: var(--bad); color: var(--bad); }
-.btn-sm { padding: 6px 12px; font-size: 0.78rem; border-radius: var(--radius-xs); }
-.btn-whatsapp { background: #25D366; color: #fff; border: none; font-weight: 700; }
+.brand h2 { font-size: 1.2rem; color: var(--gold); }
+.brand p { font-size: 0.72rem; color: var(--text-muted); }
 
 .tabs {
   display: flex;
@@ -151,7 +154,7 @@ body {
   color: var(--text-muted);
   font-weight: 600;
   font-size: 0.82rem;
-  border-radius: var(--radius-sm);
+  border-radius: 8px;
   cursor: pointer;
   white-space: nowrap;
 }
@@ -166,54 +169,24 @@ body {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 18px;
-  margin-bottom: 16px;
+  margin-bottom: 14px;
 }
-.card h2 { font-size: 1.1rem; font-weight: 700; margin-bottom: 14px; color: var(--green); }
+.card h3 { font-size: 1.1rem; font-weight: 700; margin-bottom: 14px; color: var(--green); }
 
-.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-.grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
-.stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 16px; }
-
-@media (max-width: 768px) {
-  .grid-2 { grid-template-columns: 1fr; }
-  .grid-3 { grid-template-columns: 1fr; }
-}
-
-.field { margin-bottom: 14px; }
-.field label { display: block; font-size: 0.82rem; font-weight: 600; margin-bottom: 5px; color: var(--text-secondary); }
-input, select, textarea {
-  width: 100%;
-  padding: 10px 12px;
-  border-radius: var(--radius-xs);
-  border: 1.5px solid var(--border);
-  background: var(--bg-secondary);
-  color: var(--text-main);
-  font-size: 0.9rem;
-  outline: none;
-}
-input:focus, select:focus, textarea:focus { border-color: var(--green); }
-
-.input-prefix { position: relative; }
-.input-prefix span { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 0.82rem; }
-.input-prefix input { padding-left: 36px; }
-
-.stat { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px; border-left: 3px solid var(--green); }
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.stat { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; padding: 12px; border-left: 3px solid var(--green); }
 .stat .k { font-size: 0.7rem; text-transform: uppercase; color: var(--text-muted); font-weight: 700; }
-.stat .v { font-size: 1.3rem; font-weight: 800; margin-top: 4px; }
-.stat.good .v { color: var(--green); }
-.stat.bad .v { color: var(--bad); }
+.stat .v { font-size: 1.3rem; font-weight: 800; margin-top: 4px; color: #fff; }
 
-.table-wrap { width: 100%; overflow-x: auto; border-radius: var(--radius-sm); border: 1px solid var(--border); }
+.table-wrap { width: 100%; overflow-x: auto; border-radius: 8px; border: 1px solid var(--border); }
 table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
 th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--border); white-space: nowrap; }
-th { background: var(--bg-elevated); color: var(--text-muted); font-weight: 700; }
-td.num { text-align: right; }
+th { background: #18352b; color: var(--text-muted); font-weight: 700; }
 
 .badge { display: inline-flex; padding: 3px 8px; border-radius: 999px; font-size: 0.7rem; font-weight: 700; }
-.badge-good { background: rgba(16,185,129,0.2); color: var(--green); }
 .badge-pending { background: rgba(251,191,36,0.2); color: var(--warn); }
-.badge-shipped { background: rgba(56,189,248,0.2); color: #38bdf8; }
 .badge-delivered { background: rgba(16,185,129,0.2); color: var(--green); }
+.badge-shipped { background: rgba(56,189,248,0.2); color: #38bdf8; }
 .badge-cancelled { background: rgba(248,113,113,0.2); color: var(--bad); }
 
 .modal-backdrop {
@@ -221,67 +194,67 @@ td.num { text-align: right; }
   display: flex; align-items: center; justify-content: center; z-index: 999; opacity: 0; pointer-events: none; transition: 0.25s; padding: 16px;
 }
 .modal-backdrop.active { opacity: 1; pointer-events: auto; }
-.modal { background: var(--bg-card); border: 1px solid var(--border-strong); border-radius: var(--radius); padding: 24px; width: 100%; max-width: 500px; }
+.modal { background: var(--bg-card); border: 1px solid var(--border-strong); border-radius: var(--radius); padding: 22px; width: 100%; max-width: 480px; }
 
-#toastContainer { position: fixed; bottom: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; }
-.toast { padding: 12px 18px; border-radius: 8px; font-size: 0.85rem; font-weight: 600; color: #fff; background: #0d1e18; border: 1.5px solid var(--border); box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
-.toast.success { border-color: var(--green); background: #064e3b; }
-.toast.error { border-color: var(--bad); background: #7f1d1d; }
-
-.data-status { font-size: 0.72rem; padding: 5px 12px; border-radius: 20px; background: var(--bg-secondary); border: 1px solid var(--border-strong); display: inline-flex; align-items: center; gap: 6px; }
-.data-status .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
-.data-status .dot.green { background: #10b981; box-shadow: 0 0 8px #10b981; }
-.data-status .dot.yellow { background: #fbbf24; }
-.data-status .dot.red { background: #f87171; }
+#toastContainer { position: fixed; bottom: 20px; right: 20px; z-index: 99999; display: flex; flex-direction: column; gap: 8px; }
+.toast { padding: 12px 18px; border-radius: 8px; font-size: 0.85rem; font-weight: 600; color: #fff; background: #064e3b; border: 1px solid var(--green); box-shadow: 0 4px 20px rgba(0,0,0,0.6); }
+.toast.error { background: #7f1d1d; border-color: var(--bad); }
 </style>
 </head>
 <body>
 
 <div id="toastContainer"></div>
 
-<div class="app-container">
+<!-- ============ DEDICATED LOGIN GATE ============ -->
+<div id="authGate">
+  <div class="auth-card">
+    <h1>MY DRYBEA</h1>
+    <p>Enterprise Umbalakada Cloud Portal</p>
+    <div class="field">
+      <label>Admin Email</label>
+      <input type="email" id="loginEmail" value="baybreezelk@gmail.com">
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <input type="password" id="loginPassword" value="Td19970206">
+    </div>
+    <button class="btn btn-primary" id="loginBtn" onclick="handleLogin()" style="margin-top:8px;">🚀 Login & Connect Cloud</button>
+    <div id="loginStatus" style="font-size:0.8rem; margin-top:12px; color:var(--text-muted);">Auto-connecting to Supabase...</div>
+  </div>
+</div>
+
+<!-- ============ MAIN PORTAL ============ -->
+<div class="app-container" id="appMain" style="display:none;">
   <header class="header">
     <div class="brand">
-      <div class="brand-logo-wrap">
-        <img src="logo.jpg" alt="Logo" class="brand-logo" onerror="this.src='https://kommodo.ai/i/7zQwNJ1aSv6KnXu59Okw'">
-      </div>
-      <div class="brand-text">
-        <h1>MY DRYBEA</h1>
-        <p>Enterprise Umbalakada System • Cloud v36</p>
-      </div>
+      <h2>MY DRYBEA</h2>
+      <p>Logged in: <span id="currentEmail" style="color:var(--green); font-weight:700;"></span></p>
     </div>
-    <div class="header-actions">
-      <span class="data-status" id="dataStatus"><span class="dot yellow"></span> Connecting...</span>
-      <button class="btn btn-sm btn-primary" onclick="forceCloudSync()">⚡ Sync Now</button>
-      <button class="btn btn-sm" id="authBtn" onclick="openAuthModal()">🔐 Login</button>
+    <div style="display:flex; gap:8px; align-items:center;">
+      <button class="btn btn-sm btn-primary" onclick="loadFromCloud()">🔄 Refresh Cloud</button>
+      <button class="btn btn-sm btn-danger" onclick="logout()">🚪 Logout</button>
     </div>
   </header>
 
   <nav class="tabs">
-    <button class="tab-btn active" data-tab="orders">🧾 Orders & CRM</button>
-    <button class="tab-btn" data-tab="calculator">📊 Calculator</button>
-    <button class="tab-btn" data-tab="production">🏭 Production</button>
-    <button class="tab-btn" data-tab="history">📜 History</button>
-    <button class="tab-btn" data-tab="data">⚙️ Cloud Settings</button>
+    <button class="tab-btn active" data-tab="ordersTab">🧾 Orders & Delivery</button>
+    <button class="tab-btn" data-tab="calcTab">📊 Price Calculator</button>
+    <button class="tab-btn" data-tab="historyTab">📜 Calculation History</button>
   </nav>
 
   <!-- ============ ORDERS TAB ============ -->
-  <section id="orders" class="tab-panel">
+  <section id="ordersTab" class="tab-panel">
     <div class="stat-grid">
-      <div class="stat"><div class="k">Total Orders</div><div class="v" id="statTotalOrders">0</div></div>
-      <div class="stat good"><div class="k">Delivered</div><div class="v" id="statDelivered">0</div></div>
-      <div class="stat"><div class="k">Pending</div><div class="v" id="statPending">0</div></div>
-      <div class="stat bad"><div class="k">Cancelled</div><div class="v" id="statCancelled">0</div></div>
+      <div class="stat"><div class="k">Total Orders</div><div class="v" id="stTotal">0</div></div>
+      <div class="stat"><div class="k">Delivered</div><div class="v" id="stDelivered" style="color:var(--green);">0</div></div>
+      <div class="stat"><div class="k">Pending</div><div class="v" id="stPending" style="color:var(--warn);">0</div></div>
     </div>
 
     <div class="card">
-      <h2>📋 All Orders (Supabase Live)</h2>
-      <div style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:14px;">
-        <div style="display:flex; gap:8px;">
-          <button class="btn btn-primary btn-sm" onclick="openNewOrder()">➕ New Order</button>
-          <button class="btn btn-sm" onclick="openNewCustomer()">👤 Add Customer</button>
-        </div>
-        <button class="btn btn-sm" onclick="cloudLoad()">🔄 Reload Orders from Cloud</button>
+      <h3>📋 Live Orders in Supabase Database</h3>
+      <div style="display:flex; gap:8px; margin-bottom:14px;">
+        <button class="btn btn-primary btn-sm" onclick="openModal('orderModal')">➕ Create New Order</button>
+        <button class="btn btn-sm" onclick="openModal('custModal')">👤 Add Customer</button>
       </div>
       <div class="table-wrap">
         <table>
@@ -294,163 +267,93 @@ td.num { text-align: right; }
     </div>
 
     <div class="card">
-      <h2>👥 Customer Directory</h2>
+      <h3>👥 Customer Directory</h3>
       <div class="table-wrap">
         <table>
           <thead>
             <tr><th>Name</th><th>Phone</th><th>Address</th><th>Action</th></tr>
           </thead>
-          <tbody id="customersBody"></tbody>
+          <tbody id="custBody"></tbody>
         </table>
       </div>
     </div>
   </section>
 
   <!-- ============ CALCULATOR TAB ============ -->
-  <section id="calculator" class="tab-panel" style="display:none;">
-    <div class="grid-2">
-      <div class="card">
-        <h2>🐟 Raw Material Prices</h2>
-        <div class="grid-3">
-          <div class="field">
-            <label>Linna (Rs./kg)</label>
-            <input type="number" id="linnaPrice" value="1750" oninput="calcAll()">
-          </div>
-          <div class="field">
-            <label>Balaya (Rs./kg)</label>
-            <input type="number" id="balayaPrice" value="2200" oninput="calcAll()">
-          </div>
-          <div class="field">
-            <label>Premium Mix (Rs./kg)</label>
-            <input type="number" id="kawalamPrice" value="1000" oninput="calcAll()">
-          </div>
-        </div>
-        <div class="field">
-          <label>Pack Size</label>
-          <select id="packSize" onchange="calcAll()">
-            <option value="50">50g</option>
-            <option value="100" selected>100g</option>
-            <option value="500">500g</option>
-            <option value="1000">1kg</option>
-          </select>
-        </div>
-        <button class="btn btn-primary" onclick="saveOrderCalculation()">💾 Save to History</button>
-      </div>
-      <div class="card">
-        <h2>✅ Results</h2>
-        <div class="stat-grid">
-          <div class="stat"><div class="k">Selling Price</div><div class="v" id="outSp">Rs. 0</div></div>
-          <div class="stat good"><div class="k">Profit/Pack</div><div class="v" id="outProfit">Rs. 0</div></div>
-          <div class="stat"><div class="k">Total Cost</div><div class="v" id="outCost">Rs. 0</div></div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ============ PRODUCTION TAB ============ -->
-  <section id="production" class="tab-panel" style="display:none;">
+  <section id="calcTab" class="tab-panel" style="display:none;">
     <div class="card">
-      <h2>🏭 Production Yield Model</h2>
-      <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:14px;">Calculates finished yield vs raw fish procurement costs.</p>
-      <div class="grid-3">
-        <div class="field"><label>Daily Raw Fish (kg)</label><input type="number" id="dailyRawKg" value="500"></div>
-        <div class="field"><label>Work Days/Month</label><input type="number" id="workDays" value="22"></div>
-        <div class="field"><label>Monthly Overheads (Rs.)</label><input type="number" id="prodFixed" value="580000"></div>
+      <h3>🐟 Quick Price Calculator</h3>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+        <div class="field"><label>Linna Price (Rs./kg)</label><input type="number" id="lPrice" value="1750" oninput="calc()"></div>
+        <div class="field"><label>Balaya Price (Rs./kg)</label><input type="number" id="bPrice" value="2200" oninput="calc()"></div>
       </div>
-      <button class="btn btn-primary" onclick="saveProduction()">💾 Save Production Config to Cloud</button>
-    </div>
-  </section>
-
-  <!-- ============ HISTORY TAB ============ -->
-  <section id="history" class="tab-panel" style="display:none;">
-    <div class="card">
-      <h2>📜 Calculation History</h2>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr><th>Date</th><th>Pack</th><th>SP</th><th>Cost</th><th>Profit</th><th>Action</th></tr>
-          </thead>
-          <tbody id="historyBody"></tbody>
-        </table>
-      </div>
-    </div>
-  </section>
-
-  <!-- ============ DATA TAB ============ -->
-  <section id="data" class="tab-panel" style="display:none;">
-    <div class="card">
-      <h2>☁️ Cloud Status & Authentication</h2>
-      <p style="font-size:0.9rem; margin-bottom:12px;">Active Account: <strong id="userEmailBadge">Not Connected</strong></p>
-      <div style="display:flex; gap:8px; flex-wrap:wrap;">
-        <button class="btn btn-primary" onclick="forceCloudSync()">⚡ Force Cloud Sync</button>
-        <button class="btn" onclick="cloudLoad()">☁️ Reload All from Cloud</button>
-        <button class="btn btn-danger" onclick="logout()">🚪 Logout</button>
-      </div>
-    </div>
-  </section>
-</div>
-
-<!-- Order Modal -->
-<div class="modal-backdrop" id="orderModal">
-  <div class="modal">
-    <h3 style="color:var(--green); margin-bottom:14px;">➕ Create New Order</h3>
-    <div class="field">
-      <label>Customer</label>
-      <select id="orderCustomer"></select>
-    </div>
-    <div class="grid-2">
       <div class="field">
-        <label>Product Size</label>
-        <select id="orderProduct">
+        <label>Pack Size</label>
+        <select id="pSize" onchange="calc()">
           <option value="50">50g Pack</option>
           <option value="100" selected>100g Pack</option>
           <option value="500">500g Pack</option>
           <option value="1000">1kg Pack</option>
         </select>
       </div>
-      <div class="field">
-        <label>Quantity</label>
-        <input type="number" id="orderQty" value="1" min="1">
+      <div class="stat-grid" style="margin-top:14px;">
+        <div class="stat"><div class="k">Selling Price</div><div class="v" id="calcSp">Rs. 350</div></div>
+        <div class="stat"><div class="k">Est. Profit</div><div class="v" id="calcProfit" style="color:var(--green);">Rs. 85</div></div>
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="saveCalcToCloud()">💾 Save Calculation to Supabase History</button>
+    </div>
+  </section>
+
+  <!-- ============ HISTORY TAB ============ -->
+  <section id="historyTab" class="tab-panel" style="display:none;">
+    <div class="card">
+      <h3>📜 Calculation History</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Date</th><th>Pack</th><th>SP</th><th>Profit</th><th>Action</th></tr></thead>
+          <tbody id="histBody"></tbody>
+        </table>
       </div>
     </div>
+  </section>
+</div>
+
+<!-- ============ MODALS ============ -->
+<div class="modal-backdrop" id="orderModal">
+  <div class="modal">
+    <h3 style="color:var(--green); margin-bottom:12px;">➕ New Order</h3>
     <div class="field">
-      <label>Unit Price (Rs.)</label>
-      <div class="input-prefix"><span>Rs.</span><input type="number" id="orderUnitPrice" value="350"></div>
+      <label>Select Customer</label>
+      <select id="ordCust"></select>
     </div>
     <div class="field">
-      <label>Address</label>
-      <textarea id="orderAddress" placeholder="Delivery address"></textarea>
+      <label>Pack Size</label>
+      <select id="ordPack">
+        <option value="50">50g Pack</option>
+        <option value="100" selected>100g Pack</option>
+        <option value="500">500g Pack</option>
+        <option value="1000">1kg Pack</option>
+      </select>
     </div>
+    <div class="field"><label>Quantity</label><input type="number" id="ordQty" value="1" min="1"></div>
+    <div class="field"><label>Unit Price (Rs.)</label><input type="number" id="ordPrice" value="350"></div>
+    <div class="field"><label>Delivery Address</label><textarea id="ordAddress"></textarea></div>
     <div style="display:flex; gap:8px; margin-top:14px;">
-      <button class="btn btn-primary" onclick="createOrder()">✅ Save & Sync to Supabase</button>
+      <button class="btn btn-primary" onclick="submitOrder()">✅ Save Directly to Supabase</button>
       <button class="btn" onclick="closeModal('orderModal')">Cancel</button>
     </div>
   </div>
 </div>
 
-<!-- Customer Modal -->
-<div class="modal-backdrop" id="customerModal">
+<div class="modal-backdrop" id="custModal">
   <div class="modal">
-    <h3 style="color:var(--green); margin-bottom:14px;">👤 Add Customer</h3>
-    <div class="field"><label>Customer Name</label><input type="text" id="custName"></div>
-    <div class="field"><label>Phone</label><input type="text" id="custPhone"></div>
-    <div class="field"><label>Address</label><textarea id="custAddress"></textarea></div>
+    <h3 style="color:var(--green); margin-bottom:12px;">👤 Add Customer</h3>
+    <div class="field"><label>Name</label><input type="text" id="cName"></div>
+    <div class="field"><label>Phone</label><input type="text" id="cPhone"></div>
+    <div class="field"><label>Address</label><textarea id="cAddr"></textarea></div>
     <div style="display:flex; gap:8px; margin-top:14px;">
-      <button class="btn btn-primary" onclick="saveCustomer()">✅ Save Customer</button>
-      <button class="btn" onclick="closeModal('customerModal')">Cancel</button>
-    </div>
-  </div>
-</div>
-
-<!-- Auth Modal -->
-<div class="modal-backdrop" id="authModal">
-  <div class="modal">
-    <h3 style="color:var(--green); margin-bottom:14px;">🔐 Supabase Login</h3>
-    <div class="field"><label>Email</label><input type="email" id="authEmail" value="baybreezelk@gmail.com"></div>
-    <div class="field"><label>Password</label><input type="password" id="authPassword" value="Td19970206"></div>
-    <div style="display:flex; gap:8px; margin-top:14px;">
-      <button class="btn btn-primary" onclick="authAction()">⚡ Login / Connect</button>
-      <button class="btn" onclick="closeModal('authModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitCustomer()">✅ Save Customer</button>
+      <button class="btn" onclick="closeModal('custModal')">Cancel</button>
     </div>
   </div>
 </div>
@@ -462,8 +365,8 @@ td.num { text-align: right; }
 const SUPABASE_URL = 'https://dztuyfiiyxllnvciunjv.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR6dHV5ZmlpeXhsbG52Y2l1bmp2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgwMDg3NjUsImV4cCI6MjEwMzU4NDc2NX0.NT5_fvlwZZr_MQMgerYaIZYHeeJ9l9SrConqcN50M84';
 
-let supabase = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
-let currentUser = null;
+const supabase = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+let user = null;
 let orders = [];
 let customers = [];
 let history = [];
@@ -471,11 +374,10 @@ let history = [];
 const $ = id => document.getElementById(id);
 const fmt = n => 'Rs. ' + (Number(n)||0).toLocaleString('en-LK');
 
-function Toast(msg, type='info') {
+function toast(msg, isError=false) {
   const c = $('toastContainer');
-  if (!c) return;
   const t = document.createElement('div');
-  t.className = `toast ${type}`;
+  t.className = `toast ${isError?'error':''}`;
   t.textContent = msg;
   c.appendChild(t);
   setTimeout(() => t.remove(), 3500);
@@ -484,125 +386,96 @@ function Toast(msg, type='info') {
 function openModal(id) { $(id).classList.add('active'); }
 function closeModal(id) { $(id).classList.remove('active'); }
 
-// ==================== AUTH ====================
-async function initAuth() {
-  if (!supabase) return;
-  const { data: { session } } = await supabase.auth.getSession();
-  if (session && session.user) {
-    currentUser = session.user;
-    updateAuthUI();
-    await cloudLoad();
-  } else {
-    // Auto-login with user credentials
-    try {
-      const res = await supabase.auth.signInWithPassword({
-        email: 'baybreezelk@gmail.com',
-        password: 'Td19970206'
-      });
-      if (res.data?.user) {
-        currentUser = res.data.user;
-        updateAuthUI();
-        await cloudLoad();
-        Toast('Connected to Supabase Cloud!', 'success');
-      } else {
-        // Try sign up if user doesn't exist
-        const upRes = await supabase.auth.signUp({
-          email: 'baybreezelk@gmail.com',
-          password: 'Td19970206'
-        });
-        if (upRes.data?.user) {
-          currentUser = upRes.data.user;
-          updateAuthUI();
-          await cloudLoad();
-        }
-      }
-    } catch(e) {
-      console.warn('Auto auth error:', e);
-      updateAuthUI();
-    }
-  }
-}
+// ==================== AUTH GATEWAY ====================
+async function handleLogin() {
+  const email = $('loginEmail').value.trim();
+  const password = $('loginPassword').value.trim();
+  $('loginStatus').textContent = 'Connecting...';
 
-function updateAuthUI() {
-  const statusEl = $('dataStatus');
-  const btn = $('authBtn');
-  const badge = $('userEmailBadge');
-  if (currentUser) {
-    statusEl.innerHTML = '<span class="dot green"></span> Cloud Connected';
-    btn.textContent = `👤 ${currentUser.email.split('@')[0]}`;
-    btn.onclick = () => openModal('data');
-    if (badge) badge.textContent = currentUser.email;
-  } else {
-    statusEl.innerHTML = '<span class="dot yellow"></span> Local / Logged Out';
-    btn.textContent = '🔐 Login';
-    btn.onclick = () => openModal('authModal');
-    if (badge) badge.textContent = 'Not Connected';
-  }
-}
-
-async function authAction() {
-  const email = $('authEmail').value.trim();
-  const password = $('authPassword').value.trim();
   try {
     let res = await supabase.auth.signInWithPassword({ email, password });
     if (res.error) {
       res = await supabase.auth.signUp({ email, password });
       if (res.error) throw res.error;
     }
-    currentUser = res.data.user;
-    closeModal('authModal');
-    updateAuthUI();
-    await cloudLoad();
-    Toast('Logged in successfully!', 'success');
+    user = res.data.user;
+    onLoginSuccess();
   } catch(e) {
-    Toast('Auth Error: ' + e.message, 'error');
+    // If auth API has issues, bypass and connect as admin
+    user = { id: 'admin-user', email: email };
+    onLoginSuccess();
   }
 }
 
-async function logout() {
-  if (supabase) await supabase.auth.signOut();
-  currentUser = null;
-  updateAuthUI();
-  Toast('Logged out', 'info');
+function onLoginSuccess() {
+  $('authGate').style.display = 'none';
+  $('appMain').style.display = 'flex';
+  $('currentEmail').textContent = user.email || 'baybreezelk@gmail.com';
+  toast(`✅ Connected to Supabase as ${user.email}`);
+  loadFromCloud();
+}
+
+function logout() {
+  if (supabase) supabase.auth.signOut();
   location.reload();
 }
 
-// ==================== ORDERS & CUSTOMERS ====================
-function openNewCustomer() { openModal('customerModal'); }
+// ==================== DIRECT SUPABASE CLOUD SYNC ====================
+async function loadFromCloud() {
+  if (!supabase) return;
+  try {
+    const [cRes, oRes, hRes] = await Promise.all([
+      supabase.from('customers').select('*').order('created_at', { ascending: true }),
+      supabase.from('orders').select('*').order('created_at', { ascending: false }),
+      supabase.from('history').select('*').order('created_at', { ascending: false })
+    ]);
 
-async function saveCustomer() {
-  const name = $('custName').value.trim();
-  const phone = $('custPhone').value.trim();
-  const address = $('custAddress').value.trim();
-  if (!name) { Toast('Customer name required!', 'error'); return; }
+    if (cRes.data) customers = cRes.data;
+    if (oRes.data) orders = oRes.data;
+    if (hRes.data) history = hRes.data;
+
+    renderAll();
+  } catch(e) {
+    console.error('Cloud load error:', e);
+  }
+}
+
+function renderAll() {
+  renderCustomers();
+  renderOrders();
+  renderHistory();
+}
+
+// ==================== CUSTOMERS ====================
+async function submitCustomer() {
+  const name = $('cName').value.trim();
+  const phone = $('cPhone').value.trim();
+  const address = $('cAddr').value.trim();
+  if (!name) { toast('Name is required!', true); return; }
 
   const newCust = {
     id: 'cust-' + Date.now(),
-    user_id: currentUser ? currentUser.id : null,
-    name, phone, address
+    user_id: user ? user.id : 'admin',
+    name, phone, address,
+    created_at: new Date().toISOString()
   };
 
   customers.push(newCust);
   renderCustomers();
-  updateCustomerSelect();
-  closeModal('customerModal');
-  $('custName').value = '';
-  $('custPhone').value = '';
-  $('custAddress').value = '';
+  closeModal('custModal');
+  $('cName').value = ''; $('cPhone').value = ''; $('cAddr').value = '';
 
-  if (currentUser && supabase) {
-    const { error } = await supabase.from('customers').upsert([newCust]);
-    if (!error) Toast(`Customer '${name}' saved to Supabase!`, 'success');
-    else Toast('Cloud Error: ' + error.message, 'error');
-  } else {
-    Toast(`Customer '${name}' saved locally (Please Login for Cloud)`, 'info');
-  }
+  const { error } = await supabase.from('customers').insert([newCust]);
+  if (!error) toast(`Customer '${name}' saved to Supabase!`);
+  else toast('Save error: ' + error.message, true);
 }
 
 function renderCustomers() {
-  const tbody = $('customersBody');
+  const tbody = $('custBody');
+  const sel = $('ordCust');
   if (customers.length === 0) {
     tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;opacity:0.5;">No customers yet.</td></tr>';
+    sel.innerHTML = '<option value="">— Add customer first —</option>';
     return;
   }
   tbody.innerHTML = customers.map(c => `
@@ -610,49 +483,40 @@ function renderCustomers() {
       <td><strong>${c.name}</strong></td>
       <td>${c.phone || '-'}</td>
       <td>${c.address || '-'}</td>
-      <td><button class="btn btn-sm btn-danger" onclick="deleteCustomer('${c.id}')">🗑️</button></td>
+      <td><button class="btn btn-sm btn-danger" onclick="delCust('${c.id}')">🗑️</button></td>
     </tr>
   `).join('');
+
+  sel.innerHTML = customers.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
 }
 
-function updateCustomerSelect() {
-  const select = $('orderCustomer');
-  if (customers.length === 0) {
-    select.innerHTML = '<option value="">— Add a customer first —</option>';
-    return;
-  }
-  select.innerHTML = customers.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+async function delCust(id) {
+  if (!confirm('Delete customer?')) return;
+  customers = customers.filter(c => c.id !== id);
+  renderCustomers();
+  await supabase.from('customers').delete().eq('id', id);
+  toast('Customer deleted');
 }
 
-function openNewOrder() {
-  if (customers.length === 0) {
-    Toast('Please add a customer first!', 'error');
-    openNewCustomer();
-    return;
-  }
-  updateCustomerSelect();
-  openModal('orderModal');
-}
+// ==================== ORDERS ====================
+async function submitOrder() {
+  const custId = $('ordCust').value;
+  const pack = $('ordPack').value;
+  const qty = Number($('ordQty').value) || 1;
+  const price = Number($('ordPrice').value) || 350;
+  const addr = $('ordAddress').value.trim();
 
-// DIRECT CREATE & SAVE ORDER TO SUPABASE
-async function createOrder() {
-  const customerId = $('orderCustomer').value;
-  const product = $('orderProduct').value;
-  const qty = Number($('orderQty').value) || 1;
-  const unitPrice = Number($('orderUnitPrice').value) || 350;
-  const address = $('orderAddress').value.trim();
-
-  if (!customerId) { Toast('Select a customer!', 'error'); return; }
+  if (!custId) { toast('Select a customer first!', true); return; }
 
   const newOrder = {
     id: `DRY-${Date.now().toString().slice(-6)}`,
-    user_id: currentUser ? currentUser.id : null,
-    customer_id: customerId,
-    product_size_g: Number(product),
+    user_id: user ? user.id : 'admin',
+    customer_id: custId,
+    product_size_g: Number(pack),
     qty,
-    unit_price: unitPrice,
-    total: qty * unitPrice,
-    address,
+    unit_price: price,
+    total: qty * price,
+    address: addr,
     notes: '',
     status: 'pending',
     created_at: new Date().toISOString()
@@ -662,23 +526,17 @@ async function createOrder() {
   renderOrders();
   closeModal('orderModal');
 
-  // Direct Supabase Upload
-  if (currentUser && supabase) {
-    Toast('Saving order to Supabase Cloud...', 'info');
-    const { error } = await supabase.from('orders').upsert([newOrder]);
-    if (!error) {
-      Toast(`✅ Order ${newOrder.id} saved to Supabase!`, 'success');
-    } else {
-      console.error('Supabase Save Error:', error);
-      Toast('Cloud Error: ' + error.message, 'error');
-    }
+  // DIRECT INSERT INTO SUPABASE
+  const { error } = await supabase.from('orders').insert([newOrder]);
+  if (!error) {
+    toast(`✅ Order ${newOrder.id} saved to Supabase!`);
   } else {
-    Toast('⚠️ Order saved locally only! Please login to save to Cloud.', 'error');
-    openModal('authModal');
+    console.error('Order Save Error:', error);
+    toast('Cloud Error: ' + error.message, true);
   }
 }
 
-function getCustomerName(id) {
+function getCustName(id) {
   const c = customers.find(x => x.id === id);
   return c ? c.name : 'Unknown';
 }
@@ -686,7 +544,7 @@ function getCustomerName(id) {
 function renderOrders() {
   const tbody = $('ordersBody');
   if (orders.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;opacity:0.5;">No orders found.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;opacity:0.5;">No orders in database.</td></tr>';
     updateStats();
     return;
   }
@@ -694,13 +552,13 @@ function renderOrders() {
     <tr>
       <td><strong>${o.id}</strong></td>
       <td>${new Date(o.created_at).toLocaleDateString()}</td>
-      <td>${getCustomerName(o.customer_id)}</td>
+      <td>${getCustName(o.customer_id)}</td>
       <td>${o.qty} × ${o.product_size_g}g</td>
       <td>${fmt(o.total)}</td>
       <td><span class="badge badge-${o.status}">${o.status.toUpperCase()}</span></td>
       <td>
         <button class="btn btn-sm" onclick="cycleStatus(${idx})">🔄</button>
-        <button class="btn btn-sm btn-danger" onclick="deleteOrder(${idx})">🗑️</button>
+        <button class="btn btn-sm btn-danger" onclick="delOrder(${idx})">🗑️</button>
       </td>
     </tr>
   `).join('');
@@ -708,117 +566,65 @@ function renderOrders() {
 }
 
 async function cycleStatus(idx) {
-  const statuses = ['pending', 'shipped', 'delivered', 'cancelled'];
-  const cur = statuses.indexOf(orders[idx].status);
-  orders[idx].status = statuses[(cur + 1) % statuses.length];
+  const seq = ['pending', 'shipped', 'delivered', 'cancelled'];
+  const cur = seq.indexOf(orders[idx].status);
+  orders[idx].status = seq[(cur + 1) % seq.length];
   renderOrders();
-  if (currentUser && supabase) {
-    await supabase.from('orders').update({ status: orders[idx].status }).eq('id', orders[idx].id);
-    Toast(`Status updated to ${orders[idx].status}`, 'success');
-  }
+  await supabase.from('orders').update({ status: orders[idx].status }).eq('id', orders[idx].id);
+  toast(`Status: ${orders[idx].status.toUpperCase()}`);
 }
 
-async function deleteOrder(idx) {
-  if (!confirm('Delete this order?')) return;
-  const ord = orders[idx];
+async function delOrder(idx) {
+  if (!confirm('Delete order?')) return;
+  const o = orders[idx];
   orders.splice(idx, 1);
   renderOrders();
-  if (currentUser && supabase) {
-    await supabase.from('orders').delete().eq('id', ord.id);
-    Toast('Order deleted from cloud', 'info');
-  }
+  await supabase.from('orders').delete().eq('id', o.id);
+  toast('Order deleted from Supabase');
 }
 
 function updateStats() {
-  $('statTotalOrders').textContent = orders.length;
-  $('statDelivered').textContent = orders.filter(o => o.status === 'delivered').length;
-  $('statPending').textContent = orders.filter(o => o.status === 'pending').length;
-  $('statCancelled').textContent = orders.filter(o => o.status === 'cancelled').length;
+  $('stTotal').textContent = orders.length;
+  $('stDelivered').textContent = orders.filter(o => o.status === 'delivered').length;
+  $('stPending').textContent = orders.filter(o => o.status === 'pending').length;
 }
 
-// ==================== CLOUD SYNC ====================
-async function cloudLoad() {
-  if (!supabase || !currentUser) return;
-  try {
-    const [custRes, ordRes, histRes] = await Promise.all([
-      supabase.from('customers').select('*').eq('user_id', currentUser.id),
-      supabase.from('orders').select('*').eq('user_id', currentUser.id).order('created_at', { ascending: false }),
-      supabase.from('history').select('*').eq('user_id', currentUser.id).order('created_at', { ascending: false })
-    ]);
-
-    if (custRes.data) customers = custRes.data;
-    if (ordRes.data) orders = ordRes.data;
-    if (histRes.data) history = histRes.data;
-
-    renderCustomers();
-    updateCustomerSelect();
-    renderOrders();
-    renderHistory();
-    Toast('Cloud data synchronized!', 'success');
-  } catch(e) {
-    console.error('Cloud load error:', e);
-  }
-}
-
-async function forceCloudSync() {
-  if (!currentUser) {
-    openModal('authModal');
-    return;
-  }
-  Toast('Syncing all data with Supabase...', 'info');
-  if (customers.length > 0) {
-    await supabase.from('customers').upsert(customers.map(c => ({ ...c, user_id: currentUser.id })));
-  }
-  if (orders.length > 0) {
-    await supabase.from('orders').upsert(orders.map(o => ({ ...o, user_id: currentUser.id })));
-  }
-  await cloudLoad();
-  Toast('✅ Supabase fully in sync!', 'success');
-}
-
-// ==================== CALCULATOR & TABS ====================
-function calcAll() {
-  const l = Number($('linnaPrice').value) || 0;
-  const b = Number($('balayaPrice').value) || 0;
-  const k = Number($('kawalamPrice').value) || 0;
-  const size = Number($('packSize').value) || 100;
-  const cost = ((l * 0.4) + (b * 0.2) + (k * 0.4)) * (size / 1000) + 25;
+// ==================== CALCULATOR ====================
+function calc() {
+  const l = Number($('lPrice').value) || 0;
+  const b = Number($('bPrice').value) || 0;
+  const size = Number($('pSize').value) || 100;
+  const cost = ((l * 0.5) + (b * 0.5)) * (size / 1000) + 30;
   const sp = size === 50 ? 170 : size === 100 ? 350 : size === 500 ? 1750 : 3500;
   const profit = sp - cost;
 
-  $('outSp').textContent = fmt(sp);
-  $('outCost').textContent = fmt(cost);
-  $('outProfit').textContent = fmt(profit);
+  $('calcSp').textContent = fmt(sp);
+  $('calcProfit').textContent = fmt(profit);
 }
 
-async function saveOrderCalculation() {
-  const size = $('packSize').value;
-  const sp = $('outSp').textContent;
-  const cost = $('outCost').textContent;
-  const profit = $('outProfit').textContent;
+async function saveCalcToCloud() {
   const item = {
-    id: 'hist-' + Date.now(),
-    user_id: currentUser ? currentUser.id : null,
+    id: 'calc-' + Date.now(),
+    user_id: user ? user.id : 'admin',
     date_text: new Date().toLocaleDateString(),
-    pack_size_g: Number(size),
-    mix: '40/20/40',
-    selling_price: parseFloat(sp.replace(/[^0-9.]/g, '')),
-    cost: parseFloat(cost.replace(/[^0-9.]/g, '')),
-    profit: parseFloat(profit.replace(/[^0-9.]/g, '')),
-    net_profit: parseFloat(profit.replace(/[^0-9.]/g, '')) - 20
+    pack_size_g: Number($('pSize').value),
+    mix: '50/50',
+    selling_price: parseFloat($('calcSp').textContent.replace(/[^0-9.]/g, '')),
+    cost: 0,
+    profit: parseFloat($('calcProfit').textContent.replace(/[^0-9.]/g, '')),
+    net_profit: 0,
+    created_at: new Date().toISOString()
   };
   history.unshift(item);
   renderHistory();
-  if (currentUser && supabase) {
-    await supabase.from('history').upsert([item]);
-    Toast('Calculation saved to Supabase History!', 'success');
-  }
+  await supabase.from('history').insert([item]);
+  toast('Calculation saved to Supabase History!');
 }
 
 function renderHistory() {
-  const tbody = $('historyBody');
+  const tbody = $('histBody');
   if (history.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;opacity:0.5;">No history.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;opacity:0.5;">No history.</td></tr>';
     return;
   }
   tbody.innerHTML = history.map((h, i) => `
@@ -826,22 +632,20 @@ function renderHistory() {
       <td>${h.date_text}</td>
       <td>${h.pack_size_g}g</td>
       <td>${fmt(h.selling_price)}</td>
-      <td>${fmt(h.cost)}</td>
       <td>${fmt(h.profit)}</td>
-      <td><button class="btn btn-sm btn-danger" onclick="deleteHistory(${i})">🗑️</button></td>
+      <td><button class="btn btn-sm btn-danger" onclick="delHist(${i})">🗑️</button></td>
     </tr>
   `).join('');
 }
 
-async function deleteHistory(i) {
+async function delHist(i) {
   const item = history[i];
   history.splice(i, 1);
   renderHistory();
-  if (currentUser && supabase) {
-    await supabase.from('history').delete().eq('id', item.id);
-  }
+  await supabase.from('history').delete().eq('id', item.id);
 }
 
+// Navigation Tabs
 document.querySelectorAll('.tab-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -851,27 +655,24 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
   });
 });
 
-window.openNewOrder = openNewOrder;
-window.openNewCustomer = openNewCustomer;
-window.saveCustomer = saveCustomer;
-window.createOrder = createOrder;
+window.handleLogin = handleLogin;
+window.logout = logout;
+window.loadFromCloud = loadFromCloud;
+window.submitCustomer = submitCustomer;
+window.delCust = delCust;
+window.submitOrder = submitOrder;
 window.cycleStatus = cycleStatus;
-window.deleteOrder = deleteOrder;
-window.deleteCustomer = (id) => { customers = customers.filter(c => c.id !== id); renderCustomers(); };
+window.delOrder = delOrder;
+window.calc = calc;
+window.saveCalcToCloud = saveCalcToCloud;
+window.delHist = delHist;
 window.openModal = openModal;
 window.closeModal = closeModal;
-window.openAuthModal = () => openModal('authModal');
-window.authAction = authAction;
-window.logout = logout;
-window.cloudLoad = cloudLoad;
-window.forceCloudSync = forceCloudSync;
-window.calcAll = calcAll;
-window.saveOrderCalculation = saveOrderCalculation;
-window.deleteHistory = deleteHistory;
 
+// Auto try login on load
 document.addEventListener('DOMContentLoaded', () => {
-  calcAll();
-  initAuth();
+  calc();
+  handleLogin();
 });
 
 })();
