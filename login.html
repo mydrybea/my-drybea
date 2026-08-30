@@ -1,124 +1,825 @@
 <!DOCTYPE html>
 <html lang="si">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Login | MY DRYBEA</title>
-<meta name="theme-color" content="#10b981">
-<link rel="icon" type="image/jpeg" href="logo.jpg">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=Noto+Sans+Sinhala:wght@400;500;600;700&family=Playfair+Display:wght@700;800;900&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<style>
-:root{
-  --bg-primary:#040d0a; --bg-card:#0d1e18; --bg-elevated:#18352b;
-  --border-strong:rgba(16,185,129,0.3);
-  --text-main:#f0fdf4; --text-secondary:#d1fae5; --text-muted:#6ee7b7;
-  --green:#10b981; --green-deep:#059669; --lime-accent:#a3e635;
-  --bad:#f87171; --bad-bg:rgba(248,113,113,0.12);
-  --gold:#d4af37; --gold-light:#f5e7a3;
-  --radius:16px; --radius-sm:10px;
-  --font:'Inter','Noto Sans Sinhala',sans-serif;
-  --font-display:'Playfair Display',Georgia,serif;
-}
-*{box-sizing:border-box;margin:0;padding:0;}
-body{
-  background:var(--bg-primary); color:var(--text-main); font-family:var(--font);
-  min-height:100vh; min-height:100dvh; display:flex; align-items:center; justify-content:center;
-  padding:20px;
-}
-.card{
-  width:100%; max-width:380px;
-  background:linear-gradient(135deg, var(--bg-card) 0%, var(--bg-elevated) 100%);
-  border:1.5px solid var(--border-strong); border-radius:var(--radius);
-  box-shadow:0 20px 60px rgba(0,0,0,0.6); padding:34px 28px;
-}
-.logo{ width:64px; height:64px; margin:0 auto 12px; display:block; border-radius:16px;
-  border:2px solid var(--gold); object-fit:cover; }
-h1{
-  text-align:center; font-family:var(--font-display); font-weight:900; font-size:1.5rem;
-  color:var(--green); letter-spacing:0.04em; margin-bottom:2px;
-}
-p.sub{ text-align:center; color:var(--text-muted); font-size:12px; margin-bottom:24px; text-transform:uppercase; letter-spacing:0.08em; }
-label{ display:block; font-size:12.5px; color:var(--text-secondary); margin-bottom:6px; font-weight:600; }
-input{
-  width:100%; background:rgba(4,13,10,0.5); border:1.5px solid rgba(16,185,129,0.2);
-  border-radius:var(--radius-sm); padding:12px 14px; color:var(--text-main);
-  font-family:var(--font); font-size:14.5px; margin-bottom:16px;
-}
-input:focus{ outline:none; border-color:var(--green); }
-button{
-  width:100%; padding:13px; border:none; border-radius:var(--radius-sm);
-  background:linear-gradient(135deg, var(--green) 0%, var(--green-deep) 100%);
-  color:#04120c; font-weight:800; font-size:14.5px; cursor:pointer;
-}
-button:disabled{ opacity:0.6; cursor:not-allowed; }
-.error{
-  display:none; background:var(--bad-bg); border:1px solid rgba(248,113,113,0.35);
-  color:#fecaca; padding:10px 12px; border-radius:var(--radius-sm); font-size:12.5px;
-  margin-bottom:14px;
-}
-.error.show{ display:block; }
-.footer{ text-align:center; margin-top:18px; font-size:11px; color:var(--text-muted); opacity:0.7; }
-</style>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Login · MY DRYBEA — Enterprise Access</title>
+    <meta name="theme-color" content="#10b981" />
+    <link rel="icon" type="image/jpeg" href="logo.jpg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Noto+Sans+Sinhala:wght@300;400;500;600;700&family=Playfair+Display:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2">
+    </script>
+    <style>
+        /* ============================================================
+                   LOGIN PORTAL — LUXURY DARK THEME
+                   ============================================================ */
+        :root {
+            --bg-primary: #040d0a;
+            --bg-card: #0d1e18;
+            --bg-elevated: #18352b;
+            --border: rgba(16, 185, 129, 0.15);
+            --border-strong: rgba(16, 185, 129, 0.3);
+            --text-main: #f0fdf4;
+            --text-secondary: #d1fae5;
+            --text-muted: #6ee7b7;
+            --green: #10b981;
+            --green-deep: #059669;
+            --lime-accent: #a3e635;
+            --bad: #f87171;
+            --bad-bg: rgba(248, 113, 113, 0.12);
+            --gold: #d4af37;
+            --gold-light: #f5e7a3;
+            --shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.7);
+            --shadow-glow: 0 0 40px rgba(16, 185, 129, 0.2);
+            --radius: 18px;
+            --radius-sm: 10px;
+            --font: 'Inter', 'Noto Sans Sinhala', -apple-system, BlinkMacSystemFont, sans-serif;
+            --font-display: 'Playfair Display', Georgia, serif;
+            --transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        html {
+            -webkit-text-size-adjust: 100%;
+        }
+
+        body {
+            background: var(--bg-primary);
+            color: var(--text-main);
+            font-family: var(--font);
+            min-height: 100vh;
+            min-height: 100dvh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            position: relative;
+            overflow-x: hidden;
+            line-height: 1.5;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 0;
+            background:
+                radial-gradient(ellipse at 15% 0%, rgba(16, 185, 129, 0.10) 0%, transparent 50%),
+                radial-gradient(ellipse at 85% 100%, rgba(212, 175, 55, 0.07) 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 50%, rgba(163, 230, 53, 0.04) 0%, transparent 60%);
+        }
+
+        /* ---- PORTAL CARD ---- */
+        .portal {
+            position: relative;
+            z-index: 1;
+            width: 100%;
+            max-width: 420px;
+            background: linear-gradient(135deg, var(--bg-card) 0%, var(--bg-elevated) 100%);
+            border: 1.5px solid var(--border-strong);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow-lg), var(--shadow-glow);
+            padding: 38px 32px 30px;
+            overflow: hidden;
+            animation: riseIn 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        @keyframes riseIn {
+            from {
+                opacity: 0;
+                transform: translateY(16px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .portal::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, var(--green) 0%, var(--lime-accent) 25%, var(--gold) 50%, var(--lime-accent) 75%, var(--green) 100%);
+            background-size: 200% 100%;
+            animation: shimmer 4s linear infinite;
+        }
+
+        @keyframes shimmer {
+            0% {
+                background-position: 0% 0%;
+            }
+            100% {
+                background-position: 200% 0%;
+            }
+        }
+
+        /* ---- BRAND ---- */
+        .brand-block {
+            text-align: center;
+            margin-bottom: 26px;
+        }
+
+        .logo-wrap {
+            width: 76px;
+            height: 76px;
+            margin: 0 auto 14px;
+            position: relative;
+        }
+
+        .logo-wrap img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 18px;
+            display: block;
+            border: 2px solid var(--gold);
+            box-shadow: 0 4px 20px rgba(16, 185, 129, 0.35), 0 0 15px rgba(212, 175, 55, 0.4);
+        }
+
+        .brand-block h1 {
+            font-family: var(--font-display);
+            font-weight: 900;
+            letter-spacing: 0.06em;
+            font-size: clamp(1.4rem, 5vw, 1.8rem);
+            background: linear-gradient(135deg, #93c5fd 0%, #a3e635 25%, #f5e7a3 50%, #10b981 75%, #d4af37 100%);
+            background-size: 300% 300%;
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            animation: brandShimmer 4s ease-in-out infinite;
+        }
+
+        @keyframes brandShimmer {
+            0%,
+            100% {
+                background-position: 0% 50%;
+            }
+            50% {
+                background-position: 100% 50%;
+            }
+        }
+
+        .brand-block .sub {
+            color: var(--text-muted);
+            font-size: 12px;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            margin-top: 6px;
+            font-weight: 600;
+        }
+
+        .portal-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 14px;
+            font-size: 11px;
+            color: var(--gold-light);
+            background: rgba(212, 175, 55, 0.10);
+            border: 1px solid rgba(212, 175, 55, 0.30);
+            padding: 5px 14px;
+            border-radius: 99px;
+            letter-spacing: 0.05em;
+        }
+
+        /* ---- FORM ---- */
+        form {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .field label {
+            display: block;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 7px;
+            letter-spacing: 0.03em;
+        }
+
+        .input-wrap {
+            position: relative;
+        }
+
+        .input-wrap .icon {
+            position: absolute;
+            left: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 16px;
+            opacity: 0.7;
+            pointer-events: none;
+        }
+
+        .field input {
+            width: 100%;
+            background: rgba(4, 13, 10, 0.55);
+            border: 1.5px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 13px 14px 13px 42px;
+            color: var(--text-main);
+            font-family: var(--font);
+            font-size: 14.5px;
+            transition: border-color var(--transition), box-shadow var(--transition);
+            -webkit-appearance: none;
+            appearance: none;
+        }
+
+        .field input:focus {
+            outline: none;
+            border-color: var(--green);
+            box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
+        }
+
+        .field input::placeholder {
+            color: rgba(209, 250, 229, 0.35);
+        }
+
+        .toggle-eye {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 15px;
+            opacity: 0.65;
+            padding: 4px;
+            color: var(--text-muted);
+        }
+
+        .toggle-eye:hover {
+            opacity: 1;
+        }
+
+        .row-between {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 12px;
+            margin-top: -4px;
+        }
+
+        .row-between .status-dot {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .row-between .status-dot .dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .dot.green {
+            background: #10b981;
+        }
+        .dot.yellow {
+            background: #fbbf24;
+        }
+        .dot.red {
+            background: #f87171;
+        }
+
+        /* ---- ALERT ---- */
+        .alert {
+            display: none;
+            align-items: flex-start;
+            gap: 9px;
+            background: var(--bad-bg);
+            border: 1px solid rgba(248, 113, 113, 0.35);
+            color: #fecaca;
+            padding: 11px 13px;
+            border-radius: var(--radius-sm);
+            font-size: 12.5px;
+            line-height: 1.5;
+        }
+
+        .alert.show {
+            display: flex;
+            animation: shake 0.35s ease;
+        }
+
+        @keyframes shake {
+            10%,
+            90% {
+                transform: translateX(-1px);
+            }
+            20%,
+            80% {
+                transform: translateX(2px);
+            }
+            30%,
+            50%,
+            70% {
+                transform: translateX(-4px);
+            }
+            40%,
+            60% {
+                transform: translateX(4px);
+            }
+        }
+
+        /* ---- BUTTON ---- */
+        .btn-login {
+            margin-top: 6px;
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: var(--radius-sm);
+            background: linear-gradient(135deg, var(--green) 0%, var(--green-deep) 100%);
+            color: #04120c;
+            font-weight: 800;
+            font-size: 14.5px;
+            letter-spacing: 0.03em;
+            cursor: pointer;
+            box-shadow: 0 8px 24px rgba(16, 185, 129, 0.35);
+            transition: transform var(--transition), box-shadow var(--transition), opacity var(--transition);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn-login:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 10px 30px rgba(16, 185, 129, 0.5);
+        }
+
+        .btn-login:active:not(:disabled) {
+            transform: translateY(0);
+        }
+
+        .btn-login:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .spinner {
+            width: 15px;
+            height: 15px;
+            border: 2.5px solid rgba(4, 18, 12, 0.3);
+            border-top-color: #04120c;
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+            display: none;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* ---- FOOTER ---- */
+        .footer-note {
+            text-align: center;
+            margin-top: 22px;
+            font-size: 11px;
+            color: var(--text-muted);
+            opacity: 0.75;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            align-items: center;
+        }
+
+        .footer-note .badges {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            margin-top: 2px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .footer-note .badges span {
+            background: rgba(16, 185, 129, 0.08);
+            border: 1px solid var(--border);
+            padding: 3px 10px;
+            border-radius: 99px;
+            font-size: 10px;
+            letter-spacing: 0.04em;
+            color: var(--text-secondary);
+        }
+
+        /* ---- LOCK SCREEN (redirect overlay) ---- */
+        .lock-screen {
+            position: fixed;
+            inset: 0;
+            background: var(--bg-primary);
+            z-index: 999;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            gap: 14px;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .lock-screen .big-lock {
+            font-size: 46px;
+            filter: drop-shadow(0 0 20px rgba(16, 185, 129, 0.5));
+        }
+
+        .lock-screen p {
+            color: var(--text-muted);
+            font-size: 13px;
+            letter-spacing: 0.06em;
+        }
+
+        /* ---- RESPONSIVE ---- */
+        @media (max-width: 420px) {
+            .portal {
+                padding: 30px 22px 24px;
+            }
+        }
+
+        @media (max-width: 360px) {
+            .portal {
+                padding: 24px 16px 20px;
+            }
+            .brand-block h1 {
+                font-size: 1.2rem;
+            }
+            .field input {
+                font-size: 13px;
+                padding: 11px 12px 11px 38px;
+            }
+            .btn-login {
+                font-size: 13px;
+                padding: 12px;
+            }
+        }
+
+        /* ---- UTILITY ---- */
+        .hidden {
+            display: none !important;
+        }
+
+        /* ---- CREDENTIAL HINT ---- */
+        .cred-hint {
+            background: rgba(16, 185, 129, 0.06);
+            border: 1px dashed rgba(16, 185, 129, 0.20);
+            border-radius: var(--radius-sm);
+            padding: 8px 12px;
+            font-size: 11px;
+            color: var(--text-muted);
+            text-align: center;
+            letter-spacing: 0.02em;
+        }
+
+        .cred-hint strong {
+            color: var(--gold-light);
+            font-weight: 600;
+        }
+    </style>
 </head>
 <body>
 
-<div class="card">
-  <img src="logo.jpg" class="logo" alt="MY DRYBEA" onerror="this.src='https://kommodo.ai/i/7zQwNJ1aSv6KnXu59Okw'">
-  <h1>MY DRYBEA</h1>
-  <p class="sub">Enterprise Login</p>
+    <!-- ============================================================
+    PORTAL CARD
+    ============================================================ -->
+    <div class="portal" id="portalCard">
+        <div class="brand-block">
+            <div class="logo-wrap">
+                <img src="logo.jpg" alt="MY DRYBEA" onerror="this.src='https://kommodo.ai/i/7zQwNJ1aSv6KnXu59Okw'" />
+            </div>
+            <h1>MY DRYBEA</h1>
+            <p class="sub">Enterprise Umbalakada Management System</p>
+            <span class="portal-tag">🔒 Secure Business Access Portal</span>
+        </div>
 
-  <div class="error" id="errBox"></div>
+        <form id="loginForm" autocomplete="off" novalidate>
+            <div class="field">
+                <label for="email">Business Email</label>
+                <div class="input-wrap">
+                    <span class="icon">✉️</span>
+                    <input type="email" id="email" placeholder="you@company.com" required autocomplete="username" value="baybreezelk@gmail.com" />
+                </div>
+            </div>
 
-  <form id="loginForm">
-    <label for="email">Email</label>
-    <input type="email" id="email" required autocomplete="username">
+            <div class="field">
+                <label for="password">Password</label>
+                <div class="input-wrap">
+                    <span class="icon">🔑</span>
+                    <input type="password" id="password" placeholder="Enter your password" required autocomplete="current-password" style="padding-right:42px;" />
+                    <button type="button" class="toggle-eye" id="eyeBtn" aria-label="Show password">👁️</button>
+                </div>
+            </div>
 
-    <label for="password">Password</label>
-    <input type="password" id="password" required autocomplete="current-password">
+            <div class="cred-hint">
+                🔐 Use <strong>baybreezelk@gmail.com</strong> · password <strong>Td19970206</strong>
+                <br /><span style="font-size:10px;opacity:0.6;">(First-run auto-creates the account if needed)</span>
+            </div>
 
-    <button type="submit" id="loginBtn">🔐 Login</button>
-  </form>
+            <div class="row-between">
+                <span style="color:var(--text-muted);">v33 · Supabase Secured</span>
+                <span class="status-dot" id="netStatus">
+                    <span class="dot yellow"></span> Connecting…
+                </span>
+            </div>
 
-  <div class="footer">© <span id="year"></span> MY DRYBEA — Authorized Access Only</div>
-</div>
+            <div class="alert" id="alertBox">
+                <span>⚠️</span>
+                <span id="alertText">Invalid email or password. Please try again.</span>
+            </div>
 
-<script>
-const SUPABASE_URL = 'https://dztuyfiiyxllnvciunjv.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR6dHV5ZmlpeXhsbG52Y2l1bmp2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgwMDg3NjUsImV4cCI6MjEwMzU4NDc2NX0.NT5_fvlwZZr_MQMgerYaIZYHeeJ9l9SrConqcN50M84';
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            <button type="submit" class="btn-login" id="loginBtn">
+                <span class="spinner" id="spinner"></span>
+                <span id="loginBtnText">🔐 Access Dashboard</span>
+            </button>
+        </form>
 
-const $ = id => document.getElementById(id);
-$('year').textContent = new Date().getFullYear();
+        <div class="footer-note">
+            <span>© <span id="year"></span> MY DRYBEA Seafood Market — All Rights Reserved</span>
+            <div class="badges">
+                <span>🛡️ Supabase Auth</span>
+                <span>🌐 Authorized Personnel Only</span>
+            </div>
+        </div>
+    </div>
 
-// Already logged in? Skip straight to the app.
-supabase.auth.getSession().then(({ data: { session } }) => {
-  if (session) window.location.replace('index.html');
-});
+    <!-- ============================================================
+    LOCK SCREEN (shown during redirect)
+    ============================================================ -->
+    <div class="lock-screen" id="lockScreen">
+        <div class="big-lock">🔓</div>
+        <p>ACCESS GRANTED — LOADING DASHBOARD…</p>
+    </div>
 
-$('loginForm').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  $('errBox').classList.remove('show');
-  $('loginBtn').disabled = true;
-  $('loginBtn').textContent = 'Checking…';
+    <!-- ============================================================
+    SCRIPT
+    ============================================================ -->
+    <script>
+        (function() {
+            'use strict';
 
-  const email = $('email').value.trim();
-  const password = $('password').value;
+            /* ==============================================================
+               CONFIG
+               ============================================================== */
+            const SUPABASE_URL = 'https://dztuyfiiyxllnvciunjv.supabase.co';
+            const SUPABASE_ANON_KEY =
+                'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR6dHV5ZmlpeXhsbG52Y2l1bmp2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgwMDg3NjUsImV4cCI6MjEwMzU4NDc2NX0.NT5_fvlwZZr_MQMgerYaIZYHeeJ9l9SrConqcN50M84';
 
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
+            const AUTHORIZED_EMAIL = 'baybreezelk@gmail.com';
+            const REDIRECT_TO = 'index.html';
+            const MAX_ATTEMPTS = 5;
+            const LOCKOUT_MINUTES = 2;
+            const ATTEMPTS_KEY = 'mydrybea_login_attempts';
 
-  if (error) {
-    $('errBox').textContent = error.message;
-    $('errBox').classList.add('show');
-    $('loginBtn').disabled = false;
-    $('loginBtn').textContent = '🔐 Login';
-  } else {
-    window.location.replace('index.html');
-  }
-});
-</script>
+            const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+            /* ==============================================================
+               DOM REFS
+               ============================================================== */
+            const $ = (id) => document.getElementById(id);
+            const form = $('loginForm');
+            const alertBox = $('alertBox');
+            const alertText = $('alertText');
+            const loginBtn = $('loginBtn');
+            const spinner = $('spinner');
+            const btnText = $('loginBtnText');
+            const eyeBtn = $('eyeBtn');
+            const pwField = $('password');
+            const netStatus = $('netStatus');
+            const lockScreen = $('lockScreen');
+            const portalCard = $('portalCard');
+            const emailField = $('email');
+
+            $('year').textContent = new Date().getFullYear();
+
+            /* ==============================================================
+               STATE
+               ============================================================== */
+            let isAuthCheckDone = false;
+
+            /* ==============================================================
+               HELPERS
+               ============================================================== */
+            function setNetStatus(text, dotColor) {
+                const dot = netStatus.querySelector('.dot');
+                if (dot) dot.className = 'dot ' + (dotColor || 'green');
+                netStatus.innerHTML = '<span class="dot ' + (dotColor || 'green') + '"></span> ' + text;
+            }
+
+            function showAlert(msg) {
+                alertText.textContent = msg;
+                alertBox.classList.add('show');
+            }
+
+            function hideAlert() {
+                alertBox.classList.remove('show');
+            }
+
+            function setBusy(busy, label) {
+                loginBtn.disabled = busy;
+                spinner.style.display = busy ? 'inline-block' : 'none';
+                btnText.textContent = label || (busy ? 'Authenticating…' : '🔐 Access Dashboard');
+            }
+
+            function getAttempts() {
+                try { return JSON.parse(localStorage.getItem(ATTEMPTS_KEY)) || { count: 0, lockedUntil: 0 }; } catch (
+                e) { return { count: 0, lockedUntil: 0 }; }
+            }
+
+            function setAttempts(obj) {
+                localStorage.setItem(ATTEMPTS_KEY, JSON.stringify(obj));
+            }
+
+            function goToApp(instant) {
+                if (instant) {
+                    window.location.replace(REDIRECT_TO);
+                    return;
+                }
+                portalCard.style.opacity = '0.6';
+                lockScreen.style.display = 'flex';
+                setTimeout(() => {
+                    window.location.replace(REDIRECT_TO);
+                }, 500);
+            }
+
+            /* ==============================================================
+               PASSWORD TOGGLE
+               ============================================================== */
+            eyeBtn.addEventListener('click', () => {
+                const show = pwField.type === 'password';
+                pwField.type = show ? 'text' : 'password';
+                eyeBtn.textContent = show ? '🙈' : '👁️';
+            });
+
+            /* ==============================================================
+               CHECK EXISTING SESSION ON LOAD
+               ============================================================== */
+            (async function checkExistingSession() {
+                try {
+                    setNetStatus('Checking session…', 'yellow');
+                    const { data: { session } } = await supabase.auth.getSession();
+
+                    if (session && session.user && session.user.email &&
+                        session.user.email.toLowerCase() === AUTHORIZED_EMAIL) {
+                        setNetStatus('Session found ✓', 'green');
+                        isAuthCheckDone = true;
+                        // If we already have a valid session, skip straight to the app.
+                        goToApp(true);
+                        return;
+                    }
+                    setNetStatus('Ready', 'green');
+                    isAuthCheckDone = true;
+                } catch (e) {
+                    setNetStatus('Ready', 'green');
+                    isAuthCheckDone = true;
+                }
+            })();
+
+            /* ==============================================================
+               FORM SUBMIT — LOGIN + FIRST-RUN BOOTSTRAP
+               ============================================================== */
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                hideAlert();
+
+                // Check lockout
+                const attempts = getAttempts();
+                if (attempts.lockedUntil && attempts.lockedUntil > Date.now()) {
+                    const mins = Math.ceil((attempts.lockedUntil - Date.now()) / 60000);
+                    showAlert(`Too many failed attempts. Try again in ${mins} minute(s).`);
+                    return;
+                }
+
+                const email = emailField.value.trim().toLowerCase();
+                const password = pwField.value;
+
+                if (!email || !password) {
+                    showAlert('Please enter both email and password.');
+                    return;
+                }
+
+                if (email !== AUTHORIZED_EMAIL) {
+                    showAlert('This portal is restricted to the authorized company account.');
+                    return;
+                }
+
+                setBusy(true, 'Verifying…');
+
+                try {
+                    // ---- STEP 1: Try sign-in ----
+                    let { data, error } = await supabase.auth.signInWithPassword({ email, password });
+
+                    // ---- STEP 2: If "Invalid login credentials", auto-create the account ----
+                    if (error && /Invalid login credentials/i.test(error.message)) {
+                        const signUpRes = await supabase.auth.signUp({
+                            email,
+                            password,
+                            options: {
+                                data: { full_name: 'MY DRYBEA Admin' }
+                            }
+                        });
+
+                        if (signUpRes.error) {
+                            // If sign-up fails because user already exists, try sign-in again
+                            if (/User already registered/i.test(signUpRes.error.message)) {
+                                const retry = await supabase.auth.signInWithPassword({ email, password });
+                                if (retry.error) throw retry.error;
+                                data = retry.data;
+                                error = null;
+                            } else {
+                                throw signUpRes.error;
+                            }
+                        } else if (signUpRes.data.session) {
+                            // Sign-up succeeded and auto-logged in
+                            data = signUpRes.data;
+                            error = null;
+                        } else {
+                            // Sign-up succeeded but requires email confirmation
+                            setBusy(false, '🔐 Access Dashboard');
+                            showAlert(
+                                '✅ Account created! Please check your email to confirm, then sign in again. (Or disable "Confirm email" in Supabase → Authentication → Providers)'
+                                );
+                            return;
+                        }
+                    }
+
+                    // ---- STEP 3: Handle any other error ----
+                    if (error) throw error;
+
+                    // ---- STEP 4: Success ----
+                    setAttempts({ count: 0, lockedUntil: 0 });
+                    btnText.textContent = 'Access Granted ✓';
+                    setNetStatus('Authenticated ✓', 'green');
+
+                    // Save a flag that we're logged in (for the app to detect)
+                    sessionStorage.setItem('mydrybea_auth_pass', '1');
+
+                    goToApp(false);
+
+                } catch (err) {
+                    // ---- STEP 5: Handle failure ----
+                    const attempts2 = getAttempts();
+                    const count = attempts2.count + 1;
+
+                    if (count >= MAX_ATTEMPTS) {
+                        setAttempts({ count: 0, lockedUntil: Date.now() + LOCKOUT_MINUTES * 60000 });
+                        showAlert(`Too many failed attempts. Locked for ${LOCKOUT_MINUTES} minutes.`);
+                    } else {
+                        setAttempts({ count, lockedUntil: 0 });
+                        const msg = err.message || 'Sign-in failed.';
+                        showAlert(`${msg} (${MAX_ATTEMPTS - count} attempt(s) remaining)`);
+                    }
+
+                    setBusy(false, '🔐 Access Dashboard');
+                }
+            });
+
+            /* ==============================================================
+               KEYBOARD SHORTCUT: ENTER to submit
+               ============================================================== */
+            pwField.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') form.dispatchEvent(new Event('submit'));
+            });
+
+            emailField.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') form.dispatchEvent(new Event('submit'));
+            });
+
+            /* ==============================================================
+               CLEAR ALERT ON TYPING
+               ============================================================== */
+            emailField.addEventListener('input', hideAlert);
+            pwField.addEventListener('input', hideAlert);
+
+            /* ==============================================================
+               AUTO-FOCUS
+               ============================================================== */
+            window.addEventListener('load', () => {
+                // If email is pre-filled, focus password
+                if (emailField.value) {
+                    pwField.focus();
+                } else {
+                    emailField.focus();
+                }
+            });
+
+        })();
+    </script>
 </body>
 </html>
