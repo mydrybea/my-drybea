@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>MY DRYBEA | Enterprise Umbalakada Management System v33</title>
+<title>MY DRYBEA | Enterprise Umbalakada Management System v34 • Supabase PostgreSQL</title>
 <meta name="description" content="MY DRYBEA - Complete enterprise management system for dried fish (Umbalakada) business: costing, production, orders, invoicing, delivery.">
 <meta name="theme-color" content="#10b981">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -853,7 +853,45 @@ td.num { text-align: right; font-family: 'SF Mono', 'Fira Code', monospace; font
 .data-status .dot.green { background: #10b981; }
 .data-status .dot.yellow { background: #fbbf24; }
 .data-status .dot.red { background: #f87171; }
-</style>
+
+.architecture {
+  background: linear-gradient(135deg, var(--bg-card), var(--bg-secondary));
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  box-shadow: var(--shadow-sm);
+}
+.arch-title {
+  font-size: .7rem;
+  letter-spacing: .14em;
+  color: var(--gold-light);
+  font-weight: 800;
+  margin-bottom: 9px;
+  text-align: center;
+}
+.arch-flow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.arch-node {
+  border: 1px solid var(--border);
+  background: var(--green-subtle);
+  color: var(--text-secondary);
+  border-radius: 999px;
+  padding: 5px 9px;
+  font-size: .7rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.arch-arrow { color: var(--gold); font-weight: 900; }
+@media (max-width: 768px) {
+  .architecture { overflow-x: auto; }
+  .arch-flow { justify-content: flex-start; flex-wrap: nowrap; width: max-content; }
+}
+
 </head>
 <body>
 
@@ -869,7 +907,8 @@ td.num { text-align: right; font-family: 'SF Mono', 'Fira Code', monospace; font
       </div>
     </div>
     <div class="header-actions">
-      <span class="data-status" id="dataStatus"><span class="dot green"></span> Data Saved Locally</span>
+      <span class="data-status" id="dataStatus"><span class="dot green"></span> Local</span>
+      <span class="data-status" id="roleStatus">👤 User</span>
       <button class="btn btn-sm" id="themeToggle" onclick="toggleTheme()" aria-label="Toggle theme">🌙</button>
       <button class="btn btn-sm" onclick="openQR()" aria-label="QR Code">📱 QR</button>
       <button class="btn btn-sm btn-primary" onclick="exportCSV()" aria-label="Export CSV">📊 CSV</button>
@@ -892,6 +931,22 @@ td.num { text-align: right; font-family: 'SF Mono', 'Fira Code', monospace; font
     <button class="tab-btn" data-tab="history" role="tab">📜 History</button>
     <button class="tab-btn" data-tab="data" role="tab">⚙️ Data</button>
   </nav>
+
+  <section class="architecture no-print" aria-label="MY DRYBEA data architecture">
+    <div class="arch-title">MY DRYBEA • SECURE CLOUD ARCHITECTURE</div>
+    <div class="arch-flow">
+      <span class="arch-node">🔐 Supabase Auth</span><span class="arch-arrow">→</span>
+      <span class="arch-node">👥 Admin / User</span><span class="arch-arrow">→</span>
+      <span class="arch-node">🗄️ PostgreSQL</span><span class="arch-arrow">→</span>
+      <span class="arch-node">📦 Products</span><span class="arch-arrow">→</span>
+      <span class="arch-node">👤 Customers</span><span class="arch-arrow">→</span>
+      <span class="arch-node">🧾 Orders</span><span class="arch-arrow">→</span>
+      <span class="arch-node">🏭 Production</span><span class="arch-arrow">→</span>
+      <span class="arch-node">💰 Costing</span><span class="arch-arrow">→</span>
+      <span class="arch-node">📜 History</span><span class="arch-arrow">→</span>
+      <span class="arch-node">📈 Dashboard</span>
+    </div>
+  </section>
 
   <!-- ============ CALCULATOR TAB ============ -->
   <section id="calculator" class="tab-panel active" role="tabpanel">
@@ -1316,6 +1371,12 @@ td.num { text-align: right; font-family: 'SF Mono', 'Fira Code', monospace; font
         <button class="btn" onclick="cloudLoad()">☁️ Cloud Load</button>
       </div>
       <div class="notice" style="margin-top:12px;">
+        <strong>Cloud database:</strong> Logged-in data is stored in separate PostgreSQL tables:
+        <code>profiles</code>, <code>app_settings</code>, <code>products</code>, <code>customers</code>,
+        <code>orders</code>, <code>production</code>, <code>costing</code> and <code>history</code>.
+        <br><small>Run <strong>supabase_schema.sql</strong> once in the Supabase SQL Editor before first cloud save.</small>
+      </div>
+      <div class="notice" style="margin-top:12px;">
         <strong>Safety Snapshots:</strong> Last 5 versions are automatically saved. On restore, a snapshot is taken automatically.
       </div>
     </div>
@@ -1452,12 +1513,14 @@ const CUSTOMERS_KEY = 'mydrybea_v33_customers';
 const SNAPSHOTS_KEY = 'mydrybea_v33_snapshots';
 const MAX_SNAPSHOTS = 5;
 const USER_KEY = 'mydrybea_v33_user';
+const SUPABASE_SCHEMA_VERSION = 1;
 const SUPABASE_URL = 'https://dztuyfiiyxllnvciunjv.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR6dHV5ZmlpeXhsbG52Y2l1bmp2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgwMDg3NjUsImV4cCI6MjEwMzU4NDc2NX0.NT5_fvlwZZr_MQMgerYaIZYHeeJ9l9SrConqcN50M84';
 
 // ==================== SUPABASE ====================
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 let currentUser = null;
+let currentRole = 'user';
 let isAuthModeLogin = true; // true=login, false=signup
 
 // ==================== STATE ====================
@@ -2165,6 +2228,8 @@ function saveOrder() {
   const overheadPerPack = getAllocatedOverheadPerPack();
   const netProfitPerPack = r.profit - overheadPerPack;
   history.push({
+    id: (crypto.randomUUID ? crypto.randomUUID() : `hist-${Date.now()}-${Math.random().toString(36).slice(2)}`),
+    createdAt: new Date().toISOString(),
     date: new Date().toLocaleString(),
     pack: state.packSize,
     mix: state.mixRatio === 'custom' ? `${state.customLinna}/${state.customBalaya}/${state.customKawalam}` : state.mixRatio,
@@ -2259,7 +2324,6 @@ function restoreFromSnapshot(index) {
   if (index >= snapshots.length) return;
   const snap = snapshots[index];
   if (!snap) return;
-  // Take a snapshot before restore (safety)
   takeSnapshot();
   Object.assign(state, snap.data.state);
   history = snap.data.history || [];
@@ -2284,22 +2348,20 @@ function saveAll() {
   saveOrders();
   saveCustomers();
   lastSaveTime = new Date();
-  updateStatus('Data saved locally');
+  updateStatus(currentUser ? 'Cloud sync pending' : 'Saved locally');
 }
 
 function onDataChange() {
   calcAll();
   calcProduction();
-  // Auto-save with debounce
   if (saveTimer) clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => {
+  saveTimer = setTimeout(async () => {
     saveAll();
     takeSnapshot();
-    // If user is logged in, sync to cloud
     if (currentUser) {
-      cloudSave(); // silent save
+      await cloudSave({ silent: true });
     }
-    updateStatus('Data auto-saved');
+    updateStatus(currentUser ? 'Cloud synced' : 'Saved locally');
     saveTimer = null;
   }, 800);
 }
@@ -2307,69 +2369,302 @@ function onDataChange() {
 function updateStatus(msg) {
   const el = $('dataStatus');
   if (el) {
-    const dot = el.querySelector('.dot');
-    if (dot) dot.className = 'dot green';
-    const parts = el.textContent.split(' · ');
-    el.innerHTML = `<span class="dot green"></span> ${msg}${lastSaveTime ? ' · '+lastSaveTime.toLocaleTimeString() : ''}`;
+    const isCloud = !!currentUser && /cloud/i.test(msg);
+    const color = isCloud ? 'green' : (currentUser ? 'yellow' : 'green');
+    el.innerHTML = `<span class="dot ${color}"></span> ${msg}${lastSaveTime ? ' · '+lastSaveTime.toLocaleTimeString() : ''}`;
   }
-  // Also footer status
   const footerEl = $('footerStatus');
   if (footerEl) {
-    const dot = footerEl.querySelector('.dot');
-    if (dot) dot.className = 'dot green';
-    footerEl.innerHTML = `<span class="dot green"></span> ${currentUser ? '☁️ Cloud' : 'Local'}`;
+    footerEl.innerHTML = `<span class="dot ${currentUser ? 'green' : 'yellow'}"></span> ${currentUser ? '☁️ Cloud' : 'Local'}`;
+  }
+  const roleEl = $('roleStatus');
+  if (roleEl) roleEl.textContent = currentUser ? `👤 ${currentRole === 'admin' ? 'Admin' : 'User'}` : '👤 Guest';
+}
+
+// ==================== NORMALIZED CLOUD DATA ====================
+function productRows() {
+  return Object.keys(PACKS).map(key => ({
+    id: `${currentUser.id}:pack-${key}`,
+    user_id: currentUser.id,
+    name: `Umbalakada ${PACKS[key].label}`,
+    pack_size_g: Number(key),
+    mrp: Number(state.dashSp[key] || PACKS[key].mrp),
+    active: true,
+    updated_at: new Date().toISOString()
+  }));
+}
+
+function costingRows() {
+  const mix = getMixPct();
+  return Object.keys(PACKS).map(key => {
+    const r = calculatePack(
+      key, state.linnaPrice, state.balayaPrice, state.kawalamPrice,
+      mix, state.mode, state.targetProfit, state.customSp
+    );
+    return {
+      id: `${currentUser.id}:cost-${key}`,
+      user_id: currentUser.id,
+      product_id: `${currentUser.id}:pack-${key}`,
+      pack_size_g: Number(key),
+      linna_cost: Number(r.linnaCost.toFixed(4)),
+      balaya_cost: Number(r.balayaCost.toFixed(4)),
+      premium_cost: Number(r.premiumCost.toFixed(4)),
+      raw_fish_cost: Number(r.rawFishCost.toFixed(4)),
+      grinding_cost: Number(r.p.grind.toFixed(4)),
+      packaging_cost: Number(r.p.pack.toFixed(4)),
+      packing_labour: Number(r.packingLabour.toFixed(4)),
+      total_cost: Number(r.totalCost.toFixed(4)),
+      selling_price: Number(r.sp.toFixed(4)),
+      profit: Number(r.profit.toFixed(4)),
+      margin: Number(r.margin.toFixed(4)),
+      mix_ratio: state.mixRatio === 'custom'
+        ? `${state.customLinna}/${state.customBalaya}/${state.customKawalam}`
+        : state.mixRatio,
+      updated_at: new Date().toISOString()
+    };
+  });
+}
+
+function productionRow() {
+  const p = state.production || {};
+  return {
+    id: 'current',
+    user_id: currentUser.id,
+    raw_linna: Number(p.rawLinna || 0),
+    raw_balaya: Number(p.rawBalaya || 0),
+    raw_kawalam: Number(p.rawKawalam || 0),
+    yield_linna: Number(p.yieldLinna || 0),
+    yield_balaya: Number(p.yieldBalaya || 0),
+    yield_kawalam: Number(p.yieldKawalam || 0),
+    daily_raw_kg: Number(p.dailyRawKg || 0),
+    work_days: Number(p.workDays || 0),
+    prod_transport: Number(p.prodTransport || 0),
+    prod_firewood: Number(p.prodFirewood || 0),
+    prod_workers: Number(p.prodWorkers || 0),
+    prod_other: Number(p.prodOther || 0),
+    fin_linna: Number(p.finLinna || 0),
+    fin_balaya: Number(p.finBalaya || 0),
+    fin_kawalam: Number(p.finKawalam || 0),
+    updated_at: new Date().toISOString()
+  };
+}
+
+function customerRows() {
+  return customers.map(c => ({
+    id: String(c.id),
+    user_id: currentUser.id,
+    name: c.name || '',
+    phone: c.phone || '',
+    address: c.address || '',
+    created_at: c.createdAt ? new Date(c.createdAt).toISOString() : new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  }));
+}
+
+function orderRows() {
+  return orders.map(o => ({
+    id: String(o.id),
+    user_id: currentUser.id,
+    customer_id: String(o.customerId),
+    product_size_g: Number(o.product || 0),
+    qty: Number(o.qty || 0),
+    unit_price: Number(o.unitPrice || 0),
+    total: Number(o.total || 0),
+    address: o.address || '',
+    notes: o.notes || '',
+    status: o.status || 'pending',
+    created_at: o.createdAt || new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  }));
+}
+
+function historyRows() {
+  return history.map((h, i) => {
+    if (!h.id) h.id = (crypto.randomUUID ? crypto.randomUUID() : `hist-${Date.now()}-${i}-${Math.random().toString(36).slice(2)}`);
+    if (!h.createdAt) h.createdAt = new Date().toISOString();
+    return {
+    id: String(h.id),
+    user_id: currentUser.id,
+    date_text: h.date || '',
+    pack_size_g: Number(h.pack || 0),
+    mix: h.mix || '',
+    selling_price: Number(h.sp || 0),
+    cost: Number(h.cost || 0),
+    profit: Number(h.profit || 0),
+    net_profit: Number(h.netProfit || 0),
+    created_at: h.createdAt || new Date().toISOString()
+    };
+  });
+}
+
+async function syncRows(table, rows, options = {}) {
+  const { data: existing, error: readError } = await supabase
+    .from(table).select('id').eq('user_id', currentUser.id);
+  if (readError) throw readError;
+
+  const incomingIds = new Set(rows.map(r => String(r.id)));
+  const staleIds = (existing || []).map(r => String(r.id)).filter(id => !incomingIds.has(id));
+
+  if (!options.skipDelete && staleIds.length) {
+    const { error } = await supabase.from(table).delete().eq('user_id', currentUser.id).in('id', staleIds);
+    if (error) throw error;
+  }
+  if (rows.length) {
+    const { error } = await supabase.from(table).upsert(rows, { onConflict: options.onConflict || 'id' });
+    if (error) throw error;
   }
 }
 
-// ==================== CLOUD SYNC ====================
-async function cloudSave() {
-  if (!currentUser) { alert('Please login first.'); return; }
+async function ensureProfile() {
+  if (!currentUser) return;
+  const { data, error } = await supabase
+    .from('profiles').select('id,email,role').eq('id', currentUser.id).maybeSingle();
+  if (error) throw error;
+  if (!data) {
+    const { error: insertError } = await supabase.from('profiles').insert({
+      id: currentUser.id, email: currentUser.email || '', role: 'user'
+    });
+    if (insertError) throw insertError;
+    currentRole = 'user';
+  } else {
+    currentRole = data.role || 'user';
+  }
+  updateStatus('Authenticated');
+}
+
+async function cloudSave({silent=false} = {}) {
+  if (!currentUser) {
+    if (!silent) alert('Please login first.');
+    return false;
+  }
+
   try {
-    const payload = { state, history, orders, customers };
-    const { error } = await supabase
-      .from('app_data')
-      .upsert({ user_id: currentUser.id, data: payload, updated_at: new Date().toISOString() });
-    if (error) throw error;
+    const now = new Date().toISOString();
+
+    // 1) User/session settings
+    const { error: settingsError } = await supabase.from('app_settings').upsert({
+      user_id: currentUser.id,
+      state: { ...state },
+      schema_version: SUPABASE_SCHEMA_VERSION,
+      updated_at: now
+    }, { onConflict: 'user_id' });
+    if (settingsError) throw settingsError;
+
+    // 2) Domain data — normalized PostgreSQL tables
+    // Customers are upserted first so new orders can satisfy the FK.
+    await syncRows('customers', customerRows(), { skipDelete: true });
+    await syncRows('orders', orderRows());
+    // Now it is safe to remove customers deleted in the UI.
+    await syncRows('customers', customerRows());
+    await syncRows('products', productRows());
+    await syncRows('production', [productionRow()]);
+    await syncRows('costing', costingRows());
+    await syncRows('history', historyRows());
+
     updateStatus('Cloud save successful');
+    return true;
   } catch (e) {
     console.error('Cloud save error:', e);
-    alert('Cloud save failed: ' + e.message);
+    updateStatus('Cloud save failed');
+    if (!silent) alert('Cloud save failed: ' + (e.message || e));
+    return false;
   }
 }
 
 async function cloudLoad() {
-  if (!currentUser) { alert('Please login first.'); return; }
+  if (!currentUser) {
+    alert('Please login first.');
+    return;
+  }
+
   try {
-    const { data, error } = await supabase
-      .from('app_data')
-      .select('data')
-      .eq('user_id', currentUser.id)
-      .order('updated_at', { ascending: false })
-      .limit(1);
-    if (error) throw error;
-    if (!data || data.length === 0) { alert('No cloud data found.'); return; }
-    const payload = data[0].data;
-    // Take snapshot before overwriting
-    takeSnapshot();
-    Object.assign(state, payload.state);
-    history = payload.history || [];
-    orders = payload.orders || [];
-    customers = payload.customers || [];
-    syncUI();
-    calcAll();
-    calcProduction();
-    renderHistory();
-    renderOrders();
-    renderCustomers();
-    renderDelivery();
-    updateOrderStats();
-    updateCustomerSelect();
-    saveAll();
-    updateStatus('Cloud data loaded');
-    alert('Cloud data loaded successfully!');
+    await ensureProfile();
+
+    const [settingsRes, customersRes, ordersRes, productionRes, historyRes] = await Promise.all([
+      supabase.from('app_settings').select('state').eq('user_id', currentUser.id).maybeSingle(),
+      supabase.from('customers').select('*').eq('user_id', currentUser.id).order('created_at', {ascending:true}),
+      supabase.from('orders').select('*').eq('user_id', currentUser.id).order('created_at', {ascending:true}),
+      supabase.from('production').select('*').eq('user_id', currentUser.id).order('updated_at', {ascending:false}).limit(1),
+      supabase.from('history').select('*').eq('user_id', currentUser.id).order('created_at', {ascending:true})
+    ]);
+
+    for (const r of [settingsRes, customersRes, ordersRes, productionRes, historyRes]) {
+      if (r.error) throw r.error;
+    }
+
+    const hasNormalizedData =
+      !!settingsRes.data ||
+      (customersRes.data || []).length > 0 ||
+      (ordersRes.data || []).length > 0 ||
+      (productionRes.data || []).length > 0 ||
+      (historyRes.data || []).length > 0;
+
+    // Load normalized cloud data.
+    if (settingsRes.data?.state) Object.assign(state, settingsRes.data.state);
+
+    customers = (customersRes.data || []).map(c => ({
+      id: String(c.id), name: c.name, phone: c.phone || '', address: c.address || '',
+      createdAt: c.created_at
+    }));
+
+    orders = (ordersRes.data || []).map(o => ({
+      id: String(o.id), customerId: String(o.customer_id), product: String(o.product_size_g),
+      qty: Number(o.qty), unitPrice: Number(o.unit_price), total: Number(o.total),
+      address: o.address || '', notes: o.notes || '', status: o.status || 'pending',
+      createdAt: o.created_at
+    }));
+
+    if (productionRes.data?.[0]) {
+      const p = productionRes.data[0];
+      state.production = {
+        rawLinna:p.raw_linna, rawBalaya:p.raw_balaya, rawKawalam:p.raw_kawalam,
+        yieldLinna:p.yield_linna, yieldBalaya:p.yield_balaya, yieldKawalam:p.yield_kawalam,
+        dailyRawKg:p.daily_raw_kg, workDays:p.work_days,
+        prodTransport:p.prod_transport, prodFirewood:p.prod_firewood,
+        prodWorkers:p.prod_workers, prodOther:p.prod_other,
+        finLinna:p.fin_linna, finBalaya:p.fin_balaya, finKawalam:p.fin_kawalam
+      };
+    }
+
+    history = (historyRes.data || []).map(h => ({
+      id: String(h.id), date:h.date_text, pack:String(h.pack_size_g), mix:h.mix,
+      sp:Number(h.selling_price), cost:Number(h.cost), profit:Number(h.profit),
+      netProfit:Number(h.net_profit), createdAt:h.created_at
+    }));
+
+    if (!hasNormalizedData) {
+      // Backward-compatible migration from the old JSON app_data table, if it exists.
+      const legacy = await supabase.from('app_data').select('data').eq('user_id', currentUser.id).maybeSingle();
+      if (!legacy.error && legacy.data?.data) {
+        const payload = legacy.data.data;
+        if (payload.state) Object.assign(state, payload.state);
+        history = payload.history || [];
+        orders = payload.orders || [];
+        customers = payload.customers || [];
+        await cloudSave({silent:true});
+        updateStatus('Legacy cloud data migrated');
+      } else {
+        // First login: migrate this browser's local data into PostgreSQL.
+        await cloudSave({silent:true});
+        updateStatus('Local data migrated to cloud');
+      }
+    } else {
+      saveAll();
+      syncUI();
+      calcAll();
+      calcProduction();
+      renderHistory();
+      renderOrders();
+      renderCustomers();
+      renderDelivery();
+      updateOrderStats();
+      updateCustomerSelect();
+      updateStatus('Cloud data loaded');
+    }
   } catch (e) {
     console.error('Cloud load error:', e);
-    alert('Cloud load failed: ' + e.message);
+    updateStatus('Database connection error');
+    alert('Database load failed: ' + (e.message || e) + '\n\nRun the supplied supabase_schema.sql in Supabase SQL Editor first.');
   }
 }
 
@@ -2413,9 +2708,9 @@ async function authAction() {
     }
     closeModal('authModal');
     updateAuthUI();
-    // Load cloud data after login
+    await ensureProfile();
     await cloudLoad();
-    updateStatus('Logged in');
+    updateStatus('Logged in • Cloud ready');
   } catch (e) {
     $('authError').textContent = e.message;
     $('authError').style.display = 'block';
@@ -2432,12 +2727,15 @@ async function logout() {
 
 function updateAuthUI() {
   const btn = $('authBtn');
+  const roleEl = $('roleStatus');
   if (currentUser) {
     btn.textContent = `👤 ${currentUser.email}`;
     btn.onclick = logout;
+    if (roleEl) roleEl.textContent = `👤 ${currentRole === 'admin' ? 'Admin' : 'User'}`;
   } else {
     btn.textContent = '🔐 Login';
     btn.onclick = openAuthModal;
+    if (roleEl) roleEl.textContent = '👤 Guest';
   }
 }
 
@@ -2695,10 +2993,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (session && session.user) {
     currentUser = session.user;
     updateAuthUI();
-    // Optionally load cloud data automatically
     await cloudLoad();
   } else {
+    currentRole = 'user';
     updateAuthUI();
+    updateStatus('Ready • Local mode');
   }
 });
 
