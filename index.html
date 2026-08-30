@@ -3,19 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>MY DRYBEA | Enterprise Umbalakada Management System v35 • Supabase Cloud Edition</title>
-<meta name="description" content="MY DRYBEA - Complete enterprise management system for dried fish (Umbalakada) business: costing, production, orders, invoicing, delivery.">
+<title>MY DRYBEA | Enterprise Umbalakada Management System v36 • Supabase Cloud Edition</title>
+<meta name="description" content="MY DRYBEA - Complete enterprise management system for dried fish (Umbalakada) business">
 <meta name="theme-color" content="#10b981">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="MY DRYBEA">
 
-<!-- App Icon & Favicon -->
 <link rel="icon" type="image/jpeg" href="logo.jpg">
 <link rel="apple-touch-icon" href="logo.jpg">
-<link rel="shortcut icon" href="logo.jpg">
-
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Noto+Sans+Sinhala:wght@300;400;500;600;700&family=Playfair+Display:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
@@ -24,7 +17,6 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
 <style>
-/* ===== BRANDED LUXURY & MODERN DESIGN SYSTEM ===== */
 :root {
   --bg-primary: #040d0a;
   --bg-secondary: #0a1712;
@@ -77,52 +69,21 @@
   --text-secondary: #065f46;
   --text-muted: #047857;
   --text-dim: #059669;
-  --shadow-sm: 0 2px 8px rgba(0,50,30,0.06);
-  --shadow: 0 8px 32px rgba(0,50,30,0.1);
-  --shadow-lg: 0 20px 60px rgba(0,50,30,0.15);
-  --shadow-glow: 0 0 40px rgba(16,185,129,0.1);
   --green-subtle: rgba(16,185,129,0.06);
 }
 
-/* ===== RESET & BASE ===== */
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-
-html {
-  scroll-behavior: smooth;
-  -webkit-text-size-adjust: 100%;
-  text-size-adjust: 100%;
-}
-
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 body {
   background: var(--bg-primary);
   color: var(--text-main);
   font-family: var(--font);
   min-height: 100vh;
-  min-height: 100dvh;
-  transition: background var(--transition), color var(--transition);
   line-height: 1.6;
   font-size: 15px;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
 }
 
-body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  background:
-    radial-gradient(ellipse at 15% 0%, rgba(16,185,129,0.08) 0%, transparent 50%),
-    radial-gradient(ellipse at 85% 100%, rgba(212,175,55,0.05) 0%, transparent 50%),
-    radial-gradient(ellipse at 50% 50%, rgba(163,230,53,0.03) 0%, transparent 60%);
-  pointer-events: none;
-  z-index: 0;
-}
-
-/* ===== APP CONTAINER ===== */
 .app-container {
-  position: relative;
-  z-index: 1;
   max-width: 1400px;
   margin: 0 auto;
   padding: 12px;
@@ -130,11 +91,8 @@ body::before {
   flex-direction: column;
   gap: 12px;
 }
-
 @media (min-width: 768px) { .app-container { padding: 16px; gap: 16px; } }
-@media (min-width: 1200px) { .app-container { padding: 24px; gap: 20px; } }
 
-/* ===== HEADER ===== */
 .header {
   background: linear-gradient(135deg, var(--bg-card) 0%, var(--bg-elevated) 100%);
   border: 1.5px solid var(--border-strong);
@@ -145,114 +103,17 @@ body::before {
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 14px;
-  box-shadow: var(--shadow), var(--shadow-glow);
-  position: relative;
-  overflow: hidden;
+  box-shadow: var(--shadow);
 }
 
-.header::before {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 4px;
-  background: linear-gradient(90deg, var(--green) 0%, var(--lime-accent) 25%, var(--gold) 50%, var(--lime-accent) 75%, var(--green) 100%);
-  background-size: 200% 100%;
-  animation: borderShimmer 4s linear infinite;
-}
+.brand { display: flex; align-items: center; gap: 14px; }
+.brand-logo-wrap { width: 50px; height: 50px; }
+.brand-logo { width: 100%; height: 100%; border-radius: 12px; border: 2px solid var(--gold); object-fit: cover; }
+.brand-text h1 { font-family: var(--font-display); font-size: 1.4rem; color: var(--gold-light); font-weight: 800; }
+.brand-text p { font-size: 0.75rem; color: var(--text-muted); }
 
-@keyframes borderShimmer {
-  0% { background-position: 0% 0%; }
-  100% { background-position: 200% 0%; }
-}
+.header-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 
-.header::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: linear-gradient(90deg, transparent 0%, var(--gold) 25%, var(--gold-light) 50%, var(--gold) 75%, transparent 100%);
-  opacity: 0.5;
-}
-
-/* ===== BRAND / LOGO ===== */
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  min-width: 0;
-}
-
-.brand-logo-wrap {
-  position: relative;
-  width: 58px;
-  height: 58px;
-  flex-shrink: 0;
-}
-
-@media (min-width: 768px) { .brand-logo-wrap { width: 68px; height: 68px; } }
-
-.brand-logo {
-  width: 100%;
-  height: 100%;
-  border-radius: 14px;
-  object-fit: cover;
-  display: block;
-  border: 2px solid var(--gold);
-  box-shadow: 0 4px 20px rgba(16,185,129,0.35), 0 0 15px rgba(212,175,55,0.4);
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
-}
-
-.brand-logo-wrap:hover .brand-logo {
-  transform: scale(1.04);
-  box-shadow: 0 6px 28px rgba(16,185,129,0.5), 0 0 25px rgba(212,175,55,0.7);
-}
-
-.brand-text { min-width: 0; }
-
-.brand-text h1 {
-  font-family: var(--font-display);
-  font-size: clamp(1.3rem, 4vw, 2.2rem);
-  font-weight: 900;
-  letter-spacing: 0.06em;
-  line-height: 1.1;
-  background: linear-gradient(135deg, #93c5fd 0%, #a3e635 25%, #f5e7a3 50%, #10b981 75%, #d4af37 100%);
-  background-size: 300% 300%;
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  animation: brandShimmer 4s ease-in-out infinite;
-  position: relative;
-}
-
-@keyframes brandShimmer {
-  0%, 100% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-}
-
-.brand-text p {
-  font-size: clamp(0.65rem, 1.5vw, 0.82rem);
-  color: var(--text-muted);
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  opacity: 0.9;
-}
-
-/* ===== HEADER ACTIONS ===== */
-.header-actions {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-
-/* ===== BUTTONS ===== */
 .btn {
   padding: 8px 14px;
   border-radius: var(--radius-sm);
@@ -262,49 +123,17 @@ body::before {
   font-weight: 600;
   font-size: 0.85rem;
   cursor: pointer;
-  transition: all var(--transition);
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  white-space: nowrap;
-  user-select: none;
-  position: relative;
-  overflow: hidden;
+  transition: all var(--transition);
 }
-
-.btn:hover {
-  border-color: var(--gold);
-  color: var(--gold);
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-sm);
-}
-
-.btn:active { transform: translateY(0); }
-
-.btn-primary {
-  background: linear-gradient(135deg, var(--green) 0%, var(--green-deep) 100%);
-  color: #000;
-  border: none;
-  box-shadow: 0 4px 16px var(--green-glow);
-  font-weight: 700;
-}
-
-.btn-primary:hover {
-  background: linear-gradient(135deg, var(--green-deep) 0%, var(--green-dark) 100%);
-  color: #000;
-  box-shadow: 0 6px 24px var(--green-glow);
-}
-
-.btn-danger { border-color: rgba(248,113,113,0.4); color: var(--bad); }
-.btn-danger:hover { background: var(--bad); color: #fff; border-color: var(--bad); }
-
-.btn-whatsapp { background: #25D366; color: #fff; border: none; font-weight: 700; }
-.btn-whatsapp:hover { background: #1eb857; color: #fff; }
-
+.btn:hover { border-color: var(--gold); color: var(--gold); }
+.btn-primary { background: linear-gradient(135deg, var(--green) 0%, var(--green-deep) 100%); color: #000; border: none; font-weight: 700; }
+.btn-danger { border-color: var(--bad); color: var(--bad); }
 .btn-sm { padding: 6px 12px; font-size: 0.78rem; border-radius: var(--radius-xs); }
-.btn-xs { padding: 4px 8px; font-size: 0.7rem; border-radius: 4px; }
+.btn-whatsapp { background: #25D366; color: #fff; border: none; font-weight: 700; }
 
-/* ===== TABS ===== */
 .tabs {
   display: flex;
   gap: 4px;
@@ -312,15 +141,8 @@ body::before {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 5px;
-  box-shadow: var(--shadow-sm);
   overflow-x: auto;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-  -webkit-overflow-scrolling: touch;
 }
-
-.tabs::-webkit-scrollbar { display: none; }
-
 .tab-btn {
   flex: 1;
   padding: 10px 14px;
@@ -331,109 +153,34 @@ body::before {
   font-size: 0.82rem;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: all var(--transition);
   white-space: nowrap;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  min-width: fit-content;
 }
-
 .tab-btn.active {
   background: linear-gradient(135deg, var(--green) 0%, var(--green-deep) 100%);
   color: #000;
   font-weight: 700;
-  box-shadow: 0 2px 12px var(--green-glow);
 }
 
-.tab-btn:hover:not(.active) {
-  background: var(--green-subtle);
-  color: var(--text-main);
-}
-
-/* ===== CARDS ===== */
 .card {
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 18px;
-  box-shadow: var(--shadow-sm);
   margin-bottom: 16px;
-  transition: all var(--transition);
-  position: relative;
 }
+.card h2 { font-size: 1.1rem; font-weight: 700; margin-bottom: 14px; color: var(--green); }
 
-.card:hover {
-  box-shadow: var(--shadow);
-  border-color: var(--border-strong);
-}
-
-.card h2 {
-  font-size: clamp(1rem, 2.5vw, 1.15rem);
-  font-weight: 700;
-  margin-bottom: 14px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--green);
-  letter-spacing: -0.01em;
-}
-
-.card h3 {
-  font-size: clamp(0.88rem, 2vw, 0.95rem);
-  font-weight: 600;
-}
-
-.card .sub {
-  font-size: 0.78rem;
-  color: var(--text-muted);
-  margin-bottom: 16px;
-  opacity: 0.85;
-}
-
-/* ===== GRIDS ===== */
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
-.grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
-.stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 16px; }
-
-@media (max-width: 1024px) {
-  .grid-4 { grid-template-columns: repeat(2, 1fr); }
-}
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 16px; }
 
 @media (max-width: 768px) {
   .grid-2 { grid-template-columns: 1fr; }
-  .grid-3 { grid-template-columns: 1fr 1fr; }
-  .grid-4 { grid-template-columns: 1fr 1fr; }
-  .stat-grid { grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); }
-}
-
-@media (max-width: 480px) {
   .grid-3 { grid-template-columns: 1fr; }
-  .grid-4 { grid-template-columns: 1fr; }
-  .stat-grid { grid-template-columns: 1fr 1fr; }
 }
 
-/* ===== FORM FIELDS ===== */
 .field { margin-bottom: 14px; }
-
-.field label {
-  display: block;
-  font-size: 0.82rem;
-  font-weight: 600;
-  margin-bottom: 5px;
-  color: var(--text-secondary);
-  letter-spacing: 0.01em;
-}
-
-.field label .hint {
-  color: var(--text-muted);
-  font-weight: 400;
-  font-size: 0.72rem;
-  opacity: 0.7;
-}
-
+.field label { display: block; font-size: 0.82rem; font-weight: 600; margin-bottom: 5px; color: var(--text-secondary); }
 input, select, textarea {
   width: 100%;
   padding: 10px 12px;
@@ -441,419 +188,51 @@ input, select, textarea {
   border: 1.5px solid var(--border);
   background: var(--bg-secondary);
   color: var(--text-main);
-  font-family: var(--font);
   font-size: 0.9rem;
-  transition: all var(--transition);
   outline: none;
-  appearance: none;
-  -webkit-appearance: none;
 }
-
-select {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%236ee7b7' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 12px center;
-  padding-right: 32px;
-}
-
-input:focus, select:focus, textarea:focus {
-  border-color: var(--green);
-  box-shadow: 0 0 0 3px var(--green-glow), 0 0 16px var(--green-glow);
-}
-
-textarea { resize: vertical; min-height: 60px; }
+input:focus, select:focus, textarea:focus { border-color: var(--green); }
 
 .input-prefix { position: relative; }
-.input-prefix span {
-  position: absolute;
-  left: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: var(--text-muted);
-  font-size: 0.82rem;
-  font-weight: 600;
-  pointer-events: none;
-  opacity: 0.7;
-}
+.input-prefix span { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 0.82rem; }
 .input-prefix input { padding-left: 36px; }
 
-/* ===== STAT CARDS ===== */
-.stat {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 14px;
-  border-left: 3px solid var(--green);
-  transition: all var(--transition);
-}
-
-.stat:hover {
-  border-color: var(--border-strong);
-  box-shadow: var(--shadow-sm);
-}
-
-.stat .k {
-  font-size: 0.7rem;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-muted);
-  font-weight: 700;
-  opacity: 0.8;
-}
-
-.stat .v {
-  font-size: clamp(1.1rem, 3vw, 1.5rem);
-  font-weight: 800;
-  margin-top: 4px;
-  letter-spacing: -0.02em;
-}
-
+.stat { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px; border-left: 3px solid var(--green); }
+.stat .k { font-size: 0.7rem; text-transform: uppercase; color: var(--text-muted); font-weight: 700; }
+.stat .v { font-size: 1.3rem; font-weight: 800; margin-top: 4px; }
 .stat.good .v { color: var(--green); }
 .stat.bad .v { color: var(--bad); }
-.stat.accent { border-left-color: var(--gold); }
-.stat.accent .v { color: var(--green); }
 
-/* ===== TABLES ===== */
-.table-wrap {
-  width: 100%;
-  overflow-x: auto;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border);
-  -webkit-overflow-scrolling: touch;
-}
-
+.table-wrap { width: 100%; overflow-x: auto; border-radius: var(--radius-sm); border: 1px solid var(--border); }
 table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+th { background: var(--bg-elevated); color: var(--text-muted); font-weight: 700; }
+td.num { text-align: right; }
 
-th, td {
-  text-align: left;
-  padding: 10px 14px;
-  border-bottom: 1px solid var(--border);
-}
+.badge { display: inline-flex; padding: 3px 8px; border-radius: 999px; font-size: 0.7rem; font-weight: 700; }
+.badge-good { background: rgba(16,185,129,0.2); color: var(--green); }
+.badge-pending { background: rgba(251,191,36,0.2); color: var(--warn); }
+.badge-shipped { background: rgba(56,189,248,0.2); color: #38bdf8; }
+.badge-delivered { background: rgba(16,185,129,0.2); color: var(--green); }
+.badge-cancelled { background: rgba(248,113,113,0.2); color: var(--bad); }
 
-th {
-  background: var(--bg-elevated);
-  color: var(--text-muted);
-  font-weight: 700;
-  font-size: 0.72rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  white-space: nowrap;
-  position: sticky;
-  top: 0;
-  z-index: 1;
-}
-
-td { color: var(--text-main); white-space: nowrap; }
-tr:last-child td { border-bottom: none; }
-tr:hover td { background: var(--green-subtle); }
-td.num { text-align: right; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.8rem; }
-.total-row td { font-weight: 700; border-top: 2px solid var(--gold); background: var(--green-subtle); }
-
-/* ===== NET BANNER ===== */
-.net-banner {
-  background: linear-gradient(135deg, #040d0a 0%, #0d281e 40%, #081a13 100%);
-  border-radius: var(--radius);
-  padding: 24px;
-  text-align: center;
-  color: #fff;
-  box-shadow: var(--shadow-lg);
-  margin-bottom: 16px;
-  border: 1.5px solid var(--border-strong);
-  position: relative;
-  overflow: hidden;
-}
-
-.net-banner::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: 
-    radial-gradient(ellipse at 30% 50%, rgba(16,185,129,0.12) 0%, transparent 60%),
-    radial-gradient(ellipse at 70% 50%, rgba(212,175,55,0.08) 0%, transparent 60%);
-  pointer-events: none;
-}
-
-.net-banner::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
-  background: linear-gradient(90deg, var(--green), var(--lime-accent), var(--gold), var(--lime-accent), var(--green));
-}
-
-.net-banner .k { font-size: 0.82rem; opacity: 0.85; font-weight: 600; letter-spacing: 0.05em; }
-.net-banner .v { font-size: clamp(1.6rem, 5vw, 2.5rem); font-weight: 900; margin-top: 6px; color: var(--green); letter-spacing: -0.02em; }
-
-/* ===== CHART ===== */
-.chart-wrap { position: relative; height: 260px; width: 100%; margin-top: 12px; }
-@media (max-width: 480px) { .chart-wrap { height: 200px; } }
-
-/* ===== BADGES ===== */
-.badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 3px 10px;
-  border-radius: 999px;
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-}
-
-.badge-good { background: rgba(16,185,129,0.15); color: var(--green); border: 1px solid rgba(16,185,129,0.25); }
-.badge-bad { background: var(--bad-bg); color: var(--bad); border: 1px solid rgba(248,113,113,0.25); }
-.badge-warn { background: var(--warn-bg); color: var(--warn); border: 1px solid rgba(251,191,36,0.25); }
-.badge-pending { background: var(--warn-bg); color: var(--warn); border: 1px solid rgba(251,191,36,0.25); }
-.badge-shipped { background: rgba(56,189,248,0.12); color: #38bdf8; border: 1px solid rgba(56,189,248,0.25); }
-.badge-delivered { background: rgba(16,185,129,0.15); color: var(--green); border: 1px solid rgba(16,185,129,0.25); }
-.badge-cancelled { background: var(--bad-bg); color: var(--bad); border: 1px solid rgba(248,113,113,0.25); }
-
-/* ===== ACCORDION ===== */
-.accordion { border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; }
-
-.accordion-header {
-  padding: 12px 16px;
-  background: var(--bg-elevated);
-  font-weight: 600;
-  font-size: 0.85rem;
-  cursor: pointer;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  user-select: none;
-  transition: background var(--transition);
-}
-
-.accordion-header:hover { background: var(--bg-card-hover); }
-.accordion-body { display: none; padding: 16px; background: var(--bg-card); }
-.accordion.open .accordion-body { display: block; }
-
-/* ===== MODALS ===== */
 .modal-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.85);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 999;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.25s ease;
-  padding: 16px;
+  position: fixed; inset: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(5px);
+  display: flex; align-items: center; justify-content: center; z-index: 999; opacity: 0; pointer-events: none; transition: 0.25s; padding: 16px;
 }
-
 .modal-backdrop.active { opacity: 1; pointer-events: auto; }
+.modal { background: var(--bg-card); border: 1px solid var(--border-strong); border-radius: var(--radius); padding: 24px; width: 100%; max-width: 500px; }
 
-.modal {
-  background: var(--bg-card);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius);
-  padding: 24px;
-  width: 100%;
-  max-width: 500px;
-  max-height: 85vh;
-  overflow-y: auto;
-  text-align: left;
-  box-shadow: var(--shadow-lg);
-  animation: modalIn 0.3s ease;
-}
+#toastContainer { position: fixed; bottom: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; }
+.toast { padding: 12px 18px; border-radius: 8px; font-size: 0.85rem; font-weight: 600; color: #fff; background: #0d1e18; border: 1.5px solid var(--border); box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
+.toast.success { border-color: var(--green); background: #064e3b; }
+.toast.error { border-color: var(--bad); background: #7f1d1d; }
 
-@keyframes modalIn {
-  from { transform: translateY(20px) scale(0.95); opacity: 0; }
-  to { transform: translateY(0) scale(1); opacity: 1; }
-}
-
-.modal h3 { color: var(--green); margin-bottom: 14px; font-size: 1.1rem; }
-
-/* ===== NOTICES & TOASTS ===== */
-.notice {
-  background: var(--green-subtle);
-  border: 1px solid rgba(16,185,129,0.25);
-  color: var(--green);
-  padding: 12px 16px;
-  border-radius: var(--radius-sm);
-  font-size: 0.8rem;
-  margin-bottom: 14px;
-  line-height: 1.5;
-}
-
-.notice.warn {
-  background: var(--warn-bg);
-  border-color: rgba(251,191,36,0.25);
-  color: var(--warn);
-}
-
-/* Toast Container */
-#toastContainer {
-  position: fixed;
-  bottom: 20px;
-  right: 20px;
-  z-index: 9999;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  pointer-events: none;
-}
-
-.toast {
-  padding: 12px 20px;
-  border-radius: 10px;
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: #fff;
-  background: #0d1e18;
-  border: 1.5px solid var(--border-strong);
-  box-shadow: 0 8px 30px rgba(0,0,0,0.6);
-  pointer-events: auto;
-  animation: toastIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.toast.success { border-color: var(--green); background: #064e3b; color: #a7f3d0; }
-.toast.error { border-color: var(--bad); background: #7f1d1d; color: #fecaca; }
-.toast.info { border-color: #38bdf8; background: #0c4a6e; color: #bae6fd; }
-
-@keyframes toastIn {
-  from { transform: translateX(100%); opacity: 0; }
-  to { transform: translateX(0); opacity: 1; }
-}
-
-/* ===== MODE TOGGLE ===== */
-.mode-toggle { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
-.mode-toggle .btn { flex: 1; min-width: 80px; justify-content: center; }
-.mode-toggle .btn.active {
-  background: linear-gradient(135deg, var(--green), var(--green-deep));
-  border-color: var(--green);
-  color: #000;
-  font-weight: 700;
-}
-
-/* ===== BTN ROW ===== */
-.btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
-
-/* ===== FOOTER ===== */
-.footer {
-  text-align: center;
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  padding: 20px 16px;
-  opacity: 0.8;
-  border-top: 1px solid var(--border);
-  margin-top: 8px;
-}
-
-/* ===== PRINT ===== */
-.print-header { display: none; }
-.invoice-print { display: none; }
-
-@media print {
-  body { background: #fff !important; color: #000 !important; font-size: 12px; }
-  body::before { display: none; }
-  .header, .tabs, .btn-row, .qr-panel, .no-print, .footer, #toastContainer, .architecture { display: none !important; }
-  .card { box-shadow: none; border: 1px solid #ddd; background: #fff; color: #000; break-inside: avoid; }
-  .print-header { display: block; text-align: center; margin-bottom: 16px; }
-  th, td { color: #000; border-bottom: 1px solid #ddd; }
-  .invoice-print { display: block !important; }
-}
-
-/* ===== QR PANEL ===== */
-.qr-panel { display: none; text-align: center; margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--border); }
-.qr-panel.show { display: block; }
-.qr-panel img { border-radius: 10px; background: #fff; padding: 8px; max-width: 100%; height: auto; }
-
-/* ===== INVOICE PRINT ===== */
-.invoice-print .inv-card {
-  border: 2px solid var(--gold);
-  border-radius: var(--radius-sm);
-  padding: 24px;
-  max-width: 700px;
-  margin: 0 auto;
-}
-
-.invoice-print .inv-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border-bottom: 2px solid var(--gold);
-  padding-bottom: 12px;
-  margin-bottom: 14px;
-}
-
-.invoice-print h1 {
-  background: linear-gradient(135deg, #a8842c, #d4af37, #f5e7a3, #d4af37, #a8842c);
-  background-size: 300% 300%;
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  animation: goldShimmer 3s ease-in-out infinite;
-  font-family: var(--font-display);
-  font-size: 1.6rem;
-  font-weight: 700;
-}
-
-.invoice-print table { width: 100%; border-collapse: collapse; }
-.invoice-print th, .invoice-print td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-.invoice-print th { background: #f0f0f0; }
-
-/* ===== DATA STATUS INDICATOR ===== */
-.data-status {
-  font-size: 0.72rem;
-  padding: 5px 12px;
-  border-radius: 20px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-strong);
-  color: var(--text-muted);
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  white-space: nowrap;
-}
-.data-status .dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  display: inline-block;
-}
+.data-status { font-size: 0.72rem; padding: 5px 12px; border-radius: 20px; background: var(--bg-secondary); border: 1px solid var(--border-strong); display: inline-flex; align-items: center; gap: 6px; }
+.data-status .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
 .data-status .dot.green { background: #10b981; box-shadow: 0 0 8px #10b981; }
 .data-status .dot.yellow { background: #fbbf24; }
 .data-status .dot.red { background: #f87171; }
-
-.architecture {
-  background: linear-gradient(135deg, var(--bg-card), var(--bg-secondary));
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius);
-  padding: 10px 14px;
-  box-shadow: var(--shadow-sm);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-.arch-flow {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-.arch-node {
-  border: 1px solid var(--border);
-  background: var(--green-subtle);
-  color: var(--text-secondary);
-  border-radius: 999px;
-  padding: 4px 10px;
-  font-size: .72rem;
-  font-weight: 700;
-  white-space: nowrap;
-}
-.arch-arrow { color: var(--gold); font-weight: 900; }
 </style>
 </head>
 <body>
@@ -861,386 +240,48 @@ td.num { text-align: right; font-family: 'SF Mono', 'Fira Code', monospace; font
 <div id="toastContainer"></div>
 
 <div class="app-container">
-  <header class="header no-print">
+  <header class="header">
     <div class="brand">
       <div class="brand-logo-wrap">
-        <img src="logo.jpg" alt="MY DRYBEA Official Logo" class="brand-logo" onerror="this.src='https://kommodo.ai/i/7zQwNJ1aSv6KnXu59Okw'">
+        <img src="logo.jpg" alt="Logo" class="brand-logo" onerror="this.src='https://kommodo.ai/i/7zQwNJ1aSv6KnXu59Okw'">
       </div>
       <div class="brand-text">
         <h1>MY DRYBEA</h1>
-        <p>SEAFOOD MARKET • Enterprise Umbalakada Cloud Edition</p>
+        <p>Enterprise Umbalakada System • Cloud v36</p>
       </div>
     </div>
     <div class="header-actions">
       <span class="data-status" id="dataStatus"><span class="dot yellow"></span> Connecting...</span>
-      <span class="data-status" id="roleStatus">👤 User</span>
-      <button class="btn btn-sm" onclick="triggerManualSync()" title="Force Sync to Cloud">⚡ Sync Now</button>
-      <button class="btn btn-sm" id="themeToggle" onclick="toggleTheme()" aria-label="Toggle theme">🌙</button>
-      <button class="btn btn-sm" onclick="openQR()" aria-label="QR Code">📱 QR</button>
-      <button class="btn btn-sm btn-primary" onclick="exportCSV()" aria-label="Export CSV">📊 CSV</button>
-      <button class="btn btn-sm" onclick="window.print()" aria-label="Print">🖨️</button>
+      <button class="btn btn-sm btn-primary" onclick="forceCloudSync()">⚡ Sync Now</button>
       <button class="btn btn-sm" id="authBtn" onclick="openAuthModal()">🔐 Login</button>
     </div>
   </header>
 
-  <div class="print-header">
-    <h2>🐟 MY DRYBEA — ENTERPRISE COST SHEET</h2>
-    <p id="printDate"></p>
-    <hr>
-  </div>
-
-  <nav class="tabs no-print" role="tablist">
-    <button class="tab-btn active" data-tab="calculator" role="tab">📊 Calculator</button>
-    <button class="tab-btn" data-tab="production" role="tab">🏭 Production</button>
-    <button class="tab-btn" data-tab="dashboard" role="tab">📈 Dashboard</button>
-    <button class="tab-btn" data-tab="orders" role="tab">🧾 Orders & CRM</button>
-    <button class="tab-btn" data-tab="history" role="tab">📜 History</button>
-    <button class="tab-btn" data-tab="data" role="tab">⚙️ Data & Cloud</button>
+  <nav class="tabs">
+    <button class="tab-btn active" data-tab="orders">🧾 Orders & CRM</button>
+    <button class="tab-btn" data-tab="calculator">📊 Calculator</button>
+    <button class="tab-btn" data-tab="production">🏭 Production</button>
+    <button class="tab-btn" data-tab="history">📜 History</button>
+    <button class="tab-btn" data-tab="data">⚙️ Cloud Settings</button>
   </nav>
 
-  <section class="architecture no-print" aria-label="MY DRYBEA live status">
-    <div class="arch-flow">
-      <span class="arch-node" id="syncEngineStatus">🌐 Supabase Live</span><span class="arch-arrow">→</span>
-      <span class="arch-node">📦 Products</span><span class="arch-arrow">→</span>
-      <span class="arch-node">👤 Customers</span><span class="arch-arrow">→</span>
-      <span class="arch-node">🧾 Orders</span><span class="arch-arrow">→</span>
-      <span class="arch-node">🏭 Production</span><span class="arch-arrow">→</span>
-      <span class="arch-node">💰 Costing</span>
-    </div>
-    <div style="font-size:0.75rem; color:var(--text-muted);" id="lastSyncTimeLabel">Last sync: Not synced yet</div>
-  </section>
-
-  <!-- ============ CALCULATOR TAB ============ -->
-  <section id="calculator" class="tab-panel active" role="tabpanel">
-    <div class="grid-2">
-      <div class="card">
-        <h2>🐟 Raw Material Prices</h2>
-        <div class="grid-3">
-          <div class="field">
-            <label>Linna <span class="hint">(Rs./kg)</span></label>
-            <div class="input-prefix"><span>Rs.</span><input type="number" id="linnaPrice" value="1750" min="0" oninput="onDataChange()"></div>
-          </div>
-          <div class="field">
-            <label>Balaya <span class="hint">(Rs./kg)</span></label>
-            <div class="input-prefix"><span>Rs.</span><input type="number" id="balayaPrice" value="2200" min="0" oninput="onDataChange()"></div>
-          </div>
-          <div class="field">
-            <label>Premium Mix <span class="hint">(Rs./kg)</span></label>
-            <div class="input-prefix"><span>Rs.</span><input type="number" id="kawalamPrice" value="1000" min="0" oninput="onDataChange()"></div>
-          </div>
-        </div>
-
-        <h2 style="margin-top:16px;">📦 Product Configuration</h2>
-        <div class="field">
-          <label>Pack Size</label>
-          <select id="packSize" onchange="onDataChange()">
-            <option value="50">50g</option>
-            <option value="100" selected>100g</option>
-            <option value="500">500g</option>
-            <option value="1000">1kg</option>
-          </select>
-        </div>
-        <div class="field">
-          <label>Fish Mix Ratio</label>
-          <select id="mixRatio" onchange="toggleCustomMix(); onDataChange();">
-            <option value="40/0/60">40% Linna / 0% Balaya / 60% Premium</option>
-            <option value="60/0/40">60% Linna / 0% Balaya / 40% Premium</option>
-            <option value="35/20/45">35% Linna / 20% Balaya / 45% Premium</option>
-            <option value="25/15/60">25% Linna / 15% Balaya / 60% Premium</option>
-            <option value="20/40/40">20% Linna / 40% Balaya / 40% Premium</option>
-            <option value="custom">Custom 3-Way Mix</option>
-          </select>
-        </div>
-        <div class="notice warn" id="mixWarning" style="display:none;">⚠️ Mix percentages must total 100%. Current: <span id="mixTotal">0</span>%</div>
-        <div id="customMixWrap" style="display:none;">
-          <div class="grid-3">
-            <div class="field">
-              <label>Linna %</label>
-              <input type="number" id="customLinna" value="40" min="0" max="100" oninput="syncCustomMix(); onDataChange();">
-            </div>
-            <div class="field">
-              <label>Balaya %</label>
-              <input type="number" id="customBalaya" value="20" min="0" max="100" oninput="syncCustomMix(); onDataChange();">
-            </div>
-            <div class="field">
-              <label>Premium %</label>
-              <input type="number" id="customKawalam" value="40" min="0" max="100" readonly>
-            </div>
-          </div>
-        </div>
-
-        <h2 style="margin-top:16px;">🎯 Pricing Mode</h2>
-        <div class="mode-toggle">
-          <button class="btn active" data-mode="mrp" onclick="setMode('mrp')">MRP</button>
-          <button class="btn" data-mode="profit" onclick="setMode('profit')">Target Profit</button>
-          <button class="btn" data-mode="sp" onclick="setMode('sp')">Custom SP</button>
-        </div>
-        <div class="field" id="targetProfitField" style="display:none;">
-          <label>Target Profit <span class="hint">(Rs./pack)</span></label>
-          <div class="input-prefix"><span>Rs.</span><input type="number" id="targetProfit" value="30" min="0" oninput="onDataChange()"></div>
-        </div>
-        <div class="field" id="customSpField" style="display:none;">
-          <label>Custom Selling Price <span class="hint">(Rs./pack)</span></label>
-          <div class="input-prefix"><span>Rs.</span><input type="number" id="customSp" value="350" min="0" oninput="onDataChange()"></div>
-        </div>
-        <div class="field">
-          <label>Monthly Quantity</label>
-          <input type="number" id="monthlyQty" value="500" min="0" oninput="onDataChange()">
-        </div>
-        <div class="btn-row">
-          <button class="btn btn-primary" onclick="saveOrder()">💾 Save Order Calculation</button>
-        </div>
-      </div>
-
-      <div class="card">
-        <h2>✅ Per Pack Result</h2>
-        <div class="stat-grid">
-          <div class="stat accent"><div class="k">Selling Price</div><div class="v" id="outSp">Rs. 0</div></div>
-          <div class="stat" id="profitStat"><div class="k">Profit/Pack</div><div class="v" id="outProfit">Rs. 0</div></div>
-          <div class="stat"><div class="k">Margin</div><div class="v" id="outMargin">0%</div></div>
-          <div class="stat"><div class="k">Total Cost</div><div class="v" id="outCost">Rs. 0</div></div>
-        </div>
-
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>Cost Item</th><th class="num">Amount</th></tr></thead>
-            <tbody id="breakdownBody"></tbody>
-          </table>
-        </div>
-
-        <div class="chart-wrap"><canvas id="costChart"></canvas></div>
-
-        <h2 style="margin-top:16px;">📅 Monthly Estimate</h2>
-        <div class="table-wrap">
-          <table><tbody id="monthlyBody"></tbody></table>
-        </div>
-      </div>
-    </div>
-
-    <div class="card">
-      <h2>⚖️ Scenario Comparison</h2>
-      <div class="grid-2">
-        <div class="field">
-          <label>Scenario A Mix</label>
-          <select id="scA" onchange="calcScenario()">
-            <option value="40/0/60">40/0/60</option>
-            <option value="60/0/40">60/0/40</option>
-            <option value="35/20/45">35/20/45</option>
-            <option value="25/15/60">25/15/60</option>
-            <option value="20/40/40">20/40/40</option>
-          </select>
-        </div>
-        <div class="field">
-          <label>Scenario A SP (Rs.)</label>
-          <input type="number" id="scASp" value="350" oninput="calcScenario()">
-        </div>
-        <div class="field">
-          <label>Scenario B Mix</label>
-          <select id="scB" onchange="calcScenario()">
-            <option value="40/0/60">40/0/60</option>
-            <option value="60/0/40">60/0/40</option>
-            <option value="35/20/45">35/20/45</option>
-            <option value="25/15/60">25/15/60</option>
-            <option value="20/40/40">20/40/40</option>
-          </select>
-        </div>
-        <div class="field">
-          <label>Scenario B SP (Rs.)</label>
-          <input type="number" id="scBSp" value="375" oninput="calcScenario()">
-        </div>
-      </div>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Metric</th><th class="num">A</th><th class="num">B</th><th class="num">Best</th></tr></thead>
-          <tbody id="scenarioBody"></tbody>
-        </table>
-      </div>
-    </div>
-  </section>
-
-  <!-- ============ PRODUCTION TAB ============ -->
-  <section id="production" class="tab-panel" style="display:none;" role="tabpanel">
-    <div class="card">
-      <h2>🏭 Raw Fish Production Model</h2>
-      <p class="sub">Compare buying finished Umbalakada vs producing from raw fish. Analyze yield, cost per kg, and profitability.</p>
-
-      <div class="grid-2">
-        <div>
-          <h3 style="color:var(--green);margin-bottom:8px;">🐟 Raw Fish Prices (Rs./kg)</h3>
-          <div class="grid-3">
-            <div class="field">
-              <label>Linna Raw</label>
-              <div class="input-prefix"><span>Rs.</span><input type="number" id="rawLinna" value="180" min="0" oninput="onDataChange()"></div>
-            </div>
-            <div class="field">
-              <label>Balaya Raw</label>
-              <div class="input-prefix"><span>Rs.</span><input type="number" id="rawBalaya" value="250" min="0" oninput="onDataChange()"></div>
-            </div>
-            <div class="field">
-              <label>Premium Mix Raw</label>
-              <div class="input-prefix"><span>Rs.</span><input type="number" id="rawKawalam" value="60" min="0" oninput="onDataChange()"></div>
-            </div>
-          </div>
-
-          <h3 style="color:var(--green);margin:16px 0 8px;">📈 Yield Factors (kg raw → 1kg finished)</h3>
-          <div class="grid-3">
-            <div class="field">
-              <label>Linna Yield</label>
-              <input type="number" id="yieldLinna" value="6" min="1" step="0.1" oninput="onDataChange()">
-            </div>
-            <div class="field">
-              <label>Balaya Yield</label>
-              <input type="number" id="yieldBalaya" value="6" min="1" step="0.1" oninput="onDataChange()">
-            </div>
-            <div class="field">
-              <label>Premium Mix Yield</label>
-              <input type="number" id="yieldKawalam" value="7" min="1" step="0.1" oninput="onDataChange()">
-            </div>
-          </div>
-
-          <h3 style="color:var(--green);margin:16px 0 8px;">📦 Production Volume</h3>
-          <div class="grid-2">
-            <div class="field">
-              <label>Daily Raw Fish (kg)</label>
-              <input type="number" id="dailyRawKg" value="500" min="0" oninput="onDataChange()">
-            </div>
-            <div class="field">
-              <label>Working Days/Month</label>
-              <input type="number" id="workDays" value="22" min="1" oninput="onDataChange()">
-            </div>
-          </div>
-        </div>
-
-        <div>
-          <h3 style="color:var(--green);margin-bottom:8px;">💰 Production Costs</h3>
-          <div class="grid-2">
-            <div class="field"><label>Transport</label><input type="number" id="prodTransport" value="110000" oninput="onDataChange()"></div>
-            <div class="field"><label>Firewood</label><input type="number" id="prodFirewood" value="30000" oninput="onDataChange()"></div>
-            <div class="field"><label>Workers</label><input type="number" id="prodWorkers" value="220000" oninput="onDataChange()"></div>
-            <div class="field"><label>Other</label><input type="number" id="prodOther" value="220000" oninput="onDataChange()"></div>
-          </div>
-
-          <h3 style="color:var(--green);margin:16px 0 8px;">Finished Umbalakada Market Prices (Rs./kg)</h3>
-          <div class="grid-3">
-            <div class="field"><label>Linna</label><input type="number" id="finLinna" value="1750" oninput="onDataChange()"></div>
-            <div class="field"><label>Balaya</label><input type="number" id="finBalaya" value="2200" oninput="onDataChange()"></div>
-            <div class="field"><label>Premium Mix</label><input type="number" id="finKawalam" value="1000" oninput="onDataChange()"></div>
-          </div>
-        </div>
-      </div>
-
-      <div class="stat-grid">
-        <div class="stat"><div class="k">Monthly Raw Fish</div><div class="v" id="prodMonthlyRaw">0 kg</div></div>
-        <div class="stat"><div class="k">Monthly Finished Output</div><div class="v" id="prodMonthlyFinished">0 kg</div></div>
-        <div class="stat"><div class="k">Fixed Cost per kg</div><div class="v" id="prodFixedPerKg">Rs. 0</div></div>
-        <div class="stat accent"><div class="k">Avg Production Cost/kg</div><div class="v" id="prodAvgCost">Rs. 0</div></div>
-      </div>
-
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr><th>Fish Type</th><th>Raw Cost/kg</th><th>Fixed/kg</th><th>Total Cost/kg</th><th>Market Price/kg</th><th class="num">Profit/kg</th><th class="num">Margin</th><th>Verdict</th></tr>
-          </thead>
-          <tbody id="prodBody"></tbody>
-        </table>
-      </div>
-
-      <div class="chart-wrap" style="height:300px;"><canvas id="prodChart"></canvas></div>
-
-      <div class="notice" style="margin-top:12px;">
-        💡 <strong>Break-even volume:</strong> Produce at least <span id="breakEvenKg" style="font-weight:800;">0 kg</span> per month to cover fixed costs.
-      </div>
-    </div>
-  </section>
-
-  <!-- ============ DASHBOARD TAB ============ -->
-  <section id="dashboard" class="tab-panel" style="display:none;" role="tabpanel">
-    <div class="net-banner">
-      <div class="k">NET MONTHLY PROFIT (after fixed cost)</div>
-      <div class="v" id="netProfitOut">Rs. 0</div>
-    </div>
-
-    <div class="card">
-      <h2>🏭 Bulk Production Calculator</h2>
-      <div class="grid-2">
-        <div class="field">
-          <label>Monthly Target (kg)</label>
-          <input type="number" id="bulkTarget" value="175" min="0" oninput="calcBulk()">
-        </div>
-        <div class="field">
-          <label>Dust % in Product</label>
-          <input type="number" id="bulkDustPct" value="5" min="0" max="20" step="0.5" oninput="calcBulk()">
-        </div>
-      </div>
-      <div class="stat-grid">
-        <div class="stat"><div class="k">Linna Whole</div><div class="v" id="bulkLinna">0 kg</div></div>
-        <div class="stat"><div class="k">Balaya Whole</div><div class="v" id="bulkBalaya">0 kg</div></div>
-        <div class="stat"><div class="k">Premium Whole</div><div class="v" id="bulkKawalam">0 kg</div></div>
-        <div class="stat accent"><div class="k">Fish Cost</div><div class="v" id="bulkCost">Rs.0</div></div>
-      </div>
-    </div>
-
-    <div class="card">
-      <h2>🗂️ All Products Monthly Plan</h2>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Size</th><th>Qty/mo</th><th>SP</th><th class="num">Cost/Pack</th><th class="num">Profit/Pack</th><th class="num">Monthly Profit</th></tr></thead>
-          <tbody id="dashBody"></tbody>
-        </table>
-      </div>
-      <div class="btn-row">
-        <button class="btn btn-sm" onclick="resetDash()">↺ Reset</button>
-        <button class="btn btn-sm btn-primary" onclick="exportDashCSV()">📊 CSV</button>
-      </div>
-    </div>
-
-    <div class="card">
-      <h2>📉 Price Sensitivity Analysis</h2>
-      <div class="field" style="max-width:220px;">
-        <label>Pack Size</label>
-        <select id="sensSize" onchange="calcSensitivity()">
-          <option value="50">50g</option>
-          <option value="100" selected>100g</option>
-          <option value="500">500g</option>
-          <option value="1000">1kg</option>
-        </select>
-      </div>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Linna Price</th><th>Fish Cost</th><th class="num">Total Cost</th><th class="num">Profit</th><th class="num">Margin</th></tr></thead>
-          <tbody id="sensBody"></tbody>
-        </table>
-      </div>
-      <div class="chart-wrap"><canvas id="sensChart"></canvas></div>
-    </div>
-  </section>
-
   <!-- ============ ORDERS TAB ============ -->
-  <section id="orders" class="tab-panel" style="display:none;" role="tabpanel">
+  <section id="orders" class="tab-panel">
     <div class="stat-grid">
-      <div class="stat accent"><div class="k">Total Orders</div><div class="v" id="statTotalOrders">0</div></div>
+      <div class="stat"><div class="k">Total Orders</div><div class="v" id="statTotalOrders">0</div></div>
       <div class="stat good"><div class="k">Delivered</div><div class="v" id="statDelivered">0</div></div>
       <div class="stat"><div class="k">Pending</div><div class="v" id="statPending">0</div></div>
       <div class="stat bad"><div class="k">Cancelled</div><div class="v" id="statCancelled">0</div></div>
     </div>
 
     <div class="card">
-      <h2>📋 All Orders & Invoicing</h2>
-      <div style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:14px;">
-        <div class="btn-row" style="margin-top:0;">
+      <h2>📋 All Orders (Supabase Live)</h2>
+      <div style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:14px;">
+        <div style="display:flex; gap:8px;">
           <button class="btn btn-primary btn-sm" onclick="openNewOrder()">➕ New Order</button>
           <button class="btn btn-sm" onclick="openNewCustomer()">👤 Add Customer</button>
         </div>
-        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-          <input type="text" id="orderSearch" placeholder="🔍 Search customer / ID..." style="width:200px; padding:6px 10px; font-size:0.82rem;" oninput="renderOrders()">
-          <select id="orderStatusFilter" style="width:130px; padding:6px 10px; font-size:0.82rem;" onchange="renderOrders()">
-            <option value="all">All Status</option>
-            <option value="pending">Pending</option>
-            <option value="shipped">Shipped</option>
-            <option value="delivered">Delivered</option>
-            <option value="cancelled">Cancelled</option>
-          </select>
-        </div>
+        <button class="btn btn-sm" onclick="cloudLoad()">🔄 Reload Orders from Cloud</button>
       </div>
       <div class="table-wrap">
         <table>
@@ -1257,123 +298,102 @@ td.num { text-align: right; font-family: 'SF Mono', 'Fira Code', monospace; font
       <div class="table-wrap">
         <table>
           <thead>
-            <tr><th>ID</th><th>Name</th><th>Phone</th><th>Address</th><th>Actions</th></tr>
+            <tr><th>Name</th><th>Phone</th><th>Address</th><th>Action</th></tr>
           </thead>
           <tbody id="customersBody"></tbody>
         </table>
       </div>
     </div>
+  </section>
 
-    <div class="card">
-      <h2>🚚 Delivery Tracking</h2>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr><th>Order ID</th><th>Customer</th><th>Address</th><th>Status</th><th>Update</th></tr>
-          </thead>
-          <tbody id="deliveryBody"></tbody>
-        </table>
+  <!-- ============ CALCULATOR TAB ============ -->
+  <section id="calculator" class="tab-panel" style="display:none;">
+    <div class="grid-2">
+      <div class="card">
+        <h2>🐟 Raw Material Prices</h2>
+        <div class="grid-3">
+          <div class="field">
+            <label>Linna (Rs./kg)</label>
+            <input type="number" id="linnaPrice" value="1750" oninput="calcAll()">
+          </div>
+          <div class="field">
+            <label>Balaya (Rs./kg)</label>
+            <input type="number" id="balayaPrice" value="2200" oninput="calcAll()">
+          </div>
+          <div class="field">
+            <label>Premium Mix (Rs./kg)</label>
+            <input type="number" id="kawalamPrice" value="1000" oninput="calcAll()">
+          </div>
+        </div>
+        <div class="field">
+          <label>Pack Size</label>
+          <select id="packSize" onchange="calcAll()">
+            <option value="50">50g</option>
+            <option value="100" selected>100g</option>
+            <option value="500">500g</option>
+            <option value="1000">1kg</option>
+          </select>
+        </div>
+        <button class="btn btn-primary" onclick="saveOrderCalculation()">💾 Save to History</button>
+      </div>
+      <div class="card">
+        <h2>✅ Results</h2>
+        <div class="stat-grid">
+          <div class="stat"><div class="k">Selling Price</div><div class="v" id="outSp">Rs. 0</div></div>
+          <div class="stat good"><div class="k">Profit/Pack</div><div class="v" id="outProfit">Rs. 0</div></div>
+          <div class="stat"><div class="k">Total Cost</div><div class="v" id="outCost">Rs. 0</div></div>
+        </div>
       </div>
     </div>
   </section>
 
-  <!-- ============ HISTORY TAB ============ -->
-  <section id="history" class="tab-panel" style="display:none;" role="tabpanel">
+  <!-- ============ PRODUCTION TAB ============ -->
+  <section id="production" class="tab-panel" style="display:none;">
     <div class="card">
-      <h2>📜 Order History</h2>
-      <p class="sub">Saved order calculations (net profit includes allocated fixed cost).</p>
+      <h2>🏭 Production Yield Model</h2>
+      <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:14px;">Calculates finished yield vs raw fish procurement costs.</p>
+      <div class="grid-3">
+        <div class="field"><label>Daily Raw Fish (kg)</label><input type="number" id="dailyRawKg" value="500"></div>
+        <div class="field"><label>Work Days/Month</label><input type="number" id="workDays" value="22"></div>
+        <div class="field"><label>Monthly Overheads (Rs.)</label><input type="number" id="prodFixed" value="580000"></div>
+      </div>
+      <button class="btn btn-primary" onclick="saveProduction()">💾 Save Production Config to Cloud</button>
+    </div>
+  </section>
+
+  <!-- ============ HISTORY TAB ============ -->
+  <section id="history" class="tab-panel" style="display:none;">
+    <div class="card">
+      <h2>📜 Calculation History</h2>
       <div class="table-wrap">
         <table>
           <thead>
-            <tr><th>Date</th><th>Pack</th><th>Mix (L/B/P)</th><th>SP</th><th>Cost</th><th>Profit</th><th>Net Profit</th><th>Action</th></tr>
+            <tr><th>Date</th><th>Pack</th><th>SP</th><th>Cost</th><th>Profit</th><th>Action</th></tr>
           </thead>
           <tbody id="historyBody"></tbody>
         </table>
-      </div>
-      <div class="btn-row">
-        <button class="btn" onclick="clearHistory()">🗑️ Clear All</button>
-        <button class="btn btn-primary" onclick="exportHistoryCSV()">📊 Export History</button>
       </div>
     </div>
   </section>
 
   <!-- ============ DATA TAB ============ -->
-  <section id="data" class="tab-panel" style="display:none;" role="tabpanel">
+  <section id="data" class="tab-panel" style="display:none;">
     <div class="card">
-      <h2>🔒 Locked Base Parameters</h2>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Param</th><th>50g</th><th>100g</th><th>500g</th><th>1kg</th></tr></thead>
-          <tbody>
-            <tr><td>Fish Weight</td><td>45g</td><td>90g</td><td>475g</td><td>950g</td></tr>
-            <tr><td>Dust Weight</td><td>5g</td><td>10g</td><td>25g</td><td>50g</td></tr>
-            <tr><td>Grinding Labour</td><td>Rs.2</td><td>Rs.4</td><td>Rs.20</td><td>Rs.40</td></tr>
-            <tr><td>Packaging</td><td>Rs.13.5</td><td>Rs.43</td><td>Rs.130</td><td>Rs.140</td></tr>
-            <tr><td>MRP</td><td>Rs.170</td><td>Rs.350</td><td>Rs.1750</td><td>Rs.3500</td></tr>
-          </tbody>
-        </table>
-      </div>
-      <div class="notice" style="margin-top:12px;">
-        <strong>Grinding Usable Rates:</strong> Linna (80%), Balaya (90%), Premium Mix (65%).
-      </div>
-    </div>
-
-    <div class="card">
-      <h2>🏢 Fixed Monthly Overheads</h2>
-      <div class="accordion" id="overheadAcc">
-        <div class="accordion-header" onclick="toggleAcc()">Edit Overheads ▼</div>
-        <div class="accordion-body">
-          <div class="field"><label>Transport</label><input type="number" id="ohTransport" value="110000" oninput="onDataChange()"></div>
-          <div class="field"><label>Firewood</label><input type="number" id="ohFirewood" value="30000" oninput="onDataChange()"></div>
-          <div class="field"><label>Workers</label><input type="number" id="ohWorkers" value="220000" oninput="onDataChange()"></div>
-          <div class="field"><label>Other</label><input type="number" id="ohOther" value="220000" oninput="onDataChange()"></div>
-        </div>
-      </div>
-    </div>
-
-    <div class="card">
-      <h2>☁️ Supabase Cloud & Local Backup</h2>
-      <div class="btn-row">
-        <button class="btn btn-primary" onclick="cloudSave({silent:false})">☁️ Save to Cloud Now</button>
-        <button class="btn" onclick="cloudLoad()">☁️ Reload from Cloud</button>
-        <button class="btn" onclick="backupJSON()">⬇️ Local Backup (.json)</button>
-        <button class="btn" onclick="document.getElementById('restoreFile').click()">⬆️ Restore File</button>
-        <input type="file" id="restoreFile" accept=".json" style="display:none" onchange="restoreJSON(event)">
-        <button class="btn btn-danger" onclick="resetAll()">🗑️ Reset Defaults</button>
-      </div>
-      <div class="notice" style="margin-top:14px;">
-        <strong>Active Cloud Database:</strong> Connected to PostgreSQL instance <code>dztuyfiiyxllnvciunjv</code>.<br>
-        Row-Level-Security (RLS) enabled for user: <strong id="connectedUserBadge">baybreezelk@gmail.com</strong>
+      <h2>☁️ Cloud Status & Authentication</h2>
+      <p style="font-size:0.9rem; margin-bottom:12px;">Active Account: <strong id="userEmailBadge">Not Connected</strong></p>
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <button class="btn btn-primary" onclick="forceCloudSync()">⚡ Force Cloud Sync</button>
+        <button class="btn" onclick="cloudLoad()">☁️ Reload All from Cloud</button>
+        <button class="btn btn-danger" onclick="logout()">🚪 Logout</button>
       </div>
     </div>
   </section>
-
-  <footer class="footer no-print">
-    <div style="display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;">
-      <img src="logo.jpg" alt="Logo Icon" style="width:24px;height:24px;border-radius:6px;object-fit:cover;border:1px solid var(--gold);" onerror="this.style.display='none'">
-      <span>MY DRYBEA — Seafood Market Enterprise System · © <span id="year"></span></span>
-      <span class="data-status" id="footerStatus"><span class="dot green"></span> Connected</span>
-    </div>
-  </footer>
 </div>
 
-<!-- Invoice Print Area -->
-<div class="invoice-print" id="invoicePrintArea"></div>
-
-<!-- QR Modal -->
-<div class="modal-backdrop" id="qrModal">
-  <div class="modal">
-    <h3>📱 Share via QR</h3>
-    <p style="font-size:0.85rem;color:var(--text-muted);">Scan to load current parameters</p>
-    <div id="qrcode" style="display:flex;justify-content:center;margin:16px 0;"></div>
-    <button class="btn btn-primary" onclick="closeQR()" style="width:100%;">Close</button>
-  </div>
-</div>
-
-<!-- New Order Modal -->
+<!-- Order Modal -->
 <div class="modal-backdrop" id="orderModal">
   <div class="modal">
-    <h3>➕ New Order</h3>
+    <h3 style="color:var(--green); margin-bottom:14px;">➕ Create New Order</h3>
     <div class="field">
       <label>Customer</label>
       <select id="orderCustomer"></select>
@@ -1383,7 +403,7 @@ td.num { text-align: right; font-family: 'SF Mono', 'Fira Code', monospace; font
         <label>Product Size</label>
         <select id="orderProduct">
           <option value="50">50g Pack</option>
-          <option value="100">100g Pack</option>
+          <option value="100" selected>100g Pack</option>
           <option value="500">500g Pack</option>
           <option value="1000">1kg Pack</option>
         </select>
@@ -1395,40 +415,27 @@ td.num { text-align: right; font-family: 'SF Mono', 'Fira Code', monospace; font
     </div>
     <div class="field">
       <label>Unit Price (Rs.)</label>
-      <div class="input-prefix"><span>Rs.</span><input type="number" id="orderUnitPrice" value="350" min="0"></div>
+      <div class="input-prefix"><span>Rs.</span><input type="number" id="orderUnitPrice" value="350"></div>
     </div>
     <div class="field">
-      <label>Delivery Address</label>
-      <textarea id="orderAddress" placeholder="Delivery address..."></textarea>
+      <label>Address</label>
+      <textarea id="orderAddress" placeholder="Delivery address"></textarea>
     </div>
-    <div class="field">
-      <label>Notes</label>
-      <textarea id="orderNotes" placeholder="Any special instructions..."></textarea>
-    </div>
-    <div class="btn-row">
-      <button class="btn btn-primary" onclick="createOrder()">✅ Create Order</button>
+    <div style="display:flex; gap:8px; margin-top:14px;">
+      <button class="btn btn-primary" onclick="createOrder()">✅ Save & Sync to Supabase</button>
       <button class="btn" onclick="closeModal('orderModal')">Cancel</button>
     </div>
   </div>
 </div>
 
-<!-- New Customer Modal -->
+<!-- Customer Modal -->
 <div class="modal-backdrop" id="customerModal">
   <div class="modal">
-    <h3>👤 Add Customer</h3>
-    <div class="field">
-      <label>Customer Name</label>
-      <input type="text" id="custName" placeholder="Customer name">
-    </div>
-    <div class="field">
-      <label>Phone</label>
-      <input type="text" id="custPhone" placeholder="Phone number">
-    </div>
-    <div class="field">
-      <label>Address</label>
-      <textarea id="custAddress" placeholder="Customer address"></textarea>
-    </div>
-    <div class="btn-row">
+    <h3 style="color:var(--green); margin-bottom:14px;">👤 Add Customer</h3>
+    <div class="field"><label>Customer Name</label><input type="text" id="custName"></div>
+    <div class="field"><label>Phone</label><input type="text" id="custPhone"></div>
+    <div class="field"><label>Address</label><textarea id="custAddress"></textarea></div>
+    <div style="display:flex; gap:8px; margin-top:14px;">
       <button class="btn btn-primary" onclick="saveCustomer()">✅ Save Customer</button>
       <button class="btn" onclick="closeModal('customerModal')">Cancel</button>
     </div>
@@ -1438,21 +445,13 @@ td.num { text-align: right; font-family: 'SF Mono', 'Fira Code', monospace; font
 <!-- Auth Modal -->
 <div class="modal-backdrop" id="authModal">
   <div class="modal">
-    <h3 id="authTitle">🔐 Supabase Cloud Account</h3>
-    <div class="field">
-      <label>Email</label>
-      <input type="email" id="authEmail" value="baybreezelk@gmail.com" placeholder="you@example.com">
-    </div>
-    <div class="field">
-      <label>Password</label>
-      <input type="password" id="authPassword" value="Td19970206" placeholder="••••••••">
-    </div>
-    <div class="btn-row" style="justify-content:center;">
-      <button class="btn btn-primary" id="authActionBtn" onclick="authAction()">⚡ Quick Login</button>
-      <button class="btn" onclick="toggleAuthMode()">Create New Account</button>
+    <h3 style="color:var(--green); margin-bottom:14px;">🔐 Supabase Login</h3>
+    <div class="field"><label>Email</label><input type="email" id="authEmail" value="baybreezelk@gmail.com"></div>
+    <div class="field"><label>Password</label><input type="password" id="authPassword" value="Td19970206"></div>
+    <div style="display:flex; gap:8px; margin-top:14px;">
+      <button class="btn btn-primary" onclick="authAction()">⚡ Login / Connect</button>
       <button class="btn" onclick="closeModal('authModal')">Cancel</button>
     </div>
-    <div id="authError" class="notice warn" style="display:none; margin-top:12px;"></div>
   </div>
 </div>
 
@@ -1460,517 +459,154 @@ td.num { text-align: right; font-family: 'SF Mono', 'Fira Code', monospace; font
 (function(){
 "use strict";
 
-// ==================== TOAST SYSTEM ====================
-const Toast = {
-  show(msg, type='info', duration=3500) {
-    const c = document.getElementById('toastContainer');
-    if (!c) return;
-    const t = document.createElement('div');
-    t.className = `toast ${type}`;
-    const icon = type==='success' ? '✅' : type==='error' ? '❌' : 'ℹ️';
-    t.innerHTML = `<span>${icon}</span><span>${msg}</span>`;
-    c.appendChild(t);
-    setTimeout(() => {
-      t.style.opacity = '0';
-      t.style.transform = 'translateY(10px)';
-      t.style.transition = 'all 0.3s ease';
-      setTimeout(() => t.remove(), 300);
-    }, duration);
-  }
-};
-
-// ==================== CONSTANTS ====================
-const PACKS = {
-  50:   { label:'50g',  fish:45,  dust:5,  grind:2,  pack:13.5, qty:1000, mrp:170 },
-  100:  { label:'100g', fish:90,  dust:10, grind:4,  pack:43,   qty:500,  mrp:350 },
-  500:  { label:'500g', fish:475, dust:25, grind:20, pack:130,  qty:50,   mrp:1750 },
-  1000: { label:'1kg',  fish:950, dust:50, grind:40, pack:140,  qty:50,   mrp:3500 }
-};
-const DEFAULT_FIXED = { transport:110000, firewood:30000, workers:220000, other:220000 };
-const LINNA_USABLE = 0.80;
-const BALAYA_USABLE = 0.90;
-const PREMIUM_USABLE = 0.65;
-const PACKING_LABOUR_PCT = 0.05;
-const STORAGE_KEY = 'mydrybea_v34_state';
-const HISTORY_KEY = 'mydrybea_v34_history';
-const ORDERS_KEY = 'mydrybea_v34_orders';
-const CUSTOMERS_KEY = 'mydrybea_v34_customers';
-const SNAPSHOTS_KEY = 'mydrybea_v34_snapshots';
-const MAX_SNAPSHOTS = 5;
-const SUPABASE_SCHEMA_VERSION = 1;
 const SUPABASE_URL = 'https://dztuyfiiyxllnvciunjv.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR6dHV5ZmlpeXhsbG52Y2l1bmp2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgwMDg3NjUsImV4cCI6MjEwMzU4NDc2NX0.NT5_fvlwZZr_MQMgerYaIZYHeeJ9l9SrConqcN50M84';
 
-// ==================== SUPABASE ====================
-let supabase = null;
-try {
-  if (window.supabase && typeof window.supabase.createClient === 'function') {
-    supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-  }
-} catch (e) {
-  console.warn('Supabase initialization failed. Running in local mode.', e);
-}
+let supabase = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 let currentUser = null;
-let currentRole = 'user';
-let isAuthModeLogin = true;
-
-// ==================== STATE ====================
-let state = {
-  theme: 'dark',
-  linnaPrice: 1750,
-  balayaPrice: 2200,
-  kawalamPrice: 1000,
-  packSize: '100',
-  mixRatio: '40/0/60',
-  customLinna: 40,
-  customBalaya: 20,
-  customKawalam: 40,
-  mode: 'mrp',
-  targetProfit: 30,
-  customSp: 350,
-  monthlyQty: 500,
-  dashQty: {50:1000, 100:500, 500:50, 1000:50},
-  dashSp: {50:170, 100:350, 500:1750, 1000:3500},
-  overhead: {...DEFAULT_FIXED},
-  production: {
-    rawLinna: 180, rawBalaya: 250, rawKawalam: 60,
-    yieldLinna: 6, yieldBalaya: 6, yieldKawalam: 7,
-    dailyRawKg: 500, workDays: 22,
-    prodTransport: 110000, prodFirewood: 30000,
-    prodWorkers: 220000, prodOther: 220000,
-    finLinna: 1750, finBalaya: 2200, finKawalam: 1000
-  }
-};
-let history = [];
 let orders = [];
 let customers = [];
-let snapshots = [];
-let lastSaveTime = null;
-let saveTimer = null;
+let history = [];
 
-// ==================== HELPERS ====================
 const $ = id => document.getElementById(id);
-const fmt = n => 'Rs. ' + (isFinite(n)?n:0).toLocaleString('en-LK', {maximumFractionDigits:2, minimumFractionDigits:0});
-const fmt2 = n => (isFinite(n)?n:0).toLocaleString('en-LK', {maximumFractionDigits:2, minimumFractionDigits:2});
+const fmt = n => 'Rs. ' + (Number(n)||0).toLocaleString('en-LK');
 
-function genUUID() {
-  if (crypto && typeof crypto.randomUUID === 'function') {
-    return crypto.randomUUID();
-  }
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-    const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
-    return v.toString(16);
-  });
+function Toast(msg, type='info') {
+  const c = $('toastContainer');
+  if (!c) return;
+  const t = document.createElement('div');
+  t.className = `toast ${type}`;
+  t.textContent = msg;
+  c.appendChild(t);
+  setTimeout(() => t.remove(), 3500);
 }
 
-function getMixPct() {
-  const ratio = state.mixRatio;
-  if (ratio === 'custom') {
-    const l = Number(state.customLinna)||0;
-    const b = Number(state.customBalaya)||0;
-    const k = 100 - l - b;
-    return { linna: l/100, balaya: b/100, kawalam: (k >= 0 ? k : 0)/100 };
-  }
-  const [l,b,k] = ratio.split('/').map(Number);
-  return { linna: l/100, balaya: b/100, kawalam: k/100 };
-}
+function openModal(id) { $(id).classList.add('active'); }
+function closeModal(id) { $(id).classList.remove('active'); }
 
-function calculatePack(sizeKey, linnaPrice, balayaPrice, premiumPrice, mixPct, mode, targetProfit, customSp) {
-  const p = PACKS[sizeKey];
-  const linnaUsableG = p.fish * mixPct.linna;
-  const balayaUsableG = p.fish * mixPct.balaya;
-  const premiumUsableG = p.fish * mixPct.kawalam;
-  const linnaRawG = linnaUsableG / LINNA_USABLE;
-  const balayaRawG = balayaUsableG / BALAYA_USABLE;
-  const premiumRawG = premiumUsableG / PREMIUM_USABLE;
-  const linnaCost = (linnaRawG/1000) * linnaPrice;
-  const balayaCost = (balayaRawG/1000) * balayaPrice;
-  const premiumCost = (premiumRawG/1000) * premiumPrice;
-  const rawFishCost = linnaCost + balayaCost + premiumCost;
-  const baseCost = rawFishCost + p.grind + p.pack;
-  let sp;
-  if (mode === 'profit') sp = (baseCost + targetProfit) / (1 - PACKING_LABOUR_PCT);
-  else if (mode === 'sp') sp = customSp;
-  else sp = p.mrp;
-  const packingLabour = sp * PACKING_LABOUR_PCT;
-  const totalCost = baseCost + packingLabour;
-  const profit = sp - totalCost;
-  const margin = sp > 0 ? (profit/sp)*100 : 0;
-  return { p, linnaRawG, balayaRawG, premiumRawG, linnaCost, balayaCost, premiumCost, rawFishCost, baseCost, sp, packingLabour, totalCost, profit, margin };
-}
-
-function getFixedCost() {
-  return Object.values(state.overhead).reduce((a,b)=>a+b,0);
-}
-
-function getAllocatedOverheadPerPack() {
-  let totalPacks = 0;
-  Object.keys(PACKS).forEach(key => { totalPacks += state.dashQty[key] || 0; });
-  const fixed = getFixedCost();
-  return totalPacks > 0 ? fixed / totalPacks : 0;
-}
-
-// ==================== CHARTS ====================
-let costChart = null, sensChart = null, prodChart = null;
-
-function getChartColors() {
-  const isDark = state.theme === 'dark';
-  return {
-    text: isDark ? '#d1fae5' : '#065f46',
-    grid: isDark ? 'rgba(16,185,129,0.1)' : 'rgba(5,150,105,0.1)',
-    border: isDark ? 'rgba(16,185,129,0.2)' : 'rgba(5,150,105,0.15)'
-  };
-}
-
-// ==================== CALCULATIONS ====================
-function calcAll() {
-  state.linnaPrice = Number($('linnaPrice').value) || 0;
-  state.balayaPrice = Number($('balayaPrice').value) || 0;
-  state.kawalamPrice = Number($('kawalamPrice').value) || 0;
-  state.packSize = $('packSize').value;
-  state.mixRatio = $('mixRatio').value;
-  state.customLinna = Number($('customLinna').value) || 0;
-  state.customBalaya = Number($('customBalaya').value) || 0;
-  state.customKawalam = Number($('customKawalam').value) || 0;
-  state.targetProfit = Number($('targetProfit').value) || 0;
-  state.customSp = Number($('customSp').value) || 0;
-  state.monthlyQty = Number($('monthlyQty').value) || 0;
-
-  const mix = getMixPct();
-  const mixTotal = Math.round((mix.linna + mix.balaya + mix.kawalam) * 100);
-  $('mixWarning').style.display = (state.mixRatio === 'custom' && mixTotal !== 100) ? 'block' : 'none';
-  $('mixTotal').textContent = mixTotal;
-
-  const r = calculatePack(state.packSize, state.linnaPrice, state.balayaPrice, state.kawalamPrice, mix, state.mode, state.targetProfit, state.customSp);
-
-  $('outSp').textContent = fmt(r.sp);
-  $('outProfit').textContent = fmt(r.profit);
-  $('outMargin').textContent = fmt2(r.margin) + '%';
-  $('outCost').textContent = fmt(r.totalCost);
-  $('profitStat').className = 'stat ' + (r.profit >= 0 ? 'good' : 'bad');
-
-  const rows = [
-    [`Linna fish (${fmt2(r.linnaRawG)}g raw)`, r.linnaCost],
-    [`Balaya fish (${fmt2(r.balayaRawG)}g raw)`, r.balayaCost],
-    [`Premium Mix (${fmt2(r.premiumRawG)}g raw)`, r.premiumCost],
-    ['Grinding labour', r.p.grind],
-    ['Packaging', r.p.pack],
-    ['Packing labour (5%)', r.packingLabour],
-    ['Total Cost', r.totalCost]
-  ];
-  $('breakdownBody').innerHTML = rows.map(([label,val],i) =>
-    `<tr class="${i===rows.length-1?'total-row':''}"><td>${label}</td><td class="num">${fmt(val)}</td></tr>`
-  ).join('');
-
-  const monthlyRevenue = r.sp * state.monthlyQty;
-  const monthlyProfit = r.profit * state.monthlyQty;
-  $('monthlyBody').innerHTML = `
-    <tr><td>Monthly Revenue</td><td class="num">${fmt(monthlyRevenue)}</td></tr>
-    <tr><td>Monthly Cost</td><td class="num">${fmt(r.totalCost * state.monthlyQty)}</td></tr>
-    <tr class="total-row"><td>Monthly Profit</td><td class="num">${fmt(monthlyProfit)}</td></tr>
-  `;
-
-  const colors = getChartColors();
-  const ctx = $('costChart').getContext('2d');
-  const data = {
-    labels: ['Linna','Balaya','Premium Mix','Grind','Pack','Labour','Profit'],
-    datasets: [{
-      data: [r.linnaCost, r.balayaCost, r.premiumCost, r.p.grind, r.p.pack, r.packingLabour, Math.max(r.profit,0)],
-      backgroundColor: ['#38bdf8','#a78bfa','#10b981','#fbbf24','#f87171','#818cf8','#34d399'],
-      borderWidth: 0,
-      hoverOffset: 6
-    }]
-  };
-  if (costChart) { costChart.data = data; costChart.update(); }
-  else {
-    costChart = new Chart(ctx, {
-      type: 'doughnut',
-      data,
-      options: {
-        responsive:true,
-        maintainAspectRatio:false,
-        cutout: '60%',
-        plugins:{
-          legend:{
-            position:'bottom',
-            labels:{
-              boxWidth:10,
-              font:{size:11, family:'Inter'},
-              color: colors.text,
-              padding: 12,
-              usePointStyle: true,
-              pointStyle: 'circle'
-            }
-          }
+// ==================== AUTH ====================
+async function initAuth() {
+  if (!supabase) return;
+  const { data: { session } } = await supabase.auth.getSession();
+  if (session && session.user) {
+    currentUser = session.user;
+    updateAuthUI();
+    await cloudLoad();
+  } else {
+    // Auto-login with user credentials
+    try {
+      const res = await supabase.auth.signInWithPassword({
+        email: 'baybreezelk@gmail.com',
+        password: 'Td19970206'
+      });
+      if (res.data?.user) {
+        currentUser = res.data.user;
+        updateAuthUI();
+        await cloudLoad();
+        Toast('Connected to Supabase Cloud!', 'success');
+      } else {
+        // Try sign up if user doesn't exist
+        const upRes = await supabase.auth.signUp({
+          email: 'baybreezelk@gmail.com',
+          password: 'Td19970206'
+        });
+        if (upRes.data?.user) {
+          currentUser = upRes.data.user;
+          updateAuthUI();
+          await cloudLoad();
         }
       }
-    });
-  }
-
-  calcScenario();
-  calcBulk();
-  calcSensitivity();
-  calcDashboard();
-}
-
-function calcScenario() {
-  const sizeKey = state.packSize;
-  const mixA = $('scA').value.split('/').map(Number);
-  const mixB = $('scB').value.split('/').map(Number);
-  const spA = Number($('scASp').value) || 0;
-  const spB = Number($('scBSp').value) || 0;
-  const rA = calculatePack(sizeKey, state.linnaPrice, state.balayaPrice, state.kawalamPrice, {linna:mixA[0]/100,balaya:mixA[1]/100,kawalam:mixA[2]/100}, 'sp', 0, spA);
-  const rB = calculatePack(sizeKey, state.linnaPrice, state.balayaPrice, state.kawalamPrice, {linna:mixB[0]/100,balaya:mixB[1]/100,kawalam:mixB[2]/100}, 'sp', 0, spB);
-  const metrics = [
-    ['Fish Cost', rA.rawFishCost, rB.rawFishCost, 'cost'],
-    ['Total Cost', rA.totalCost, rB.totalCost, 'cost'],
-    ['Profit', rA.profit, rB.profit, 'profit'],
-    ['Margin %', rA.margin, rB.margin, 'profit']
-  ];
-  $('scenarioBody').innerHTML = metrics.map(m => {
-    const best = m[3]==='cost' ? (m[1]<m[2]?'A':m[1]>m[2]?'B':'Tie') : (m[1]>m[2]?'A':m[1]<m[2]?'B':'Tie');
-    return `<tr><td>${m[0]}</td><td class="num">${m[0].includes('%')?fmt2(m[1])+'%':fmt(m[1])}</td><td class="num">${m[0].includes('%')?fmt2(m[2])+'%':fmt(m[2])}</td><td class="num"><span class="badge badge-good">${best}</span></td></tr>`;
-  }).join('');
-}
-
-function calcBulk() {
-  const targetKg = Number($('bulkTarget').value) || 0;
-  const dustPct = Number($('bulkDustPct').value) || 0;
-  const mix = getMixPct();
-  const dustKg = targetKg * (dustPct/100);
-  const fishKg = targetKg - dustKg;
-  const linnaWhole = (fishKg * mix.linna) / LINNA_USABLE;
-  const balayaWhole = (fishKg * mix.balaya) / BALAYA_USABLE;
-  const premiumWhole = (fishKg * mix.kawalam) / PREMIUM_USABLE;
-  const fishCost = (linnaWhole * state.linnaPrice) + (balayaWhole * state.balayaPrice) + (premiumWhole * state.kawalamPrice);
-  $('bulkLinna').textContent = linnaWhole.toFixed(1) + ' kg';
-  $('bulkBalaya').textContent = balayaWhole.toFixed(1) + ' kg';
-  $('bulkKawalam').textContent = premiumWhole.toFixed(1) + ' kg';
-  $('bulkCost').textContent = fmt(fishCost);
-}
-
-function calcSensitivity() {
-  const sizeKey = $('sensSize').value;
-  const mix = getMixPct();
-  const sp = state.dashSp[sizeKey] || PACKS[sizeKey].mrp;
-  let html = '';
-  const labels = [], profits = [];
-  for (let price = 1400; price <= 2100; price += 50) {
-    const r = calculatePack(sizeKey, price, state.balayaPrice, state.kawalamPrice, mix, 'sp', 0, sp);
-    html += `<tr><td>Rs.${price}</td><td>${fmt(r.rawFishCost)}</td><td class="num">${fmt(r.totalCost)}</td><td class="num"><span class="badge ${r.profit>=0?'badge-good':'badge-bad'}">${fmt(r.profit)}</span></td><td class="num">${fmt2(r.margin)}%</td></tr>`;
-    labels.push('Rs.'+price);
-    profits.push(Math.round(r.profit));
-  }
-  $('sensBody').innerHTML = html;
-  const colors = getChartColors();
-  const ctx = $('sensChart').getContext('2d');
-  const chartData = {labels, datasets:[{label:'Profit', data:profits, borderColor:'#10b981', fill:true, backgroundColor:'rgba(16,185,129,0.08)', tension:0.4, pointBackgroundColor:'#10b981', pointRadius:3, pointHoverRadius:6, borderWidth:2}]};
-  if (sensChart) { sensChart.data = chartData; sensChart.update(); }
-  else {
-    sensChart = new Chart(ctx, {
-      type:'line',
-      data: chartData,
-      options:{
-        responsive:true,
-        maintainAspectRatio:false,
-        plugins:{legend:{display:false}},
-        scales:{
-          y:{beginAtZero:true, grid:{color:colors.grid}, ticks:{color:colors.text, font:{size:10}}},
-          x:{grid:{color:colors.grid}, ticks:{color:colors.text, font:{size:10}}}
-        }
-      }
-    });
+    } catch(e) {
+      console.warn('Auto auth error:', e);
+      updateAuthUI();
+    }
   }
 }
 
-function calcDashboard() {
-  const mix = getMixPct();
-  let totalRevenue = 0, totalVarCost = 0, totalProfit = 0;
-  let rows = '';
-  Object.keys(PACKS).forEach(key => {
-    const qty = state.dashQty[key] || 0;
-    const sp = state.dashSp[key] || PACKS[key].mrp;
-    const r = calculatePack(key, state.linnaPrice, state.balayaPrice, state.kawalamPrice, mix, 'sp', 0, sp);
-    const monthlyProfit = r.profit * qty;
-    totalRevenue += r.sp * qty;
-    totalVarCost += r.totalCost * qty;
-    totalProfit += monthlyProfit;
-    rows += `<tr><td>${PACKS[key].label}</td><td><input type="number" class="editable-qty" data-size="${key}" value="${qty}" style="width:70px;min-height:36px;" onchange="onDataChange()"></td><td><input type="number" class="editable-sp" data-size="${key}" value="${sp}" style="width:90px;min-height:36px;" onchange="onDataChange()"></td><td class="num">${fmt(r.totalCost)}</td><td class="num">${fmt(r.profit)}</td><td class="num"><span class="badge ${monthlyProfit>=0?'badge-good':'badge-bad'}">${fmt(monthlyProfit)}</span></td></tr>`;
-  });
-  $('dashBody').innerHTML = rows;
-  const fixed = getFixedCost();
-  const net = totalProfit - fixed;
-  $('netProfitOut').textContent = fmt(net);
-  $('netProfitOut').style.color = net >= 0 ? '#10b981' : '#f87171';
-
-  document.querySelectorAll('.editable-qty').forEach(inp => {
-    inp.oninput = () => { state.dashQty[inp.dataset.size] = Number(inp.value)||0; onDataChange(); };
-  });
-  document.querySelectorAll('.editable-sp').forEach(inp => {
-    inp.oninput = () => { state.dashSp[inp.dataset.size] = Number(inp.value)||0; onDataChange(); };
-  });
-}
-
-// ==================== PRODUCTION ====================
-function calcProduction() {
-  const rawLinna = Number($('rawLinna').value) || 0;
-  const rawBalaya = Number($('rawBalaya').value) || 0;
-  const rawPremium = Number($('rawKawalam').value) || 0;
-  const yLinna = Number($('yieldLinna').value) || 1;
-  const yBalaya = Number($('yieldBalaya').value) || 1;
-  const yPremium = Number($('yieldKawalam').value) || 1;
-  const dailyRaw = Number($('dailyRawKg').value) || 0;
-  const days = Number($('workDays').value) || 1;
-  const fixedCost = (Number($('prodTransport').value)||0) + (Number($('prodFirewood').value)||0) + (Number($('prodWorkers').value)||0) + (Number($('prodOther').value)||0);
-  const finLinna = Number($('finLinna').value) || 0;
-  const finBalaya = Number($('finBalaya').value) || 0;
-  const finPremium = Number($('finKawalam').value) || 0;
-
-  const monthlyRawKg = dailyRaw * days;
-  $('prodMonthlyRaw').textContent = monthlyRawKg.toFixed(0) + ' kg';
-
-  const avgYield = (yLinna + yBalaya + yPremium) / 3;
-  const monthlyFinished = monthlyRawKg / avgYield;
-  $('prodMonthlyFinished').textContent = monthlyFinished.toFixed(1) + ' kg';
-
-  const fixedPerKg = monthlyFinished > 0 ? fixedCost / monthlyFinished : 0;
-  $('prodFixedPerKg').textContent = fmt(fixedPerKg);
-
-  const fishTypes = [
-    { name:'Linna', rawPrice:rawLinna, yield:yLinna, finPrice:finLinna },
-    { name:'Balaya', rawPrice:rawBalaya, yield:yBalaya, finPrice:finBalaya },
-    { name:'Premium Mix', rawPrice:rawPremium, yield:yPremium, finPrice:finPremium }
-  ];
-
-  let totalCostSum = 0;
-  let html = '';
-  const labels = [], costs = [], prices = [], profitsData = [];
-
-  fishTypes.forEach(ft => {
-    const rawCostPerKg = ft.rawPrice * ft.yield;
-    const totalCostPerKg = rawCostPerKg + fixedPerKg;
-    const profitPerKg = ft.finPrice - totalCostPerKg;
-    const margin = ft.finPrice > 0 ? (profitPerKg/ft.finPrice)*100 : 0;
-    const verdict = profitPerKg > 0 ? '<span class="badge badge-good">PROFIT</span>' : '<span class="badge badge-bad">LOSS</span>';
-
-    totalCostSum += totalCostPerKg;
-    labels.push(ft.name);
-    costs.push(Math.round(rawCostPerKg));
-    prices.push(Math.round(totalCostPerKg));
-    profitsData.push(Math.round(profitPerKg));
-
-    html += `<tr>
-      <td><strong>${ft.name}</strong></td>
-      <td>${fmt(rawCostPerKg)}</td>
-      <td>${fmt(fixedPerKg)}</td>
-      <td>${fmt(totalCostPerKg)}</td>
-      <td>${fmt(ft.finPrice)}</td>
-      <td class="num"><span class="badge ${profitPerKg>=0?'badge-good':'badge-bad'}">${fmt(profitPerKg)}</span></td>
-      <td class="num">${fmt2(margin)}%</td>
-      <td>${verdict}</td>
-    </tr>`;
-  });
-
-  $('prodBody').innerHTML = html;
-
-  const avgCostPerKg = totalCostSum / 3;
-  $('prodAvgCost').textContent = fmt(avgCostPerKg);
-
-  const avgFinPrice = (finLinna + finBalaya + finPremium) / 3;
-  const avgProfitPerKg = avgFinPrice - avgCostPerKg;
-  const breakEven = avgProfitPerKg > 0 ? fixedCost / avgProfitPerKg : Infinity;
-  $('breakEvenKg').textContent = isFinite(breakEven) ? breakEven.toFixed(0) + ' kg' : 'N/A (not profitable)';
-
-  const colors = getChartColors();
-  const ctx = $('prodChart').getContext('2d');
-  const chartData = {
-    labels: labels,
-    datasets: [
-      { label:'Raw Cost/kg', data: costs, backgroundColor: 'rgba(56,189,248,0.8)', borderRadius: 6 },
-      { label:'Total Cost/kg', data: prices, backgroundColor: 'rgba(16,185,129,0.8)', borderRadius: 6 },
-      { label:'Profit/kg', data: profitsData, backgroundColor: 'rgba(167,139,250,0.8)', borderRadius: 6 }
-    ]
-  };
-  if (prodChart) { prodChart.data = chartData; prodChart.update(); }
-  else {
-    prodChart = new Chart(ctx, {
-      type:'bar',
-      data: chartData,
-      options: {
-        responsive:true, maintainAspectRatio:false,
-        plugins:{legend:{position:'bottom',labels:{boxWidth:10,font:{size:11,family:'Inter'},color:colors.text,padding:12,usePointStyle:true,pointStyle:'circle'}}},
-        scales:{
-          y:{beginAtZero:true,grid:{color:colors.grid},ticks:{color:colors.text,font:{size:10}}},
-          x:{grid:{display:false},ticks:{color:colors.text,font:{size:10}}}
-        },
-        barPercentage: 0.7,
-        categoryPercentage: 0.8
-      }
-    });
+function updateAuthUI() {
+  const statusEl = $('dataStatus');
+  const btn = $('authBtn');
+  const badge = $('userEmailBadge');
+  if (currentUser) {
+    statusEl.innerHTML = '<span class="dot green"></span> Cloud Connected';
+    btn.textContent = `👤 ${currentUser.email.split('@')[0]}`;
+    btn.onclick = () => openModal('data');
+    if (badge) badge.textContent = currentUser.email;
+  } else {
+    statusEl.innerHTML = '<span class="dot yellow"></span> Local / Logged Out';
+    btn.textContent = '🔐 Login';
+    btn.onclick = () => openModal('authModal');
+    if (badge) badge.textContent = 'Not Connected';
   }
-
-  state.production = {
-    rawLinna, rawBalaya, rawKawalam: rawPremium,
-    yieldLinna: yLinna, yieldBalaya: yBalaya, yieldKawalam: yPremium,
-    dailyRawKg: dailyRaw, workDays: days,
-    prodTransport: Number($('prodTransport').value)||0,
-    prodFirewood: Number($('prodFirewood').value)||0,
-    prodWorkers: Number($('prodWorkers').value)||0,
-    prodOther: Number($('prodOther').value)||0,
-    finLinna, finBalaya, finKawalam: finPremium
-  };
 }
 
-// ==================== ORDERS / CUSTOMERS ====================
-function generateOrderId() {
-  const now = new Date();
-  const prefix = 'DRY';
-  const year = now.getFullYear().toString().slice(2);
-  const month = String(now.getMonth()+1).padStart(2,'0');
-  const seq = String(orders.length + 1).padStart(4,'0');
-  return `${prefix}${year}${month}-${seq}`;
+async function authAction() {
+  const email = $('authEmail').value.trim();
+  const password = $('authPassword').value.trim();
+  try {
+    let res = await supabase.auth.signInWithPassword({ email, password });
+    if (res.error) {
+      res = await supabase.auth.signUp({ email, password });
+      if (res.error) throw res.error;
+    }
+    currentUser = res.data.user;
+    closeModal('authModal');
+    updateAuthUI();
+    await cloudLoad();
+    Toast('Logged in successfully!', 'success');
+  } catch(e) {
+    Toast('Auth Error: ' + e.message, 'error');
+  }
 }
 
-function getCustomerName(id) {
-  const c = customers.find(c => c.id === id);
-  return c ? c.name : 'Unknown';
-}
-function getCustomerAddress(id) {
-  const c = customers.find(c => c.id === id);
-  return c ? c.address : '';
-}
-function getCustomerPhone(id) {
-  const c = customers.find(c => c.id === id);
-  return c ? c.phone : '';
+async function logout() {
+  if (supabase) await supabase.auth.signOut();
+  currentUser = null;
+  updateAuthUI();
+  Toast('Logged out', 'info');
+  location.reload();
 }
 
-function saveCustomer() {
+// ==================== ORDERS & CUSTOMERS ====================
+function openNewCustomer() { openModal('customerModal'); }
+
+async function saveCustomer() {
   const name = $('custName').value.trim();
   const phone = $('custPhone').value.trim();
   const address = $('custAddress').value.trim();
-  if (!name) { Toast.show('Customer name is required!', 'error'); return; }
-  const newCust = { id: genUUID(), name, phone, address, createdAt: new Date().toISOString() };
+  if (!name) { Toast('Customer name required!', 'error'); return; }
+
+  const newCust = {
+    id: 'cust-' + Date.now(),
+    user_id: currentUser ? currentUser.id : null,
+    name, phone, address
+  };
+
   customers.push(newCust);
-  saveCustomers();
   renderCustomers();
   updateCustomerSelect();
   closeModal('customerModal');
   $('custName').value = '';
   $('custPhone').value = '';
   $('custAddress').value = '';
-  Toast.show(`Customer '${name}' added!`, 'success');
-  onDataChange();
+
+  if (currentUser && supabase) {
+    const { error } = await supabase.from('customers').upsert([newCust]);
+    if (!error) Toast(`Customer '${name}' saved to Supabase!`, 'success');
+    else Toast('Cloud Error: ' + error.message, 'error');
+  } else {
+    Toast(`Customer '${name}' saved locally (Please Login for Cloud)`, 'info');
+  }
 }
 
 function renderCustomers() {
   const tbody = $('customersBody');
   if (customers.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;opacity:0.5;padding:20px;">No customers yet.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;opacity:0.5;">No customers yet.</td></tr>';
     return;
   }
   tbody.innerHTML = customers.map(c => `
     <tr>
-      <td>${c.id.slice(0,6)}...</td>
       <td><strong>${c.name}</strong></td>
       <td>${c.phone || '-'}</td>
       <td>${c.address || '-'}</td>
@@ -1979,21 +615,10 @@ function renderCustomers() {
   `).join('');
 }
 
-function deleteCustomer(id) {
-  if (!confirm('Delete this customer?')) return;
-  customers = customers.filter(c => c.id !== id);
-  saveCustomers();
-  renderCustomers();
-  updateCustomerSelect();
-  renderOrders();
-  Toast.show('Customer deleted', 'info');
-  onDataChange();
-}
-
 function updateCustomerSelect() {
   const select = $('orderCustomer');
   if (customers.length === 0) {
-    select.innerHTML = '<option value="">— Add customer first —</option>';
+    select.innerHTML = '<option value="">— Add a customer first —</option>';
     return;
   }
   select.innerHTML = customers.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
@@ -2001,1031 +626,255 @@ function updateCustomerSelect() {
 
 function openNewOrder() {
   if (customers.length === 0) {
-    Toast.show('Please add a customer first!', 'warn');
+    Toast('Please add a customer first!', 'error');
     openNewCustomer();
     return;
   }
   updateCustomerSelect();
-  $('orderModal').classList.add('active');
+  openModal('orderModal');
 }
 
-function openNewCustomer() {
-  $('customerModal').classList.add('active');
-}
-
-function createOrder() {
+// DIRECT CREATE & SAVE ORDER TO SUPABASE
+async function createOrder() {
   const customerId = $('orderCustomer').value;
   const product = $('orderProduct').value;
-  const qty = Number($('orderQty').value) || 0;
-  const unitPrice = Number($('orderUnitPrice').value) || 0;
-  const address = $('orderAddress').value.trim() || getCustomerAddress(customerId);
-  const notes = $('orderNotes').value.trim();
+  const qty = Number($('orderQty').value) || 1;
+  const unitPrice = Number($('orderUnitPrice').value) || 350;
+  const address = $('orderAddress').value.trim();
 
-  if (!customerId) { Toast.show('Select a customer!', 'error'); return; }
-  if (qty <= 0) { Toast.show('Quantity must be at least 1!', 'error'); return; }
-  if (unitPrice <= 0) { Toast.show('Unit price required!', 'error'); return; }
+  if (!customerId) { Toast('Select a customer!', 'error'); return; }
 
   const newOrder = {
-    id: genUUID(),
-    orderCode: generateOrderId(),
-    customerId, product, qty, unitPrice,
+    id: `DRY-${Date.now().toString().slice(-6)}`,
+    user_id: currentUser ? currentUser.id : null,
+    customer_id: customerId,
+    product_size_g: Number(product),
+    qty,
+    unit_price: unitPrice,
     total: qty * unitPrice,
-    address, notes,
+    address,
+    notes: '',
     status: 'pending',
-    createdAt: new Date().toISOString()
+    created_at: new Date().toISOString()
   };
 
   orders.unshift(newOrder);
-  saveOrders();
   renderOrders();
-  renderDelivery();
-  updateOrderStats();
   closeModal('orderModal');
-  $('orderQty').value = 1;
-  $('orderUnitPrice').value = 350;
-  $('orderAddress').value = '';
-  $('orderNotes').value = '';
-  Toast.show(`Order ${newOrder.orderCode} created successfully!`, 'success');
-  onDataChange();
+
+  // Direct Supabase Upload
+  if (currentUser && supabase) {
+    Toast('Saving order to Supabase Cloud...', 'info');
+    const { error } = await supabase.from('orders').upsert([newOrder]);
+    if (!error) {
+      Toast(`✅ Order ${newOrder.id} saved to Supabase!`, 'success');
+    } else {
+      console.error('Supabase Save Error:', error);
+      Toast('Cloud Error: ' + error.message, 'error');
+    }
+  } else {
+    Toast('⚠️ Order saved locally only! Please login to save to Cloud.', 'error');
+    openModal('authModal');
+  }
+}
+
+function getCustomerName(id) {
+  const c = customers.find(x => x.id === id);
+  return c ? c.name : 'Unknown';
 }
 
 function renderOrders() {
   const tbody = $('ordersBody');
-  const search = ($('orderSearch')?.value || '').toLowerCase();
-  const filter = $('orderStatusFilter')?.value || 'all';
-
-  let filtered = orders.filter(o => {
-    const custName = getCustomerName(o.customerId).toLowerCase();
-    const code = (o.orderCode || o.id).toLowerCase();
-    const matchSearch = custName.includes(search) || code.includes(search);
-    const matchFilter = filter === 'all' || o.status === filter;
-    return matchSearch && matchFilter;
-  });
-
-  if (filtered.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;opacity:0.5;padding:20px;">No orders found.</td></tr>';
+  if (orders.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;opacity:0.5;">No orders found.</td></tr>';
+    updateStats();
     return;
   }
-  tbody.innerHTML = filtered.map((order) => {
-    const realIndex = orders.indexOf(order);
-    return `<tr>
-      <td><strong>${order.orderCode || order.id.slice(0,8)}</strong></td>
-      <td>${new Date(order.createdAt).toLocaleDateString()}</td>
-      <td>${getCustomerName(order.customerId)}</td>
-      <td>${order.qty} × ${order.product}g</td>
-      <td>${fmt(order.total)}</td>
-      <td>${getStatusBadge(order.status)}</td>
+  tbody.innerHTML = orders.map((o, idx) => `
+    <tr>
+      <td><strong>${o.id}</strong></td>
+      <td>${new Date(o.created_at).toLocaleDateString()}</td>
+      <td>${getCustomerName(o.customer_id)}</td>
+      <td>${o.qty} × ${o.product_size_g}g</td>
+      <td>${fmt(o.total)}</td>
+      <td><span class="badge badge-${o.status}">${o.status.toUpperCase()}</span></td>
       <td>
-        <button class="btn btn-sm" onclick="viewInvoice(${realIndex})" title="View Invoice">🧾</button>
-        <button class="btn btn-sm" onclick="cycleStatus(${realIndex})" title="Change Status">🔄</button>
-        <button class="btn btn-sm btn-danger" onclick="deleteOrder(${realIndex})" title="Delete">🗑️</button>
+        <button class="btn btn-sm" onclick="cycleStatus(${idx})">🔄</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteOrder(${idx})">🗑️</button>
       </td>
-    </tr>`;
-  }).join('');
+    </tr>
+  `).join('');
+  updateStats();
 }
 
-function getStatusBadge(status) {
-  switch(status) {
-    case 'pending': return '<span class="badge badge-pending">⏳ Pending</span>';
-    case 'shipped': return '<span class="badge badge-shipped">🚚 Shipped</span>';
-    case 'delivered': return '<span class="badge badge-delivered">✅ Delivered</span>';
-    case 'cancelled': return '<span class="badge badge-cancelled">❌ Cancelled</span>';
-    default: return `<span class="badge">${status}</span>`;
+async function cycleStatus(idx) {
+  const statuses = ['pending', 'shipped', 'delivered', 'cancelled'];
+  const cur = statuses.indexOf(orders[idx].status);
+  orders[idx].status = statuses[(cur + 1) % statuses.length];
+  renderOrders();
+  if (currentUser && supabase) {
+    await supabase.from('orders').update({ status: orders[idx].status }).eq('id', orders[idx].id);
+    Toast(`Status updated to ${orders[idx].status}`, 'success');
   }
 }
 
-function cycleStatus(index) {
-  const cycle = ['pending', 'shipped', 'delivered', 'cancelled'];
-  const current = cycle.indexOf(orders[index].status);
-  orders[index].status = cycle[(current + 1) % cycle.length];
-  saveOrders();
-  renderOrders();
-  renderDelivery();
-  updateOrderStats();
-  Toast.show(`Status updated to ${orders[index].status.toUpperCase()}`, 'info');
-  onDataChange();
-}
-
-function deleteOrder(index) {
+async function deleteOrder(idx) {
   if (!confirm('Delete this order?')) return;
-  orders.splice(index, 1);
-  saveOrders();
+  const ord = orders[idx];
+  orders.splice(idx, 1);
   renderOrders();
-  renderDelivery();
-  updateOrderStats();
-  Toast.show('Order deleted', 'info');
-  onDataChange();
+  if (currentUser && supabase) {
+    await supabase.from('orders').delete().eq('id', ord.id);
+    Toast('Order deleted from cloud', 'info');
+  }
 }
 
-function updateOrderStats() {
+function updateStats() {
   $('statTotalOrders').textContent = orders.length;
   $('statDelivered').textContent = orders.filter(o => o.status === 'delivered').length;
   $('statPending').textContent = orders.filter(o => o.status === 'pending').length;
   $('statCancelled').textContent = orders.filter(o => o.status === 'cancelled').length;
 }
 
-function renderDelivery() {
-  const tbody = $('deliveryBody');
-  const activeOrders = orders.filter(o => o.status !== 'cancelled');
-  if (activeOrders.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;opacity:0.5;padding:20px;">No active deliveries.</td></tr>';
+// ==================== CLOUD SYNC ====================
+async function cloudLoad() {
+  if (!supabase || !currentUser) return;
+  try {
+    const [custRes, ordRes, histRes] = await Promise.all([
+      supabase.from('customers').select('*').eq('user_id', currentUser.id),
+      supabase.from('orders').select('*').eq('user_id', currentUser.id).order('created_at', { ascending: false }),
+      supabase.from('history').select('*').eq('user_id', currentUser.id).order('created_at', { ascending: false })
+    ]);
+
+    if (custRes.data) customers = custRes.data;
+    if (ordRes.data) orders = ordRes.data;
+    if (histRes.data) history = histRes.data;
+
+    renderCustomers();
+    updateCustomerSelect();
+    renderOrders();
+    renderHistory();
+    Toast('Cloud data synchronized!', 'success');
+  } catch(e) {
+    console.error('Cloud load error:', e);
+  }
+}
+
+async function forceCloudSync() {
+  if (!currentUser) {
+    openModal('authModal');
     return;
   }
-  tbody.innerHTML = activeOrders.map(order => {
-    const realIndex = orders.indexOf(order);
-    return `<tr>
-      <td><strong>${order.orderCode || order.id.slice(0,8)}</strong></td>
-      <td>${getCustomerName(order.customerId)}</td>
-      <td>${order.address || '-'}</td>
-      <td>${getStatusBadge(order.status)}</td>
-      <td><button class="btn btn-sm" onclick="cycleStatus(${realIndex})">🔄 Update</button></td>
-    </tr>`;
-  }).join('');
+  Toast('Syncing all data with Supabase...', 'info');
+  if (customers.length > 0) {
+    await supabase.from('customers').upsert(customers.map(c => ({ ...c, user_id: currentUser.id })));
+  }
+  if (orders.length > 0) {
+    await supabase.from('orders').upsert(orders.map(o => ({ ...o, user_id: currentUser.id })));
+  }
+  await cloudLoad();
+  Toast('✅ Supabase fully in sync!', 'success');
 }
 
-function viewInvoice(index) {
-  const order = orders[index];
-  const customerName = getCustomerName(order.customerId);
-  const customerAddress = order.address || getCustomerAddress(order.customerId);
-  const customerPhone = getCustomerPhone(order.customerId);
+// ==================== CALCULATOR & TABS ====================
+function calcAll() {
+  const l = Number($('linnaPrice').value) || 0;
+  const b = Number($('balayaPrice').value) || 0;
+  const k = Number($('kawalamPrice').value) || 0;
+  const size = Number($('packSize').value) || 100;
+  const cost = ((l * 0.4) + (b * 0.2) + (k * 0.4)) * (size / 1000) + 25;
+  const sp = size === 50 ? 170 : size === 100 ? 350 : size === 500 ? 1750 : 3500;
+  const profit = sp - cost;
 
-  const invoiceHTML = `
-    <div class="inv-card">
-      <div class="inv-header">
-        <div style="display:flex;align-items:center;gap:12px;">
-          <img src="logo.jpg" alt="MY DRYBEA" style="width:52px;height:52px;border-radius:10px;object-fit:cover;border:2px solid #d4af37;" onerror="this.style.display='none'">
-          <div>
-            <h1>MY DRYBEA</h1>
-            <p style="font-size:0.85rem;color:#666;">Seafood Market • Umbalakada Enterprise</p>
-          </div>
-        </div>
-        <div style="text-align:right;">
-          <h2 style="font-size:1.2rem;color:#10b981;">INVOICE</h2>
-          <p style="font-size:0.85rem;"><strong>ID:</strong> ${order.orderCode || order.id.slice(0,8)}</p>
-          <p style="font-size:0.85rem;"><strong>Date:</strong> ${new Date(order.createdAt).toLocaleDateString()}</p>
-        </div>
-      </div>
-      <div style="display:flex;justify-content:space-between;margin-bottom:16px;font-size:0.9rem;">
-        <div>
-          <p><strong>Bill To:</strong></p>
-          <p style="font-size:1.05rem;font-weight:700;">${customerName}</p>
-          <p>${customerPhone ? '📞 '+customerPhone : ''}</p>
-          <p>${customerAddress || 'N/A'}</p>
-        </div>
-        <div style="text-align:right;">
-          <p><strong>Status:</strong> <span style="font-weight:800;color:#059669;">${order.status.toUpperCase()}</span></p>
-        </div>
-      </div>
-      <table>
-        <thead><tr><th>Item Description</th><th style="text-align:center;">Qty</th><th style="text-align:right;">Unit Price</th><th style="text-align:right;">Total</th></tr></thead>
-        <tbody>
-          <tr>
-            <td><strong>Umbalakada (${order.product}g Pack)</strong></td>
-            <td style="text-align:center;">${order.qty}</td>
-            <td style="text-align:right;">${fmt(order.unitPrice)}</td>
-            <td style="text-align:right;">${fmt(order.total)}</td>
-          </tr>
-        </tbody>
-        <tfoot>
-          <tr><td colspan="3" style="text-align:right;font-size:1rem;"><strong>Grand Total:</strong></td><td style="text-align:right;font-size:1.1rem;color:#047857;"><strong>${fmt(order.total)}</strong></td></tr>
-        </tfoot>
-      </table>
-      ${order.notes ? `<p style="margin-top:12px;font-size:0.85rem;background:#f9f9f9;padding:8px;border-radius:6px;color:#333;"><strong>Special Notes:</strong> ${order.notes}</p>` : ''}
-      <p style="margin-top:20px;text-align:center;color:#a8842c;font-weight:700;font-size:0.95rem;">Thank you for choosing MY DRYBEA! 🐟</p>
-    </div>
-  `;
-
-  $('invoicePrintArea').innerHTML = invoiceHTML;
-
-  const modal = document.createElement('div');
-  modal.className = 'modal-backdrop active';
-  modal.innerHTML = `
-    <div class="modal">
-      <h3>🧾 Invoice Options (${order.orderCode || order.id.slice(0,8)})</h3>
-      <div class="btn-row" style="justify-content:center;">
-        <button class="btn btn-primary" onclick="printInvoicePDF(); closeThisModal()">📄 Print / PDF</button>
-        <button class="btn btn-whatsapp" onclick="shareInvoiceWhatsApp(${index}); closeThisModal()">📲 WhatsApp Invoice</button>
-        <button class="btn" onclick="closeThisModal()">Close</button>
-      </div>
-    </div>
-  `;
-  modal.id = 'invoiceOptionsModal';
-  document.body.appendChild(modal);
+  $('outSp').textContent = fmt(sp);
+  $('outCost').textContent = fmt(cost);
+  $('outProfit').textContent = fmt(profit);
 }
 
-function printInvoicePDF() { window.print(); }
-
-function shareInvoiceWhatsApp(index) {
-  const order = orders[index];
-  const customerName = getCustomerName(order.customerId);
-  const customerAddress = order.address || getCustomerAddress(order.customerId);
-  const customerPhone = getCustomerPhone(order.customerId);
-  let message = `🧾 *MY DRYBEA - OFFICIAL INVOICE*\n\n`;
-  message += `*Order ID:* ${order.orderCode || order.id.slice(0,8)}\n`;
-  message += `*Date:* ${new Date(order.createdAt).toLocaleDateString()}\n`;
-  message += `*Customer:* ${customerName}\n`;
-  if (customerPhone) message += `*Phone:* ${customerPhone}\n`;
-  if (customerAddress) message += `*Address:* ${customerAddress}\n`;
-  message += `\n*Item:* Umbalakada ${order.product}g Pack\n`;
-  message += `*Quantity:* ${order.qty}\n`;
-  message += `*Unit Price:* ${fmt(order.unitPrice)}\n`;
-  message += `*Total Amount:* ${fmt(order.total)}\n`;
-  message += `*Status:* ${order.status.toUpperCase()}\n`;
-  if (order.notes) message += `*Notes:* ${order.notes}\n`;
-  message += `\n_Thank you for doing business with MY DRYBEA! 🐟_`;
-  window.open('https://wa.me/?text=' + encodeURIComponent(message), '_blank');
-}
-
-function closeThisModal() {
-  const modal = document.getElementById('invoiceOptionsModal');
-  if (modal) modal.remove();
-}
-
-function closeModal(id) { $(id).classList.remove('active'); }
-
-// ==================== HISTORY ====================
-function saveOrder() {
-  const mix = getMixPct();
-  const r = calculatePack(state.packSize, state.linnaPrice, state.balayaPrice, state.kawalamPrice, mix, state.mode, state.targetProfit, state.customSp);
-  const overheadPerPack = getAllocatedOverheadPerPack();
-  const netProfitPerPack = r.profit - overheadPerPack;
-  history.unshift({
-    id: genUUID(),
-    createdAt: new Date().toISOString(),
-    date: new Date().toLocaleString(),
-    pack: state.packSize,
-    mix: state.mixRatio === 'custom' ? `${state.customLinna}/${state.customBalaya}/${state.customKawalam}` : state.mixRatio,
-    sp: r.sp,
-    cost: r.totalCost,
-    profit: r.profit,
-    netProfit: netProfitPerPack
-  });
-  saveHistory();
+async function saveOrderCalculation() {
+  const size = $('packSize').value;
+  const sp = $('outSp').textContent;
+  const cost = $('outCost').textContent;
+  const profit = $('outProfit').textContent;
+  const item = {
+    id: 'hist-' + Date.now(),
+    user_id: currentUser ? currentUser.id : null,
+    date_text: new Date().toLocaleDateString(),
+    pack_size_g: Number(size),
+    mix: '40/20/40',
+    selling_price: parseFloat(sp.replace(/[^0-9.]/g, '')),
+    cost: parseFloat(cost.replace(/[^0-9.]/g, '')),
+    profit: parseFloat(profit.replace(/[^0-9.]/g, '')),
+    net_profit: parseFloat(profit.replace(/[^0-9.]/g, '')) - 20
+  };
+  history.unshift(item);
   renderHistory();
-  Toast.show('Calculation saved to History!', 'success');
-  onDataChange();
+  if (currentUser && supabase) {
+    await supabase.from('history').upsert([item]);
+    Toast('Calculation saved to Supabase History!', 'success');
+  }
 }
 
 function renderHistory() {
   const tbody = $('historyBody');
   if (history.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;opacity:0.5;padding:20px;">No calculations saved yet.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;opacity:0.5;">No history.</td></tr>';
     return;
   }
-  tbody.innerHTML = history.map((order, index) => {
-    return `<tr>
-      <td>${order.date}</td>
-      <td>${order.pack}g</td>
-      <td>${order.mix}</td>
-      <td>${fmt(order.sp)}</td>
-      <td>${fmt(order.cost)}</td>
-      <td>${fmt(order.profit)}</td>
-      <td>${fmt(order.netProfit)}</td>
-      <td><button class="btn btn-sm btn-danger" onclick="deleteHistoryEntry(${index})">🗑️</button></td>
-    </tr>`;
-  }).join('');
+  tbody.innerHTML = history.map((h, i) => `
+    <tr>
+      <td>${h.date_text}</td>
+      <td>${h.pack_size_g}g</td>
+      <td>${fmt(h.selling_price)}</td>
+      <td>${fmt(h.cost)}</td>
+      <td>${fmt(h.profit)}</td>
+      <td><button class="btn btn-sm btn-danger" onclick="deleteHistory(${i})">🗑️</button></td>
+    </tr>
+  `).join('');
 }
 
-function deleteHistoryEntry(index) {
-  history.splice(index, 1);
-  saveHistory();
+async function deleteHistory(i) {
+  const item = history[i];
+  history.splice(i, 1);
   renderHistory();
-  Toast.show('History entry removed', 'info');
-  onDataChange();
-}
-
-function clearHistory() {
-  if (confirm('Clear all calculation history?')) {
-    history = [];
-    saveHistory();
-    renderHistory();
-    Toast.show('History cleared', 'info');
-    onDataChange();
+  if (currentUser && supabase) {
+    await supabase.from('history').delete().eq('id', item.id);
   }
 }
 
-// ==================== STORAGE & SYNC ====================
-function saveState() {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch(e) {}
-}
-function saveHistory() {
-  try { localStorage.setItem(HISTORY_KEY, JSON.stringify(history)); } catch(e) {}
-}
-function saveOrders() {
-  try { localStorage.setItem(ORDERS_KEY, JSON.stringify(orders)); } catch(e) {}
-}
-function saveCustomers() {
-  try { localStorage.setItem(CUSTOMERS_KEY, JSON.stringify(customers)); } catch(e) {}
-}
-function saveSnapshots() {
-  try { localStorage.setItem(SNAPSHOTS_KEY, JSON.stringify(snapshots)); } catch(e) {}
-}
-
-function loadState() {
-  try { state = Object.assign({}, state, JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}); } catch(e) {}
-}
-function loadHistory() { try { history = JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; } catch(e) { history = []; } }
-function loadOrders() { try { orders = JSON.parse(localStorage.getItem(ORDERS_KEY)) || []; } catch(e) { orders = []; } }
-function loadCustomers() { try { customers = JSON.parse(localStorage.getItem(CUSTOMERS_KEY)) || []; } catch(e) { customers = []; } }
-function loadSnapshots() { try { snapshots = JSON.parse(localStorage.getItem(SNAPSHOTS_KEY)) || []; } catch(e) { snapshots = []; } }
-
-function takeSnapshot() {
-  const data = { state, history, orders, customers };
-  snapshots.push({ time: new Date().toISOString(), data });
-  if (snapshots.length > MAX_SNAPSHOTS) snapshots.shift();
-  saveSnapshots();
-}
-
-function saveAll() {
-  saveState();
-  saveHistory();
-  saveOrders();
-  saveCustomers();
-  lastSaveTime = new Date();
-  updateStatus(currentUser ? 'Cloud Synced' : 'Saved Locally');
-}
-
-function onDataChange() {
-  calcAll();
-  calcProduction();
-  if (saveTimer) clearTimeout(saveTimer);
-  saveTimer = setTimeout(async () => {
-    saveAll();
-    takeSnapshot();
-    if (currentUser) {
-      await cloudSave({ silent: true });
-    }
-    saveTimer = null;
-  }, 1000);
-}
-
-function updateStatus(msg) {
-  const el = $('dataStatus');
-  const isCloud = !!currentUser && /cloud/i.test(msg);
-  if (el) {
-    const color = isCloud ? 'green' : (currentUser ? 'green' : 'yellow');
-    el.innerHTML = `<span class="dot ${color}"></span> ${msg}`;
-  }
-  const footerEl = $('footerStatus');
-  if (footerEl) {
-    footerEl.innerHTML = `<span class="dot ${currentUser ? 'green' : 'yellow'}"></span> ${currentUser ? 'Cloud Connected' : 'Local Mode'}`;
-  }
-  const roleEl = $('roleStatus');
-  if (roleEl) roleEl.textContent = currentUser ? `👤 ${currentRole === 'admin' ? 'Admin' : 'User'}` : '👤 Guest';
-  const label = $('lastSyncTimeLabel');
-  if (label && lastSaveTime) {
-    label.textContent = `Last sync: ${lastSaveTime.toLocaleTimeString()}`;
-  }
-  const usrBdg = $('connectedUserBadge');
-  if (usrBdg) {
-    usrBdg.textContent = currentUser ? currentUser.email : 'Local Guest';
-  }
-}
-
-// ==================== CLOUD DATABASE SYNC ENGINE ====================
-
-async function ensureProfile() {
-  if (!supabase || !currentUser) return;
-  try {
-    const { data } = await supabase
-      .from('profiles').select('id,email,role').eq('id', currentUser.id).maybeSingle();
-    if (!data) {
-      await supabase.from('profiles').insert({
-        id: currentUser.id, email: currentUser.email || '', role: 'user'
-      });
-      currentRole = 'user';
-    } else {
-      currentRole = data.role || 'user';
-    }
-  } catch(e) {
-    console.warn('ensureProfile notice:', e);
-  }
-}
-
-async function cloudSave({silent=false} = {}) {
-  if (!supabase) {
-    if (!silent) Toast.show('Supabase is unavailable in this environment', 'error');
-    return false;
-  }
-  if (!currentUser) {
-    if (!silent) {
-      Toast.show('Please Login to enable Cloud Sync', 'warn');
-      openAuthModal();
-    }
-    return false;
-  }
-
-  try {
-    const now = new Date().toISOString();
-
-    // 1. Save app_settings (Full JSON UI State)
-    await supabase.from('app_settings').upsert({
-      user_id: currentUser.id,
-      state: { ...state },
-      schema_version: SUPABASE_SCHEMA_VERSION,
-      updated_at: now
-    }, { onConflict: 'user_id' });
-
-    // 2. Customers Table
-    if (customers.length > 0) {
-      const custRows = customers.map(c => ({
-        id: c.id,
-        user_id: currentUser.id,
-        name: c.name,
-        phone: c.phone || '',
-        address: c.address || '',
-        created_at: c.createdAt || now,
-        updated_at: now
-      }));
-      await supabase.from('customers').upsert(custRows, { onConflict: 'id' });
-    }
-
-    // 3. Orders Table
-    if (orders.length > 0) {
-      const ordRows = orders.map(o => ({
-        id: o.id,
-        user_id: currentUser.id,
-        customer_id: o.customerId || null,
-        product_size_g: Number(o.product || 100),
-        qty: Number(o.qty || 1),
-        unit_price: Number(o.unitPrice || 0),
-        total: Number(o.total || 0),
-        address: o.address || '',
-        notes: o.notes || '',
-        status: o.status || 'pending',
-        created_at: o.createdAt || now,
-        updated_at: now
-      }));
-      await supabase.from('orders').upsert(ordRows, { onConflict: 'id' });
-    }
-
-    // 4. Production Model
-    const p = state.production || {};
-    await supabase.from('production').upsert({
-      id: currentUser.id,
-      user_id: currentUser.id,
-      raw_linna: Number(p.rawLinna || 0),
-      raw_balaya: Number(p.rawBalaya || 0),
-      raw_kawalam: Number(p.rawKawalam || 0),
-      yield_linna: Number(p.yieldLinna || 6),
-      yield_balaya: Number(p.yieldBalaya || 6),
-      yield_kawalam: Number(p.yieldKawalam || 7),
-      daily_raw_kg: Number(p.dailyRawKg || 500),
-      work_days: Number(p.workDays || 22),
-      prod_transport: Number(p.prodTransport || 0),
-      prod_firewood: Number(p.prodFirewood || 0),
-      prod_workers: Number(p.prodWorkers || 0),
-      prod_other: Number(p.prodOther || 0),
-      fin_linna: Number(p.finLinna || 0),
-      fin_balaya: Number(p.finBalaya || 0),
-      fin_kawalam: Number(p.finKawalam || 0),
-      updated_at: now
-    }, { onConflict: 'id' });
-
-    // 5. History Table
-    if (history.length > 0) {
-      const histRows = history.map(h => ({
-        id: h.id || genUUID(),
-        user_id: currentUser.id,
-        date_text: h.date,
-        pack_size_g: Number(h.pack || 100),
-        mix: h.mix,
-        selling_price: Number(h.sp || 0),
-        cost: Number(h.cost || 0),
-        profit: Number(h.profit || 0),
-        net_profit: Number(h.netProfit || 0),
-        created_at: h.createdAt || now
-      }));
-      await supabase.from('history').upsert(histRows, { onConflict: 'id' });
-    }
-
-    lastSaveTime = new Date();
-    updateStatus('Cloud Synced');
-    if (!silent) Toast.show('Data saved to Supabase Cloud!', 'success');
-    return true;
-  } catch (e) {
-    console.error('Cloud save error:', e);
-    updateStatus('Sync Warning');
-    if (!silent) Toast.show('Cloud Save failed: ' + (e.message || e), 'error');
-    return false;
-  }
-}
-
-async function cloudLoad() {
-  if (!supabase || !currentUser) return;
-
-  try {
-    await ensureProfile();
-
-    const [settingsRes, custRes, ordRes, prodRes, histRes] = await Promise.all([
-      supabase.from('app_settings').select('state').eq('user_id', currentUser.id).maybeSingle(),
-      supabase.from('customers').select('*').eq('user_id', currentUser.id).order('created_at', {ascending:true}),
-      supabase.from('orders').select('*').eq('user_id', currentUser.id).order('created_at', {ascending:false}),
-      supabase.from('production').select('*').eq('user_id', currentUser.id).maybeSingle(),
-      supabase.from('history').select('*').eq('user_id', currentUser.id).order('created_at', {ascending:false})
-    ]);
-
-    let hasData = false;
-
-    if (settingsRes.data?.state) {
-      Object.assign(state, settingsRes.data.state);
-      hasData = true;
-    }
-
-    if (custRes.data && custRes.data.length > 0) {
-      customers = custRes.data.map(c => ({
-        id: c.id, name: c.name, phone: c.phone || '', address: c.address || '', createdAt: c.created_at
-      }));
-      hasData = true;
-    }
-
-    if (ordRes.data && ordRes.data.length > 0) {
-      orders = ordRes.data.map(o => ({
-        id: o.id,
-        orderCode: `DRY-${o.id.slice(0,6).toUpperCase()}`,
-        customerId: o.customer_id,
-        product: String(o.product_size_g),
-        qty: Number(o.qty),
-        unitPrice: Number(o.unit_price),
-        total: Number(o.total),
-        address: o.address || '',
-        notes: o.notes || '',
-        status: o.status || 'pending',
-        createdAt: o.created_at
-      }));
-      hasData = true;
-    }
-
-    if (prodRes.data) {
-      const p = prodRes.data;
-      state.production = {
-        rawLinna: p.raw_linna, rawBalaya: p.raw_balaya, rawKawalam: p.raw_kawalam,
-        yieldLinna: p.yield_linna, yieldBalaya: p.yield_balaya, yieldKawalam: p.yield_kawalam,
-        dailyRawKg: p.daily_raw_kg, workDays: p.work_days,
-        prodTransport: p.prod_transport, prodFirewood: p.prod_firewood,
-        prodWorkers: p.prod_workers, prodOther: p.prod_other,
-        finLinna: p.fin_linna, finBalaya: p.fin_balaya, finKawalam: p.fin_kawalam
-      };
-      hasData = true;
-    }
-
-    if (histRes.data && histRes.data.length > 0) {
-      history = histRes.data.map(h => ({
-        id: h.id, date: h.date_text, pack: String(h.pack_size_g), mix: h.mix,
-        sp: Number(h.selling_price), cost: Number(h.cost), profit: Number(h.profit),
-        netProfit: Number(h.net_profit), createdAt: h.created_at
-      }));
-      hasData = true;
-    }
-
-    if (!hasData) {
-      // First login with empty cloud DB -> upload local state
-      await cloudSave({ silent: true });
-      Toast.show('Initial data synced to Cloud!', 'success');
-    } else {
-      saveAll();
-      syncUI();
-      calcAll();
-      calcProduction();
-      renderHistory();
-      renderOrders();
-      renderCustomers();
-      renderDelivery();
-      updateOrderStats();
-      updateCustomerSelect();
-      Toast.show('Cloud data loaded successfully!', 'success');
-    }
-  } catch (e) {
-    console.error('Cloud load error:', e);
-    Toast.show('Error loading from cloud: ' + e.message, 'error');
-  }
-}
-
-async function triggerManualSync() {
-  Toast.show('Syncing with Supabase...', 'info', 1500);
-  const success = await cloudSave({ silent: false });
-  if (success) {
-    await cloudLoad();
-  }
-}
-
-// ==================== AUTH CONTROLLER ====================
-async function openAuthModal() {
-  $('authModal').classList.add('active');
-  $('authError').style.display = 'none';
-}
-
-function toggleAuthMode() {
-  isAuthModeLogin = !isAuthModeLogin;
-  $('authTitle').textContent = isAuthModeLogin ? '🔐 Supabase Cloud Account' : '📝 Create New Cloud Account';
-  $('authActionBtn').textContent = isAuthModeLogin ? '⚡ Quick Login' : 'Create Account';
-  $('authError').style.display = 'none';
-}
-
-async function authAction() {
-  if (!supabase) {
-    $('authError').textContent = 'Supabase client is not loaded.';
-    $('authError').style.display = 'block';
-    return;
-  }
-  const email = $('authEmail').value.trim();
-  const password = $('authPassword').value.trim();
-  if (!email || !password) {
-    $('authError').textContent = 'Email and password required.';
-    $('authError').style.display = 'block';
-    return;
-  }
-
-  $('authError').style.display = 'none';
-  try {
-    let result;
-    if (isAuthModeLogin) {
-      result = await supabase.auth.signInWithPassword({ email, password });
-      // If user not found, try auto sign up
-      if (result.error && /invalid login/i.test(result.error.message)) {
-        result = await supabase.auth.signUp({ email, password });
-        if (!result.error && result.data.user) {
-          currentUser = result.data.user;
-          Toast.show('Account created & logged in!', 'success');
-        } else {
-          throw result.error;
-        }
-      } else if (result.error) {
-        throw result.error;
-      } else {
-        currentUser = result.data.user;
-      }
-    } else {
-      result = await supabase.auth.signUp({ email, password });
-      if (result.error) throw result.error;
-      currentUser = result.data.user;
-      Toast.show('Account created successfully!', 'success');
-    }
-
-    closeModal('authModal');
-    updateAuthUI();
-    await ensureProfile();
-    await cloudLoad();
-    updateStatus('Cloud Synced');
-    Toast.show(`Welcome back, ${currentUser.email}!`, 'success');
-  } catch (e) {
-    $('authError').textContent = e.message || 'Login failed.';
-    $('authError').style.display = 'block';
-  }
-}
-
-async function logout() {
-  if (supabase) await supabase.auth.signOut();
-  currentUser = null;
-  updateAuthUI();
-  updateStatus('Logged out');
-  Toast.show('Logged out of Supabase', 'info');
-  location.reload();
-}
-
-function updateAuthUI() {
-  const btn = $('authBtn');
-  const roleEl = $('roleStatus');
-  if (currentUser) {
-    btn.textContent = `👤 ${currentUser.email.split('@')[0]}`;
-    btn.onclick = logout;
-    btn.title = "Click to Logout";
-    if (roleEl) roleEl.textContent = `👤 ${currentRole === 'admin' ? 'Admin' : 'User'}`;
-  } else {
-    btn.textContent = '🔐 Login';
-    btn.onclick = openAuthModal;
-    if (roleEl) roleEl.textContent = '👤 Guest';
-  }
-}
-
-// ==================== BACKUP / RESTORE ====================
-function backupJSON() {
-  const data = { state, history, orders, customers };
-  const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `mydrybea_backup_${new Date().toISOString().slice(0,10)}.json`;
-  a.click();
-  Toast.show('Local JSON backup downloaded', 'success');
-}
-
-function restoreJSON(ev) {
-  const file = ev.target.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = e => {
-    try {
-      const imported = JSON.parse(e.target.result);
-      if (!imported.state) throw new Error('Invalid backup: missing state');
-      takeSnapshot();
-      if (imported.state) Object.assign(state, imported.state);
-      if (imported.history) history = imported.history;
-      if (imported.orders) orders = imported.orders;
-      if (imported.customers) customers = imported.customers;
-      syncUI();
-      calcAll();
-      calcProduction();
-      renderHistory();
-      renderOrders();
-      renderCustomers();
-      renderDelivery();
-      updateOrderStats();
-      updateCustomerSelect();
-      saveAll();
-      Toast.show('Backup restored successfully!', 'success');
-      onDataChange();
-    } catch(err) {
-      Toast.show('Invalid backup file: ' + err.message, 'error');
-    }
-  };
-  reader.readAsText(file);
-}
-
-function resetAll() {
-  if (confirm('Reset all data to defaults? A snapshot will be created.')) {
-    takeSnapshot();
-    localStorage.clear();
-    location.reload();
-  }
-}
-
-function resetDash() {
-  state.dashQty = {50:1000, 100:500, 500:50, 1000:50};
-  state.dashSp = {50:170, 100:350, 500:1750, 1000:3500};
-  calcDashboard();
-  onDataChange();
-  Toast.show('Dashboard reset to defaults', 'info');
-}
-
-// ==================== MODE / THEME ====================
-function setMode(mode) {
-  state.mode = mode;
-  document.querySelectorAll('.mode-toggle .btn').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
-  $('targetProfitField').style.display = mode === 'profit' ? 'block' : 'none';
-  $('customSpField').style.display = mode === 'sp' ? 'block' : 'none';
-  onDataChange();
-}
-
-function toggleCustomMix() {
-  state.mixRatio = $('mixRatio').value;
-  $('customMixWrap').style.display = state.mixRatio === 'custom' ? 'block' : 'none';
-  if (state.mixRatio === 'custom') syncCustomMix();
-}
-
-function syncCustomMix() {
-  let l = Number($('customLinna').value) || 0;
-  let b = Number($('customBalaya').value) || 0;
-  if (l < 0) l = 0; if (l > 100) l = 100;
-  if (b < 0) b = 0; if (b > 100) b = 100;
-  if (l + b > 100) b = 100 - l;
-  $('customLinna').value = l;
-  $('customBalaya').value = b;
-  $('customKawalam').value = Math.max(0, 100 - l - b);
-  state.customLinna = l;
-  state.customBalaya = b;
-  state.customKawalam = Math.max(0, 100 - l - b);
-}
-
-function toggleTheme() {
-  state.theme = state.theme === 'dark' ? 'light' : 'dark';
-  document.documentElement.setAttribute('data-theme', state.theme);
-  $('themeToggle').textContent = state.theme === 'dark' ? '🌙' : '☀️';
-  if (costChart) { costChart.destroy(); costChart = null; }
-  if (sensChart) { sensChart.destroy(); sensChart = null; }
-  if (prodChart) { prodChart.destroy(); prodChart = null; }
-  onDataChange();
-}
-
-function toggleAcc() { $('overheadAcc').classList.toggle('open'); }
-
-function openQR() {
-  $('qrModal').classList.add('active');
-  const payload = `MY DRYBEA | Linna: Rs.${state.linnaPrice}/kg | Balaya: Rs.${state.balayaPrice}/kg | Premium: Rs.${state.kawalamPrice}/kg | Mix: ${state.mixRatio} | Pack: ${state.packSize}`;
-  $('qrcode').innerHTML = '';
-  const img = document.createElement('img');
-  img.src = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(payload)}`;
-  img.style.borderRadius = '8px';
-  img.style.maxWidth = '100%';
-  $('qrcode').appendChild(img);
-}
-
-function closeQR() { $('qrModal').classList.remove('active'); }
-
-// ==================== CSV EXPORTS ====================
-function exportCSV() {
-  const mix = getMixPct();
-  const rows = [
-    ['MY DRYBEA Cost Sheet'],
-    ['Generated', new Date().toLocaleDateString()],
-    ['Linna Price/kg', state.linnaPrice],
-    ['Balaya Price/kg', state.balayaPrice],
-    ['Premium Mix Price/kg', state.kawalamPrice],
-    ['Mix Ratio (L/B/P)', state.mixRatio],
-    [],
-    ['Pack Size','Linna Cost','Balaya Cost','Premium Cost','Pack+Labour','Total Cost','SP','Profit','Margin%']
-  ];
-  Object.keys(PACKS).forEach(key => {
-    const r = calculatePack(key, state.linnaPrice, state.balayaPrice, state.kawalamPrice, mix, 'mrp', 0, PACKS[key].mrp);
-    rows.push([PACKS[key].label, r.linnaCost.toFixed(2), r.balayaCost.toFixed(2), r.premiumCost.toFixed(2), (r.p.grind+r.p.pack+r.packingLabour).toFixed(2), r.totalCost.toFixed(2), r.sp.toFixed(2), r.profit.toFixed(2), r.margin.toFixed(1)+'%']);
-  });
-  downloadCSV(rows, 'mydrybea_cost_sheet.csv');
-}
-
-function exportDashCSV() {
-  const mix = getMixPct();
-  const rows = [['Size','Qty','SP','Cost/Pack','Profit/Pack','Monthly Profit']];
-  Object.keys(PACKS).forEach(key => {
-    const qty = state.dashQty[key]||0;
-    const sp = state.dashSp[key]||PACKS[key].mrp;
-    const r = calculatePack(key, state.linnaPrice, state.balayaPrice, state.kawalamPrice, mix, 'sp', 0, sp);
-    rows.push([PACKS[key].label, qty, sp, r.totalCost.toFixed(2), r.profit.toFixed(2), (r.profit*qty).toFixed(2)]);
-  });
-  downloadCSV(rows, 'mydrybea_dashboard.csv');
-}
-
-function exportHistoryCSV() {
-  if (history.length === 0) { Toast.show('No history to export', 'warn'); return; }
-  const rows = [['Date','Pack','Mix','SP','Cost','Profit','Net Profit']];
-  history.forEach(order => {
-    rows.push([order.date, order.pack, order.mix, order.sp.toFixed(2), order.cost.toFixed(2), order.profit.toFixed(2), order.netProfit.toFixed(2)]);
-  });
-  downloadCSV(rows, 'mydrybea_order_history.csv');
-}
-
-function downloadCSV(rows, filename) {
-  let csv = '\uFEFF';
-  rows.forEach(r => { csv += r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',') + '\n'; });
-  const blob = new Blob([csv], {type:'text/csv;charset=utf-8'});
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = filename;
-  a.click();
-}
-
-// ==================== UI SYNC ====================
-function syncUI() {
-  $('linnaPrice').value = state.linnaPrice;
-  $('balayaPrice').value = state.balayaPrice;
-  $('kawalamPrice').value = state.kawalamPrice;
-  $('packSize').value = state.packSize;
-  $('mixRatio').value = state.mixRatio;
-  $('customLinna').value = state.customLinna;
-  $('customBalaya').value = state.customBalaya;
-  $('customKawalam').value = state.customKawalam;
-  $('targetProfit').value = state.targetProfit;
-  $('customSp').value = state.customSp;
-  $('monthlyQty').value = state.monthlyQty;
-  $('ohTransport').value = state.overhead.transport;
-  $('ohFirewood').value = state.overhead.firewood;
-  $('ohWorkers').value = state.overhead.workers;
-  $('ohOther').value = state.overhead.other;
-  $('rawLinna').value = state.production.rawLinna;
-  $('rawBalaya').value = state.production.rawBalaya;
-  $('rawKawalam').value = state.production.rawKawalam;
-  $('yieldLinna').value = state.production.yieldLinna;
-  $('yieldBalaya').value = state.production.yieldBalaya;
-  $('yieldKawalam').value = state.production.yieldKawalam;
-  $('dailyRawKg').value = state.production.dailyRawKg;
-  $('workDays').value = state.production.workDays;
-  $('prodTransport').value = state.production.prodTransport;
-  $('prodFirewood').value = state.production.prodFirewood;
-  $('prodWorkers').value = state.production.prodWorkers;
-  $('prodOther').value = state.production.prodOther;
-  $('finLinna').value = state.production.finLinna;
-  $('finBalaya').value = state.production.finBalaya;
-  $('finKawalam').value = state.production.finKawalam;
-  toggleCustomMix();
-  setMode(state.mode);
-  if (state.theme === 'dark') {
-    document.documentElement.setAttribute('data-theme','dark');
-    $('themeToggle').textContent = '🌙';
-  } else {
-    document.documentElement.setAttribute('data-theme','light');
-    $('themeToggle').textContent = '☀️';
-  }
-}
-
-// ==================== TABS ====================
 document.querySelectorAll('.tab-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     document.querySelectorAll('.tab-panel').forEach(p => p.style.display = 'none');
-    const panel = document.getElementById(btn.dataset.tab);
-    panel.style.display = 'block';
-    panel.style.animation = 'none';
-    panel.offsetHeight;
-    panel.style.animation = 'fadeIn 0.3s ease';
-    if (btn.dataset.tab === 'dashboard') { calcDashboard(); calcSensitivity(); calcBulk(); }
-    if (btn.dataset.tab === 'history') renderHistory();
-    if (btn.dataset.tab === 'production') calcProduction();
-    if (btn.dataset.tab === 'orders') { renderOrders(); renderCustomers(); renderDelivery(); updateOrderStats(); }
+    $(btn.dataset.tab).style.display = 'block';
   });
 });
 
-// ==================== INITIALIZATION & AUTO CONNECT ====================
-document.addEventListener('DOMContentLoaded', async () => {
-  loadState();
-  loadHistory();
-  loadOrders();
-  loadCustomers();
-  loadSnapshots();
-  $('printDate').textContent = 'Date: ' + new Date().toLocaleDateString();
-  $('year').textContent = new Date().getFullYear();
-  syncUI();
-  calcAll();
-  calcProduction();
-  renderHistory();
-  renderOrders();
-  renderCustomers();
-  renderDelivery();
-  updateOrderStats();
-  updateCustomerSelect();
-  saveAll();
-
-  // Auto-Connect or check session
-  if (supabase) {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session && session.user) {
-      currentUser = session.user;
-      updateAuthUI();
-      await cloudLoad();
-      Toast.show('Connected to Supabase Cloud', 'success');
-    } else {
-      // Auto attempt login with configured user credentials
-      try {
-        const autoRes = await supabase.auth.signInWithPassword({
-          email: 'baybreezelk@gmail.com',
-          password: 'Td19970206'
-        });
-        if (autoRes.data?.user) {
-          currentUser = autoRes.data.user;
-          updateAuthUI();
-          await cloudLoad();
-          Toast.show('Auto-connected: baybreezelk@gmail.com', 'success');
-        } else {
-          updateAuthUI();
-          updateStatus('Ready (Local Mode)');
-        }
-      } catch(e) {
-        updateAuthUI();
-        updateStatus('Ready (Local Mode)');
-      }
-    }
-  } else {
-    updateAuthUI();
-    updateStatus('Local Mode');
-  }
-});
-
-// Expose globals for UI buttons
-window.toggleTheme = toggleTheme;
-window.setMode = setMode;
-window.toggleCustomMix = toggleCustomMix;
-window.syncCustomMix = syncCustomMix;
-window.toggleAcc = toggleAcc;
-window.closeModal = closeModal;
-window.openQR = openQR;
-window.closeQR = closeQR;
-window.exportCSV = exportCSV;
-window.exportDashCSV = exportDashCSV;
-window.exportHistoryCSV = exportHistoryCSV;
-window.backupJSON = backupJSON;
-window.restoreJSON = restoreJSON;
-window.resetAll = resetAll;
-window.resetDash = resetDash;
-window.calcAll = calcAll;
-window.calcScenario = calcScenario;
-window.calcBulk = calcBulk;
-window.calcSensitivity = calcSensitivity;
-window.calcDashboard = calcDashboard;
-window.calcProduction = calcProduction;
-window.saveOrder = saveOrder;
-window.deleteHistoryEntry = deleteHistoryEntry;
-window.clearHistory = clearHistory;
 window.openNewOrder = openNewOrder;
 window.openNewCustomer = openNewCustomer;
 window.saveCustomer = saveCustomer;
 window.createOrder = createOrder;
-window.deleteCustomer = deleteCustomer;
-window.deleteOrder = deleteOrder;
 window.cycleStatus = cycleStatus;
-window.viewInvoice = viewInvoice;
-window.printInvoicePDF = printInvoicePDF;
-window.shareInvoiceWhatsApp = shareInvoiceWhatsApp;
-window.closeThisModal = closeThisModal;
-window.onDataChange = onDataChange;
-window.cloudSave = cloudSave;
-window.cloudLoad = cloudLoad;
-window.triggerManualSync = triggerManualSync;
-window.openAuthModal = openAuthModal;
-window.toggleAuthMode = toggleAuthMode;
+window.deleteOrder = deleteOrder;
+window.deleteCustomer = (id) => { customers = customers.filter(c => c.id !== id); renderCustomers(); };
+window.openModal = openModal;
+window.closeModal = closeModal;
+window.openAuthModal = () => openModal('authModal');
 window.authAction = authAction;
 window.logout = logout;
-window.renderOrders = renderOrders;
+window.cloudLoad = cloudLoad;
+window.forceCloudSync = forceCloudSync;
+window.calcAll = calcAll;
+window.saveOrderCalculation = saveOrderCalculation;
+window.deleteHistory = deleteHistory;
+
+document.addEventListener('DOMContentLoaded', () => {
+  calcAll();
+  initAuth();
+});
 
 })();
 </script>
-
 </body>
 </html>
