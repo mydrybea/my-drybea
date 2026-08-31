@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>MY DRYBEA | Enterprise Umbalakada Management System v34</title>
-<meta name="description" content="MY DRYBEA - Complete enterprise management system for dried fish (Umbalakada) business: costing, production, orders, invoicing, delivery.">
+<title>MY DRYBEA</title>
+<meta name="description" content="MY DRYBEA business management app.">
 <meta name="theme-color" content="#10b981">
 
 <!-- ============================================================
@@ -869,6 +869,248 @@ td.num { text-align: right; font-family: 'SF Mono', 'Fira Code', monospace; font
   to { opacity: 1; transform: translateY(0); }
 }
 
+
+/* ============================================================
+   MOBILE BUSINESS APP UI — DESIGN LAYER ONLY
+   Core calculation, database, auth and existing feature logic remain untouched.
+   ============================================================ */
+:root {
+  --app-green: #0a8f43;
+  --app-green-dark: #075d31;
+  --app-green-soft: #eaf8ef;
+  --app-gold: #d7ad3d;
+  --app-ink: #101714;
+  --app-muted: #6c7771;
+  --app-white: #ffffff;
+  --app-surface: #f6faf7;
+}
+
+body { background: var(--app-surface); color: var(--app-ink); }
+body::before { background:
+  radial-gradient(circle at 90% 8%, rgba(10,143,67,.08), transparent 28%),
+  radial-gradient(circle at 8% 78%, rgba(215,173,61,.06), transparent 26%);
+}
+.app-container { max-width: 1180px; padding: 16px; gap: 16px; }
+.app-shell-header {
+  background: rgba(255,255,255,.94); border: 1px solid rgba(10,143,67,.12);
+  border-radius: 22px; box-shadow: 0 10px 30px rgba(18,45,31,.08);
+  padding: 12px 16px; backdrop-filter: blur(12px);
+}
+.app-shell-header::before { height: 2px; background: linear-gradient(90deg, transparent, var(--app-green), var(--app-gold), var(--app-green), transparent); }
+.app-shell-header::after { display:none; }
+.brand { gap: 12px; }
+.brand-logo-wrap { width: 48px; height: 48px; }
+.brand-logo { border: 1px solid rgba(10,143,67,.18); border-radius: 14px; box-shadow: none; }
+.brand-text h1 { font-family: var(--font); font-size: 1.15rem; letter-spacing: .01em; background: none; -webkit-text-fill-color: var(--app-ink); animation: none; }
+.brand-text p { font-size: .62rem; letter-spacing: .09em; color: var(--app-muted); }
+.header-actions { gap: 7px; }
+.data-status { display:none; }
+.icon-btn {
+  width: 42px; height: 42px; padding: 0; border-radius: 13px; border: 1px solid #dce8df;
+  background: #fff; color: var(--app-green-dark); display:inline-flex; align-items:center; justify-content:center;
+  position:relative; overflow:hidden; cursor:pointer; transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+}
+.icon-btn:hover { transform: translateY(-1px); border-color: rgba(10,143,67,.35); box-shadow: 0 7px 18px rgba(10,143,67,.10); color:var(--app-green); }
+.icon-btn:active { transform:scale(.96); }
+.icon-btn.lock-btn { color:#9a7622; }
+.icon { width:20px; height:20px; display:block; position:relative; }
+/* Unified vector-style navigation icons (CSS only, no external icon library). */
+.nav-icon { width:20px; height:20px; display:block; position:relative; flex:0 0 auto; color:currentColor; }
+.nav-icon::before, .nav-icon::after { content:""; position:absolute; box-sizing:border-box; }
+.icon::before, .icon::after { content:""; position:absolute; box-sizing:border-box; }
+.icon-home::before { inset:4px 3px 2px; border:2px solid currentColor; border-top:0; border-radius:3px; }
+.icon-home::after { width:12px; height:12px; left:4px; top:1px; border-left:2px solid currentColor; border-top:2px solid currentColor; transform:rotate(45deg); }
+
+/* Quick Access icon system */
+.home-action .nav-icon::before, .home-action .nav-icon::after { content:""; position:absolute; box-sizing:border-box; }
+.home-action .nav-icon.icon-dashboard::before { left:2px; right:2px; bottom:2px; height:14px; border:2px solid currentColor; border-radius:3px; }
+.home-action .nav-icon.icon-dashboard::after { left:6px; bottom:6px; width:2px; height:6px; background:currentColor; box-shadow:5px -3px currentColor,10px -7px currentColor; }
+.home-action .nav-icon.icon-calc::before { inset:1px 3px; border:2px solid currentColor; border-radius:4px; }
+.home-action .nav-icon.icon-calc::after { width:3px; height:3px; left:6px; top:6px; background:currentColor; border-radius:1px; box-shadow:6px 0 currentColor,0 6px currentColor,6px 6px currentColor; }
+.home-action .nav-icon.icon-production::before { left:2px; right:2px; bottom:2px; height:13px; border:2px solid currentColor; border-radius:2px; }
+.home-action .nav-icon.icon-production::after { left:5px; top:2px; width:10px; height:6px; border:2px solid currentColor; border-bottom:0; border-radius:4px 4px 0 0; }
+.home-action .nav-icon.icon-orders::before { inset:2px 4px; border:2px solid currentColor; border-radius:3px; }
+.home-action .nav-icon.icon-orders::after { left:7px; top:6px; width:7px; height:2px; background:currentColor; box-shadow:0 5px currentColor; }
+.home-action .nav-icon.icon-expense::before { inset:1px; border:2px solid currentColor; border-radius:50%; }
+.home-action .nav-icon.icon-expense::after { content:"Rs"; left:4px; top:4px; font-size:7px; font-weight:900; line-height:1; }
+.home-action .nav-icon.icon-history::before { inset:2px; border:2px solid currentColor; border-right-color:transparent; border-radius:50%; }
+.home-action .nav-icon.icon-history::after { left:9px; top:4px; width:2px; height:7px; background:currentColor; box-shadow:3px 5px 0 -0.3px currentColor; }
+.home-action .nav-icon.icon-option::before { inset:2px; border:2px solid currentColor; border-radius:50%; }
+.home-action .nav-icon.icon-option::after { width:6px; height:6px; left:7px; top:7px; border:2px solid currentColor; border-radius:50%; box-shadow:0 -8px 0 -2px currentColor,0 8px 0 -2px currentColor,8px 0 0 -2px currentColor,-8px 0 0 -2px currentColor; }
+.home-action .nav-icon.icon-summary::before { left:2px; right:2px; bottom:2px; height:15px; border:2px solid currentColor; border-radius:3px; }
+.home-action .nav-icon.icon-summary::after { left:5px; top:6px; width:3px; height:8px; background:currentColor; border-radius:2px; box-shadow:5px -4px 0 currentColor,10px 1px 0 currentColor; }
+
+.icon-calc::before { inset:2px 3px; border:2px solid currentColor; border-radius:4px; }
+.icon-calc::after { width:8px; height:2px; left:6px; top:7px; background:currentColor; box-shadow:0 4px currentColor, 0 8px currentColor; }
+.icon-production::before { left:2px; right:2px; bottom:3px; height:12px; border:2px solid currentColor; border-radius:2px; }
+.icon-production::after { left:5px; top:2px; width:10px; height:6px; border:2px solid currentColor; border-bottom:0; border-radius:3px 3px 0 0; }
+.icon-orders::before { inset:2px 4px; border:2px solid currentColor; border-radius:3px; }
+.icon-orders::after { left:7px; top:6px; width:7px; height:2px; background:currentColor; box-shadow:0 5px currentColor; }
+.icon-expense::before { inset:2px; border:2px solid currentColor; border-radius:50%; }
+.icon-expense::after { content:"Rs"; font-size:7px; font-weight:800; left:5px; top:5px; }
+.icon-income::before { inset:3px; border:2px solid currentColor; border-radius:50%; }
+.icon-income::after { content:"₹"; font-size:12px; font-weight:900; left:5px; top:1px; }
+.icon-profile::before { width:8px; height:8px; left:6px; top:2px; border:2px solid currentColor; border-radius:50%; }
+.icon-profile::after { width:15px; height:8px; left:2.5px; bottom:2px; border:2px solid currentColor; border-radius:9px 9px 5px 5px; }
+.icon-history::before { inset:3px; border:2px solid currentColor; border-radius:50%; border-right-color:transparent; }
+.icon-history::after { left:9px; top:5px; width:2px; height:7px; background:currentColor; box-shadow:3px 5px 0 -0.3px currentColor; transform-origin:bottom; }
+.icon-settings::before { inset:4px; border:2px solid currentColor; border-radius:50%; box-shadow:0 -6px 0 -4px currentColor, 0 6px 0 -4px currentColor, 6px 0 0 -4px currentColor, -6px 0 0 -4px currentColor; }
+.icon-user::before { width:7px; height:7px; left:6px; top:2px; border:2px solid currentColor; border-radius:50%; }
+.icon-user::after { width:13px; height:7px; left:3px; bottom:2px; border:2px solid currentColor; border-radius:8px 8px 5px 5px; }
+.icon-lock::before { left:4px; right:4px; bottom:2px; height:11px; border:2px solid currentColor; border-radius:3px; }
+.icon-lock::after { left:6px; top:2px; width:8px; height:9px; border:2px solid currentColor; border-bottom:0; border-radius:7px 7px 0 0; }
+.icon-moon::before { width:15px; height:15px; left:2px; top:2px; border:2px solid currentColor; border-radius:50%; }
+.icon-moon::after { width:13px; height:13px; left:7px; top:0; background:#fff; border-radius:50%; }
+.icon-qr::before { inset:2px; border:2px dashed currentColor; border-radius:3px; }
+
+.mobile-greeting { display:flex; align-items:center; justify-content:space-between; padding: 6px 3px 0; }
+.mobile-greeting .eyebrow { font-size:.68rem; font-weight:800; color:var(--app-green); letter-spacing:.12em; }
+.mobile-greeting h2 { margin-top:4px; font-size:clamp(1.25rem,4vw,1.7rem); line-height:1.2; letter-spacing:-.035em; color:#101714; }
+.mobile-greeting p { margin-top:3px; font-size:.78rem; color:var(--app-muted); }
+.wave { font-size:1rem; }
+.profile-dot { width:42px; height:42px; border-radius:50%; background:var(--app-green-soft); color:var(--app-green); display:grid; place-items:center; border:1px solid rgba(10,143,67,.1); }
+
+.app-nav { order:0; background:#fff; border:1px solid #e1ebe4; border-radius:18px; padding:5px; box-shadow:0 8px 24px rgba(18,45,31,.07); position:sticky; top:10px; z-index:30; width:100%; display:flex; gap:5px; }
+.tab-btn { color:#718078; font-size:.72rem; font-weight:700; padding:9px 8px; gap:5px; border-radius:13px; min-width:82px; }
+.tab-btn .nav-icon { width:17px; height:17px; color:currentColor; transform:scale(.78); transform-origin:center; }
+.tab-btn.active { background:var(--app-green); color:#fff; box-shadow:0 6px 14px rgba(10,143,67,.20); }
+.tab-btn:hover:not(.active) { background:var(--app-green-soft); color:var(--app-green-dark); }
+
+.tab-panel { animation: appPanelIn .28s ease; }
+@keyframes appPanelIn { from{opacity:0; transform:translateY(5px)} to{opacity:1; transform:none} }
+.card { background:#fff; border:1px solid #e3ece6; border-radius:20px; padding:18px; box-shadow:0 8px 26px rgba(18,45,31,.055); }
+.card:hover { border-color:#d5e5da; box-shadow:0 12px 30px rgba(18,45,31,.08); }
+.card h2 { color:#15221c; font-size:1rem; letter-spacing:-.02em; }
+.card h2::first-letter { color:var(--app-green); }
+
+/* Remove decorative/verbose headings from the old desktop presentation. */
+.print-header { display:none !important; }
+.sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+.card h2 { line-height:1.3; }
+.btn-primary { background:var(--app-green); color:#fff; box-shadow:0 7px 18px rgba(10,143,67,.18); }
+.btn-primary:hover { background:var(--app-green-dark); color:#fff; }
+
+/* Gold ribbon touch feedback */
+.gold-ribbon { position:absolute; top:-18px; left:-34%; width:24%; height:90px; pointer-events:none; opacity:0; transform:rotate(20deg); background:linear-gradient(90deg, transparent, rgba(245,231,163,.95), var(--app-gold), rgba(245,231,163,.95), transparent); filter:drop-shadow(0 0 8px rgba(215,173,61,.45)); }
+.icon-btn.ribbon-play .gold-ribbon { animation:goldRibbon .65s ease-out forwards; }
+@keyframes goldRibbon { 0%{left:-34%;opacity:0} 12%{opacity:1} 100%{left:125%;opacity:0} }
+
+
+.income-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:14px;}
+.income-card{min-height:132px;display:flex;flex-direction:column;justify-content:center;gap:6px;}
+.income-card span{font-size:.68rem;color:#718078;font-weight:800;text-transform:uppercase;letter-spacing:.06em;}
+.income-card strong{font-size:1.35rem;color:#122019;letter-spacing:-.04em;}
+.income-card small{font-size:.68rem;color:#8a958f;}
+.income-highlight{background:linear-gradient(180deg,#0b9346,#087d3b);border-color:#08783a;color:#fff;}
+.income-highlight span,.income-highlight strong,.income-highlight small{color:#fff;}
+.income-summary{display:flex;align-items:center;justify-content:space-between;gap:12px;}
+.income-summary>div{display:flex;flex-direction:column;gap:3px;}
+.income-summary span{font-size:.7rem;color:#718078;font-weight:700;}
+.income-summary strong{font-size:1.5rem;color:var(--app-green);}
+.profile-panel{text-align:center;max-width:560px;margin:0 auto;padding:30px 22px;}
+.profile-large{width:76px;height:76px;border-radius:24px;background:var(--app-green-soft);color:var(--app-green);display:grid;place-items:center;margin:0 auto 15px;}
+.profile-large .nav-icon{width:34px;height:34px;transform:none;}
+.profile-panel .eyebrow{font-size:.68rem;font-weight:800;color:var(--app-green);letter-spacing:.12em;}
+.profile-panel h2{font-size:1.4rem;margin:8px 0 4px;}
+.profile-panel p{font-size:.82rem;color:#718078;margin:0;}
+.profile-actions{display:flex;justify-content:center;gap:10px;margin-top:22px;flex-wrap:wrap;}
+@media(max-width:680px){.income-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;}.income-card{min-height:115px;padding:14px;}.income-card strong{font-size:1.08rem;}.income-card span{font-size:.6rem;}.income-card small{font-size:.62rem;}.income-summary{align-items:flex-start;}.app-container{padding-bottom:92px;}}
+
+/* ===== MOBILE-APP HOME STRUCTURE ===== */
+/* Reference-style Quick Access: compact task rows, like a premium mobile app checklist. */
+.quick-access-card{background:#fff;border:1px solid #e3ebe5;border-radius:22px;padding:10px;box-shadow:0 10px 30px rgba(18,45,31,.06);}
+.home-actions{display:flex;flex-direction:column;gap:7px;max-width:none;}
+.home-action{appearance:none;border:1px solid #e7eee9;background:#fff;border-radius:16px;min-height:72px;padding:9px 11px;display:grid;grid-template-columns:42px minmax(0,1fr) auto;align-items:center;gap:11px;text-align:left;cursor:pointer;position:relative;overflow:hidden;color:#15221c;transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease,background .18s ease;}
+.home-action:hover{transform:translateY(-1px);border-color:#cfe2d5;box-shadow:0 8px 20px rgba(18,45,31,.08);}
+.home-action:active{transform:scale(.985);}
+.home-action .home-icon{width:42px;height:42px;border-radius:13px;background:#eef9f1;color:var(--app-green);display:grid;place-items:center;position:relative;z-index:2;flex:0 0 auto;}
+.home-action .nav-icon{width:22px;height:22px;transform:none;color:currentColor;}
+.home-action-copy{min-width:0;display:flex;flex-direction:column;gap:3px;position:relative;z-index:2;}
+.home-action strong{font-size:.78rem;line-height:1.1;text-align:left;white-space:nowrap;}
+.home-action small{font-size:.61rem;color:#8a958f;line-height:1.2;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.home-action .quick-status{width:28px;height:28px;border-radius:50%;border:1.5px solid #d7e3dc;display:grid;place-items:center;color:#6d7c74;position:relative;z-index:2;font-size:.72rem;font-weight:900;}
+.home-action .quick-status::after{content:'›';font-size:1.15rem;line-height:1;transform:translateX(1px);}
+.home-action.primary{background:linear-gradient(90deg,#f2fbf5,#fff);color:#15221c;border-color:#cfe5d6;box-shadow:none;}
+.home-action.primary .home-icon{background:var(--app-green);color:#fff;box-shadow:0 7px 15px rgba(10,143,67,.18);}
+.home-action.primary .quick-status{background:var(--app-green);border-color:var(--app-green);color:#fff;}
+.home-action.gold .home-icon{background:#fff8df;color:#b88918;}
+.home-action .gold-ribbon{top:-24px;height:125px;width:20%;z-index:4;}
+.home-section-head{display:flex;align-items:end;justify-content:space-between;margin:15px 3px 8px;}
+.home-section-head h3{font-size:.92rem;letter-spacing:-.02em;margin:0;color:#15221c;}
+.home-section-head span{font-size:.65rem;color:var(--app-green);font-weight:800;}
+.icon-dashboard::before{left:3px;right:3px;bottom:3px;height:12px;border:2px solid currentColor;border-radius:3px;}
+.icon-dashboard::after{left:6px;bottom:6px;width:2px;height:7px;background:currentColor;box-shadow:5px -3px currentColor,10px -7px currentColor;}
+.icon-option::before{inset:4px;border:2px solid currentColor;border-radius:50%;box-shadow:0 -6px 0 -4px currentColor,0 6px 0 -4px currentColor,6px 0 0 -4px currentColor,-6px 0 0 -4px currentColor;}
+.icon-option::after{width:5px;height:5px;left:7.5px;top:7.5px;border:2px solid currentColor;border-radius:50%;}
+@media (min-width:681px){
+  .home-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;}
+  .home-action{min-height:78px;}
+  .home-action strong{font-size:.8rem;}
+}
+@media (max-width:680px){
+  .home-actions-wrap{margin:2px 0 4px;}
+  .quick-access-card{padding:8px;border-radius:20px;}
+  .home-actions{gap:6px;}
+  .home-action{min-height:68px;border-radius:15px;padding:8px 9px;grid-template-columns:40px minmax(0,1fr) 27px;gap:10px;}
+  .home-action .home-icon{width:40px;height:40px;border-radius:12px;}
+  .home-action strong{font-size:.72rem;}
+  .home-action small{font-size:.58rem;}
+  .home-action .quick-status{width:27px;height:27px;}
+}
+
+.home-actions-wrap{margin:2px 0 4px;}
+.home-actions-title{font-size:.72rem;font-weight:800;color:#718078;text-transform:uppercase;letter-spacing:.1em;margin:0 3px 9px;}
+.home-actions{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;}
+.home-action{appearance:none;border:1px solid #e3ebe5;background:#fff;border-radius:18px;min-height:94px;padding:11px 7px 9px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;color:#18231e;cursor:pointer;position:relative;overflow:hidden;box-shadow:0 7px 20px rgba(18,45,31,.055);transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease;touch-action:manipulation;}
+.home-action:hover{transform:translateY(-2px);border-color:rgba(10,143,67,.28);box-shadow:0 11px 25px rgba(10,143,67,.10);}
+.home-action:active{transform:scale(.97);}
+.home-action .home-icon{width:45px;height:45px;border-radius:14px;background:var(--app-green-soft);color:var(--app-green);display:grid;place-items:center;position:relative;z-index:2;}
+.home-action strong{font-size:.72rem;line-height:1.1;text-align:center;white-space:nowrap;position:relative;z-index:2;}
+.home-action small{font-size:.58rem;color:#8a958f;line-height:1;position:relative;z-index:2;}
+.home-action.gold .home-icon{background:#fff8df;color:#b88918;}
+.home-action.primary{background:linear-gradient(180deg,#0b9346,#087d3b);color:#fff;border-color:#08783a;box-shadow:0 10px 23px rgba(10,143,67,.22);}
+.home-action.primary .home-icon{background:rgba(255,255,255,.16);color:#fff;}
+.home-action.primary small{color:rgba(255,255,255,.72);}
+.home-action .nav-icon{width:23px;height:23px;transform:none;color:currentColor;}
+.home-action .gold-ribbon{top:-20px;height:120px;width:26%;z-index:4;}
+.home-section-head{display:flex;align-items:end;justify-content:space-between;margin:15px 3px 8px;}
+.home-section-head h3{font-size:.92rem;letter-spacing:-.02em;margin:0;color:#15221c;}
+.home-section-head span{font-size:.65rem;color:var(--app-green);font-weight:800;}
+.app-nav{order:0;position:sticky;top:10px;width:100%;display:flex;gap:5px;margin:0 0 1px;}
+.app-nav .tab-btn{flex:1;min-width:0;}
+@media (min-width:681px){
+  .app-nav{position:sticky;top:10px;z-index:30;max-width:100%;} 
+  .app-nav .tab-btn{min-height:48px;font-size:.76rem;}
+  .home-actions{max-width:760px;}
+}
+@media (max-width:680px){
+  .app-nav{position:fixed;left:8px;right:8px;bottom:max(8px, env(safe-area-inset-bottom));top:auto;width:auto;margin:0;z-index:100;overflow:hidden;}
+  .app-nav .tab-btn{min-width:0;flex:1;flex-direction:column;font-size:.61rem;padding:7px 3px;gap:2px;}
+  .home-actions{gap:8px;}
+  .home-action{min-height:91px;border-radius:16px;padding:9px 4px;}
+  .home-action .home-icon{width:41px;height:41px;border-radius:13px;}
+  .home-action strong{font-size:.67rem;}
+  .home-action small{display:none;}
+}
+
+@media (max-width: 680px) {
+  .app-container { padding:10px 10px 82px; gap:12px; }
+  .app-shell-header { border-radius:18px; padding:10px 11px; }
+  .brand-logo-wrap { width:42px; height:42px; }
+  .brand-text h1 { font-size:1rem; }
+  .brand-text p { display:none; }
+  .header-actions { gap:5px; }
+  .icon-btn { width:38px; height:38px; border-radius:12px; }
+  .mobile-greeting { padding-top:3px; }
+  .tab-btn { min-width:0; flex:1; padding:7px 3px; font-size:.61rem; flex-direction:column; gap:1px; }
+  .tab-btn .nav-icon { width:18px; height:18px; }
+  .grid-2, .grid-3 { gap:10px; }
+}
+
+@media (min-width: 681px) {
+  .mobile-greeting { margin-top:2px; }
+}
+
 /* ===== DATA STATUS INDICATOR ===== */
 .data-status {
   font-size: 0.7rem;
@@ -891,31 +1133,530 @@ td.num { text-align: right; font-family: 'SF Mono', 'Fira Code', monospace; font
 .data-status .dot.green { background: #10b981; }
 .data-status .dot.yellow { background: #fbbf24; }
 .data-status .dot.red { background: #f87171; }
+
+/* ============================================================
+   PROFESSIONAL RESPONSIVE QUICK ACCESS — DESIGN ONLY
+   IMPORTANT: no Supabase/auth/business logic is changed here.
+   Desktop = website workspace launcher
+   Mobile  = compact mobile-app launcher
+   ============================================================ */
+.quick-access-card{
+  position:relative;
+  padding:16px;
+  border:1px solid #dfe9e3;
+  border-radius:24px;
+  background:linear-gradient(180deg,#ffffff 0%,#fbfdfb 100%);
+  box-shadow:0 14px 38px rgba(16,48,32,.075);
+}
+.quick-access-card::before{
+  content:"";
+  position:absolute;
+  left:18px; right:18px; top:0; height:2px;
+  background:linear-gradient(90deg,transparent,#0a8f43 18%,#d7ad3d 50%,#0a8f43 82%,transparent);
+  opacity:.65;
+}
+.home-actions-title{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin:2px 4px 10px;
+  color:#5e6c65;
+  font-size:.7rem;
+  font-weight:850;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+}
+.home-actions-title::after{
+  content:"8 business tools";
+  color:#0a8f43;
+  font-size:.61rem;
+  letter-spacing:.02em;
+  text-transform:none;
+  font-weight:750;
+}
+.home-actions{
+  width:100%;
+  max-width:none !important;
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:12px;
+}
+.home-action{
+  min-height:128px;
+  padding:14px 12px 12px;
+  border:1px solid #e1eae4;
+  border-radius:20px;
+  background:#fff;
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  justify-content:flex-start;
+  gap:9px;
+  text-align:left;
+  box-shadow:0 7px 20px rgba(16,48,32,.045);
+  transition:transform .2s ease,box-shadow .2s ease,border-color .2s ease,background .2s ease;
+}
+.home-action:hover{
+  transform:translateY(-3px);
+  border-color:rgba(10,143,67,.28);
+  background:linear-gradient(180deg,#fff,#f8fcf9);
+  box-shadow:0 15px 30px rgba(10,143,67,.10);
+}
+.home-action:focus-visible{
+  outline:3px solid rgba(10,143,67,.16);
+  outline-offset:2px;
+}
+.home-action .home-icon{
+  width:52px;
+  height:52px;
+  border-radius:16px;
+  background:#eaf8ef;
+  color:#0a8f43;
+  box-shadow:inset 0 0 0 1px rgba(10,143,67,.06);
+}
+.home-action .nav-icon{width:25px;height:25px;}
+.home-action-copy{
+  width:100%;
+  padding-right:28px;
+  gap:4px;
+}
+.home-action strong{
+  font-size:.82rem;
+  font-weight:800;
+  color:#14211b;
+  line-height:1.15;
+}
+.home-action small{
+  display:block;
+  max-width:100%;
+  white-space:normal;
+  overflow:visible;
+  text-overflow:clip;
+  color:#78847e;
+  font-size:.62rem;
+  line-height:1.3;
+}
+.home-action .quick-status{
+  position:absolute;
+  right:11px;
+  bottom:11px;
+  width:28px;
+  height:28px;
+  background:#fff;
+  color:#728078;
+  border-color:#d7e3dc;
+  box-shadow:0 3px 8px rgba(16,48,32,.04);
+}
+.home-action.primary{
+  background:linear-gradient(145deg,#0a9347 0%,#087b3a 100%);
+  border-color:#087c3c;
+  box-shadow:0 14px 28px rgba(10,143,67,.18);
+}
+.home-action.primary:hover{background:linear-gradient(145deg,#0b9b4c,#087c3c);}
+.home-action.primary strong{color:#fff;}
+.home-action.primary small{color:rgba(255,255,255,.72);}
+.home-action.primary .home-icon{background:rgba(255,255,255,.14);color:#fff;}
+.home-action.primary .quick-status{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.35);color:#fff;}
+.home-action.gold .home-icon{background:#fff8df;color:#b88918;}
+.home-action.gold{border-color:#eee2bd;}
+
+/* Monthly Summary — live current-month business snapshot */
+.summary-action .home-icon{background:linear-gradient(145deg,#fff8df,#f6edcf);color:#9a7622;}
+.summary-action{border-color:#eadfbf;}
+.summary-action:hover{border-color:rgba(184,137,24,.35);box-shadow:0 15px 30px rgba(184,137,24,.10);}
+.monthly-summary-hero{display:grid;grid-template-columns:1.3fr .7fr;gap:14px;align-items:stretch;margin-bottom:14px;}
+.monthly-summary-period{padding:20px;border-radius:20px;background:linear-gradient(135deg,#063b25,#0a8f43);color:#fff;position:relative;overflow:hidden;box-shadow:0 16px 32px rgba(10,143,67,.15);}
+.monthly-summary-period::after{content:"";position:absolute;width:170px;height:170px;border-radius:50%;right:-55px;top:-70px;background:rgba(255,255,255,.08);}
+.monthly-summary-period .eyebrow{color:rgba(255,255,255,.7);}
+.monthly-summary-period h2{margin:5px 0 4px;font-size:1.5rem;letter-spacing:-.035em;}
+.monthly-summary-period p{margin:0;color:rgba(255,255,255,.72);font-size:.75rem;}
+.monthly-summary-live{display:flex;align-items:center;gap:7px;margin-top:14px;font-size:.66rem;font-weight:800;color:#dff9e9;}
+.monthly-summary-live .live-dot{width:7px;height:7px;border-radius:50%;background:#69f0a0;box-shadow:0 0 0 5px rgba(105,240,160,.12);}
+.monthly-summary-mini{padding:20px;border:1px solid #e0eae4;border-radius:20px;background:#fff;display:flex;flex-direction:column;justify-content:center;}
+.monthly-summary-mini span{font-size:.67rem;color:#77837d;font-weight:750;text-transform:uppercase;letter-spacing:.08em;}
+.monthly-summary-mini strong{font-size:1.65rem;color:#13211a;margin-top:5px;letter-spacing:-.04em;}
+.monthly-summary-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:14px;}
+.monthly-stat{border:1px solid #e1eae4;border-radius:18px;background:#fff;padding:16px;box-shadow:0 7px 20px rgba(16,48,32,.045);}
+.monthly-stat .ms-icon{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;background:#eaf8ef;color:#0a8f43;margin-bottom:11px;}
+.monthly-stat.gold .ms-icon{background:#fff8df;color:#9a7622;}
+.monthly-stat.blue .ms-icon{background:#eef4ff;color:#4d73c9;}
+.monthly-stat.red .ms-icon{background:#fff0ee;color:#d45d55;}
+.monthly-stat .ms-label{font-size:.66rem;color:#78847e;font-weight:750;}
+.monthly-stat .ms-value{font-size:1.12rem;font-weight:850;color:#14211b;margin-top:3px;}
+.monthly-stat .ms-sub{font-size:.58rem;color:#929c96;margin-top:4px;}
+.monthly-summary-table{width:100%;border-collapse:collapse;}
+.monthly-summary-table td{padding:10px 0;border-bottom:1px solid #edf1ee;font-size:.72rem;}
+.monthly-summary-table td:last-child{text-align:right;font-weight:800;}
+.monthly-summary-table tr:last-child td{border-bottom:0;}
+.monthly-summary-note{margin-top:12px;padding:12px 14px;border-radius:14px;background:#f7faf8;color:#68756e;font-size:.66rem;line-height:1.45;}
+@media(max-width:680px){
+  .monthly-summary-hero{grid-template-columns:1fr;gap:9px;}
+  .monthly-summary-period{padding:16px;border-radius:18px;}
+  .monthly-summary-period h2{font-size:1.25rem;}
+  .monthly-summary-mini{padding:15px;border-radius:17px;}
+  .monthly-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;}
+  .monthly-stat{padding:12px;border-radius:15px;}
+  .monthly-stat .ms-icon{width:34px;height:34px;border-radius:10px;margin-bottom:8px;}
+  .monthly-stat .ms-value{font-size:.98rem;}
+}
+
+/* Desktop: make the home screen feel like a real web dashboard. */
+@media (min-width:681px){
+  .app-container{max-width:1180px;}
+  .app-nav{
+    position:sticky;
+    top:12px;
+    z-index:40;
+    padding:6px;
+    border-radius:20px;
+    box-shadow:0 10px 26px rgba(18,45,31,.075);
+  }
+  .app-nav .tab-btn{
+    min-height:50px;
+    font-size:.75rem;
+    letter-spacing:.01em;
+  }
+  .home-actions{grid-template-columns:repeat(4,minmax(0,1fr));}
+}
+
+/* Mobile: retain the reference-app feeling without looking like a shrunken website. */
+@media (max-width:680px){
+  .app-container{padding:9px 10px 92px;gap:11px;}
+  .quick-access-card{padding:10px;border-radius:21px;box-shadow:0 10px 28px rgba(16,48,32,.065);}
+  .quick-access-card::before{left:14px;right:14px;}
+  .home-actions-title{margin:1px 2px 9px;font-size:.67rem;}
+  .home-actions-title::after{font-size:.57rem;}
+  .home-actions{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;}
+  .home-action{
+    min-height:112px;
+    padding:11px 10px;
+    border-radius:17px;
+    gap:7px;
+  }
+  .home-action .home-icon{width:44px;height:44px;border-radius:13px;}
+  .home-action .nav-icon{width:22px;height:22px;}
+  .home-action-copy{padding-right:22px;gap:3px;}
+  .home-action strong{font-size:.71rem;}
+  .home-action small{font-size:.56rem;line-height:1.25;}
+  .home-action .quick-status{width:25px;height:25px;right:8px;bottom:8px;}
+  .home-action .quick-status::after{font-size:1rem;}
+}
+
+@media (max-width:360px){
+  .home-actions{gap:7px;}
+  .home-action{min-height:104px;padding:9px;border-radius:15px;}
+  .home-action .home-icon{width:40px;height:40px;border-radius:12px;}
+  .home-action strong{font-size:.67rem;}
+  .home-action small{font-size:.53rem;}
+}
+
+
+/* ============================================================
+   FINAL MY DRYBEA LIVE APP THEME — DESIGN ONLY
+   Keeps all existing application logic, auth and Supabase setup intact.
+   ============================================================ */
+:root{
+  --app-green:#0a8f43;
+  --app-green-deep:#067538;
+  --app-green-dark:#075b30;
+  --app-green-soft:#e9f7ef;
+  --app-ink:#10221a;
+  --app-muted:#718078;
+  --app-gold:#c9a23a;
+  --app-gold-soft:#fbf4df;
+  --app-line:rgba(10,143,67,.12);
+}
+
+[data-theme="light"]{
+  --bg-primary:#f5faf7;
+  --bg-secondary:#edf6f1;
+  --bg-card:rgba(255,255,255,.94);
+  --bg-card-hover:#ffffff;
+  --bg-elevated:#e5f3eb;
+  --border:rgba(10,143,67,.13);
+  --border-strong:rgba(10,143,67,.22);
+  --text-main:#10221a;
+  --text-secondary:#294338;
+  --text-muted:#718078;
+  --text-dim:#0a8f43;
+  --shadow-sm:0 2px 10px rgba(12,65,38,.05);
+  --shadow:0 12px 34px rgba(12,65,38,.08);
+  --shadow-lg:0 24px 70px rgba(12,65,38,.12);
+  --shadow-glow:0 0 45px rgba(10,143,67,.08);
+  --green-subtle:rgba(10,143,67,.055);
+}
+
+body{
+  background:
+    radial-gradient(circle at 8% 8%, rgba(10,143,67,.10), transparent 25%),
+    radial-gradient(circle at 92% 12%, rgba(201,162,58,.08), transparent 22%),
+    radial-gradient(circle at 78% 88%, rgba(10,143,67,.06), transparent 28%),
+    linear-gradient(135deg,#f8fcfa 0%,#f1f8f4 48%,#f7faf8 100%);
+  color:var(--app-ink);
+}
+
+body::before{
+  background:
+    linear-gradient(rgba(10,143,67,.018) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(10,143,67,.018) 1px,transparent 1px),
+    radial-gradient(circle at 18% 0%,rgba(10,143,67,.055),transparent 38%),
+    radial-gradient(circle at 90% 100%,rgba(201,162,58,.045),transparent 34%);
+  background-size:32px 32px,32px 32px,100% 100%,100% 100%;
+}
+
+.app-container{max-width:1180px;}
+
+.header{
+  background:rgba(255,255,255,.82);
+  backdrop-filter:blur(18px) saturate(135%);
+  -webkit-backdrop-filter:blur(18px) saturate(135%);
+  border:1px solid rgba(10,143,67,.14);
+  box-shadow:0 16px 45px rgba(12,65,38,.08),0 0 0 1px rgba(255,255,255,.65) inset;
+}
+.header::before{
+  height:3px;
+  background:linear-gradient(90deg,var(--app-green-deep),var(--app-green),var(--app-gold),var(--app-green),var(--app-green-deep));
+}
+.header::after{opacity:.32;}
+
+.brand-logo{
+  border-color:rgba(10,143,67,.25);
+  box-shadow:0 7px 22px rgba(10,143,67,.16),0 0 0 4px rgba(201,162,58,.08);
+}
+.brand-text h1{color:var(--app-ink);}
+.brand-text p{color:var(--app-muted);}
+
+.app-nav{
+  background:rgba(255,255,255,.78);
+  backdrop-filter:blur(16px) saturate(140%);
+  -webkit-backdrop-filter:blur(16px) saturate(140%);
+  border:1px solid rgba(10,143,67,.12);
+  box-shadow:0 12px 32px rgba(12,65,38,.075),0 1px 0 rgba(255,255,255,.8) inset;
+}
+.tab-btn{color:#66766e;}
+.tab-btn.active{
+  background:linear-gradient(135deg,#0a9347,#08783a);
+  box-shadow:0 8px 20px rgba(10,143,67,.22),0 1px 0 rgba(255,255,255,.22) inset;
+}
+
+.quick-access-card{
+  background:linear-gradient(145deg,rgba(255,255,255,.97),rgba(247,252,249,.91));
+  border:1px solid rgba(10,143,67,.13);
+  box-shadow:0 18px 48px rgba(12,65,38,.075),0 1px 0 rgba(255,255,255,.9) inset;
+  overflow:hidden;
+}
+.quick-access-card::after{
+  content:"";
+  position:absolute;
+  width:220px;height:220px;border-radius:50%;
+  right:-105px;bottom:-130px;
+  background:radial-gradient(circle,rgba(10,143,67,.065),transparent 68%);
+  pointer-events:none;
+}
+.home-actions-title{color:#63736b;}
+.home-actions-title::after{color:var(--app-green);}
+.home-action{
+  position:relative;
+  isolation:isolate;
+  background:linear-gradient(180deg,#ffffff 0%,#fbfdfc 100%);
+  border:1px solid rgba(10,143,67,.10);
+  box-shadow:0 9px 24px rgba(12,65,38,.055),0 1px 0 rgba(255,255,255,.9) inset;
+}
+.home-action::before{
+  content:"";position:absolute;inset:0;border-radius:inherit;
+  background:linear-gradient(135deg,rgba(10,143,67,.055),transparent 42%,rgba(201,162,58,.035));
+  opacity:0;transition:opacity .2s ease;pointer-events:none;z-index:-1;
+}
+.home-action:hover::before,.home-action:focus-visible::before{opacity:1;}
+.home-action:hover{border-color:rgba(10,143,67,.22);box-shadow:0 16px 34px rgba(10,143,67,.10);}
+.home-action .home-icon{background:linear-gradient(145deg,#eaf8ef,#dff2e7);color:var(--app-green);border:1px solid rgba(10,143,67,.07);box-shadow:0 7px 16px rgba(10,143,67,.08);}
+.home-action strong{color:var(--app-ink);}
+.home-action small{color:#78857f;}
+.home-action.primary{background:linear-gradient(145deg,#0b9649 0%,#087b3b 100%);border-color:#087a3b;box-shadow:0 16px 34px rgba(10,143,67,.20);}
+.home-action.primary .home-icon{background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.14);}
+.home-action.gold .home-icon,.summary-action .home-icon{background:linear-gradient(145deg,#fff9e8,#f8edcc);color:#aa821c;border-color:rgba(201,162,58,.18);}
+.home-action.gold,.summary-action{border-color:rgba(201,162,58,.20);}
+
+/* Give the business overview a refined brand surface without changing its data. */
+.monthly-summary-period,.profit-card,.dashboard-profit-card{
+  background:linear-gradient(135deg,#062e1e 0%,#0a6e3a 62%,#0b8e47 100%);
+  box-shadow:0 18px 42px rgba(6,74,39,.18);
+}
+
+@media (max-width:680px){
+  body{
+    background:
+      radial-gradient(circle at 0% 0%,rgba(10,143,67,.10),transparent 32%),
+      radial-gradient(circle at 100% 15%,rgba(201,162,58,.07),transparent 28%),
+      linear-gradient(180deg,#f8fcfa 0%,#f2f8f5 100%);
+  }
+  body::before{background-size:28px 28px,28px 28px,100% 100%,100% 100%;}
+  .header{box-shadow:0 10px 30px rgba(12,65,38,.07);}
+  .quick-access-card{box-shadow:0 13px 34px rgba(12,65,38,.07);}
+  .home-action{box-shadow:0 7px 18px rgba(12,65,38,.055);}
+}
+
+
+/* ============================================================
+   MY DRYBEA — SIGNATURE BRAND THEME / PREMIUM WEB + APP UI
+   Visual layer only. No data, auth, Supabase or business logic.
+   ============================================================ */
+:root{
+  --drybea-forest:#063b25;
+  --drybea-green:#079447;
+  --drybea-mint:#e8f7ef;
+  --drybea-gold:#c9a33a;
+  --drybea-gold-soft:#fbf4df;
+  --drybea-ink:#10231a;
+  --drybea-muted:#718078;
+  --drybea-surface:rgba(255,255,255,.90);
+}
+
+body{
+  background:
+    radial-gradient(900px 500px at 4% -5%,rgba(7,148,71,.16),transparent 62%),
+    radial-gradient(760px 520px at 104% 5%,rgba(201,163,58,.12),transparent 58%),
+    radial-gradient(650px 480px at 82% 100%,rgba(7,148,71,.08),transparent 62%),
+    linear-gradient(135deg,#f8fcfa 0%,#eef7f2 46%,#fbfaf4 100%);
+}
+body::before{
+  opacity:.75;
+  background:
+    linear-gradient(115deg,transparent 0 48%,rgba(7,148,71,.025) 48.2% 48.5%,transparent 48.7%),
+    linear-gradient(35deg,transparent 0 60%,rgba(201,163,58,.022) 60.2% 60.5%,transparent 60.7%);
+  background-size:46px 46px,58px 58px;
+}
+
+.header{
+  background:linear-gradient(135deg,rgba(255,255,255,.94),rgba(246,252,248,.82));
+  border:1px solid rgba(7,148,71,.16);
+  box-shadow:0 22px 55px rgba(6,59,37,.10),0 1px 0 #fff inset;
+}
+.header::before{
+  height:3px;
+  background:linear-gradient(90deg,#063b25,#079447,#c9a33a,#079447,#063b25);
+}
+.brand-logo{
+  box-shadow:0 8px 22px rgba(7,148,71,.13),0 0 0 3px rgba(201,163,58,.07);
+}
+
+.app-nav{
+  background:rgba(255,255,255,.84);
+  border-color:rgba(7,148,71,.14);
+  box-shadow:0 15px 35px rgba(6,59,37,.085),0 1px 0 #fff inset;
+}
+.tab-btn{position:relative;overflow:hidden;}
+.tab-btn.active::after{
+  content:"";position:absolute;left:18%;right:18%;bottom:4px;height:2px;border-radius:2px;
+  background:linear-gradient(90deg,transparent,#f4df8c,transparent);opacity:.85;
+}
+
+/* Rich, color-coded tool identity. */
+.home-action:nth-child(1) .home-icon{background:linear-gradient(145deg,#e4f7ec,#ccefdc);color:#078b43;}
+.home-action:nth-child(2) .home-icon{background:linear-gradient(145deg,#eaf1ff,#dce8ff);color:#4775c7;}
+.home-action:nth-child(3) .home-icon{background:linear-gradient(145deg,#fff2df,#ffe4bd);color:#d18419;}
+.home-action:nth-child(4) .home-icon{background:linear-gradient(145deg,#f1eaff,#e4d8ff);color:#7653c7;}
+.home-action:nth-child(5) .home-icon{background:linear-gradient(145deg,#fff9e7,#f8e8b9);color:#ad831e;}
+.home-action:nth-child(6) .home-icon{background:linear-gradient(145deg,#eef2f4,#dfe7ea);color:#58717a;}
+.home-action:nth-child(7) .home-icon{background:linear-gradient(145deg,#e4f8f6,#cff0eb);color:#168c83;}
+.home-action:nth-child(8) .home-icon{background:linear-gradient(145deg,#eaf8ef,#d8f0e1);color:#087f40;}
+.home-action:nth-child(1) .quick-status{color:#078b43;border-color:#bfe3cd;}
+.home-action:nth-child(2) .quick-status{color:#4775c7;border-color:#c9d8f4;}
+.home-action:nth-child(3) .quick-status{color:#d18419;border-color:#f0d6ae;}
+.home-action:nth-child(4) .quick-status{color:#7653c7;border-color:#d9cdf4;}
+.home-action:nth-child(5) .quick-status{color:#ad831e;border-color:#eadcae;}
+.home-action:nth-child(6) .quick-status{color:#58717a;border-color:#d1dde0;}
+.home-action:nth-child(7) .quick-status{color:#168c83;border-color:#bfe4df;}
+.home-action:nth-child(8) .quick-status{color:#087f40;border-color:#bfe3cd;}
+
+.home-action{
+  background:linear-gradient(145deg,rgba(255,255,255,.98),rgba(248,252,249,.92));
+  box-shadow:0 12px 28px rgba(6,59,37,.06),0 1px 0 #fff inset;
+}
+.home-action::after{
+  content:"";position:absolute;inset:auto 12px 0;height:2px;border-radius:2px;
+  background:linear-gradient(90deg,transparent,currentColor,transparent);opacity:.08;pointer-events:none;
+}
+.home-action:hover{transform:translateY(-4px);box-shadow:0 19px 38px rgba(6,59,37,.11);}
+.home-action .home-icon{border:0;box-shadow:0 8px 18px rgba(6,59,37,.08);}
+.home-action.primary .home-icon{background:rgba(255,255,255,.16);color:#fff;box-shadow:none;}
+.home-action.primary{box-shadow:0 18px 38px rgba(7,148,71,.22),0 1px 0 rgba(255,255,255,.22) inset;}
+.home-action.gold .home-icon,.summary-action .home-icon{box-shadow:0 8px 18px rgba(201,163,58,.13);}
+
+/* Micro labels make the launcher feel like a professional business suite. */
+.home-action-copy{position:relative;}
+.home-action-copy::after{
+  content:"OPEN";display:inline-flex;align-items:center;align-self:flex-start;
+  margin-top:5px;padding:2px 6px;border-radius:999px;
+  font-size:.48rem;font-weight:850;letter-spacing:.08em;color:#6e7b74;
+  background:#f2f6f3;border:1px solid #e4ebe6;
+}
+.home-action:nth-child(1) .home-action-copy::after{content:"LIVE";color:#087d3e;background:#e9f8ef;border-color:#ccebd7;}
+.home-action:nth-child(2) .home-action-copy::after{content:"PROFIT";color:#4775c7;background:#eef4ff;border-color:#d8e4fa;}
+.home-action:nth-child(3) .home-action-copy::after{content:"PLAN";color:#bd7414;background:#fff5e7;border-color:#f2dfc0;}
+.home-action:nth-child(4) .home-action-copy::after{content:"TRACK";color:#7653c7;background:#f3efff;border-color:#e2d9fa;}
+.home-action:nth-child(5) .home-action-copy::after{content:"CASH";color:#9a7622;background:#fff9e9;border-color:#eee1bb;}
+.home-action:nth-child(6) .home-action-copy::after{content:"LOG";color:#58717a;background:#f0f4f5;border-color:#dfe7e9;}
+.home-action:nth-child(7) .home-action-copy::after{content:"SETUP";color:#168c83;background:#eaf8f6;border-color:#d0ece8;}
+.home-action:nth-child(8) .home-action-copy::after{content:"REPORT";color:#087d3e;background:#e9f8ef;border-color:#ccebd7;}
+
+.home-actions-title::before{
+  content:"";width:7px;height:7px;border-radius:50%;background:var(--drybea-green);
+  box-shadow:0 0 0 5px rgba(7,148,71,.09);display:inline-block;margin-right:2px;
+}
+.home-actions-title::after{content:"8 BUSINESS TOOLS";font-size:.58rem;letter-spacing:.07em;}
+
+.net-banner{
+  background:linear-gradient(135deg,#052c1c 0%,#075f34 55%,#078b43 100%);
+  border:1px solid rgba(201,163,58,.25);
+  box-shadow:0 20px 48px rgba(6,59,37,.19),0 0 0 1px rgba(255,255,255,.05) inset;
+  position:relative;overflow:hidden;
+}
+.net-banner::after{
+  content:"";position:absolute;width:260px;height:260px;border-radius:50%;right:-100px;top:-145px;
+  background:radial-gradient(circle,rgba(201,163,58,.17),transparent 66%);pointer-events:none;
+}
+
+@media(max-width:680px){
+  body{background:radial-gradient(520px 330px at -10% -5%,rgba(7,148,71,.14),transparent 68%),radial-gradient(480px 320px at 110% 12%,rgba(201,163,58,.10),transparent 65%),linear-gradient(180deg,#f8fcfa,#f0f7f3 70%,#faf9f2);}
+  .home-action{min-height:116px;}
+  .home-action-copy::after{font-size:.45rem;margin-top:4px;padding:2px 5px;}
+  .home-action .home-icon{width:46px;height:46px;border-radius:14px;}
+}
+
 </style>
 </head>
 <body>
 
 <div class="app-container">
-  <header class="header no-print">
+  <header class="header no-print app-shell-header">
     <div class="brand">
       <div class="brand-logo-wrap">
-        <img src="logo.jpg" alt="MY DRYBEA Official Logo" class="brand-logo" onerror="this.src='https://kommodo.ai/i/7zQwNJ1aSv6KnXu59Okw'">
+        <img src="logo.jpg" alt="MY DRYBEA" class="brand-logo">
       </div>
       <div class="brand-text">
         <h1>MY DRYBEA</h1>
-        <p>SEAFOOD MARKET • Enterprise Umbalakada System</p>
+        <p>BUSINESS AT A GLANCE</p>
       </div>
     </div>
     <div class="header-actions">
       <span class="data-status" id="dataStatus"><span class="dot green"></span> Ready</span>
-      <button class="btn btn-sm" id="themeToggle" onclick="toggleTheme()" aria-label="Toggle theme">🌙</button>
-      <button class="btn btn-sm" onclick="openQR()" aria-label="QR Code">📱 QR</button>
-      <button class="btn btn-sm btn-primary" onclick="exportCSV()" aria-label="Export CSV">📊 CSV</button>
-      <button class="btn btn-sm" onclick="window.print()" aria-label="Print">🖨️</button>
-      <button class="btn btn-sm" id="authBtn" onclick="openAuthModal()">🔐 Login</button>
-      <button class="btn btn-sm" id="lockAppBtn" onclick="lockApp()" title="Lock App" aria-label="Lock App">🔒 Lock</button>
+      <button class="icon-btn" id="themeToggle" onclick="toggleTheme()" aria-label="Toggle theme" data-ribbon="true"><span class="icon icon-moon"></span></button>
+      <button class="icon-btn" onclick="openQR()" aria-label="QR Code" data-ribbon="true"><span class="icon icon-qr"></span></button>
+      <button class="icon-btn" id="authBtn" onclick="openAuthModal()" aria-label="Login" data-ribbon="true"><span class="icon icon-user"></span></button>
+      <button class="icon-btn lock-btn" id="lockAppBtn" onclick="lockApp()" title="Lock App" aria-label="Lock App" data-ribbon="true"><span class="icon icon-lock"></span></button>
     </div>
   </header>
+
+  <div class="mobile-greeting no-print">
+    <div>
+      <span class="eyebrow">MY DRYBEA</span>
+      <h2>Hello, <span id="mobileUserName">Business Owner</span> <span class="wave">👋</span></h2>
+      <p>Here’s your business at a glance.</p>
+    </div>
+    <div class="profile-dot"><span class="icon icon-user"></span></div>
+  </div>
 
   <div class="print-header">
     <h2>🐟 MY DRYBEA — ENTERPRISE COST SHEET</h2>
@@ -923,18 +1664,88 @@ td.num { text-align: right; font-family: 'SF Mono', 'Fira Code', monospace; font
     <hr>
   </div>
 
-  <nav class="tabs no-print" role="tablist">
-    <button class="tab-btn active" data-tab="calculator" role="tab">📊 Calculator</button>
-    <button class="tab-btn" data-tab="production" role="tab">🏭 Production</button>
-    <button class="tab-btn" data-tab="dashboard" role="tab">📈 Dashboard</button>
-    <button class="tab-btn" data-tab="orders" role="tab">🧾 Orders</button>
-    <button class="tab-btn" data-tab="expenses" role="tab">💰 Expenses</button>
-    <button class="tab-btn" data-tab="history" role="tab">📜 History</button>
-    <button class="tab-btn" data-tab="data" role="tab">⚙️ Data</button>
+  <nav class="tabs no-print app-nav" role="tablist" aria-label="Main navigation">
+    <button class="tab-btn active" data-tab="dashboard" role="tab" aria-label="Home"><span class="nav-icon icon-home"></span><span>Home</span></button>
+    <button class="tab-btn" data-tab="orders" role="tab" aria-label="Orders"><span class="nav-icon icon-orders"></span><span>Order</span></button>
+    <button class="tab-btn" data-tab="income" role="tab" aria-label="Income"><span class="nav-icon icon-income"></span><span>Income</span></button>
+    <button class="tab-btn" data-tab="profile" role="tab" aria-label="Profile"><span class="nav-icon icon-profile"></span><span>Profile</span></button>
   </nav>
 
+  <!-- ============ INCOME TAB ============ -->
+  <section id="income" class="tab-panel" role="tabpanel" style="display:none;">
+    <div class="mobile-greeting no-print" style="padding:0 0 8px;">
+      <div><span class="eyebrow">FINANCIAL OVERVIEW</span><h2>Your Income</h2><p>Revenue, profit and fixed-cost position at a glance.</p></div>
+      <div class="profile-dot"><span class="nav-icon icon-income"></span></div>
+    </div>
+    <div class="income-grid">
+      <div class="card income-card"><span>Monthly Revenue</span><strong id="incomeRevenue">Rs. 0</strong><small>Total planned sales</small></div>
+      <div class="card income-card"><span>Gross Profit</span><strong id="incomeGrossProfit">Rs. 0</strong><small>Before fixed costs</small></div>
+      <div class="card income-card"><span>Fixed Costs</span><strong id="incomeFixed">Rs. 0</strong><small>Monthly overhead</small></div>
+      <div class="card income-card income-highlight"><span>Net Profit</span><strong id="incomeNet">Rs. 0</strong><small>After fixed costs</small></div>
+    </div>
+    <div class="card">
+      <h2>Profit Snapshot</h2>
+      <div class="income-summary"><div><span>Net Margin</span><strong id="incomeMargin">0%</strong></div><button class="btn btn-primary" data-open-tab="calculator" data-ribbon="true">Open Costing</button></div>
+    </div>
+  </section>
+
+  <!-- ============ MONTHLY SUMMARY TAB ============ -->
+  <section id="monthly-summary" class="tab-panel" role="tabpanel" style="display:none;">
+    <div class="mobile-greeting no-print" style="padding:0 0 8px;">
+      <div><span class="eyebrow">BUSINESS REPORT</span><h2>Monthly Summary</h2><p>Live summary of this month's recorded business activity.</p></div>
+      <div class="profile-dot"><span class="nav-icon icon-summary"></span></div>
+    </div>
+
+    <div class="monthly-summary-hero">
+      <div class="monthly-summary-period">
+        <span class="eyebrow">CURRENT MONTH</span>
+        <h2 id="summaryMonthName">—</h2>
+        <p id="summaryDateRange">01 — —</p>
+        <div class="monthly-summary-live"><span class="live-dot"></span><span id="summaryLiveText">Updating from recorded data</span></div>
+      </div>
+      <div class="monthly-summary-mini">
+        <span>Net Recorded Cash</span>
+        <strong id="summaryNetCash">Rs. 0</strong>
+        <span id="summaryNetLabel" style="margin-top:5px;text-transform:none;letter-spacing:0;font-size:.62rem;font-weight:600;">Orders revenue − recorded expenses</span>
+      </div>
+    </div>
+
+    <div class="monthly-summary-grid">
+      <div class="monthly-stat"><div class="ms-icon"><span class="nav-icon icon-income"></span></div><div class="ms-label">Order Revenue</div><div class="ms-value" id="summaryRevenue">Rs. 0</div><div class="ms-sub">Non-cancelled orders</div></div>
+      <div class="monthly-stat gold"><div class="ms-icon"><span class="nav-icon icon-expense"></span></div><div class="ms-label">Recorded Expenses</div><div class="ms-value" id="summaryExpenses">Rs. 0</div><div class="ms-sub">Expenses dated this month</div></div>
+      <div class="monthly-stat blue"><div class="ms-icon"><span class="nav-icon icon-orders"></span></div><div class="ms-label">Orders</div><div class="ms-value" id="summaryOrders">0</div><div class="ms-sub" id="summaryOrdersSub">0 delivered • 0 pending</div></div>
+      <div class="monthly-stat red"><div class="ms-icon"><span class="nav-icon icon-dashboard"></span></div><div class="ms-label">Units Sold</div><div class="ms-value" id="summaryUnits">0</div><div class="ms-sub">Across recorded orders</div></div>
+    </div>
+
+    <div class="card">
+      <h2>Month at a Glance</h2>
+      <table class="monthly-summary-table">
+        <tr><td>Average order value</td><td id="summaryAvgOrder">Rs. 0</td></tr>
+        <tr><td>Delivered revenue</td><td id="summaryDeliveredRevenue">Rs. 0</td></tr>
+        <tr><td>Pending revenue</td><td id="summaryPendingRevenue">Rs. 0</td></tr>
+        <tr><td>Cancelled orders</td><td id="summaryCancelled">0</td></tr>
+        <tr><td>Days elapsed</td><td id="summaryDaysElapsed">0 / 0</td></tr>
+      </table>
+      <div class="monthly-summary-note" id="summaryNote">This report automatically refreshes whenever the app receives or records new order and expense data.</div>
+    </div>
+  </section>
+
+  <!-- ============ PROFILE TAB ============ -->
+  <section id="profile" class="tab-panel" role="tabpanel" style="display:none;">
+    <div class="profile-panel card">
+      <div class="profile-large"><span class="nav-icon icon-profile"></span></div>
+      <span class="eyebrow">MY DRYBEA ACCOUNT</span>
+      <h2 id="profileName">Business Owner</h2>
+      <p id="profileEmail">Not signed in</p>
+      <div class="profile-actions">
+        <button class="btn btn-primary" id="profileAuthAction" data-ribbon="true" onclick="openAuthModal()">Login</button>
+        <button class="btn lock-btn" data-ribbon="true" onclick="lockApp()"><span class="nav-icon icon-lock"></span> Lock App</button>
+      </div>
+    </div>
+  </section>
+
   <!-- ============ CALCULATOR TAB ============ -->
-  <section id="calculator" class="tab-panel active" role="tabpanel">
+  <section id="calculator" class="tab-panel" role="tabpanel" style="display:none;">
     <div class="grid-2">
       <div class="card">
         <h2>🐟 Raw Material Prices</h2>
@@ -1177,7 +1988,56 @@ td.num { text-align: right; font-family: 'SF Mono', 'Fira Code', monospace; font
   </section>
 
   <!-- ============ DASHBOARD TAB ============ -->
-  <section id="dashboard" class="tab-panel" style="display:none;" role="tabpanel">
+  <section id="dashboard" class="tab-panel active" role="tabpanel" style="display:block;">
+
+    <div class="home-actions-wrap no-print">
+      <div class="home-actions-title">Quick access</div>
+      <div class="quick-access-card">
+        <div class="home-actions">
+          <button class="home-action primary" data-home-tab="dashboard" data-ribbon="true" aria-label="Open Dashboard">
+            <span class="home-icon"><span class="nav-icon icon-dashboard"></span></span>
+            <span class="home-action-copy"><strong>Dashboard</strong><small>Business at a glance</small></span>
+            <span class="quick-status" aria-hidden="true"></span>
+          </button>
+          <button class="home-action" data-home-tab="calculator" data-ribbon="true" aria-label="Open Costing">
+            <span class="home-icon"><span class="nav-icon icon-calc"></span></span>
+            <span class="home-action-copy"><strong>Costing</strong><small>Calculate price, cost & profit</small></span>
+            <span class="quick-status" aria-hidden="true"></span>
+          </button>
+          <button class="home-action" data-home-tab="production" data-ribbon="true" aria-label="Open Production">
+            <span class="home-icon"><span class="nav-icon icon-production"></span></span>
+            <span class="home-action-copy"><strong>Production</strong><small>Plan batches & production cost</small></span>
+            <span class="quick-status" aria-hidden="true"></span>
+          </button>
+          <button class="home-action" data-home-tab="orders" data-ribbon="true" aria-label="Open Orders">
+            <span class="home-icon"><span class="nav-icon icon-orders"></span></span>
+            <span class="home-action-copy"><strong>Orders</strong><small>Customers, delivery & order status</small></span>
+            <span class="quick-status" aria-hidden="true"></span>
+          </button>
+          <button class="home-action gold" data-home-tab="expenses" data-ribbon="true" aria-label="Open Expenses">
+            <span class="home-icon"><span class="nav-icon icon-expense"></span></span>
+            <span class="home-action-copy"><strong>Expenses</strong><small>Track monthly business costs</small></span>
+            <span class="quick-status" aria-hidden="true"></span>
+          </button>
+          <button class="home-action" data-home-tab="history" data-ribbon="true" aria-label="Open History">
+            <span class="home-icon"><span class="nav-icon icon-history"></span></span>
+            <span class="home-action-copy"><strong>History</strong><small>Saved calculations & past records</small></span>
+            <span class="quick-status" aria-hidden="true"></span>
+          </button>
+          <button class="home-action" data-home-tab="data" data-ribbon="true" aria-label="Open Options">
+            <span class="home-icon"><span class="nav-icon icon-option"></span></span>
+            <span class="home-action-copy"><strong>Options</strong><small>Base data & business settings</small></span>
+            <span class="quick-status" aria-hidden="true"></span>
+          </button>
+          <button class="home-action summary-action" data-home-tab="monthly-summary" data-ribbon="true" aria-label="Open Monthly Summary">
+            <span class="home-icon"><span class="nav-icon icon-summary"></span></span>
+            <span class="home-action-copy"><strong>Monthly Summary</strong><small>Live month-to-date business summary</small></span>
+            <span class="quick-status" aria-hidden="true"></span>
+          </button>
+        </div>
+      </div>
+    </div>
+    <div class="home-section-head no-print"><h3>Business overview</h3><span>Live dashboard</span></div>
     <div class="net-banner">
       <div class="k">NET MONTHLY PROFIT (after fixed cost)</div>
       <div class="v" id="netProfitOut">Rs. 0</div>
@@ -1845,6 +2705,16 @@ function calcDashboard() {
   $('dashBody').innerHTML = rows;
   const fixed = getFixedCost();
   const net = totalProfit - fixed;
+  const incomeRevenue = $('incomeRevenue');
+  const incomeGross = $('incomeGrossProfit');
+  const incomeFixed = $('incomeFixed');
+  const incomeNet = $('incomeNet');
+  const incomeMargin = $('incomeMargin');
+  if (incomeRevenue) incomeRevenue.textContent = fmt(totalRevenue);
+  if (incomeGross) incomeGross.textContent = fmt(totalProfit);
+  if (incomeFixed) incomeFixed.textContent = fmt(fixed);
+  if (incomeNet) incomeNet.textContent = fmt(net);
+  if (incomeMargin) incomeMargin.textContent = totalRevenue > 0 ? ((net / totalRevenue) * 100).toFixed(1) + '%' : '0%';
   $('netProfitOut').textContent = fmt(net);
   $('netProfitOut').style.color = net >= 0 ? '#10b981' : '#f87171';
 
@@ -2112,6 +2982,7 @@ async function saveExpense() {
   }
 
   renderExpenses();
+  updateMonthlySummary();
   closeModal('expenseModal');
   updateStatus('✅ Expense saved');
 }
@@ -2129,6 +3000,7 @@ async function deleteExpense(id) {
   }
   expenses = expenses.filter(e => e.id !== id);
   renderExpenses();
+  updateMonthlySummary();
   updateStatus('🗑️ Expense deleted');
 }
 
@@ -2359,6 +3231,7 @@ async function cycleStatus(index) {
   renderOrders();
   renderDelivery();
   updateOrderStats();
+  updateMonthlySummary();
   updateStatus('🔄 Order status updated');
 }
 
@@ -2379,6 +3252,7 @@ async function deleteOrder(index) {
   renderOrders();
   renderDelivery();
   updateOrderStats();
+  updateMonthlySummary();
   updateStatus('🗑️ Order deleted');
 }
 
@@ -2616,6 +3490,7 @@ function restoreFromSnapshot(index) {
   customers = snap.data.customers || [];
   syncUI();
   calcAll();
+  calcDashboard();
   calcProduction();
   renderHistory();
   renderOrders();
@@ -2800,10 +3675,31 @@ async function logout() {
 function updateAuthUI() {
   const btn = $('authBtn');
   if (currentUser) {
-    btn.textContent = `👤 ${currentUser.email}`;
+    btn.innerHTML = '<span class="icon icon-user"></span><span class="sr-only">Account</span>';
+    btn.title = currentUser.email || 'Account';
+    btn.setAttribute('aria-label', currentUser.email || 'Account');
     btn.onclick = logout;
+    const profileEmail = $('profileEmail');
+    const profileName = $('profileName');
+    const profileAction = $('profileAuthAction');
+    if (profileEmail) profileEmail.textContent = currentUser.email || 'Signed in';
+    if (profileName) profileName.textContent = ((currentUser.email || 'Business Owner').split('@')[0].replace(/[._-]+/g, ' ').trim() || 'Business Owner').replace(/\b\w/g, c => c.toUpperCase());
+    if (profileAction) { profileAction.textContent = 'Sign Out'; profileAction.onclick = logout; }
+    const nameEl = $('mobileUserName');
+    if (nameEl) {
+      const emailName = (currentUser.email || 'Business Owner').split('@')[0].replace(/[._-]+/g, ' ').trim();
+      nameEl.textContent = emailName ? emailName.replace(/\b\w/g, c => c.toUpperCase()) : 'Business Owner';
+    }
   } else {
-    btn.textContent = '🔐 Login';
+    const profileEmail = $('profileEmail');
+    const profileName = $('profileName');
+    const profileAction = $('profileAuthAction');
+    if (profileEmail) profileEmail.textContent = 'Not signed in';
+    if (profileName) profileName.textContent = 'Business Owner';
+    if (profileAction) { profileAction.textContent = 'Login'; profileAction.onclick = openAuthModal; }
+    btn.innerHTML = '<span class="icon icon-user"></span><span class="sr-only">Login</span>';
+    btn.title = 'Login';
+    btn.setAttribute('aria-label', 'Login');
     btn.onclick = openAuthModal;
   }
 }
@@ -2900,7 +3796,7 @@ function syncCustomMix() {
 function toggleTheme() {
   state.theme = state.theme === 'dark' ? 'light' : 'dark';
   document.documentElement.setAttribute('data-theme', state.theme);
-  $('themeToggle').textContent = state.theme === 'dark' ? '🌙' : '☀️';
+  $('themeToggle').innerHTML = '<span class="icon icon-moon"></span>';
   if (costChart) { costChart.destroy(); costChart = null; }
   if (sensChart) { sensChart.destroy(); sensChart = null; }
   if (prodChart) { prodChart.destroy(); prodChart = null; }
@@ -3017,30 +3913,111 @@ function syncUI() {
   setMode(state.mode);
   if (state.theme === 'dark') {
     document.documentElement.setAttribute('data-theme','dark');
-    $('themeToggle').textContent = '🌙';
+    $('themeToggle').innerHTML = '<span class="icon icon-moon"></span>';
   } else {
     document.documentElement.setAttribute('data-theme','light');
-    $('themeToggle').textContent = '☀️';
+    $('themeToggle').innerHTML = '<span class="icon icon-moon"></span>';
+  }
+}
+
+// ==================== MONTHLY SUMMARY ====================
+function parseSummaryDate(value) {
+  if (!value) return null;
+  const d = value instanceof Date ? new Date(value) : new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function updateMonthlySummary() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const day = now.getDate();
+  const monthName = now.toLocaleDateString(undefined, { month:'long', year:'numeric' });
+  const range = `01 — ${String(day).padStart(2,'0')} ${now.toLocaleDateString(undefined,{month:'short'})} (${daysInMonth} days in month)`;
+
+  const inCurrentMonth = (value) => {
+    const d = parseSummaryDate(value);
+    return d && d.getFullYear() === year && d.getMonth() === month;
+  };
+
+  const monthOrders = (orders || []).filter(o => inCurrentMonth(o.createdAt));
+  const activeOrders = monthOrders.filter(o => o.status !== 'cancelled');
+  const cancelled = monthOrders.filter(o => o.status === 'cancelled');
+  const delivered = monthOrders.filter(o => o.status === 'delivered');
+  const pending = monthOrders.filter(o => !['delivered','cancelled'].includes(o.status));
+  const revenue = activeOrders.reduce((sum,o) => sum + (Number(o.total)||0), 0);
+  const deliveredRevenue = delivered.reduce((sum,o) => sum + (Number(o.total)||0), 0);
+  const pendingRevenue = pending.reduce((sum,o) => sum + (Number(o.total)||0), 0);
+  const units = activeOrders.reduce((sum,o) => sum + (Number(o.qty)||0), 0);
+  const avg = activeOrders.length ? revenue / activeOrders.length : 0;
+
+  const monthExpenses = (expenses || []).filter(e => inCurrentMonth(e.date || e.createdAt));
+  const expenseTotal = monthExpenses.reduce((sum,e) => sum + (Number(e.amount)||0), 0);
+  const netCash = revenue - expenseTotal;
+
+  const set = (id, value) => { const el = $(id); if (el) el.textContent = value; };
+  set('summaryMonthName', monthName);
+  set('summaryDateRange', range);
+  set('summaryLiveText', `Live • updated ${now.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}`);
+  set('summaryNetCash', fmt(netCash));
+  set('summaryRevenue', fmt(revenue));
+  set('summaryExpenses', fmt(expenseTotal));
+  set('summaryOrders', monthOrders.length);
+  set('summaryOrdersSub', `${delivered.length} delivered • ${pending.length} pending`);
+  set('summaryUnits', units);
+  set('summaryAvgOrder', fmt(avg));
+  set('summaryDeliveredRevenue', fmt(deliveredRevenue));
+  set('summaryPendingRevenue', fmt(pendingRevenue));
+  set('summaryCancelled', cancelled.length);
+  set('summaryDaysElapsed', `${day} / ${daysInMonth}`);
+
+  const net = $('summaryNetCash');
+  if (net) net.style.color = netCash >= 0 ? '#0a8f43' : '#d45d55';
+  const note = $('summaryNote');
+  if (note) {
+    note.textContent = `Reporting period: 01–${String(day).padStart(2,'0')} ${monthName}. Revenue comes from recorded non-cancelled orders; expenses come from expense records dated in the current month. The figures refresh automatically as new data is loaded or saved.`;
   }
 }
 
 // ==================== TABS ====================
-document.querySelectorAll('.tab-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    document.querySelectorAll('.tab-panel').forEach(p => p.style.display = 'none');
-    const panel = document.getElementById(btn.dataset.tab);
-    panel.style.display = 'block';
-    panel.style.animation = 'none';
-    panel.offsetHeight;
-    panel.style.animation = 'fadeIn 0.3s ease';
-    if (btn.dataset.tab === 'dashboard') { calcDashboard(); calcSensitivity(); calcBulk(); }
-    if (btn.dataset.tab === 'history') renderHistory();
-    if (btn.dataset.tab === 'production') calcProduction();
-    if (btn.dataset.tab === 'orders') { renderOrders(); renderCustomers(); renderDelivery(); updateOrderStats(); }
-    if (btn.dataset.tab === 'expenses') { renderExpenses(); }
+// Design-only touch interaction: gold ribbon sweep on app icon buttons.
+document.querySelectorAll('[data-ribbon="true"]').forEach(btn => {
+  const ribbon = document.createElement('span');
+  ribbon.className = 'gold-ribbon';
+  btn.appendChild(ribbon);
+  btn.addEventListener('pointerdown', () => {
+    btn.classList.remove('ribbon-play');
+    void btn.offsetWidth;
+    btn.classList.add('ribbon-play');
   });
+});
+
+function activateAppTab(tabId){
+  const panel = document.getElementById(tabId);
+  if (!panel) return;
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  const nav = document.querySelector('.tab-btn[data-tab="' + tabId + '"]');
+  if (nav) nav.classList.add('active');
+  document.querySelectorAll('.tab-panel').forEach(p => p.style.display = 'none');
+  panel.style.display = 'block';
+  panel.style.animation = 'none'; panel.offsetHeight; panel.style.animation = 'fadeIn 0.3s ease';
+  if (tabId === 'dashboard') { calcDashboard(); calcSensitivity(); calcBulk(); }
+  if (tabId === 'income') { calcDashboard(); }
+  if (tabId === 'monthly-summary') { updateMonthlySummary(); }
+  if (tabId === 'history') renderHistory();
+  if (tabId === 'production') calcProduction();
+  if (tabId === 'orders') { renderOrders(); renderCustomers(); renderDelivery(); updateOrderStats(); }
+  if (tabId === 'expenses') renderExpenses();
+  if (tabId === 'profile') updateAuthUI();
+}
+
+document.querySelectorAll('[data-home-tab],[data-open-tab]').forEach(btn => {
+  btn.addEventListener('click', () => activateAppTab(btn.dataset.homeTab || btn.dataset.openTab));
+});
+
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => activateAppTab(btn.dataset.tab));
 });
 
 // ==================== INIT ====================
@@ -3087,6 +4064,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   updateOrderStats();
   updateCustomerSelect();
   renderExpenses();
+  updateMonthlySummary();
 
   // ---- LOAD CLOUD DATA (silent, no alert on empty) ----
   // app_data still holds: state (pricing/production settings), history, snapshots.
@@ -3160,6 +4138,7 @@ window.calcBulk = calcBulk;
 window.calcSensitivity = calcSensitivity;
 window.calcDashboard = calcDashboard;
 window.calcProduction = calcProduction;
+window.updateMonthlySummary = updateMonthlySummary;
 window.saveOrder = saveOrder;
 window.deleteHistoryEntry = deleteHistoryEntry;
 window.clearHistory = clearHistory;
