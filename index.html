@@ -1927,12 +1927,80 @@ function getCustomerPhone(id) {
   return c ? c.phone : '';
 }
 
-function saveCustomer() {
+// ==================== SUPABASE-BACKED CUSTOMERS/ORDERS ====================
+// customers/orders now live in their own dedicated Supabase tables
+// (public.customers / public.orders) instead of the app_data JSON blob,
+// so every device/browser sees the same live data.
+
+function dbCustomerToLocal(c) {
+  return { id: c.id, name: c.name, phone: c.phone || '', address: c.address || '', createdAt: c.created_at ? new Date(c.created_at).toLocaleDateString() : new Date().toLocaleDateString() };
+}
+function dbOrderToLocal(o) {
+  return {
+    id: o.id,
+    customerId: o.customer_id,
+    product: String(o.product_size_g),
+    qty: Number(o.qty),
+    unitPrice: Number(o.unit_price),
+    total: Number(o.total),
+    address: o.address || '',
+    notes: o.notes || '',
+    status: o.status || 'pending',
+    createdAt: o.created_at || new Date().toISOString()
+  };
+}
+
+async function loadCustomersFromCloud() {
+  if (!currentUser) return;
+  try {
+    const { data, error } = await supabase
+      .from('customers')
+      .select('*')
+      .eq('user_id', currentUser.id)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    customers = (data || []).map(dbCustomerToLocal);
+    saveCustomers();
+  } catch (e) {
+    console.error('Load customers error:', e);
+    updateStatus('⚠️ Could not load customers from cloud');
+  }
+}
+
+async function loadOrdersFromCloud() {
+  if (!currentUser) return;
+  try {
+    const { data, error } = await supabase
+      .from('orders')
+      .select('*')
+      .eq('user_id', currentUser.id)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    orders = (data || []).map(dbOrderToLocal);
+    saveOrders();
+  } catch (e) {
+    console.error('Load orders error:', e);
+    updateStatus('⚠️ Could not load orders from cloud');
+  }
+}
+
+async function saveCustomer() {
   const name = $('custName').value.trim();
   const phone = $('custPhone').value.trim();
   const address = $('custAddress').value.trim();
   if (!name) { alert('Customer name is required!'); return; }
-  customers.push({ id: Date.now().toString(), name, phone, address, createdAt: new Date().toLocaleDateString() });
+  if (!currentUser) { alert('Please login first.'); return; }
+
+  const row = { id: Date.now().toString(), user_id: currentUser.id, name, phone, address };
+  try {
+    const { error } = await supabase.from('customers').insert(row);
+    if (error) throw error;
+  } catch (e) {
+    console.error('Save customer error:', e);
+    alert('❌ Could not save customer: ' + e.message);
+    return;
+  }
+  customers.unshift({ id: row.id, name, phone, address, createdAt: new Date().toLocaleDateString() });
   saveCustomers();
   renderCustomers();
   updateCustomerSelect();
@@ -1940,7 +2008,7 @@ function saveCustomer() {
   $('custName').value = '';
   $('custPhone').value = '';
   $('custAddress').value = '';
-  onDataChange();
+  updateStatus('✅ Customer saved');
 }
 
 function renderCustomers() {
@@ -1960,14 +2028,23 @@ function renderCustomers() {
   `).join('');
 }
 
-function deleteCustomer(id) {
+async function deleteCustomer(id) {
   if (!confirm('Delete this customer?')) return;
+  if (!currentUser) { alert('Please login first.'); return; }
+  try {
+    const { error } = await supabase.from('customers').delete().eq('id', id).eq('user_id', currentUser.id);
+    if (error) throw error;
+  } catch (e) {
+    console.error('Delete customer error:', e);
+    alert('❌ Could not delete customer: ' + e.message);
+    return;
+  }
   customers = customers.filter(c => c.id !== id);
   saveCustomers();
   renderCustomers();
   updateCustomerSelect();
   renderOrders();
-  onDataChange();
+  updateStatus('🗑️ Customer deleted');
 }
 
 function updateCustomerSelect() {
@@ -1993,7 +2070,7 @@ function openNewCustomer() {
   $('customerModal').classList.add('active');
 }
 
-function createOrder() {
+async function createOrder() {
   const customerId = $('orderCustomer').value;
   const product = $('orderProduct').value;
   const qty = Number($('orderQty').value) || 0;
@@ -2004,14 +2081,29 @@ function createOrder() {
   if (!customerId) { alert('Select a customer!'); return; }
   if (qty <= 0) { alert('Quantity must be at least 1!'); return; }
   if (unitPrice <= 0) { alert('Unit price required!'); return; }
+  if (!currentUser) { alert('Please login first.'); return; }
 
-  orders.push({
+  const total = qty * unitPrice;
+  const row = {
     id: generateOrderId(),
-    customerId, product, qty, unitPrice,
-    total: qty * unitPrice,
-    address, notes,
-    status: 'pending',
-    createdAt: new Date().toISOString()
+    user_id: currentUser.id,
+    customer_id: customerId,
+    product_size_g: Number(product) || 0,
+    qty, unit_price: unitPrice, total,
+    address, notes, status: 'pending'
+  };
+  try {
+    const { error } = await supabase.from('orders').insert(row);
+    if (error) throw error;
+  } catch (e) {
+    console.error('Create order error:', e);
+    alert('❌ Could not save order: ' + e.message);
+    return;
+  }
+
+  orders.unshift({
+    id: row.id, customerId, product, qty, unitPrice, total,
+    address, notes, status: 'pending', createdAt: new Date().toISOString()
   });
   saveOrders();
   renderOrders();
@@ -2022,7 +2114,7 @@ function createOrder() {
   $('orderUnitPrice').value = 350;
   $('orderAddress').value = '';
   $('orderNotes').value = '';
-  onDataChange();
+  updateStatus('✅ Order created');
 }
 
 function renderOrders() {
@@ -2058,25 +2150,45 @@ function getStatusBadge(status) {
   }
 }
 
-function cycleStatus(index) {
+async function cycleStatus(index) {
   const cycle = ['pending', 'shipped', 'delivered', 'cancelled'];
-  const current = cycle.indexOf(orders[index].status);
-  orders[index].status = cycle[(current + 1) % cycle.length];
+  const order = orders[index];
+  if (!currentUser) { alert('Please login first.'); return; }
+  const newStatus = cycle[(cycle.indexOf(order.status) + 1) % cycle.length];
+  try {
+    const { error } = await supabase.from('orders').update({ status: newStatus }).eq('id', order.id).eq('user_id', currentUser.id);
+    if (error) throw error;
+  } catch (e) {
+    console.error('Update order status error:', e);
+    alert('❌ Could not update order status: ' + e.message);
+    return;
+  }
+  order.status = newStatus;
   saveOrders();
   renderOrders();
   renderDelivery();
   updateOrderStats();
-  onDataChange();
+  updateStatus('🔄 Order status updated');
 }
 
-function deleteOrder(index) {
+async function deleteOrder(index) {
   if (!confirm('Delete this order?')) return;
+  if (!currentUser) { alert('Please login first.'); return; }
+  const order = orders[index];
+  try {
+    const { error } = await supabase.from('orders').delete().eq('id', order.id).eq('user_id', currentUser.id);
+    if (error) throw error;
+  } catch (e) {
+    console.error('Delete order error:', e);
+    alert('❌ Could not delete order: ' + e.message);
+    return;
+  }
   orders.splice(index, 1);
   saveOrders();
   renderOrders();
   renderDelivery();
   updateOrderStats();
-  onDataChange();
+  updateStatus('🗑️ Order deleted');
 }
 
 function updateOrderStats() {
@@ -2367,7 +2479,7 @@ function updateStatus(msg) {
 async function cloudSave() {
   if (!currentUser) { alert('Please login first.'); return; }
   try {
-    const payload = { state, history, orders, customers };
+    const payload = { state, history }; // customers/orders now live in their own tables
     const { error } = await supabase
       .from('app_data')
       .upsert({ user_id: currentUser.id, data: payload, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
@@ -2384,7 +2496,7 @@ async function cloudSave() {
 async function cloudSaveSilent() {
   if (!currentUser) return;
   try {
-    const payload = { state, history, orders, customers };
+    const payload = { state, history }; // customers/orders now live in their own tables
     const { error } = await supabase
       .from('app_data')
       .upsert({ user_id: currentUser.id, data: payload, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
@@ -2419,18 +2531,18 @@ async function cloudLoad() {
     takeSnapshot();
     Object.assign(state, payload.state);
     history = payload.history || [];
-    orders = payload.orders || [];
-    customers = payload.customers || [];
     syncUI();
     calcAll();
     calcProduction();
     renderHistory();
+    saveAll();
+    // customers/orders live in their own tables — refresh those too
+    await Promise.all([loadCustomersFromCloud(), loadOrdersFromCloud()]);
     renderOrders();
     renderCustomers();
     renderDelivery();
     updateOrderStats();
     updateCustomerSelect();
-    saveAll();
     updateStatus('☁️ Cloud data loaded');
   } catch (e) {
     console.error('Cloud load error:', e);
@@ -2749,7 +2861,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   currentUser = session.user;
 
-  // ---- LOAD LOCAL DATA ----
+  // ---- LOAD LOCAL DATA (fast, offline-friendly first paint) ----
   loadState();
   loadHistory();
   loadOrders();
@@ -2773,7 +2885,18 @@ document.addEventListener('DOMContentLoaded', async () => {
   saveAll();
   updateStatus('✅ Ready');
 
+  // ---- LOAD CUSTOMERS/ORDERS FROM THEIR OWN SUPABASE TABLES ----
+  // (source of truth — same data across every device/browser)
+  await Promise.all([loadCustomersFromCloud(), loadOrdersFromCloud()]);
+  renderOrders();
+  renderCustomers();
+  renderDelivery();
+  updateOrderStats();
+  updateCustomerSelect();
+
   // ---- LOAD CLOUD DATA (silent, no alert on empty) ----
+  // app_data still holds: state (pricing/production settings), history, snapshots.
+  // customers/orders are NOT read from here anymore — they come from their own tables above.
   try {
     const { data, error } = await supabase
       .from('app_data')
@@ -2787,17 +2910,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       takeSnapshot();
       Object.assign(state, payload.state);
       history = payload.history || [];
-      orders = payload.orders || [];
-      customers = payload.customers || [];
       syncUI();
       calcAll();
       calcProduction();
       renderHistory();
-      renderOrders();
-      renderCustomers();
-      renderDelivery();
-      updateOrderStats();
-      updateCustomerSelect();
       saveAll();
       updateStatus('☁️ Cloud data loaded');
     } else {
