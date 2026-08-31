@@ -2370,7 +2370,7 @@ async function cloudSave() {
     const payload = { state, history, orders, customers };
     const { error } = await supabase
       .from('app_data')
-      .upsert({ user_id: currentUser.id, data: payload, updated_at: new Date().toISOString() });
+      .upsert({ user_id: currentUser.id, data: payload, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
     if (error) throw error;
     updateStatus('Cloud save successful');
     alert('✅ Data saved to cloud successfully!');
@@ -2387,7 +2387,7 @@ async function cloudSaveSilent() {
     const payload = { state, history, orders, customers };
     const { error } = await supabase
       .from('app_data')
-      .upsert({ user_id: currentUser.id, data: payload, updated_at: new Date().toISOString() });
+      .upsert({ user_id: currentUser.id, data: payload, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
     if (error) throw error;
     updateStatus('☁️ Synced');
   } catch (e) {

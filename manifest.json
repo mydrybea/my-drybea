@@ -1,21 +1,21 @@
 {
-  "name": "MY DRYBEA - Umbalakada System",
-  "short_name": "DRYBEA",
-  "description": "Enterprise Umbalakada Management System",
+  "name": "MY DRYBEA - Enterprise Umbalakada Management System",
+  "short_name": "MY DRYBEA",
+  "description": "Complete enterprise management system for dried fish (Umbalakada) business.",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#040d0a",
   "theme_color": "#10b981",
   "icons": [
     {
-      "src": "logo.png",
+      "src": "logo.jpg",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/jpeg"
     },
     {
-      "src": "logo.png",
+      "src": "logo.jpg",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/jpeg"
     }
   ]
 }
