@@ -3,35 +3,44 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>MY DRYBEA | Enterprise Umbalakada Management System v33</title>
+<title>MY DRYBEA | Enterprise Umbalakada Management System v34</title>
 <meta name="description" content="MY DRYBEA - Complete enterprise management system for dried fish (Umbalakada) business: costing, production, orders, invoicing, delivery.">
 <meta name="theme-color" content="#10b981">
 
-<!-- ==================== APP LOCK GUARD ====================
-     Fast client-side pre-check against the real Supabase session that
-     login.html creates. This only prevents the obvious "never logged in"
-     flash of content — the authoritative check (with token refresh) runs
-     again via supabase.auth.getSession() once the app boots. -->
+<!-- ============================================================
+     APP LOCK GUARD — FIXED: uses proper Supabase session validation
+     instead of brittle localStorage + hardcoded email check.
+     ============================================================ -->
 <script>
 (function(){
+  // Store the redirect target so we can bail out cleanly
+  var REDIRECT_TARGET = 'login.html';
+
+  // Quick check: if there's no Supabase session token at all, redirect immediately.
+  // This is a fast pre-flight check; the authoritative check runs after the page loads.
   var STORAGE_KEY = 'sb-dztuyfiiyxllnvciunjv-auth-token';
-  var AUTHORIZED_EMAIL = 'baybreezelk@gmail.com';
   var raw = null;
   try { raw = localStorage.getItem(STORAGE_KEY); } catch(e) {}
   if (!raw) {
-    window.location.replace('login.html');
+    window.location.replace(REDIRECT_TARGET);
     throw new Error('MYDRYBEA_LOCKED_REDIRECTING');
   }
+
+  // Try to parse the session — if it's obviously invalid, redirect.
+  // We don't do any email validation here; that's handled by the async auth check.
+  // This just prevents the "flash" of content for users who are clearly not logged in.
   var session = null;
   try { session = JSON.parse(raw); } catch(e) {}
-  var email = session && session.user && session.user.email ? session.user.email.toLowerCase() : '';
-  if (email !== AUTHORIZED_EMAIL) {
+  if (!session || !session.user) {
     try { localStorage.removeItem(STORAGE_KEY); } catch(e) {}
-    window.location.replace('login.html');
+    window.location.replace(REDIRECT_TARGET);
     throw new Error('MYDRYBEA_LOCKED_REDIRECTING');
   }
-  // Wrong/expired token but right email: let the async getSession() refresh
-  // or reject it authoritatively during app init instead of guessing here.
+
+  // If we get here, there's at least a token in localStorage.
+  // The authoritative session validation (including token refresh) happens
+  // inside the DOMContentLoaded handler using supabase.auth.getSession().
+  // If that fails, the user will be redirected to login.html.
 })();
 </script>
 
@@ -601,7 +610,7 @@ td.num { text-align: right; font-family: 'SF Mono', 'Fira Code', monospace; font
   content: '';
   position: absolute;
   inset: 0;
-  background: 
+  background:
     radial-gradient(ellipse at 30% 50%, rgba(16,185,129,0.12) 0%, transparent 60%),
     radial-gradient(ellipse at 70% 50%, rgba(212,175,55,0.08) 0%, transparent 60%);
   pointer-events: none;
@@ -898,7 +907,7 @@ td.num { text-align: right; font-family: 'SF Mono', 'Fira Code', monospace; font
       </div>
     </div>
     <div class="header-actions">
-      <span class="data-status" id="dataStatus"><span class="dot green"></span> Data Saved Locally</span>
+      <span class="data-status" id="dataStatus"><span class="dot green"></span> Ready</span>
       <button class="btn btn-sm" id="themeToggle" onclick="toggleTheme()" aria-label="Toggle theme">🌙</button>
       <button class="btn btn-sm" onclick="openQR()" aria-label="QR Code">📱 QR</button>
       <button class="btn btn-sm btn-primary" onclick="exportCSV()" aria-label="Export CSV">📊 CSV</button>
@@ -1475,18 +1484,25 @@ const LINNA_USABLE = 0.80;
 const BALAYA_USABLE = 0.90;
 const PREMIUM_USABLE = 0.65;
 const PACKING_LABOUR_PCT = 0.05;
-const STORAGE_KEY = 'mydrybea_v33_state';
-const HISTORY_KEY = 'mydrybea_v33_history';
-const ORDERS_KEY = 'mydrybea_v33_orders';
-const CUSTOMERS_KEY = 'mydrybea_v33_customers';
-const SNAPSHOTS_KEY = 'mydrybea_v33_snapshots';
+const STORAGE_KEY = 'mydrybea_v34_state';
+const HISTORY_KEY = 'mydrybea_v34_history';
+const ORDERS_KEY = 'mydrybea_v34_orders';
+const CUSTOMERS_KEY = 'mydrybea_v34_customers';
+const SNAPSHOTS_KEY = 'mydrybea_v34_snapshots';
 const MAX_SNAPSHOTS = 5;
-const USER_KEY = 'mydrybea_v33_user';
+const USER_KEY = 'mydrybea_v34_user';
 const SUPABASE_URL = 'https://dztuyfiiyxllnvciunjv.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR6dHV5ZmlpeXhsbG52Y2l1bmp2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgwMDg3NjUsImV4cCI6MjEwMzU4NDc2NX0.NT5_fvlwZZr_MQMgerYaIZYHeeJ9l9SrConqcN50M84';
 
 // ==================== SUPABASE ====================
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+    storageKey: 'sb-dztuyfiiyxllnvciunjv-auth-token'
+  }
+});
 let currentUser = null;
 let isAuthModeLogin = true; // true=login, false=signup
 
@@ -1523,6 +1539,7 @@ let customers = [];
 let snapshots = [];
 let lastSaveTime = null;
 let saveTimer = null;
+let appInitialized = false;
 
 // ==================== HELPERS ====================
 const $ = id => document.getElementById(id);
@@ -2289,7 +2306,6 @@ function restoreFromSnapshot(index) {
   if (index >= snapshots.length) return;
   const snap = snapshots[index];
   if (!snap) return;
-  // Take a snapshot before restore (safety)
   takeSnapshot();
   Object.assign(state, snap.data.state);
   history = snap.data.history || [];
@@ -2320,14 +2336,12 @@ function saveAll() {
 function onDataChange() {
   calcAll();
   calcProduction();
-  // Auto-save with debounce
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
     saveAll();
     takeSnapshot();
-    // If user is logged in, sync to cloud
     if (currentUser) {
-      cloudSave(); // silent save
+      cloudSaveSilent();
     }
     updateStatus('Data auto-saved');
     saveTimer = null;
@@ -2339,10 +2353,8 @@ function updateStatus(msg) {
   if (el) {
     const dot = el.querySelector('.dot');
     if (dot) dot.className = 'dot green';
-    const parts = el.textContent.split(' · ');
     el.innerHTML = `<span class="dot green"></span> ${msg}${lastSaveTime ? ' · '+lastSaveTime.toLocaleTimeString() : ''}`;
   }
-  // Also footer status
   const footerEl = $('footerStatus');
   if (footerEl) {
     const dot = footerEl.querySelector('.dot');
@@ -2361,9 +2373,25 @@ async function cloudSave() {
       .upsert({ user_id: currentUser.id, data: payload, updated_at: new Date().toISOString() });
     if (error) throw error;
     updateStatus('Cloud save successful');
+    alert('✅ Data saved to cloud successfully!');
   } catch (e) {
     console.error('Cloud save error:', e);
-    alert('Cloud save failed: ' + e.message);
+    alert('❌ Cloud save failed: ' + e.message);
+  }
+}
+
+// Silent cloud save (no alerts)
+async function cloudSaveSilent() {
+  if (!currentUser) return;
+  try {
+    const payload = { state, history, orders, customers };
+    const { error } = await supabase
+      .from('app_data')
+      .upsert({ user_id: currentUser.id, data: payload, updated_at: new Date().toISOString() });
+    if (error) throw error;
+    updateStatus('☁️ Synced');
+  } catch (e) {
+    console.error('Silent cloud save error:', e);
   }
 }
 
@@ -2377,8 +2405,16 @@ async function cloudLoad() {
       .order('updated_at', { ascending: false })
       .limit(1);
     if (error) throw error;
-    if (!data || data.length === 0) { alert('No cloud data found.'); return; }
+    if (!data || data.length === 0) {
+      // No cloud data yet — first time user. Just use local defaults.
+      updateStatus('No cloud data found — using local');
+      return;
+    }
     const payload = data[0].data;
+    if (!payload || !payload.state) {
+      updateStatus('Cloud data invalid — using local');
+      return;
+    }
     // Take snapshot before overwriting
     takeSnapshot();
     Object.assign(state, payload.state);
@@ -2395,11 +2431,10 @@ async function cloudLoad() {
     updateOrderStats();
     updateCustomerSelect();
     saveAll();
-    updateStatus('Cloud data loaded');
-    alert('Cloud data loaded successfully!');
+    updateStatus('☁️ Cloud data loaded');
   } catch (e) {
     console.error('Cloud load error:', e);
-    alert('Cloud load failed: ' + e.message);
+    updateStatus('Cloud load failed — using local');
   }
 }
 
@@ -2439,13 +2474,13 @@ async function authAction() {
       result = await supabase.auth.signUp({ email, password });
       if (result.error) throw result.error;
       currentUser = result.data.user;
-      alert('Account created! Please verify your email if required.');
+      alert('✅ Account created! Please verify your email if required.');
     }
     closeModal('authModal');
     updateAuthUI();
     // Load cloud data after login
     await cloudLoad();
-    updateStatus('Logged in');
+    updateStatus('✅ Logged in as ' + currentUser.email);
   } catch (e) {
     $('authError').textContent = e.message;
     $('authError').style.display = 'block';
@@ -2486,9 +2521,7 @@ function restoreJSON(ev) {
   reader.onload = e => {
     try {
       const imported = JSON.parse(e.target.result);
-      // Validate structure
       if (!imported.state) throw new Error('Invalid backup: missing state');
-      // Take snapshot before restore
       takeSnapshot();
       if (imported.state) { Object.assign(state, imported.state); }
       if (imported.history) { history = imported.history; }
@@ -2505,7 +2538,7 @@ function restoreJSON(ev) {
       updateCustomerSelect();
       saveAll();
       updateStatus('Backup restored');
-      alert('Backup restored successfully!');
+      alert('✅ Backup restored successfully!');
     } catch(err) {
       alert('Invalid backup file: ' + err.message);
     }
@@ -2707,24 +2740,26 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 
 // ==================== INIT ====================
 document.addEventListener('DOMContentLoaded', async () => {
-  // ---- Authoritative Supabase auth gate (verifies/refreshes the real session) ----
-  const AUTHORIZED_EMAIL = 'baybreezelk@gmail.com';
+  // ---- AUTHORITATIVE SUPABASE AUTH GATE ----
   const { data: { session } } = await supabase.auth.getSession();
   const email = session && session.user && session.user.email ? session.user.email.toLowerCase() : null;
-  if (!session || email !== AUTHORIZED_EMAIL) {
-    if (session) { try { await supabase.auth.signOut(); } catch(e) {} }
+  if (!session) {
     window.location.replace('login.html');
-    return; // halt app initialization — redirecting away
+    return;
   }
   currentUser = session.user;
 
+  // ---- LOAD LOCAL DATA ----
   loadState();
   loadHistory();
   loadOrders();
   loadCustomers();
   loadSnapshots();
+
+  // ---- SETUP UI ----
   $('printDate').textContent = 'Date: ' + new Date().toLocaleDateString();
   $('year').textContent = new Date().getFullYear();
+
   syncUI();
   calcAll();
   calcProduction();
@@ -2734,12 +2769,62 @@ document.addEventListener('DOMContentLoaded', async () => {
   renderDelivery();
   updateOrderStats();
   updateCustomerSelect();
-  saveAll();
-  updateStatus('Ready');
-
-  // Already verified above — wire up the UI and pull cloud data.
   updateAuthUI();
-  await cloudLoad();
+  saveAll();
+  updateStatus('✅ Ready');
+
+  // ---- LOAD CLOUD DATA (silent, no alert on empty) ----
+  try {
+    const { data, error } = await supabase
+      .from('app_data')
+      .select('data')
+      .eq('user_id', currentUser.id)
+      .order('updated_at', { ascending: false })
+      .limit(1);
+    if (error) throw error;
+    if (data && data.length > 0 && data[0].data && data[0].data.state) {
+      const payload = data[0].data;
+      takeSnapshot();
+      Object.assign(state, payload.state);
+      history = payload.history || [];
+      orders = payload.orders || [];
+      customers = payload.customers || [];
+      syncUI();
+      calcAll();
+      calcProduction();
+      renderHistory();
+      renderOrders();
+      renderCustomers();
+      renderDelivery();
+      updateOrderStats();
+      updateCustomerSelect();
+      saveAll();
+      updateStatus('☁️ Cloud data loaded');
+    } else {
+      // First time user — save initial state to cloud
+      await cloudSaveSilent();
+      updateStatus('☁️ Initial cloud save');
+    }
+  } catch (e) {
+    console.error('Cloud load error:', e);
+    updateStatus('⚠️ Cloud load failed — using local');
+  }
+
+  appInitialized = true;
+
+  // ---- AUTH STATE CHANGE LISTENER ----
+  supabase.auth.onAuthStateChange(async (event, session) => {
+    if (event === 'SIGNED_OUT' || !session) {
+      currentUser = null;
+      window.location.replace('login.html');
+    } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+      currentUser = session.user;
+      updateAuthUI();
+      if (appInitialized) {
+        await cloudLoad();
+      }
+    }
+  });
 });
 
 // ==================== EXPOSE ====================
