@@ -928,6 +928,7 @@ td.num { text-align: right; font-family: 'SF Mono', 'Fira Code', monospace; font
     <button class="tab-btn" data-tab="production" role="tab">🏭 Production</button>
     <button class="tab-btn" data-tab="dashboard" role="tab">📈 Dashboard</button>
     <button class="tab-btn" data-tab="orders" role="tab">🧾 Orders</button>
+    <button class="tab-btn" data-tab="expenses" role="tab">💰 Expenses</button>
     <button class="tab-btn" data-tab="history" role="tab">📜 History</button>
     <button class="tab-btn" data-tab="data" role="tab">⚙️ Data</button>
   </nav>
@@ -1287,6 +1288,31 @@ td.num { text-align: right; font-family: 'SF Mono', 'Fira Code', monospace; font
     </div>
   </section>
 
+  <!-- ============ EXPENSES TAB ============ -->
+  <section id="expenses" class="tab-panel" style="display:none;" role="tabpanel">
+    <div class="stat-grid">
+      <div class="stat accent"><div class="k">This Month</div><div class="v" id="statExpThisMonth">Rs. 0</div></div>
+      <div class="stat"><div class="k">Total (all time)</div><div class="v" id="statExpTotal">Rs. 0</div></div>
+      <div class="stat"><div class="k">Entries</div><div class="v" id="statExpCount">0</div></div>
+    </div>
+
+    <div class="card">
+      <h2>💰 Expenses</h2>
+      <div class="btn-row" style="margin-bottom:14px;">
+        <button class="btn btn-primary btn-sm" onclick="openNewExpense()">➕ Add Expense</button>
+        <button class="btn btn-sm" onclick="exportExpensesCSV()">📊 Export CSV</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Date</th><th>Category</th><th>Description</th><th>Amount</th><th>Actions</th></tr>
+          </thead>
+          <tbody id="expensesBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
   <!-- ============ HISTORY TAB ============ -->
   <section id="history" class="tab-panel" style="display:none;" role="tabpanel">
     <div class="card">
@@ -1443,6 +1469,42 @@ td.num { text-align: right; font-family: 'SF Mono', 'Fira Code', monospace; font
     <div class="btn-row">
       <button class="btn btn-primary" onclick="saveCustomer()">✅ Save Customer</button>
       <button class="btn" onclick="closeModal('customerModal')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- New Expense Modal -->
+<div class="modal-backdrop" id="expenseModal">
+  <div class="modal">
+    <h3>💰 Add Expense</h3>
+    <div class="field">
+      <label>Date</label>
+      <input type="date" id="expDate">
+    </div>
+    <div class="field">
+      <label>Category</label>
+      <select id="expCategory">
+        <option value="Transport">Transport</option>
+        <option value="Firewood">Firewood</option>
+        <option value="Workers Salary">Workers Salary</option>
+        <option value="Packing Materials">Packing Materials</option>
+        <option value="Raw Fish">Raw Fish</option>
+        <option value="Rent">Rent</option>
+        <option value="Utilities">Utilities</option>
+        <option value="Other">Other</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Description</label>
+      <textarea id="expDescription" placeholder="Optional notes..."></textarea>
+    </div>
+    <div class="field">
+      <label>Amount (Rs.)</label>
+      <div class="input-prefix"><span>Rs.</span><input type="number" id="expAmount" value="0" min="0"></div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="saveExpense()">✅ Save Expense</button>
+      <button class="btn" onclick="closeModal('expenseModal')">Cancel</button>
     </div>
   </div>
 </div>
@@ -1982,6 +2044,135 @@ async function loadOrdersFromCloud() {
     console.error('Load orders error:', e);
     updateStatus('⚠️ Could not load orders from cloud');
   }
+}
+
+// ==================== SUPABASE-BACKED EXPENSES ====================
+let expenses = [];
+
+function dbExpenseToLocal(e) {
+  return {
+    id: e.id,
+    date: e.expense_date,
+    category: e.category,
+    description: e.description || '',
+    amount: Number(e.amount) || 0,
+    createdAt: e.created_at
+  };
+}
+
+async function loadExpensesFromCloud() {
+  if (!currentUser) return;
+  try {
+    const { data, error } = await supabase
+      .from('expenses')
+      .select('*')
+      .eq('created_by', currentUser.id)
+      .order('expense_date', { ascending: false });
+    if (error) throw error;
+    expenses = (data || []).map(dbExpenseToLocal);
+  } catch (e) {
+    console.error('Load expenses error:', e);
+    updateStatus('⚠️ Could not load expenses from cloud');
+  }
+}
+
+function openNewExpense() {
+  $('expDate').value = new Date().toISOString().slice(0, 10);
+  $('expCategory').value = 'Transport';
+  $('expDescription').value = '';
+  $('expAmount').value = 0;
+  $('expenseModal').classList.add('active');
+}
+
+async function saveExpense() {
+  const date = $('expDate').value || new Date().toISOString().slice(0, 10);
+  const category = $('expCategory').value;
+  const description = $('expDescription').value.trim();
+  const amount = Number($('expAmount').value) || 0;
+
+  if (!currentUser) { alert('Please login first.'); return; }
+  if (amount <= 0) { alert('Enter an amount greater than 0!'); return; }
+
+  const row = {
+    expense_date: date,
+    category,
+    description,
+    amount,
+    created_by: currentUser.id
+  };
+
+  try {
+    const { data, error } = await supabase.from('expenses').insert(row).select().single();
+    if (error) throw error;
+    expenses.unshift(dbExpenseToLocal(data));
+  } catch (e) {
+    console.error('Save expense error:', e);
+    alert('❌ Could not save expense: ' + e.message);
+    return;
+  }
+
+  renderExpenses();
+  closeModal('expenseModal');
+  updateStatus('✅ Expense saved');
+}
+
+async function deleteExpense(id) {
+  if (!confirm('Delete this expense?')) return;
+  if (!currentUser) { alert('Please login first.'); return; }
+  try {
+    const { error } = await supabase.from('expenses').delete().eq('id', id).eq('created_by', currentUser.id);
+    if (error) throw error;
+  } catch (e) {
+    console.error('Delete expense error:', e);
+    alert('❌ Could not delete expense: ' + e.message);
+    return;
+  }
+  expenses = expenses.filter(e => e.id !== id);
+  renderExpenses();
+  updateStatus('🗑️ Expense deleted');
+}
+
+function renderExpenses() {
+  const tbody = $('expensesBody');
+  if (!tbody) return;
+  if (expenses.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;opacity:0.5;padding:20px;">No expenses yet.</td></tr>';
+  } else {
+    tbody.innerHTML = expenses.map(e => `
+      <tr>
+        <td>${e.date}</td>
+        <td>${e.category}</td>
+        <td>${e.description || '-'}</td>
+        <td>${fmt(e.amount)}</td>
+        <td><button class="btn btn-sm btn-danger" onclick="deleteExpense('${e.id}')">🗑️</button></td>
+      </tr>
+    `).join('');
+  }
+  updateExpenseStats();
+}
+
+function updateExpenseStats() {
+  const total = expenses.reduce((sum, e) => sum + e.amount, 0);
+  const now = new Date();
+  const thisMonth = expenses
+    .filter(e => {
+      const d = new Date(e.date);
+      return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+    })
+    .reduce((sum, e) => sum + e.amount, 0);
+  const elMonth = $('statExpThisMonth');
+  const elTotal = $('statExpTotal');
+  const elCount = $('statExpCount');
+  if (elMonth) elMonth.textContent = fmt(thisMonth);
+  if (elTotal) elTotal.textContent = fmt(total);
+  if (elCount) elCount.textContent = expenses.length;
+}
+
+function exportExpensesCSV() {
+  if (expenses.length === 0) { alert('No expenses to export.'); return; }
+  const rows = [['Date', 'Category', 'Description', 'Amount']];
+  expenses.forEach(e => rows.push([e.date, e.category, e.description, e.amount.toFixed(2)]));
+  downloadCSV(rows, 'mydrybea_expenses.csv');
 }
 
 async function saveCustomer() {
@@ -2536,13 +2727,14 @@ async function cloudLoad() {
     calcProduction();
     renderHistory();
     saveAll();
-    // customers/orders live in their own tables — refresh those too
-    await Promise.all([loadCustomersFromCloud(), loadOrdersFromCloud()]);
+    // customers/orders/expenses live in their own tables — refresh those too
+    await Promise.all([loadCustomersFromCloud(), loadOrdersFromCloud(), loadExpensesFromCloud()]);
     renderOrders();
     renderCustomers();
     renderDelivery();
     updateOrderStats();
     updateCustomerSelect();
+    renderExpenses();
     updateStatus('☁️ Cloud data loaded');
   } catch (e) {
     console.error('Cloud load error:', e);
@@ -2847,6 +3039,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     if (btn.dataset.tab === 'history') renderHistory();
     if (btn.dataset.tab === 'production') calcProduction();
     if (btn.dataset.tab === 'orders') { renderOrders(); renderCustomers(); renderDelivery(); updateOrderStats(); }
+    if (btn.dataset.tab === 'expenses') { renderExpenses(); }
   });
 });
 
@@ -2885,14 +3078,15 @@ document.addEventListener('DOMContentLoaded', async () => {
   saveAll();
   updateStatus('✅ Ready');
 
-  // ---- LOAD CUSTOMERS/ORDERS FROM THEIR OWN SUPABASE TABLES ----
+  // ---- LOAD CUSTOMERS/ORDERS/EXPENSES FROM THEIR OWN SUPABASE TABLES ----
   // (source of truth — same data across every device/browser)
-  await Promise.all([loadCustomersFromCloud(), loadOrdersFromCloud()]);
+  await Promise.all([loadCustomersFromCloud(), loadOrdersFromCloud(), loadExpensesFromCloud()]);
   renderOrders();
   renderCustomers();
   renderDelivery();
   updateOrderStats();
   updateCustomerSelect();
+  renderExpenses();
 
   // ---- LOAD CLOUD DATA (silent, no alert on empty) ----
   // app_data still holds: state (pricing/production settings), history, snapshots.
@@ -2976,6 +3170,10 @@ window.createOrder = createOrder;
 window.deleteCustomer = deleteCustomer;
 window.deleteOrder = deleteOrder;
 window.cycleStatus = cycleStatus;
+window.openNewExpense = openNewExpense;
+window.saveExpense = saveExpense;
+window.deleteExpense = deleteExpense;
+window.exportExpensesCSV = exportExpensesCSV;
 window.viewInvoice = viewInvoice;
 window.printInvoicePDF = printInvoicePDF;
 window.shareInvoiceWhatsApp = shareInvoiceWhatsApp;
