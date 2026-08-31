@@ -2180,6 +2180,19 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
 
 </style>
 
+
+<style id="my-drybea-pro-title-system">
+.pro-title{display:flex!important;align-items:center;gap:12px;letter-spacing:-.02em;line-height:1.08;margin-bottom:7px!important}
+.pro-title-icon{width:34px;height:34px;min-width:34px;display:inline-grid;place-items:center;border-radius:11px;position:relative;color:var(--accent,#16a765);background:linear-gradient(145deg,rgba(22,167,101,.14),rgba(22,167,101,.04));border:1px solid rgba(22,167,101,.18);box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 7px 20px rgba(0,0,0,.08)}
+.pro-title-icon::after{content:"";position:absolute;inset:-4px;border-radius:14px;border:1px solid color-mix(in srgb,var(--accent,#16a765) 18%, transparent);opacity:.45;pointer-events:none}
+.pro-title-icon.gold{--accent:#c9a44d}.pro-title-icon.blue{--accent:#4b9cff}.pro-title-icon.purple{--accent:#9a72ff}.pro-title-icon.orange{--accent:#ee9a3d}.pro-title-icon.teal{--accent:#27b9b1}.pro-title-icon.slate{--accent:#8fa3ad}.pro-title-icon.green{--accent:#16a765}
+.pro-title-icon .nav-icon{width:18px;height:18px}
+.pro-subtitle{display:flex;align-items:center;gap:7px;margin:0 0 18px;color:var(--text-muted,#82918a);font-size:.76rem;font-weight:650;letter-spacing:.01em;line-height:1.45}
+.pro-subtitle::before{content:"";width:4px;height:4px;border-radius:50%;background:var(--sub-accent,#16a765);box-shadow:0 0 0 4px color-mix(in srgb,var(--sub-accent,#16a765) 10%, transparent)}
+.pro-subtitle.gold{--sub-accent:#c9a44d}.pro-subtitle.blue{--sub-accent:#4b9cff}.pro-subtitle.purple{--sub-accent:#9a72ff}.pro-subtitle.orange{--sub-accent:#ee9a3d}.pro-subtitle.teal{--sub-accent:#27b9b1}.pro-subtitle.slate{--sub-accent:#8fa3ad}
+@media(max-width:680px){.pro-title{gap:9px}.pro-title-icon{width:31px;height:31px;min-width:31px;border-radius:10px}.pro-subtitle{font-size:.72rem;margin-bottom:14px}}
+</style>
+
 </head>
 <body>
 
@@ -2213,7 +2226,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
   </div>
 
   <div class="print-header">
-    <h2>🐟 MY DRYBEA — ENTERPRISE COST SHEET</h2>
+    <h2><span class="pro-title-icon green" aria-hidden="true"><span class="nav-icon icon-calc"></span></span><span>Cost Sheet</span></h2><p class="pro-subtitle green">Fast pricing intelligence for every pack.</p>
     <p id="printDate"></p>
     <hr>
   </div>
@@ -2228,7 +2241,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
   <!-- ============ INCOME TAB ============ -->
   <section id="income" class="tab-panel" role="tabpanel" style="display:none;">
     <div class="mobile-greeting no-print" style="padding:0 0 8px;">
-      <div><span class="eyebrow">FINANCIAL OVERVIEW</span><h2>Your Income</h2><p>Revenue, profit and fixed-cost position at a glance.</p></div>
+      <div><span class="eyebrow">FINANCIAL OVERVIEW</span><h2><span class="pro-title-icon green" aria-hidden="true"><span class="nav-icon icon-income"></span></span><span>Income</span></h2><p class="pro-subtitle green">See what the business is earning at a glance.</p><p>Revenue, profit and fixed-cost position at a glance.</p></div>
       <div class="profile-dot"><span class="nav-icon icon-income"></span></div>
     </div>
     <div class="income-grid">
@@ -2238,7 +2251,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
       <div class="card income-card income-highlight"><span>Net Profit</span><strong id="incomeNet">Rs. 0</strong><small>After fixed costs</small></div>
     </div>
     <div class="card">
-      <h2>Profit Snapshot</h2>
+      <h2><span class="pro-title-icon gold" aria-hidden="true"><span class="nav-icon icon-summary"></span></span><span>Profit</span></h2><p class="pro-subtitle gold">Margin, contribution and momentum in one view.</p>
       <div class="income-summary"><div><span>Net Margin</span><strong id="incomeMargin">0%</strong></div><button class="btn btn-primary" data-open-tab="calculator" data-ribbon="true">Open Costing</button></div>
     </div>
   </section>
@@ -2246,7 +2259,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
   <!-- ============ MONTHLY SUMMARY TAB ============ -->
   <section id="monthly-summary" class="tab-panel" role="tabpanel" style="display:none;">
     <div class="mobile-greeting no-print" style="padding:0 0 8px;">
-      <div><span class="eyebrow">BUSINESS REPORT</span><h2>Monthly Summary</h2><p>Live summary of this month's recorded business activity.</p></div>
+      <div><span class="eyebrow">BUSINESS REPORT</span><h2><span class="pro-title-icon green" aria-hidden="true"><span class="nav-icon icon-summary"></span></span><span>Month Pulse</span></h2><p class="pro-subtitle green">Live month-to-date performance as data moves.</p><p>Live summary of this month's recorded business activity.</p></div>
       <div class="profile-dot"><span class="nav-icon icon-summary"></span></div>
     </div>
 
@@ -2302,7 +2315,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
   <section id="calculator" class="tab-panel" role="tabpanel" style="display:none;">
     <div class="grid-2">
       <div class="card">
-        <h2>🐟 Raw Material Prices</h2>
+        <h2><span class="pro-title-icon blue" aria-hidden="true"><span class="nav-icon icon-production"></span></span><span>Raw Materials</span></h2><p class="pro-subtitle blue">Control the input costs behind every result.</p>
         <div class="grid-3">
           <div class="field">
             <label>Linna <span class="hint">(Rs./kg)</span></label>
@@ -2318,7 +2331,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
           </div>
         </div>
 
-        <h2 style="margin-top:16px;">📦 Product Configuration</h2>
+        <h2 style="margin-top:16px;"><span class="pro-title-icon teal" aria-hidden="true"><span class="nav-icon icon-option"></span></span><span>Product Setup</span></h2><p class="pro-subtitle teal">Define pack sizes, yields and production assumptions.</p>
         <div class="field">
           <label>Pack Size</label>
           <select id="packSize" onchange="onDataChange()">
@@ -2357,7 +2370,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
           </div>
         </div>
 
-        <h2 style="margin-top:16px;">🎯 Pricing Mode</h2>
+        <h2 style="margin-top:16px;"><span class="pro-title-icon purple" aria-hidden="true"><span class="nav-icon icon-calc"></span></span><span>Pricing</span></h2><p class="pro-subtitle purple">Choose the commercial lens behind your selling price.</p>
         <div class="mode-toggle">
           <button class="btn active" data-mode="mrp" onclick="setMode('mrp')">MRP</button>
           <button class="btn" data-mode="profit" onclick="setMode('profit')">Target Profit</button>
@@ -2381,7 +2394,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
       </div>
 
       <div class="card">
-        <h2>✅ Per Pack Result</h2>
+        <h2><span class="pro-title-icon green" aria-hidden="true"><span class="nav-icon icon-income"></span></span><span>Pack Result</span></h2><p class="pro-subtitle green">Unit economics, margin and selling power.</p>
         <div class="stat-grid">
           <div class="stat accent"><div class="k">Selling Price</div><div class="v" id="outSp">Rs. 0</div></div>
           <div class="stat" id="profitStat"><div class="k">Profit/Pack</div><div class="v" id="outProfit">Rs. 0</div></div>
@@ -2398,7 +2411,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
 
         <div class="chart-wrap"><canvas id="costChart"></canvas></div>
 
-        <h2 style="margin-top:16px;">📅 Monthly Estimate</h2>
+        <h2 style="margin-top:16px;"><span class="pro-title-icon gold" aria-hidden="true"><span class="nav-icon icon-summary"></span></span><span>Monthly Plan</span></h2><p class="pro-subtitle gold">Turn unit economics into a practical target.</p>
         <div class="table-wrap">
           <table><tbody id="monthlyBody"></tbody></table>
         </div>
@@ -2406,7 +2419,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
     </div>
 
     <div class="card">
-      <h2>⚖️ Scenario Comparison</h2>
+      <h2><span class="pro-title-icon purple" aria-hidden="true"><span class="nav-icon icon-summary"></span></span><span>Scenarios</span></h2><p class="pro-subtitle purple">Compare pricing paths before you commit.</p>
       <div class="grid-2">
         <div class="field">
           <label>Scenario A Mix</label>
@@ -2449,7 +2462,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
   <!-- ============ PRODUCTION TAB ============ -->
   <section id="production" class="tab-panel" style="display:none;" role="tabpanel">
     <div class="card">
-      <h2>🏭 Raw Fish Production Model</h2>
+      <h2><span class="pro-title-icon orange" aria-hidden="true"><span class="nav-icon icon-production"></span></span><span>Production Model</span></h2><p class="pro-subtitle orange">Translate raw fish yield into finished output.</p>
       <p class="sub">Compare buying finished Umbalakada vs producing from raw fish. Analyze yield, cost per kg, and profitability.</p>
 
       <div class="grid-2">
@@ -2598,7 +2611,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
     </div>
 
     <div class="card">
-      <h2>🏭 Bulk Production Calculator</h2>
+      <h2><span class="pro-title-icon orange" aria-hidden="true"><span class="nav-icon icon-production"></span></span><span>Bulk Plan</span></h2><p class="pro-subtitle orange">Plan output, yield and break-even volume.</p>
       <div class="grid-2">
         <div class="field">
           <label>Monthly Target (kg)</label>
@@ -2618,7 +2631,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
     </div>
 
     <div class="card">
-      <h2>🗂️ All Products Monthly Plan</h2>
+      <h2><span class="pro-title-icon green" aria-hidden="true"><span class="nav-icon icon-summary"></span></span><span>Monthly Mix</span></h2><p class="pro-subtitle green">Plan production across every SKU.</p>
       <div class="table-wrap">
         <table>
           <thead><tr><th>Size</th><th>Qty/mo</th><th>SP</th><th class="num">Cost/Pack</th><th class="num">Profit/Pack</th><th class="num">Monthly Profit</th></tr></thead>
@@ -2632,7 +2645,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
     </div>
 
     <div class="card">
-      <h2>📉 Price Sensitivity Analysis</h2>
+      <h2><span class="pro-title-icon purple" aria-hidden="true"><span class="nav-icon icon-calc"></span></span><span>Price Sensitivity</span></h2><p class="pro-subtitle purple">Test price moves before you sell.</p>
       <div class="field" style="max-width:220px;">
         <label>Pack Size</label>
         <select id="sensSize" onchange="calcSensitivity()">
@@ -2662,7 +2675,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
     </div>
 
     <div class="card">
-      <h2>📋 All Orders</h2>
+      <h2><span class="pro-title-icon green" aria-hidden="true"><span class="nav-icon icon-orders"></span></span><span>Orders</span></h2><p class="pro-subtitle green">Track every customer sale from one command view.</p>
       <div class="btn-row" style="margin-bottom:14px;">
         <button class="btn btn-primary btn-sm" onclick="openNewOrder()">➕ New Order</button>
         <button class="btn btn-sm" onclick="openNewCustomer()">👤 Add Customer</button>
@@ -2678,7 +2691,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
     </div>
 
     <div class="card">
-      <h2>👥 Customer Management</h2>
+      <h2><span class="pro-title-icon blue" aria-hidden="true"><span class="nav-icon icon-profile"></span></span><span>Customers</span></h2><p class="pro-subtitle blue">Keep customer relationships organised.</p>
       <div class="table-wrap">
         <table>
           <thead>
@@ -2690,7 +2703,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
     </div>
 
     <div class="card">
-      <h2>🚚 Delivery Tracking</h2>
+      <h2><span class="pro-title-icon orange" aria-hidden="true"><span class="nav-icon icon-orders"></span></span><span>Delivery</span></h2><p class="pro-subtitle orange">Follow fulfilment without losing the sale.</p>
       <div class="table-wrap">
         <table>
           <thead>
@@ -2711,7 +2724,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
     </div>
 
     <div class="card">
-      <h2>💰 Expenses</h2>
+      <h2><span class="pro-title-icon gold" aria-hidden="true"><span class="nav-icon icon-expense"></span></span><span>Expenses</span></h2><p class="pro-subtitle gold">Capture costs and protect your margin.</p>
       <div class="btn-row" style="margin-bottom:14px;">
         <button class="btn btn-primary btn-sm" onclick="openNewExpense()">➕ Add Expense</button>
         <button class="btn btn-sm" onclick="exportExpensesCSV()">📊 Export CSV</button>
@@ -2730,7 +2743,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
   <!-- ============ HISTORY TAB ============ -->
   <section id="history" class="tab-panel" style="display:none;" role="tabpanel">
     <div class="card">
-      <h2>📜 Order History</h2>
+      <h2><span class="pro-title-icon slate" aria-hidden="true"><span class="nav-icon icon-history"></span></span><span>History</span></h2><p class="pro-subtitle slate">Review saved calculations and past decisions.</p>
       <p class="sub">Saved order calculations (net profit includes allocated fixed cost).</p>
       <div class="table-wrap">
         <table>
@@ -2750,7 +2763,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
   <!-- ============ DATA TAB ============ -->
   <section id="data" class="tab-panel" style="display:none;" role="tabpanel">
     <div class="card">
-      <h2>🔒 Locked Base Data</h2>
+      <h2><span class="pro-title-icon slate" aria-hidden="true"><span class="nav-icon icon-lock"></span></span><span>Base Data</span></h2><p class="pro-subtitle slate">Protected assumptions used by the system.</p>
       <div class="table-wrap">
         <table>
           <thead><tr><th>Param</th><th>50g</th><th>100g</th><th>500g</th><th>1kg</th></tr></thead>
@@ -2772,7 +2785,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
     </div>
 
     <div class="card">
-      <h2>🏢 Fixed Monthly Costs</h2>
+      <h2><span class="pro-title-icon gold" aria-hidden="true"><span class="nav-icon icon-expense"></span></span><span>Overheads</span></h2><p class="pro-subtitle gold">Keep recurring monthly costs visible and controlled.</p>
       <div class="accordion" id="overheadAcc">
         <div class="accordion-header" onclick="toggleAcc()">Edit Overheads ▼</div>
         <div class="accordion-body">
@@ -2785,7 +2798,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
     </div>
 
     <div class="card">
-      <h2>💾 Data Backup & Safety</h2>
+      <h2><span class="pro-title-icon slate" aria-hidden="true"><span class="nav-icon icon-lock"></span></span><span>Data Vault</span></h2><p class="pro-subtitle slate">Backup, restore and protect business records.</p>
       <div class="btn-row">
         <button class="btn" onclick="backupJSON()">⬇️ Backup</button>
         <button class="btn" onclick="document.getElementById('restoreFile').click()">⬆️ Restore</button>
@@ -2815,7 +2828,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
 <!-- QR Modal -->
 <div class="modal-backdrop" id="qrModal">
   <div class="modal">
-    <h3>📱 Share via QR</h3>
+    <h3><span class="pro-title-icon teal" aria-hidden="true"><span class="nav-icon icon-qr"></span></span><span>Share QR</span></h3><p class="pro-subtitle teal">Load current business parameters instantly.</p>
     <p style="font-size:0.85rem;color:var(--text-muted);">Scan to load current parameters</p>
     <div id="qrcode" style="display:flex;justify-content:center;margin:16px 0;"></div>
     <button class="btn btn-primary" onclick="closeQR()" style="width:100%;">Close</button>
@@ -2825,7 +2838,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
 <!-- New Order Modal -->
 <div class="modal-backdrop" id="orderModal">
   <div class="modal">
-    <h3>➕ New Order</h3>
+    <h3><span class="pro-title-icon green" aria-hidden="true"><span class="nav-icon icon-orders"></span></span><span>New Order</span></h3><p class="pro-subtitle green">Capture the sale cleanly from the first field.</p>
     <div class="field">
       <label>Customer</label>
       <select id="orderCustomer"></select>
@@ -2867,7 +2880,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
 <!-- New Customer Modal -->
 <div class="modal-backdrop" id="customerModal">
   <div class="modal">
-    <h3>👤 Add Customer</h3>
+    <h3><span class="pro-title-icon blue" aria-hidden="true"><span class="nav-icon icon-profile"></span></span><span>New Customer</span></h3><p class="pro-subtitle blue">Create a clean customer record.</p>
     <div class="field">
       <label>Customer Name</label>
       <input type="text" id="custName" placeholder="Customer name">
@@ -2890,7 +2903,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
 <!-- New Expense Modal -->
 <div class="modal-backdrop" id="expenseModal">
   <div class="modal">
-    <h3>💰 Add Expense</h3>
+    <h3><span class="pro-title-icon gold" aria-hidden="true"><span class="nav-icon icon-expense"></span></span><span>New Expense</span></h3><p class="pro-subtitle gold">Record the cost while the transaction is fresh.</p>
     <div class="field">
       <label>Date</label>
       <input type="date" id="expDate">
@@ -2926,7 +2939,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
 <!-- Auth Modal -->
 <div class="modal-backdrop" id="authModal">
   <div class="modal">
-    <h3 id="authTitle">🔐 Login</h3>
+    <h3 id="authTitle"><span class="pro-title-icon slate" aria-hidden="true"><span class="nav-icon icon-lock"></span></span><span>Secure Login</span></h3><p class="pro-subtitle slate">Authorised access to the MY DRYBEA workspace.</p>
     <div class="field">
       <label>Email</label>
       <input type="email" id="authEmail" placeholder="you@example.com">
@@ -3894,7 +3907,7 @@ function viewInvoice(index) {
   modal.className = 'modal-backdrop active';
   modal.innerHTML = `
     <div class="modal">
-      <h3>🧾 Invoice Options</h3>
+      <h3><span class="pro-title-icon green" aria-hidden="true"><span class="nav-icon icon-summary"></span></span><span>Invoice</span></h3><p class="pro-subtitle green">Choose how to deliver the finished invoice.</p>
       <div class="btn-row" style="justify-content:center;">
         <button class="btn btn-primary" onclick="printInvoicePDF(); closeThisModal()">📄 Print / PDF</button>
         <button class="btn btn-whatsapp" onclick="shareInvoiceWhatsApp(${index}); closeThisModal()">📲 WhatsApp</button>
