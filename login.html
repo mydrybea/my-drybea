@@ -58,6 +58,83 @@ html[data-theme="light"]{--bg:#f5faf7;--bg2:#e9f5ef;--panel:rgba(255,255,255,.88
     }
   })();
 
+  // ---- Rate limiting / brute-force lockout ----
+  // Same tier schedule as the server-side RPCs in rate_limiting_setup.sql,
+  // kept in sync so the UI feels consistent whichever layer triggers first.
+  const LOCK_TIERS = [
+    { attempts: 12, ms: 30 * 60 * 1000 },
+    { attempts: 8,  ms: 5 * 60 * 1000 },
+    { attempts: 5,  ms: 1 * 60 * 1000 }
+  ];
+  const ATTEMPTS_STORE_KEY = 'my-drybea-login-attempts';
+
+  function readAttemptsStore() {
+    try { return JSON.parse(localStorage.getItem(ATTEMPTS_STORE_KEY) || '{}'); }
+    catch { return {}; }
+  }
+  function writeAttemptsStore(store) {
+    try { localStorage.setItem(ATTEMPTS_STORE_KEY, JSON.stringify(store)); } catch {}
+  }
+  function tierLockMs(count) {
+    for (const t of LOCK_TIERS) if (count >= t.attempts) return t.ms;
+    return 0;
+  }
+  // Client-side check (fast, offline-capable, but bypassable by clearing storage —
+  // this is only the first line of defense; the RPC calls below are authoritative).
+  function getClientLock(email) {
+    const rec = readAttemptsStore()[email];
+    if (!rec || !rec.lockedUntil) return null;
+    return rec.lockedUntil > Date.now() ? rec.lockedUntil : null;
+  }
+  function registerClientFailure(email) {
+    const store = readAttemptsStore();
+    const rec = store[email] || { count: 0, lockedUntil: 0 };
+    if (!rec.lockedUntil || rec.lockedUntil <= Date.now()) rec.count += 1;
+    const ms = tierLockMs(rec.count);
+    rec.lockedUntil = ms ? Date.now() + ms : 0;
+    store[email] = rec;
+    writeAttemptsStore(store);
+    return rec;
+  }
+  function clearClientAttempts(email) {
+    const store = readAttemptsStore();
+    delete store[email];
+    writeAttemptsStore(store);
+  }
+
+  let lockCountdownTimer = null;
+  function formatRemaining(ms) {
+    const totalSec = Math.max(0, Math.ceil(ms / 1000));
+    const m = Math.floor(totalSec / 60);
+    const s = totalSec % 60;
+    return m > 0 ? `${m}m ${s}s` : `${s}s`;
+  }
+  function lockLoginUI(untilMs) {
+    const btn = $('loginBtn');
+    $('email').disabled = true;
+    $('password').disabled = true;
+    btn.disabled = true;
+
+    if (lockCountdownTimer) clearInterval(lockCountdownTimer);
+    const tick = () => {
+      const remaining = untilMs - Date.now();
+      if (remaining <= 0) {
+        clearInterval(lockCountdownTimer);
+        lockCountdownTimer = null;
+        $('email').disabled = false;
+        $('password').disabled = false;
+        btn.disabled = false;
+        btn.textContent = '🔐 Access Dashboard';
+        $('errBox').classList.remove('show');
+        return;
+      }
+      showError(`Too many failed attempts. Try again in ${formatRemaining(remaining)}.`);
+      btn.textContent = `🔒 Locked (${formatRemaining(remaining)})`;
+    };
+    tick();
+    lockCountdownTimer = setInterval(tick, 1000);
+  }
+
   $('loginForm').addEventListener('submit', async (e) => {
     e.preventDefault();
 
@@ -73,17 +150,52 @@ html[data-theme="light"]{--bg:#f5faf7;--bg2:#e9f5ef;--panel:rgba(255,255,255,.88
       return;
     }
 
+    // 1) Client-side check first — instant, no network needed.
+    const clientLockUntil = getClientLock(email);
+    if (clientLockUntil) {
+      lockLoginUI(clientLockUntil);
+      return;
+    }
+
     btn.disabled = true;
     btn.textContent = '⏳ Signing in…';
 
     try {
+      // 2) Server-side check — authoritative, can't be bypassed by clearing localStorage.
+      const { data: lockData, error: lockErr } = await client.rpc('check_login_lock', { p_email: email });
+      if (!lockErr && lockData && lockData[0] && lockData[0].is_locked) {
+        const untilMs = new Date(lockData[0].locked_until).getTime();
+        lockLoginUI(untilMs);
+        return;
+      }
+
       const { data, error } = await client.auth.signInWithPassword({ email, password });
 
       if (error) {
         // Friendly messages without exposing unnecessary backend details.
         const msg = (error.message || '').toLowerCase();
+
         if (msg.includes('invalid login credentials')) {
-          showError('Invalid email or password. Make sure the user exists in Supabase Authentication → Users and the password is correct.');
+          const clientRec = registerClientFailure(email);
+          let serverLockUntil = null;
+          try {
+            const { data: failData } = await client.rpc('register_failed_login', { p_email: email });
+            if (failData && failData[0] && failData[0].is_locked) {
+              serverLockUntil = new Date(failData[0].locked_until).getTime();
+            }
+          } catch (rpcErr) {
+            console.error('register_failed_login RPC failed:', rpcErr);
+          }
+
+          const lockUntil = serverLockUntil || (clientRec.lockedUntil || null);
+          if (lockUntil) {
+            lockLoginUI(lockUntil);
+          } else {
+            const remaining = Math.max(0, 5 - clientRec.count);
+            showError(remaining > 0
+              ? `Invalid email or password. ${remaining} attempt${remaining === 1 ? '' : 's'} left before a temporary lockout.`
+              : 'Invalid email or password.');
+          }
         } else if (msg.includes('email not confirmed')) {
           showError('This email has not been confirmed yet. Confirm the user in Supabase Authentication, then try again.');
         } else {
@@ -97,14 +209,19 @@ html[data-theme="light"]{--bg:#f5faf7;--bg2:#e9f5ef;--panel:rgba(255,255,255,.88
         return;
       }
 
+      clearClientAttempts(email);
+      client.rpc('register_successful_login', { p_email: email }).catch(() => {});
+
       showStatus('Login successful. Opening dashboard…');
       window.location.replace('index.html');
     } catch (err) {
       console.error(err);
       showError('Could not connect to Supabase. Check your internet connection and Supabase project settings.');
     } finally {
-      btn.disabled = false;
-      btn.textContent = '🔐 Access Dashboard';
+      if (!lockCountdownTimer) {
+        btn.disabled = false;
+        btn.textContent = '🔐 Access Dashboard';
+      }
     }
   });
 
