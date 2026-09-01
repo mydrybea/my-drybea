@@ -210,7 +210,7 @@ html[data-theme="light"]{--bg:#f5faf7;--bg2:#e9f5ef;--panel:rgba(255,255,255,.88
       }
 
       clearClientAttempts(email);
-      client.rpc('register_successful_login', { p_email: email }).catch(() => {});
+      try { await client.rpc('register_successful_login', { p_email: email }); } catch (rpcErr) { console.error('register_successful_login RPC failed:', rpcErr); }
 
       showStatus('Login successful. Opening dashboard…');
       window.location.replace('index.html');
