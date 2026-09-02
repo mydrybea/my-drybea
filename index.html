@@ -2388,11 +2388,15 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
         <div class="stat accent"><div class="k">Net Payable (Month)</div><div class="v" id="mySalSumNet">Rs. 0</div></div>
       </div>
 
+      <div class="btn-row" style="margin-top:14px;">
+        <button class="btn btn-primary" onclick="requestSalaryViaWhatsApp()">💬 Request Salary via WhatsApp</button>
+      </div>
+
       <p class="sub" style="margin-top:14px;">Full history:</p>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Date</th><th>Type</th><th>Amount</th><th>Note</th></tr></thead>
-          <tbody id="mySalaryHistoryBody"><tr><td colspan="4" style="text-align:center;opacity:.5;padding:14px;">Loading…</td></tr></tbody>
+          <thead><tr><th>Date</th><th>Time</th><th>Type</th><th>Amount</th><th>Method</th><th>Note</th></tr></thead>
+          <tbody id="mySalaryHistoryBody"><tr><td colspan="6" style="text-align:center;opacity:.5;padding:14px;">Loading…</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -2439,13 +2443,28 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
 
         <!-- DAILY MODE: quick one-tap log of what was paid today -->
         <div id="salaryModeDaily">
-          <div class="field">
-            <label>Date</label>
-            <input type="date" id="salDailyDate">
+          <div class="grid-2">
+            <div class="field">
+              <label>Date</label>
+              <input type="date" id="salDailyDate">
+            </div>
+            <div class="field">
+              <label>Time</label>
+              <input type="time" id="salDailyTime">
+            </div>
           </div>
           <div class="field">
             <label>Amount Paid Today (Rs.)</label>
             <div class="input-prefix"><span>Rs.</span><input type="number" id="salDailyAmount" value="0" min="0"></div>
+          </div>
+          <div class="field">
+            <label>Payment Method</label>
+            <select id="salDailyMethod">
+              <option value="cash">💵 Cash</option>
+              <option value="bank">🏦 Bank Transfer</option>
+              <option value="online">📱 Online / Mobile Payment</option>
+              <option value="other">🔗 Other</option>
+            </select>
           </div>
           <div class="field">
             <label>Note</label>
@@ -2487,6 +2506,21 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
               <input type="date" id="salEntryDate">
             </div>
           </div>
+          <div class="grid-2">
+            <div class="field">
+              <label>Time</label>
+              <input type="time" id="salEntryTime">
+            </div>
+            <div class="field">
+              <label>Payment Method</label>
+              <select id="salEntryMethod">
+                <option value="cash">💵 Cash</option>
+                <option value="bank">🏦 Bank Transfer</option>
+                <option value="online">📱 Online / Mobile Payment</option>
+                <option value="other">🔗 Other</option>
+              </select>
+            </div>
+          </div>
           <div class="field">
             <label>Amount (Rs.)</label>
             <div class="input-prefix"><span>Rs.</span><input type="number" id="salEntryAmount" value="0" min="0"></div>
@@ -2509,7 +2543,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
 
         <div class="table-wrap" style="margin-top:14px;">
           <table>
-            <thead><tr><th>Date</th><th>Type</th><th>Amount</th><th>Note</th><th>Actions</th></tr></thead>
+            <thead><tr><th>Date</th><th>Time</th><th>Type</th><th>Amount</th><th>Method</th><th>Note</th><th>Actions</th></tr></thead>
             <tbody id="salaryHistoryBody"></tbody>
           </table>
         </div>
@@ -3392,6 +3426,8 @@ let salaryEntries = [];
 let salaryMode = 'daily';
 let currentSalaryStaffId = '';
 const SAL_TYPE_LABEL = { daily: '⚡ Daily', bonus: '➕ Bonus', advance: '💸 Advance', deduction: '➖ Deduction' };
+const SAL_METHOD_LABEL = { cash: '💵 Cash', bank: '🏦 Bank Transfer', online: '📱 Online', other: '🔗 Other' };
+const STAFF_WHATSAPP_NUMBER = '94762432963'; // +94 76 243 2963, no leading 0 / no +, per wa.me format
 
 function populateSalaryStaffSelect(list) {
   staffListCache = list || [];
@@ -3425,6 +3461,8 @@ async function onSalaryStaffChange() {
   if (panel) panel.style.display = '';
   $('salDailyDate').value = new Date().toISOString().slice(0, 10);
   $('salEntryDate').value = new Date().toISOString().slice(0, 10);
+  if ($('salDailyTime')) $('salDailyTime').value = new Date().toTimeString().slice(0, 5);
+  if ($('salEntryTime')) $('salEntryTime').value = new Date().toTimeString().slice(0, 5);
 
   const staff = staffListCache.find(s => s.id === staffId);
   $('salBaseMonthly').value = (staff && staff.base_salary) || 0;
@@ -3452,10 +3490,12 @@ async function saveSalarySettings() {
 async function saveDailySalary() {
   if (!currentSalaryStaffId) { alert('Select a staff member first.'); return; }
   const date = $('salDailyDate').value || new Date().toISOString().slice(0, 10);
+  const time = $('salDailyTime').value || new Date().toTimeString().slice(0, 5);
   const amount = Number($('salDailyAmount').value) || 0;
+  const method = $('salDailyMethod').value;
   const note = $('salDailyNote').value.trim();
   if (amount <= 0) { alert('Enter an amount greater than 0!'); return; }
-  const ok = await insertSalaryEntry({ entry_date: date, amount, entry_type: 'daily', note });
+  const ok = await insertSalaryEntry({ entry_date: date, entry_time: time, amount, entry_type: 'daily', payment_method: method, note });
   if (ok) { $('salDailyAmount').value = 0; $('salDailyNote').value = ''; }
 }
 
@@ -3463,14 +3503,16 @@ async function addSalaryEntry() {
   if (!currentSalaryStaffId) { alert('Select a staff member first.'); return; }
   const type = $('salEntryType').value;
   const date = $('salEntryDate').value || new Date().toISOString().slice(0, 10);
+  const time = $('salEntryTime').value || new Date().toTimeString().slice(0, 5);
   const amount = Number($('salEntryAmount').value) || 0;
+  const method = $('salEntryMethod').value;
   const note = $('salEntryNote').value.trim();
   if (amount <= 0) { alert('Enter an amount greater than 0!'); return; }
-  const ok = await insertSalaryEntry({ entry_date: date, amount, entry_type: type, note });
+  const ok = await insertSalaryEntry({ entry_date: date, entry_time: time, amount, entry_type: type, payment_method: method, note });
   if (ok) { $('salEntryAmount').value = 0; $('salEntryNote').value = ''; }
 }
 
-async function insertSalaryEntry({ entry_date, amount, entry_type, note }) {
+async function insertSalaryEntry({ entry_date, entry_time, amount, entry_type, payment_method, note }) {
   if (!currentUser) { alert('Please login first.'); return false; }
   const staff = staffListCache.find(s => s.id === currentSalaryStaffId);
   const row = {
@@ -3478,8 +3520,10 @@ async function insertSalaryEntry({ entry_date, amount, entry_type, note }) {
     staff_id: currentSalaryStaffId,
     staff_name: staff ? (staff.display_name || null) : null,
     entry_date,
+    entry_time: entry_time || null,
     amount,
     entry_type,
+    payment_method: payment_method || null,
     note: note || null,
     created_by: currentUser.id
   };
@@ -3531,13 +3575,15 @@ function renderSalaryHistory() {
   const tbody = $('salaryHistoryBody');
   if (!tbody) return;
   if (!salaryEntries.length) {
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;opacity:0.5;padding:14px;">No salary entries yet.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;opacity:0.5;padding:14px;">No salary entries yet.</td></tr>';
   } else {
     tbody.innerHTML = salaryEntries.map(s => `
       <tr>
         <td>${s.entry_date}</td>
+        <td>${s.entry_time || '-'}</td>
         <td>${SAL_TYPE_LABEL[s.entry_type] || s.entry_type}</td>
         <td>${fmt(s.amount)}</td>
+        <td>${SAL_METHOD_LABEL[s.payment_method] || s.payment_method || '-'}</td>
         <td>${s.note || '-'}</td>
         <td><button class="btn btn-sm btn-danger" onclick="deleteSalaryEntry('${s.id}')">🗑️</button></td>
       </tr>
@@ -3584,7 +3630,7 @@ async function loadMySalaryData() {
   } catch (e) {
     console.error('Load my salary error:', e);
     const tbody = $('mySalaryHistoryBody');
-    if (tbody) tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;opacity:.5;padding:14px;">⚠️ Could not load salary history.</td></tr>';
+    if (tbody) tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;opacity:.5;padding:14px;">⚠️ Could not load salary history.</td></tr>';
   }
 }
 
@@ -3592,13 +3638,15 @@ function renderMySalaryHistory() {
   const tbody = $('mySalaryHistoryBody');
   if (tbody) {
     if (!mySalaryEntries.length) {
-      tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;opacity:0.5;padding:14px;">No salary entries yet.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;opacity:0.5;padding:14px;">No salary entries yet.</td></tr>';
     } else {
       tbody.innerHTML = mySalaryEntries.map(s => `
         <tr>
           <td>${s.entry_date}</td>
+          <td>${s.entry_time || '-'}</td>
           <td>${SAL_TYPE_LABEL[s.entry_type] || s.entry_type}</td>
           <td>${fmt(s.amount)}</td>
+          <td>${SAL_METHOD_LABEL[s.payment_method] || s.payment_method || '-'}</td>
           <td>${s.note || '-'}</td>
         </tr>
       `).join('');
@@ -3615,6 +3663,18 @@ function renderMySalaryHistory() {
   if ($('mySalSumBonus')) $('mySalSumBonus').textContent = fmt(bonus);
   if ($('mySalSumMinus')) $('mySalSumMinus').textContent = fmt(minus);
   if ($('mySalSumNet')) $('mySalSumNet').textContent = fmt(net);
+}
+
+function requestSalaryViaWhatsApp() {
+  if (userRole !== 'staff') return;
+  const name = (userProfile && userProfile.display_name) || (currentUser && currentUser.email) || 'Staff member';
+  const now = new Date();
+  const dateStr = now.toLocaleDateString();
+  const timeStr = now.toTimeString().slice(0, 5);
+  const net = ($('mySalSumNet') && $('mySalSumNet').textContent) || 'Rs. 0';
+  const msg = `Hi, I would like to request my salary payment.\n\nName: ${name}\nRequest Date/Time: ${dateStr}, ${timeStr}\nCurrent Net Payable (this month): ${net}\n\nPlease let me know when it can be arranged. Thank you.`;
+  const url = `https://wa.me/${STAFF_WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`;
+  window.open(url, '_blank');
 }
 
 let isAuthModeLogin = true; // true=login, false=signup
