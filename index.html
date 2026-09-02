@@ -61,6 +61,23 @@
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://unpkg.com/lucide@latest"></script>
+<script>
+/* BUSINESS-CLASS ICON SYSTEM — VISUAL ONLY.
+   No database, auth, Supabase, calculations or business logic changed. */
+document.addEventListener('DOMContentLoaded', function () {
+  if (window.lucide) {
+    lucide.createIcons({
+      attrs: {
+        'stroke-width': 1.9,
+        'stroke-linecap': 'round',
+        'stroke-linejoin': 'round'
+      }
+    });
+  }
+});
+</script>
+
 
 <style>
 /* ===== BRANDED LUXURY & MODERN DESIGN SYSTEM ===== */
@@ -2245,6 +2262,69 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
 }
 </style>
 
+
+<style id="business-class-icon-system">
+/* ============================================================
+   MY DRYBEA — WORLD BUSINESS-CLASS ICON SYSTEM
+   Lucide outline icons: clean, universal, executive SaaS language.
+   Visual layer only — no data/auth/business logic changes.
+   ============================================================ */
+.business-icon{
+  width:20px;
+  height:20px;
+  display:inline-block;
+  flex:0 0 auto;
+  vertical-align:middle;
+  stroke:currentColor;
+  fill:none;
+  stroke-width:1.9;
+  stroke-linecap:round;
+  stroke-linejoin:round;
+}
+.nav-icon.business-icon,
+.icon.business-icon,
+.home-action .business-icon{
+  width:23px;
+  height:23px;
+}
+.tab-btn .business-icon{
+  width:18px;
+  height:18px;
+}
+.icon-btn .business-icon{
+  width:20px;
+  height:20px;
+}
+.profile-dot .business-icon{
+  width:20px;
+  height:20px;
+}
+.pro-title-icon .business-icon{
+  width:20px;
+  height:20px;
+}
+.icon-inline{
+  width:16px;
+  height:16px;
+  margin-right:5px;
+  vertical-align:-3px;
+}
+.home-action .home-icon .business-icon{
+  width:24px;
+  height:24px;
+}
+.home-action.primary .home-icon .business-icon{
+  stroke-width:2;
+}
+/* Disable legacy CSS-pseudo icon drawings after migration. */
+.icon::before,.icon::after,
+.nav-icon::before,.nav-icon::after,
+.home-action .nav-icon::before,.home-action .nav-icon::after{
+  content:none!important;
+  display:none!important;
+}
+</style>
+
 </head>
 <body>
 
@@ -2270,24 +2350,24 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
   </span>
   <button id="syncRefresh" class="sync-refresh" type="button" aria-label="Sync now" title="Sync now">↻</button>
 </div>
-<button class="icon-btn" id="themeToggle" onclick="toggleTheme()" aria-label="Toggle theme" data-ribbon="true"><span class="icon icon-moon"></span></button>
-      <button class="icon-btn" onclick="openQR()" aria-label="QR Code" data-ribbon="true"><span class="icon icon-qr"></span></button>
-      <button class="icon-btn" id="authBtn" onclick="openAuthModal()" aria-label="Login" data-ribbon="true"><span class="icon icon-user"></span></button>
-      <button class="icon-btn lock-btn" id="lockAppBtn" onclick="lockApp()" title="Lock App" aria-label="Lock App" data-ribbon="true"><span class="icon icon-lock"></span></button>
+<button class="icon-btn" id="themeToggle" onclick="toggleTheme()" aria-label="Toggle theme" data-ribbon="true"><i class="business-icon" data-lucide="moon" aria-hidden="true"></i></button>
+      <button class="icon-btn" onclick="openQR()" aria-label="QR Code" data-ribbon="true"><i class="business-icon" data-lucide="qr-code" aria-hidden="true"></i></button>
+      <button class="icon-btn" id="authBtn" onclick="openAuthModal()" aria-label="Login" data-ribbon="true"><i class="business-icon" data-lucide="user-round" aria-hidden="true"></i></button>
+      <button class="icon-btn lock-btn" id="lockAppBtn" onclick="lockApp()" title="Lock App" aria-label="Lock App" data-ribbon="true"><i class="business-icon" data-lucide="lock-keyhole" aria-hidden="true"></i></button>
     </div>
   </header>
 
   <div class="mobile-greeting no-print">
     <div>
       <span class="eyebrow">MY DRYBEA</span>
-      <h2>Hello, <span id="mobileUserName">Business Owner</span> <span class="wave">👋</span></h2>
+      <h2>Hello, <span id="mobileUserName">Business Owner</span> <span class="wave"><i class="business-icon icon-inline" data-lucide="hand" aria-hidden="true"></i></span></h2>
       <p>Here’s your business at a glance.</p>
     </div>
-    <div class="profile-dot"><span class="icon icon-user"></span></div>
+    <div class="profile-dot"><i class="business-icon" data-lucide="user-round" aria-hidden="true"></i></div>
   </div>
 
   <div class="print-header">
-    <h2><span class="pro-title-icon green" aria-hidden="true"><span class="nav-icon icon-calc"></span></span><span>Cost Sheet</span></h2><p class="pro-subtitle green">Fast pricing intelligence for every pack.</p>
+    <h2><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="calculator" aria-hidden="true"></i></span><span>Cost Sheet</span></h2><p class="pro-subtitle green">Fast pricing intelligence for every pack.</p>
     <p id="printDate"></p>
     <hr>
   </div>
@@ -2316,22 +2396,22 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
     .work-note-box textarea{ width:100%; min-height:90px; resize:vertical; font-family:var(--font); background:#07110d; color:var(--text-main); border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px 12px; }
   </style>
   <nav class="tabs no-print app-nav" role="tablist" aria-label="Main navigation">
-    <button class="tab-btn active" data-tab="dashboard" role="tab" aria-label="Home" data-owner-only><span class="nav-icon icon-home"></span><span>Home</span></button>
-    <button class="tab-btn" data-tab="orders" role="tab" aria-label="Orders"><span class="nav-icon icon-orders"></span><span>Order</span></button>
-    <button class="tab-btn" data-tab="income" role="tab" aria-label="Income" data-owner-only><span class="nav-icon icon-income"></span><span>Income</span></button>
-    <button class="tab-btn" data-tab="my-salary" role="tab" aria-label="My Salary" data-staff-only><span class="nav-icon emoji-nav-icon">💰</span><span>My Salary</span></button>
-    <button class="tab-btn" data-tab="daily-pay" role="tab" aria-label="Daily Pay" data-staff-only><span class="nav-icon emoji-nav-icon">📅</span><span>Daily Pay</span></button>
-    <button class="tab-btn" data-tab="work-update" role="tab" aria-label="Work Update" data-staff-only><span class="nav-icon emoji-nav-icon">📝</span><span>Work Update</span></button>
-    <button class="tab-btn" data-tab="attendance" role="tab" aria-label="Attendance" data-staff-only><span class="nav-icon emoji-nav-icon">🕒</span><span>Attendance</span></button>
-    <button class="tab-btn" data-tab="advance" role="tab" aria-label="Advance" data-staff-only><span class="nav-icon emoji-nav-icon">💸</span><span>Advance</span></button>
-    <button class="tab-btn" data-tab="profile" role="tab" aria-label="Profile"><span class="nav-icon icon-profile"></span><span>Profile</span></button>
+    <button class="tab-btn active" data-tab="dashboard" role="tab" aria-label="Home" data-owner-only><i class="business-icon" data-lucide="house" aria-hidden="true"></i><span>Home</span></button>
+    <button class="tab-btn" data-tab="orders" role="tab" aria-label="Orders"><i class="business-icon" data-lucide="shopping-bag" aria-hidden="true"></i><span>Order</span></button>
+    <button class="tab-btn" data-tab="income" role="tab" aria-label="Income" data-owner-only><i class="business-icon" data-lucide="trending-up" aria-hidden="true"></i><span>Income</span></button>
+    <button class="tab-btn" data-tab="my-salary" role="tab" aria-label="My Salary" data-staff-only><i class="business-icon" data-lucide="wallet-cards" aria-hidden="true"></i><span>My Salary</span></button>
+    <button class="tab-btn" data-tab="daily-pay" role="tab" aria-label="Daily Pay" data-staff-only><i class="business-icon" data-lucide="calendar-days" aria-hidden="true"></i><span>Daily Pay</span></button>
+    <button class="tab-btn" data-tab="work-update" role="tab" aria-label="Work Update" data-staff-only><i class="business-icon" data-lucide="notebook-pen" aria-hidden="true"></i><span>Work Update</span></button>
+    <button class="tab-btn" data-tab="attendance" role="tab" aria-label="Attendance" data-staff-only><i class="business-icon" data-lucide="clock-3" aria-hidden="true"></i><span>Attendance</span></button>
+    <button class="tab-btn" data-tab="advance" role="tab" aria-label="Advance" data-staff-only><i class="business-icon" data-lucide="hand-coins" aria-hidden="true"></i><span>Advance</span></button>
+    <button class="tab-btn" data-tab="profile" role="tab" aria-label="Profile"><i class="business-icon" data-lucide="user-round" aria-hidden="true"></i><span>Profile</span></button>
   </nav>
 
   <!-- ============ INCOME TAB ============ -->
   <section id="income" class="tab-panel" role="tabpanel" style="display:none;">
     <div class="mobile-greeting no-print" style="padding:0 0 8px;">
-      <div><span class="eyebrow">FINANCIAL OVERVIEW</span><h2><span class="pro-title-icon green" aria-hidden="true"><span class="nav-icon icon-income"></span></span><span>Income</span></h2><p class="pro-subtitle green">See what the business is earning at a glance.</p><p>Revenue, profit and fixed-cost position at a glance.</p></div>
-      <div class="profile-dot"><span class="nav-icon icon-income"></span></div>
+      <div><span class="eyebrow">FINANCIAL OVERVIEW</span><h2><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="trending-up" aria-hidden="true"></i></span><span>Income</span></h2><p class="pro-subtitle green">See what the business is earning at a glance.</p><p>Revenue, profit and fixed-cost position at a glance.</p></div>
+      <div class="profile-dot"><i class="business-icon" data-lucide="trending-up" aria-hidden="true"></i></div>
     </div>
     <div class="income-grid">
       <div class="card income-card"><span>Monthly Revenue</span><strong id="incomeRevenue">Rs. 0</strong><small>Total planned sales</small></div>
@@ -2340,7 +2420,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
       <div class="card income-card income-highlight"><span>Net Profit</span><strong id="incomeNet">Rs. 0</strong><small>After fixed costs</small></div>
     </div>
     <div class="card">
-      <h2><span class="pro-title-icon gold" aria-hidden="true"><span class="nav-icon icon-summary"></span></span><span>Profit</span></h2><p class="pro-subtitle gold">Margin, contribution and momentum in one view.</p>
+      <h2><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="chart-no-axes-combined" aria-hidden="true"></i></span><span>Profit</span></h2><p class="pro-subtitle gold">Margin, contribution and momentum in one view.</p>
       <div class="income-summary"><div><span>Net Margin</span><strong id="incomeMargin">0%</strong></div><button class="btn btn-primary" data-open-tab="calculator" data-ribbon="true">Open Costing</button></div>
     </div>
   </section>
@@ -2348,8 +2428,8 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
   <!-- ============ MONTHLY SUMMARY TAB ============ -->
   <section id="monthly-summary" class="tab-panel" role="tabpanel" style="display:none;">
     <div class="mobile-greeting no-print" style="padding:0 0 8px;">
-      <div><span class="eyebrow">BUSINESS REPORT</span><h2><span class="pro-title-icon green" aria-hidden="true"><span class="nav-icon icon-summary"></span></span><span>Month Pulse</span></h2><p class="pro-subtitle green">Live month-to-date performance as data moves.</p><p>Live summary of this month's recorded business activity.</p></div>
-      <div class="profile-dot"><span class="nav-icon icon-summary"></span></div>
+      <div><span class="eyebrow">BUSINESS REPORT</span><h2><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="chart-no-axes-combined" aria-hidden="true"></i></span><span>Month Pulse</span></h2><p class="pro-subtitle green">Live month-to-date performance as data moves.</p><p>Live summary of this month's recorded business activity.</p></div>
+      <div class="profile-dot"><i class="business-icon" data-lucide="chart-no-axes-combined" aria-hidden="true"></i></div>
     </div>
 
     <div class="monthly-summary-hero">
@@ -2367,10 +2447,10 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
     </div>
 
     <div class="monthly-summary-grid">
-      <div class="monthly-stat"><div class="ms-icon"><span class="nav-icon icon-income"></span></div><div class="ms-label">Order Revenue</div><div class="ms-value" id="summaryRevenue">Rs. 0</div><div class="ms-sub">Non-cancelled orders</div></div>
-      <div class="monthly-stat gold"><div class="ms-icon"><span class="nav-icon icon-expense"></span></div><div class="ms-label">Recorded Expenses</div><div class="ms-value" id="summaryExpenses">Rs. 0</div><div class="ms-sub">Expenses dated this month</div></div>
-      <div class="monthly-stat blue"><div class="ms-icon"><span class="nav-icon icon-orders"></span></div><div class="ms-label">Orders</div><div class="ms-value" id="summaryOrders">0</div><div class="ms-sub" id="summaryOrdersSub">0 delivered • 0 pending</div></div>
-      <div class="monthly-stat red"><div class="ms-icon"><span class="nav-icon icon-dashboard"></span></div><div class="ms-label">Units Sold</div><div class="ms-value" id="summaryUnits">0</div><div class="ms-sub">Across recorded orders</div></div>
+      <div class="monthly-stat"><div class="ms-icon"><i class="business-icon" data-lucide="trending-up" aria-hidden="true"></i></div><div class="ms-label">Order Revenue</div><div class="ms-value" id="summaryRevenue">Rs. 0</div><div class="ms-sub">Non-cancelled orders</div></div>
+      <div class="monthly-stat gold"><div class="ms-icon"><i class="business-icon" data-lucide="receipt" aria-hidden="true"></i></div><div class="ms-label">Recorded Expenses</div><div class="ms-value" id="summaryExpenses">Rs. 0</div><div class="ms-sub">Expenses dated this month</div></div>
+      <div class="monthly-stat blue"><div class="ms-icon"><i class="business-icon" data-lucide="shopping-bag" aria-hidden="true"></i></div><div class="ms-label">Orders</div><div class="ms-value" id="summaryOrders">0</div><div class="ms-sub" id="summaryOrdersSub">0 delivered • 0 pending</div></div>
+      <div class="monthly-stat red"><div class="ms-icon"><i class="business-icon" data-lucide="layout-dashboard" aria-hidden="true"></i></div><div class="ms-label">Units Sold</div><div class="ms-value" id="summaryUnits">0</div><div class="ms-sub">Across recorded orders</div></div>
     </div>
 
     <div class="card">
@@ -2389,8 +2469,8 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
   <!-- ============ MY SALARY TAB (staff-only) ============ -->
   <section id="my-salary" class="tab-panel" role="tabpanel" style="display:none;">
     <div class="mobile-greeting no-print" style="padding:0 0 8px;">
-      <div><span class="eyebrow">MY PAY</span><h2><span class="pro-title-icon green" aria-hidden="true"><span class="nav-icon emoji-nav-icon">💰</span></span><span>My Salary</span></h2><p class="pro-subtitle green">Your salary summary — visible only to you.</p></div>
-      <div class="profile-dot"><span class="nav-icon emoji-nav-icon">💰</span></div>
+      <div><span class="eyebrow">MY PAY</span><h2><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="wallet-cards" aria-hidden="true"></i></span><span>My Salary</span></h2><p class="pro-subtitle green">Your salary summary — visible only to you.</p></div>
+      <div class="profile-dot"><i class="business-icon" data-lucide="wallet-cards" aria-hidden="true"></i></div>
     </div>
     <div class="card smart-salary-card" style="margin-bottom:16px;">
       <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;">
@@ -2435,7 +2515,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
       <div class="stat accent"><div class="k">Net Payable (Month)</div><div class="v" id="mySalSumNet">Rs. 0</div></div>
     </div>
     <div class="card" style="margin-top:16px;">
-      <h2><span class="pro-title-icon gold" aria-hidden="true"><span class="nav-icon emoji-nav-icon">🧾</span></span><span>Payslip History</span></h2>
+      <h2><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="receipt-text" aria-hidden="true"></i></span><span>Payslip History</span></h2>
       <p class="pro-subtitle gold">Every salary entry the owner has recorded for you.</p>
       <div class="table-wrap" style="margin-top:10px;">
         <table>
@@ -2449,15 +2529,15 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
   <!-- ============ DAILY PAY TAB (staff-only) ============ -->
   <section id="daily-pay" class="tab-panel" role="tabpanel" style="display:none;">
     <div class="mobile-greeting no-print" style="padding:0 0 8px;">
-      <div><span class="eyebrow">DAILY RATE</span><h2><span class="pro-title-icon green" aria-hidden="true"><span class="nav-icon emoji-nav-icon">📅</span></span><span>Daily Pay</span></h2><p class="pro-subtitle green">Days worked and daily pay logged this month.</p></div>
-      <div class="profile-dot"><span class="nav-icon emoji-nav-icon">📅</span></div>
+      <div><span class="eyebrow">DAILY RATE</span><h2><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="calendar-days" aria-hidden="true"></i></span><span>Daily Pay</span></h2><p class="pro-subtitle green">Days worked and daily pay logged this month.</p></div>
+      <div class="profile-dot"><i class="business-icon" data-lucide="calendar-days" aria-hidden="true"></i></div>
     </div>
     <div class="stat-grid">
       <div class="stat accent"><div class="k">Days Paid This Month</div><div class="v" id="dpDaysCount">0</div></div>
       <div class="stat accent"><div class="k">Month Total</div><div class="v" id="dpMonthTotal">Rs. 0</div></div>
     </div>
     <div class="card" style="margin-top:16px;">
-      <h2><span class="pro-title-icon gold" aria-hidden="true"><span class="nav-icon emoji-nav-icon">📋</span></span><span>Day-by-Day</span></h2>
+      <h2><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="clipboard-list" aria-hidden="true"></i></span><span>Day-by-Day</span></h2>
       <div class="table-wrap" style="margin-top:10px;">
         <table>
           <thead><tr><th>Date</th><th>Amount</th><th>Note</th></tr></thead>
@@ -2470,23 +2550,23 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
   <!-- ============ MY WORK UPDATE TAB (staff-only) ============ -->
   <section id="work-update" class="tab-panel" role="tabpanel" style="display:none;">
     <div class="mobile-greeting no-print" style="padding:0 0 8px;">
-      <div><span class="eyebrow">DAILY SUMMARY</span><h2><span class="pro-title-icon green" aria-hidden="true"><span class="nav-icon emoji-nav-icon">📝</span></span><span>My Work Update</span></h2><p class="pro-subtitle green">What you did today, in one place.</p></div>
-      <div class="profile-dot"><span class="nav-icon emoji-nav-icon">📝</span></div>
+      <div><span class="eyebrow">DAILY SUMMARY</span><h2><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="notebook-pen" aria-hidden="true"></i></span><span>My Work Update</span></h2><p class="pro-subtitle green">What you did today, in one place.</p></div>
+      <div class="profile-dot"><i class="business-icon" data-lucide="notebook-pen" aria-hidden="true"></i></div>
     </div>
     <div class="stat-grid">
       <div class="stat accent"><div class="k">Orders Today</div><div class="v" id="wuOrdersToday">0</div></div>
       <div class="stat"><div class="k">Orders This Month</div><div class="v" id="wuOrdersMonth">0</div></div>
     </div>
     <div class="card work-note-box" style="margin-top:16px;">
-      <h2><span class="pro-title-icon gold" aria-hidden="true"><span class="nav-icon emoji-nav-icon">✍️</span></span><span>Today's Note</span></h2>
+      <h2><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="pen-line" aria-hidden="true"></i></span><span>Today's Note</span></h2>
       <p class="pro-subtitle gold">Add anything the auto-count doesn't capture — production, deliveries, tasks.</p>
       <textarea id="wuNoteText" placeholder="e.g. Packed 40 balaya bags, delivered 3 orders in Kandy area..."></textarea>
       <div class="btn-row" style="margin-top:10px;">
-        <button class="btn btn-primary" onclick="saveWorkNote()">💾 Save Today's Note</button>
+        <button class="btn btn-primary" onclick="saveWorkNote()"><i class="business-icon icon-inline" data-lucide="save" aria-hidden="true"></i> Save Today's Note</button>
       </div>
     </div>
     <div class="card" style="margin-top:16px;">
-      <h2><span class="pro-title-icon gold" aria-hidden="true"><span class="nav-icon emoji-nav-icon">🗂️</span></span><span>Recent Updates</span></h2>
+      <h2><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="folder-kanban" aria-hidden="true"></i></span><span>Recent Updates</span></h2>
       <div class="table-wrap" style="margin-top:10px;">
         <table>
           <thead><tr><th>Date</th><th>Orders</th><th>Note</th></tr></thead>
@@ -2499,18 +2579,18 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
   <!-- ============ ATTENDANCE TAB (staff-only) ============ -->
   <section id="attendance" class="tab-panel" role="tabpanel" style="display:none;">
     <div class="mobile-greeting no-print" style="padding:0 0 8px;">
-      <div><span class="eyebrow">CHECK IN / OUT</span><h2><span class="pro-title-icon green" aria-hidden="true"><span class="nav-icon emoji-nav-icon">🕒</span></span><span>Attendance</span></h2><p class="pro-subtitle green">Log your work day with one tap.</p></div>
-      <div class="profile-dot"><span class="nav-icon emoji-nav-icon">🕒</span></div>
+      <div><span class="eyebrow">CHECK IN / OUT</span><h2><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="clock-3" aria-hidden="true"></i></span><span>Attendance</span></h2><p class="pro-subtitle green">Log your work day with one tap.</p></div>
+      <div class="profile-dot"><i class="business-icon" data-lucide="clock-3" aria-hidden="true"></i></div>
     </div>
     <div class="card">
       <div id="attendTodayStatus" class="notice" style="margin-bottom:12px;">Loading today's status...</div>
       <div class="attend-btn-row">
-        <button class="btn btn-primary" id="attendStartBtn" onclick="startDay()">▶️ Start Day</button>
-        <button class="btn btn-danger" id="attendEndBtn" onclick="endDay()" disabled>⏹️ End Day</button>
+        <button class="btn btn-primary" id="attendStartBtn" onclick="startDay()"><i class="business-icon icon-inline" data-lucide="play" aria-hidden="true"></i> Start Day</button>
+        <button class="btn btn-danger" id="attendEndBtn" onclick="endDay()" disabled><i class="business-icon icon-inline" data-lucide="square" aria-hidden="true"></i> End Day</button>
       </div>
     </div>
     <div class="card" style="margin-top:16px;">
-      <h2><span class="pro-title-icon gold" aria-hidden="true"><span class="nav-icon emoji-nav-icon">📆</span></span><span>This Month's Log</span></h2>
+      <h2><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="calendar-range" aria-hidden="true"></i></span><span>This Month's Log</span></h2>
       <div class="table-wrap" style="margin-top:10px;">
         <table>
           <thead><tr><th>Date</th><th>Start</th><th>End</th><th>Hours</th></tr></thead>
@@ -2523,8 +2603,8 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
   <!-- ============ ADVANCE REQUEST TAB (staff-only) ============ -->
   <section id="advance" class="tab-panel" role="tabpanel" style="display:none;">
     <div class="mobile-greeting no-print" style="padding:0 0 8px;">
-      <div><span class="eyebrow">SALARY ADVANCE</span><h2><span class="pro-title-icon green" aria-hidden="true"><span class="nav-icon emoji-nav-icon">💸</span></span><span>Advance Request</span></h2><p class="pro-subtitle green">Request an advance — the owner gets notified instantly.</p></div>
-      <div class="profile-dot"><span class="nav-icon emoji-nav-icon">💸</span></div>
+      <div><span class="eyebrow">SALARY ADVANCE</span><h2><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="hand-coins" aria-hidden="true"></i></span><span>Advance Request</span></h2><p class="pro-subtitle green">Request an advance — the owner gets notified instantly.</p></div>
+      <div class="profile-dot"><i class="business-icon" data-lucide="hand-coins" aria-hidden="true"></i></div>
     </div>
     <div class="card">
       <div class="field">
@@ -2540,7 +2620,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
       </div>
     </div>
     <div class="card" style="margin-top:16px;">
-      <h2><span class="pro-title-icon gold" aria-hidden="true"><span class="nav-icon emoji-nav-icon">📜</span></span><span>My Requests</span></h2>
+      <h2><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="scroll-text" aria-hidden="true"></i></span><span>My Requests</span></h2>
       <div class="table-wrap" style="margin-top:10px;">
         <table>
           <thead><tr><th>Date</th><th>Amount</th><th>Reason</th><th>Status</th></tr></thead>
@@ -2553,31 +2633,31 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
   <!-- ============ PROFILE TAB ============ -->
   <section id="profile" class="tab-panel" role="tabpanel" style="display:none;">
     <div class="profile-panel card">
-      <div class="profile-large"><span class="nav-icon icon-profile"></span></div>
+      <div class="profile-large"><i class="business-icon" data-lucide="user-round" aria-hidden="true"></i></div>
       <span class="eyebrow">MY DRYBEA ACCOUNT</span>
       <h2 id="profileName">Business Owner</h2>
       <p id="profileEmail">Not signed in</p>
       <p id="roleBadge" style="margin-top:6px;font-size:12px;font-weight:800;color:var(--gold2, #d6b45a);">👑 Owner</p>
       <div class="profile-actions">
         <button class="btn btn-primary" id="profileAuthAction" data-ribbon="true" onclick="openAuthModal()">Login</button>
-        <button class="btn lock-btn" data-ribbon="true" onclick="lockApp()"><span class="nav-icon icon-lock"></span> Lock App</button>
+        <button class="btn lock-btn" data-ribbon="true" onclick="lockApp()"><i class="business-icon" data-lucide="lock-keyhole" aria-hidden="true"></i> Lock App</button>
       </div>
     </div>
 
     <div class="card" data-owner-only style="margin-top:16px;">
-      <h2><span class="pro-title-icon gold" aria-hidden="true"><span class="nav-icon emoji-nav-icon">📲</span></span><span>Business WhatsApp Number</span></h2>
+      <h2><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="smartphone" aria-hidden="true"></i></span><span>Business WhatsApp Number</span></h2>
       <p class="pro-subtitle gold">Advance requests from staff open a pre-filled WhatsApp message to this number.</p>
       <div class="field">
         <label>WhatsApp Number <span class="hint">(with country code, e.g. 94771234567)</span></label>
         <input type="text" id="ownerWhatsapp" placeholder="94771234567">
       </div>
       <div class="btn-row">
-        <button class="btn btn-primary" onclick="saveOwnerWhatsapp()">💾 Save Number</button>
+        <button class="btn btn-primary" onclick="saveOwnerWhatsapp()"><i class="business-icon icon-inline" data-lucide="save" aria-hidden="true"></i> Save Number</button>
       </div>
     </div>
 
     <div class="card" data-owner-only style="margin-top:16px;">
-      <h2><span class="pro-title-icon gold" aria-hidden="true"><span class="nav-icon emoji-nav-icon">💸</span></span><span>Pending Advance Requests</span></h2>
+      <h2><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="hand-coins" aria-hidden="true"></i></span><span>Pending Advance Requests</span></h2>
       <p class="pro-subtitle gold">Approve or reject advance requests from your staff.</p>
       <div class="table-wrap" style="margin-top:10px;">
         <table>
@@ -2588,7 +2668,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
     </div>
 
     <div class="card" data-owner-only style="margin-top:16px;">
-      <h2><span class="pro-title-icon gold" aria-hidden="true"><span class="nav-icon icon-profile"></span></span><span>Manage Staff</span></h2>
+      <h2><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="user-round" aria-hidden="true"></i></span><span>Manage Staff</span></h2>
       <p class="pro-subtitle gold">Give trusted staff shared access to Orders, Customers &amp; Expenses. They won't see Costing, Production or History.</p>
       <div class="field">
         <label>Staff User ID <span class="hint">(copy from Supabase → Authentication → Users)</span></label>
@@ -2610,7 +2690,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
     </div>
 
     <div class="card" data-owner-only style="margin-top:16px;">
-      <h2><span class="pro-title-icon gold" aria-hidden="true"><span class="nav-icon icon-expense"></span></span><span>Staff Salary</span></h2>
+      <h2><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="receipt" aria-hidden="true"></i></span><span>Staff Salary</span></h2>
       <p class="pro-subtitle gold">Only you can update salaries — staff members never see or edit this.</p>
 
       <div class="field">
@@ -2627,7 +2707,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
         <div class="card smart-salary-card" style="margin-bottom:16px;">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">
             <div>
-              <h2><span class="pro-title-icon green" aria-hidden="true"><span class="nav-icon emoji-nav-icon">🧠</span></span><span>Smart Payroll</span></h2>
+              <h2><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="brain" aria-hidden="true"></i></span><span>Smart Payroll</span></h2>
               <p class="pro-subtitle green">Attendance + salary entries combined into a quick payroll control center.</p>
             </div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;">
@@ -2679,7 +2759,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
             <input type="text" id="salDailyNote" placeholder="Optional note">
           </div>
           <div class="btn-row">
-            <button class="btn btn-primary" onclick="saveDailySalary()">💾 Log Daily Salary</button>
+            <button class="btn btn-primary" onclick="saveDailySalary()"><i class="business-icon icon-inline" data-lucide="save" aria-hidden="true"></i> Log Daily Salary</button>
           </div>
         </div>
 
@@ -2696,7 +2776,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
             </div>
           </div>
           <div class="btn-row">
-            <button class="btn" onclick="saveSalarySettings()">💾 Save Salary Settings</button>
+            <button class="btn" onclick="saveSalarySettings()"><i class="business-icon icon-inline" data-lucide="save" aria-hidden="true"></i> Save Salary Settings</button>
           </div>
           <hr style="border-color:var(--border);margin:16px 0;">
           <p class="sub">Add a bonus, advance, or deduction entry:</p>
@@ -2748,7 +2828,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
   <section id="calculator" class="tab-panel" role="tabpanel" style="display:none;">
     <div class="grid-2">
       <div class="card">
-        <h2><span class="pro-title-icon blue" aria-hidden="true"><span class="nav-icon icon-production"></span></span><span>Raw Materials</span></h2><p class="pro-subtitle blue">Control the input costs behind every result.</p>
+        <h2><span class="pro-title-icon blue" aria-hidden="true"><i class="business-icon" data-lucide="factory" aria-hidden="true"></i></span><span>Raw Materials</span></h2><p class="pro-subtitle blue">Control the input costs behind every result.</p>
         <div class="grid-3">
           <div class="field">
             <label>Linna <span class="hint">(Rs./kg)</span></label>
@@ -2764,7 +2844,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
           </div>
         </div>
 
-        <h2 style="margin-top:16px;"><span class="pro-title-icon teal" aria-hidden="true"><span class="nav-icon icon-option"></span></span><span>Product Setup</span></h2><p class="pro-subtitle teal">Define pack sizes, yields and production assumptions.</p>
+        <h2 style="margin-top:16px;"><span class="pro-title-icon teal" aria-hidden="true"><i class="business-icon" data-lucide="sliders-horizontal" aria-hidden="true"></i></span><span>Product Setup</span></h2><p class="pro-subtitle teal">Define pack sizes, yields and production assumptions.</p>
         <div class="field">
           <label>Pack Size</label>
           <select id="packSize" onchange="onDataChange()">
@@ -2803,7 +2883,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
           </div>
         </div>
 
-        <h2 style="margin-top:16px;"><span class="pro-title-icon purple" aria-hidden="true"><span class="nav-icon icon-calc"></span></span><span>Pricing</span></h2><p class="pro-subtitle purple">Choose the commercial lens behind your selling price.</p>
+        <h2 style="margin-top:16px;"><span class="pro-title-icon purple" aria-hidden="true"><i class="business-icon" data-lucide="calculator" aria-hidden="true"></i></span><span>Pricing</span></h2><p class="pro-subtitle purple">Choose the commercial lens behind your selling price.</p>
         <div class="mode-toggle">
           <button class="btn active" data-mode="mrp" onclick="setMode('mrp')">MRP</button>
           <button class="btn" data-mode="profit" onclick="setMode('profit')">Target Profit</button>
@@ -2822,12 +2902,12 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
           <input type="number" id="monthlyQty" value="500" min="0" oninput="onDataChange()">
         </div>
         <div class="btn-row">
-          <button class="btn btn-primary" onclick="saveOrder()">💾 Save Order</button>
+          <button class="btn btn-primary" onclick="saveOrder()"><i class="business-icon icon-inline" data-lucide="save" aria-hidden="true"></i> Save Order</button>
         </div>
       </div>
 
       <div class="card">
-        <h2><span class="pro-title-icon green" aria-hidden="true"><span class="nav-icon icon-income"></span></span><span>Pack Result</span></h2><p class="pro-subtitle green">Unit economics, margin and selling power.</p>
+        <h2><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="trending-up" aria-hidden="true"></i></span><span>Pack Result</span></h2><p class="pro-subtitle green">Unit economics, margin and selling power.</p>
         <div class="stat-grid">
           <div class="stat accent"><div class="k">Selling Price</div><div class="v" id="outSp">Rs. 0</div></div>
           <div class="stat" id="profitStat"><div class="k">Profit/Pack</div><div class="v" id="outProfit">Rs. 0</div></div>
@@ -2844,7 +2924,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
 
         <div class="chart-wrap"><canvas id="costChart"></canvas></div>
 
-        <h2 style="margin-top:16px;"><span class="pro-title-icon gold" aria-hidden="true"><span class="nav-icon icon-summary"></span></span><span>Monthly Plan</span></h2><p class="pro-subtitle gold">Turn unit economics into a practical target.</p>
+        <h2 style="margin-top:16px;"><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="chart-no-axes-combined" aria-hidden="true"></i></span><span>Monthly Plan</span></h2><p class="pro-subtitle gold">Turn unit economics into a practical target.</p>
         <div class="table-wrap">
           <table><tbody id="monthlyBody"></tbody></table>
         </div>
@@ -2852,7 +2932,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
     </div>
 
     <div class="card">
-      <h2><span class="pro-title-icon purple" aria-hidden="true"><span class="nav-icon icon-summary"></span></span><span>Scenarios</span></h2><p class="pro-subtitle purple">Compare pricing paths before you commit.</p>
+      <h2><span class="pro-title-icon purple" aria-hidden="true"><i class="business-icon" data-lucide="chart-no-axes-combined" aria-hidden="true"></i></span><span>Scenarios</span></h2><p class="pro-subtitle purple">Compare pricing paths before you commit.</p>
       <div class="grid-2">
         <div class="field">
           <label>Scenario A Mix</label>
@@ -2895,7 +2975,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
   <!-- ============ PRODUCTION TAB ============ -->
   <section id="production" class="tab-panel" style="display:none;" role="tabpanel">
     <div class="card">
-      <h2><span class="pro-title-icon orange" aria-hidden="true"><span class="nav-icon icon-production"></span></span><span>Production Model</span></h2><p class="pro-subtitle orange">Translate raw fish yield into finished output.</p>
+      <h2><span class="pro-title-icon orange" aria-hidden="true"><i class="business-icon" data-lucide="factory" aria-hidden="true"></i></span><span>Production Model</span></h2><p class="pro-subtitle orange">Translate raw fish yield into finished output.</p>
       <p class="sub">Compare buying finished Umbalakada vs producing from raw fish. Analyze yield, cost per kg, and profitability.</p>
 
       <div class="grid-2">
@@ -2995,42 +3075,42 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
       <div class="quick-access-card">
         <div class="home-actions">
           <button class="home-action primary" data-home-tab="dashboard" data-ribbon="true" aria-label="Open Dashboard">
-            <span class="home-icon"><span class="nav-icon icon-dashboard"></span></span>
+            <span class="home-icon"><i class="business-icon" data-lucide="layout-dashboard" aria-hidden="true"></i></span>
             <span class="home-action-copy"><strong>Dashboard</strong><small>Business at a glance</small></span>
             <span class="quick-status" aria-hidden="true"></span>
           </button>
           <button class="home-action" data-home-tab="calculator" data-ribbon="true" aria-label="Open Costing">
-            <span class="home-icon"><span class="nav-icon icon-calc"></span></span>
+            <span class="home-icon"><i class="business-icon" data-lucide="calculator" aria-hidden="true"></i></span>
             <span class="home-action-copy"><strong>Costing</strong><small>Calculate price, cost & profit</small></span>
             <span class="quick-status" aria-hidden="true"></span>
           </button>
           <button class="home-action" data-home-tab="production" data-ribbon="true" aria-label="Open Production">
-            <span class="home-icon"><span class="nav-icon icon-production"></span></span>
+            <span class="home-icon"><i class="business-icon" data-lucide="factory" aria-hidden="true"></i></span>
             <span class="home-action-copy"><strong>Production</strong><small>Plan batches & production cost</small></span>
             <span class="quick-status" aria-hidden="true"></span>
           </button>
           <button class="home-action" data-home-tab="orders" data-ribbon="true" aria-label="Open Orders">
-            <span class="home-icon"><span class="nav-icon icon-orders"></span></span>
+            <span class="home-icon"><i class="business-icon" data-lucide="shopping-bag" aria-hidden="true"></i></span>
             <span class="home-action-copy"><strong>Orders</strong><small>Customers, delivery & order status</small></span>
             <span class="quick-status" aria-hidden="true"></span>
           </button>
           <button class="home-action gold" data-home-tab="expenses" data-ribbon="true" aria-label="Open Expenses">
-            <span class="home-icon"><span class="nav-icon icon-expense"></span></span>
+            <span class="home-icon"><i class="business-icon" data-lucide="receipt" aria-hidden="true"></i></span>
             <span class="home-action-copy"><strong>Expenses</strong><small>Track monthly business costs</small></span>
             <span class="quick-status" aria-hidden="true"></span>
           </button>
           <button class="home-action" data-home-tab="history" data-ribbon="true" aria-label="Open History">
-            <span class="home-icon"><span class="nav-icon icon-history"></span></span>
+            <span class="home-icon"><i class="business-icon" data-lucide="history" aria-hidden="true"></i></span>
             <span class="home-action-copy"><strong>History</strong><small>Saved calculations & past records</small></span>
             <span class="quick-status" aria-hidden="true"></span>
           </button>
           <button class="home-action" data-home-tab="data" data-ribbon="true" aria-label="Open Options">
-            <span class="home-icon"><span class="nav-icon icon-option"></span></span>
+            <span class="home-icon"><i class="business-icon" data-lucide="sliders-horizontal" aria-hidden="true"></i></span>
             <span class="home-action-copy"><strong>Options</strong><small>Base data & business settings</small></span>
             <span class="quick-status" aria-hidden="true"></span>
           </button>
           <button class="home-action summary-action" data-home-tab="monthly-summary" data-ribbon="true" aria-label="Open Monthly Summary">
-            <span class="home-icon"><span class="nav-icon icon-summary"></span></span>
+            <span class="home-icon"><i class="business-icon" data-lucide="chart-no-axes-combined" aria-hidden="true"></i></span>
             <span class="home-action-copy"><strong>Monthly Summary</strong><small>Live month-to-date business summary</small></span>
             <span class="quick-status" aria-hidden="true"></span>
           </button>
@@ -3044,7 +3124,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
     </div>
 
     <div class="card">
-      <h2><span class="pro-title-icon orange" aria-hidden="true"><span class="nav-icon icon-production"></span></span><span>Bulk Plan</span></h2><p class="pro-subtitle orange">Plan output, yield and break-even volume.</p>
+      <h2><span class="pro-title-icon orange" aria-hidden="true"><i class="business-icon" data-lucide="factory" aria-hidden="true"></i></span><span>Bulk Plan</span></h2><p class="pro-subtitle orange">Plan output, yield and break-even volume.</p>
       <div class="grid-2">
         <div class="field">
           <label>Monthly Target (kg)</label>
@@ -3064,7 +3144,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
     </div>
 
     <div class="card">
-      <h2><span class="pro-title-icon green" aria-hidden="true"><span class="nav-icon icon-summary"></span></span><span>Monthly Mix</span></h2><p class="pro-subtitle green">Plan production across every SKU.</p>
+      <h2><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="chart-no-axes-combined" aria-hidden="true"></i></span><span>Monthly Mix</span></h2><p class="pro-subtitle green">Plan production across every SKU.</p>
       <div class="table-wrap">
         <table>
           <thead><tr><th>Size</th><th>Qty/mo</th><th>SP</th><th class="num">Cost/Pack</th><th class="num">Profit/Pack</th><th class="num">Monthly Profit</th></tr></thead>
@@ -3078,7 +3158,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
     </div>
 
     <div class="card">
-      <h2><span class="pro-title-icon purple" aria-hidden="true"><span class="nav-icon icon-calc"></span></span><span>Price Sensitivity</span></h2><p class="pro-subtitle purple">Test price moves before you sell.</p>
+      <h2><span class="pro-title-icon purple" aria-hidden="true"><i class="business-icon" data-lucide="calculator" aria-hidden="true"></i></span><span>Price Sensitivity</span></h2><p class="pro-subtitle purple">Test price moves before you sell.</p>
       <div class="field" style="max-width:220px;">
         <label>Pack Size</label>
         <select id="sensSize" onchange="calcSensitivity()">
@@ -3108,7 +3188,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
     </div>
 
     <div class="card">
-      <h2><span class="pro-title-icon green" aria-hidden="true"><span class="nav-icon icon-orders"></span></span><span>Orders</span></h2><p class="pro-subtitle green">Track every customer sale from one command view.</p>
+      <h2><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="shopping-bag" aria-hidden="true"></i></span><span>Orders</span></h2><p class="pro-subtitle green">Track every customer sale from one command view.</p>
       <div class="btn-row" style="margin-bottom:14px;">
         <button class="btn btn-primary btn-sm" onclick="openNewOrder()">➕ New Order</button>
         <button class="btn btn-sm" onclick="openNewCustomer()">👤 Add Customer</button>
@@ -3124,7 +3204,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
     </div>
 
     <div class="card">
-      <h2><span class="pro-title-icon blue" aria-hidden="true"><span class="nav-icon icon-profile"></span></span><span>Customers</span></h2><p class="pro-subtitle blue">Keep customer relationships organised.</p>
+      <h2><span class="pro-title-icon blue" aria-hidden="true"><i class="business-icon" data-lucide="user-round" aria-hidden="true"></i></span><span>Customers</span></h2><p class="pro-subtitle blue">Keep customer relationships organised.</p>
       <div class="table-wrap">
         <table>
           <thead>
@@ -3136,7 +3216,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
     </div>
 
     <div class="card">
-      <h2><span class="pro-title-icon orange" aria-hidden="true"><span class="nav-icon icon-orders"></span></span><span>Delivery</span></h2><p class="pro-subtitle orange">Follow fulfilment without losing the sale.</p>
+      <h2><span class="pro-title-icon orange" aria-hidden="true"><i class="business-icon" data-lucide="shopping-bag" aria-hidden="true"></i></span><span>Delivery</span></h2><p class="pro-subtitle orange">Follow fulfilment without losing the sale.</p>
       <div class="table-wrap">
         <table>
           <thead>
@@ -3157,7 +3237,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
     </div>
 
     <div class="card">
-      <h2><span class="pro-title-icon gold" aria-hidden="true"><span class="nav-icon icon-expense"></span></span><span>Expenses</span></h2><p class="pro-subtitle gold">Capture costs and protect your margin.</p>
+      <h2><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="receipt" aria-hidden="true"></i></span><span>Expenses</span></h2><p class="pro-subtitle gold">Capture costs and protect your margin.</p>
       <div class="btn-row" style="margin-bottom:14px;">
         <button class="btn btn-primary btn-sm" onclick="openNewExpense()">➕ Add Expense</button>
         <button class="btn btn-sm" onclick="exportExpensesCSV()">📊 Export CSV</button>
@@ -3173,7 +3253,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
     </div>
 
     <div class="card">
-      <h2><span class="pro-title-icon gold" aria-hidden="true"><span class="nav-icon icon-expense"></span></span><span>Recurring Daily Expenses</span></h2><p class="pro-subtitle gold">These auto-add themselves once a day the first time you log in.</p>
+      <h2><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="receipt" aria-hidden="true"></i></span><span>Recurring Daily Expenses</span></h2><p class="pro-subtitle gold">These auto-add themselves once a day the first time you log in.</p>
       <div class="table-wrap">
         <table>
           <thead>
@@ -3188,7 +3268,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
   <!-- ============ HISTORY TAB ============ -->
   <section id="history" class="tab-panel" style="display:none;" role="tabpanel">
     <div class="card">
-      <h2><span class="pro-title-icon slate" aria-hidden="true"><span class="nav-icon icon-history"></span></span><span>History</span></h2><p class="pro-subtitle slate">Review saved calculations and past decisions.</p>
+      <h2><span class="pro-title-icon slate" aria-hidden="true"><i class="business-icon" data-lucide="history" aria-hidden="true"></i></span><span>History</span></h2><p class="pro-subtitle slate">Review saved calculations and past decisions.</p>
       <p class="sub">Saved order calculations (net profit includes allocated fixed cost).</p>
       <div class="table-wrap">
         <table>
@@ -3208,7 +3288,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
   <!-- ============ DATA TAB ============ -->
   <section id="data" class="tab-panel" style="display:none;" role="tabpanel">
     <div class="card">
-      <h2><span class="pro-title-icon slate" aria-hidden="true"><span class="nav-icon icon-lock"></span></span><span>Base Data</span></h2><p class="pro-subtitle slate">Protected assumptions used by the system.</p>
+      <h2><span class="pro-title-icon slate" aria-hidden="true"><i class="business-icon" data-lucide="lock-keyhole" aria-hidden="true"></i></span><span>Base Data</span></h2><p class="pro-subtitle slate">Protected assumptions used by the system.</p>
       <div class="table-wrap">
         <table>
           <thead><tr><th>Param</th><th>50g</th><th>100g</th><th>500g</th><th>1kg</th></tr></thead>
@@ -3230,7 +3310,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
     </div>
 
     <div class="card">
-      <h2><span class="pro-title-icon gold" aria-hidden="true"><span class="nav-icon icon-expense"></span></span><span>Overheads</span></h2><p class="pro-subtitle gold">Keep recurring monthly costs visible and controlled.</p>
+      <h2><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="receipt" aria-hidden="true"></i></span><span>Overheads</span></h2><p class="pro-subtitle gold">Keep recurring monthly costs visible and controlled.</p>
       <div class="accordion" id="overheadAcc">
         <div class="accordion-header" onclick="toggleAcc()">Edit Overheads ▼</div>
         <div class="accordion-body">
@@ -3243,7 +3323,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
     </div>
 
     <div class="card">
-      <h2><span class="pro-title-icon slate" aria-hidden="true"><span class="nav-icon icon-lock"></span></span><span>Data Vault</span></h2><p class="pro-subtitle slate">Backup, restore and protect business records.</p>
+      <h2><span class="pro-title-icon slate" aria-hidden="true"><i class="business-icon" data-lucide="lock-keyhole" aria-hidden="true"></i></span><span>Data Vault</span></h2><p class="pro-subtitle slate">Backup, restore and protect business records.</p>
       <div class="btn-row">
         <button class="btn" onclick="backupJSON()">⬇️ Backup</button>
         <button class="btn" onclick="document.getElementById('restoreFile').click()">⬆️ Restore</button>
@@ -3273,7 +3353,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
 <!-- QR Modal -->
 <div class="modal-backdrop" id="qrModal">
   <div class="modal">
-    <h3><span class="pro-title-icon teal" aria-hidden="true"><span class="nav-icon icon-qr"></span></span><span>Share QR</span></h3><p class="pro-subtitle teal">Load current business parameters instantly.</p>
+    <h3><span class="pro-title-icon teal" aria-hidden="true"><i class="business-icon" data-lucide="qr-code" aria-hidden="true"></i></span><span>Share QR</span></h3><p class="pro-subtitle teal">Load current business parameters instantly.</p>
     <p style="font-size:0.85rem;color:var(--text-muted);">Scan to load current parameters</p>
     <div id="qrcode" style="display:flex;justify-content:center;margin:16px 0;"></div>
     <button class="btn btn-primary" onclick="closeQR()" style="width:100%;">Close</button>
@@ -3283,7 +3363,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
 <!-- New Order Modal -->
 <div class="modal-backdrop" id="orderModal">
   <div class="modal">
-    <h3><span class="pro-title-icon green" aria-hidden="true"><span class="nav-icon icon-orders"></span></span><span>New Order</span></h3><p class="pro-subtitle green">Capture the sale cleanly from the first field.</p>
+    <h3><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="shopping-bag" aria-hidden="true"></i></span><span>New Order</span></h3><p class="pro-subtitle green">Capture the sale cleanly from the first field.</p>
     <div class="field">
       <label>Customer</label>
       <select id="orderCustomer"></select>
@@ -3325,7 +3405,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
 <!-- New Customer Modal -->
 <div class="modal-backdrop" id="customerModal">
   <div class="modal">
-    <h3><span class="pro-title-icon blue" aria-hidden="true"><span class="nav-icon icon-profile"></span></span><span>New Customer</span></h3><p class="pro-subtitle blue">Create a clean customer record.</p>
+    <h3><span class="pro-title-icon blue" aria-hidden="true"><i class="business-icon" data-lucide="user-round" aria-hidden="true"></i></span><span>New Customer</span></h3><p class="pro-subtitle blue">Create a clean customer record.</p>
     <div class="field">
       <label>Customer Name</label>
       <input type="text" id="custName" placeholder="Customer name">
@@ -3348,7 +3428,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
 <!-- New Expense Modal -->
 <div class="modal-backdrop" id="expenseModal">
   <div class="modal">
-    <h3><span class="pro-title-icon gold" aria-hidden="true"><span class="nav-icon icon-expense"></span></span><span>New Expense</span></h3><p class="pro-subtitle gold">Record the cost while the transaction is fresh.</p>
+    <h3><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="receipt" aria-hidden="true"></i></span><span>New Expense</span></h3><p class="pro-subtitle gold">Record the cost while the transaction is fresh.</p>
     <div class="field">
       <label>Date</label>
       <input type="date" id="expDate">
@@ -3393,7 +3473,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
 <!-- Auth Modal -->
 <div class="modal-backdrop" id="authModal">
   <div class="modal">
-    <h3 id="authTitle"><span class="pro-title-icon slate" aria-hidden="true"><span class="nav-icon icon-lock"></span></span><span>Secure Login</span></h3><p class="pro-subtitle slate">Authorised access to the MY DRYBEA workspace.</p>
+    <h3 id="authTitle"><span class="pro-title-icon slate" aria-hidden="true"><i class="business-icon" data-lucide="lock-keyhole" aria-hidden="true"></i></span><span>Secure Login</span></h3><p class="pro-subtitle slate">Authorised access to the MY DRYBEA workspace.</p>
     <div class="field">
       <label>Email</label>
       <input type="email" id="authEmail" placeholder="you@example.com">
@@ -5074,7 +5154,7 @@ function renderRecurringExpenses() {
       <td>${fmt(r.amount)}</td>
       <td>${r.active ? '🟢 Active' : '⏸️ Paused'}</td>
       <td>
-        <button class="btn btn-sm" onclick="toggleRecurringExpense('${r.id}', ${!r.active})">${r.active ? '⏸️ Pause' : '▶️ Resume'}</button>
+        <button class="btn btn-sm" onclick="toggleRecurringExpense('${r.id}', ${!r.active})">${r.active ? '⏸️ Pause' : '<i class="business-icon icon-inline" data-lucide="play" aria-hidden="true"></i> Resume'}</button>
         <button class="btn btn-sm btn-danger" onclick="deleteRecurringExpense('${r.id}')">🗑️</button>
       </td>
     </tr>
@@ -5088,7 +5168,7 @@ async function toggleRecurringExpense(id, newActive) {
     const r = recurringExpenses.find(x => x.id === id);
     if (r) r.active = newActive;
     renderRecurringExpenses();
-    updateStatus(newActive ? '▶️ Recurring expense resumed' : '⏸️ Recurring expense paused');
+    updateStatus(newActive ? '<i class="business-icon icon-inline" data-lucide="play" aria-hidden="true"></i> Recurring expense resumed' : '⏸️ Recurring expense paused');
   } catch (e) {
     console.error('Toggle recurring expense error:', e);
     alert('❌ Could not update: ' + e.message);
@@ -5428,7 +5508,7 @@ function viewInvoice(index) {
   modal.className = 'modal-backdrop active';
   modal.innerHTML = `
     <div class="modal">
-      <h3><span class="pro-title-icon green" aria-hidden="true"><span class="nav-icon icon-summary"></span></span><span>Invoice</span></h3><p class="pro-subtitle green">Choose how to deliver the finished invoice.</p>
+      <h3><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="chart-no-axes-combined" aria-hidden="true"></i></span><span>Invoice</span></h3><p class="pro-subtitle green">Choose how to deliver the finished invoice.</p>
       <div class="btn-row" style="justify-content:center;">
         <button class="btn btn-primary" onclick="printInvoicePDF(); closeThisModal()">📄 Print / PDF</button>
         <button class="btn btn-whatsapp" onclick="shareInvoiceWhatsApp(${index}); closeThisModal()">📲 WhatsApp</button>
@@ -5770,7 +5850,7 @@ async function logout() {
 function updateAuthUI() {
   const btn = $('authBtn');
   if (currentUser) {
-    btn.innerHTML = '<span class="icon icon-user"></span><span class="sr-only">Account</span>';
+    btn.innerHTML = '<i class="business-icon" data-lucide="user-round" aria-hidden="true"></i><span class="sr-only">Account</span>';
     btn.title = currentUser.email || 'Account';
     btn.setAttribute('aria-label', currentUser.email || 'Account');
     btn.onclick = logout;
@@ -5792,7 +5872,7 @@ function updateAuthUI() {
     if (profileEmail) profileEmail.textContent = 'Not signed in';
     if (profileName) profileName.textContent = 'Business Owner';
     if (profileAction) { profileAction.textContent = 'Login'; profileAction.onclick = openAuthModal; }
-    btn.innerHTML = '<span class="icon icon-user"></span><span class="sr-only">Login</span>';
+    btn.innerHTML = '<i class="business-icon" data-lucide="user-round" aria-hidden="true"></i><span class="sr-only">Login</span>';
     btn.title = 'Login';
     btn.setAttribute('aria-label', 'Login');
     btn.onclick = openAuthModal;
@@ -5891,7 +5971,7 @@ function syncCustomMix() {
 function toggleTheme() {
   state.theme = state.theme === 'dark' ? 'light' : 'dark';
   document.documentElement.setAttribute('data-theme', state.theme);
-  $('themeToggle').innerHTML = '<span class="icon icon-moon"></span>';
+  $('themeToggle').innerHTML = '<i class="business-icon" data-lucide="moon" aria-hidden="true"></i>';
   if (costChart) { costChart.destroy(); costChart = null; }
   if (sensChart) { sensChart.destroy(); sensChart = null; }
   if (prodChart) { prodChart.destroy(); prodChart = null; }
@@ -6008,10 +6088,10 @@ function syncUI() {
   setMode(state.mode);
   if (state.theme === 'dark') {
     document.documentElement.setAttribute('data-theme','dark');
-    $('themeToggle').innerHTML = '<span class="icon icon-moon"></span>';
+    $('themeToggle').innerHTML = '<i class="business-icon" data-lucide="moon" aria-hidden="true"></i>';
   } else {
     document.documentElement.setAttribute('data-theme','light');
-    $('themeToggle').innerHTML = '<span class="icon icon-moon"></span>';
+    $('themeToggle').innerHTML = '<i class="business-icon" data-lucide="moon" aria-hidden="true"></i>';
   }
 }
 
