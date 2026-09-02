@@ -6868,12 +6868,14 @@ async function verifyCommissionClaim(id,status){
     const {data,error}=await supabase.rpc('verify_staff_commission_claim',{p_claim_id:id,p_status:status,p_owner_note:note});
     if(error) throw error;
 
-    // Server is the source of truth. Refresh every dependent dataset/UI.
-    await loadCommissionClaims();
-    await loadOrdersFromCloud();
+    // The RPC is the source of truth. Once the transaction succeeds,
+    // refreshes are deliberately best-effort so a secondary dashboard
+    // refresh failure cannot make a successful Approve/Reject look failed.
+    try{ await loadCommissionClaims(); }catch(e){ console.warn('Claims refresh after verification:',e); }
+    try{ await loadOrdersFromCloud(); }catch(e){ console.warn('Orders refresh after verification:',e); }
     if(userRole==='owner'){
-      await loadStaffList();
-      await loadMyStaffData(false);
+      try{ await loadStaffList(); }catch(e){ console.warn('Staff refresh after verification:',e); }
+      try{ await loadMyStaffData(false); }catch(e){ console.warn('MY STAFF refresh after verification:',e); }
     }
 
     // Keep local state/cache aligned with the verified sale.
