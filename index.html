@@ -2293,9 +2293,9 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
   </div>
 
   <nav class="tabs no-print app-nav" role="tablist" aria-label="Main navigation">
-    <button class="tab-btn active" data-tab="dashboard" role="tab" aria-label="Home"><span class="nav-icon icon-home"></span><span>Home</span></button>
+    <button class="tab-btn active" data-tab="dashboard" role="tab" aria-label="Home" data-owner-only><span class="nav-icon icon-home"></span><span>Home</span></button>
     <button class="tab-btn" data-tab="orders" role="tab" aria-label="Orders"><span class="nav-icon icon-orders"></span><span>Order</span></button>
-    <button class="tab-btn" data-tab="income" role="tab" aria-label="Income"><span class="nav-icon icon-income"></span><span>Income</span></button>
+    <button class="tab-btn" data-tab="income" role="tab" aria-label="Income" data-owner-only><span class="nav-icon icon-income"></span><span>Income</span></button>
     <button class="tab-btn" data-tab="profile" role="tab" aria-label="Profile"><span class="nav-icon icon-profile"></span><span>Profile</span></button>
   </nav>
 
@@ -2779,7 +2779,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
       <div class="table-wrap">
         <table>
           <thead>
-            <tr><th>ID</th><th>Name</th><th>Phone</th><th>Address</th><th>Actions</th></tr>
+            <tr><th>ID</th><th>Name</th><th data-owner-only>Phone</th><th>Address</th><th>Actions</th></tr>
           </thead>
           <tbody id="customersBody"></tbody>
         </table>
@@ -2969,7 +2969,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
       <label>Customer Name</label>
       <input type="text" id="custName" placeholder="Customer name">
     </div>
-    <div class="field">
+    <div class="field" data-owner-only>
       <label>Phone</label>
       <input type="text" id="custPhone" placeholder="Phone number">
     </div>
@@ -3120,6 +3120,11 @@ function applyRoleUI() {
   });
   const roleBadge = $('roleBadge');
   if (roleBadge) roleBadge.textContent = isStaff ? '👤 Staff' : '👑 Owner';
+  // Staff can't land on the Home dashboard (it's owner-only) — send them
+  // straight to Orders instead.
+  if (isStaff && typeof activateAppTab === 'function') {
+    activateAppTab('orders');
+  }
 }
 
 async function loadStaffList() {
@@ -3696,10 +3701,12 @@ function dbExpenseToLocal(e) {
 async function loadExpensesFromCloud() {
   if (!currentUser) return;
   try {
+    // No explicit owner filter here — RLS decides what's visible:
+    // owners see every expense their team recorded, staff only see
+    // the ones they personally added.
     const { data, error } = await supabase
       .from('expenses')
       .select('*')
-      .eq('created_by', businessId)
       .order('expense_date', { ascending: false });
     if (error) throw error;
     expenses = (data || []).map(dbExpenseToLocal);
@@ -3731,7 +3738,7 @@ async function saveExpense() {
     category,
     description,
     amount,
-    created_by: businessId
+    created_by: currentUser.id
   };
 
   try {
@@ -3754,7 +3761,7 @@ async function deleteExpense(id) {
   if (!confirm('Delete this expense?')) return;
   if (!currentUser) { alert('Please login first.'); return; }
   try {
-    const { error } = await supabase.from('expenses').delete().eq('id', id).eq('created_by', businessId);
+    const { error } = await supabase.from('expenses').delete().eq('id', id);
     if (error) throw error;
   } catch (e) {
     console.error('Delete expense error:', e);
@@ -3839,15 +3846,16 @@ async function saveCustomer() {
 
 function renderCustomers() {
   const tbody = $('customersBody');
+  const isStaff = userRole === 'staff';
   if (customers.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;opacity:0.5;padding:20px;">No customers yet.</td></tr>';
+    tbody.innerHTML = `<tr><td colspan="${isStaff ? 4 : 5}" style="text-align:center;opacity:0.5;padding:20px;">No customers yet.</td></tr>`;
     return;
   }
   tbody.innerHTML = customers.map(c => `
     <tr>
       <td>${c.id.slice(-4)}</td>
       <td><strong>${c.name}</strong></td>
-      <td>${c.phone || '-'}</td>
+      ${isStaff ? '' : `<td>${c.phone || '-'}</td>`}
       <td>${c.address || '-'}</td>
       <td><button class="btn btn-sm btn-danger" onclick="deleteCustomer('${c.id}')">🗑️</button></td>
     </tr>
@@ -4760,7 +4768,7 @@ document.querySelectorAll('[data-ribbon="true"]').forEach(btn => {
   });
 });
 
-const OWNER_ONLY_TABS = ['calculator', 'production', 'history'];
+const OWNER_ONLY_TABS = ['dashboard', 'calculator', 'production', 'history', 'data', 'monthly-summary', 'income'];
 
 function activateAppTab(tabId){
   if (OWNER_ONLY_TABS.includes(tabId) && userRole === 'staff') {
