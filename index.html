@@ -2822,6 +2822,18 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
         </table>
       </div>
     </div>
+
+    <div class="card">
+      <h2><span class="pro-title-icon gold" aria-hidden="true"><span class="nav-icon icon-expense"></span></span><span>Recurring Daily Expenses</span></h2><p class="pro-subtitle gold">These auto-add themselves once a day the first time you log in.</p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Category</th><th>Description</th><th>Amount</th><th>Status</th><th>Actions</th></tr>
+          </thead>
+          <tbody id="recurringExpensesBody"></tbody>
+        </table>
+      </div>
+    </div>
   </section>
 
   <!-- ============ HISTORY TAB ============ -->
@@ -3012,6 +3024,13 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
     <div class="field">
       <label>Amount (Rs.)</label>
       <div class="input-prefix"><span>Rs.</span><input type="number" id="expAmount" value="0" min="0"></div>
+    </div>
+    <div class="field">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+        <input type="checkbox" id="expRecurring" style="width:auto;">
+        <span>🔁 Repeat this every day</span>
+      </label>
+      <p style="font-size:0.78rem;opacity:0.65;margin-top:4px;">Auto-adds this same expense (same category, description &amp; amount) each day you're logged in. You can pause or remove it anytime below.</p>
     </div>
     <div class="btn-row">
       <button class="btn btn-primary" onclick="saveExpense()">✅ Save Expense</button>
@@ -3721,6 +3740,7 @@ function openNewExpense() {
   $('expCategory').value = 'Transport';
   $('expDescription').value = '';
   $('expAmount').value = 0;
+  if ($('expRecurring')) $('expRecurring').checked = false;
   $('expenseModal').classList.add('active');
 }
 
@@ -3729,6 +3749,7 @@ async function saveExpense() {
   const category = $('expCategory').value;
   const description = $('expDescription').value.trim();
   const amount = Number($('expAmount').value) || 0;
+  const isRecurring = $('expRecurring') ? $('expRecurring').checked : false;
 
   if (!currentUser) { alert('Please login first.'); return; }
   if (amount <= 0) { alert('Enter an amount greater than 0!'); return; }
@@ -3745,6 +3766,20 @@ async function saveExpense() {
     const { data, error } = await supabase.from('expenses').insert(row).select().single();
     if (error) throw error;
     expenses.unshift(dbExpenseToLocal(data));
+
+    if (isRecurring) {
+      const today = new Date().toISOString().slice(0, 10);
+      const { data: rdata, error: rerror } = await supabase.from('recurring_expenses').insert({
+        created_by: currentUser.id,
+        category,
+        description,
+        amount,
+        active: true,
+        last_generated_date: date === today ? today : null
+      }).select().single();
+      if (rerror) throw rerror;
+      recurringExpenses.unshift(rdata);
+    }
   } catch (e) {
     console.error('Save expense error:', e);
     alert('❌ Could not save expense: ' + e.message);
@@ -3752,9 +3787,10 @@ async function saveExpense() {
   }
 
   renderExpenses();
+  renderRecurringExpenses();
   updateMonthlySummary();
   closeModal('expenseModal');
-  updateStatus('✅ Expense saved');
+  updateStatus(isRecurring ? '✅ Expense saved — set to repeat daily' : '✅ Expense saved');
 }
 
 async function deleteExpense(id) {
@@ -3791,6 +3827,112 @@ function renderExpenses() {
     `).join('');
   }
   updateExpenseStats();
+}
+
+// ==================== RECURRING (DAILY) EXPENSES ====================
+let recurringExpenses = [];
+
+async function loadRecurringExpenses() {
+  if (!currentUser) return;
+  try {
+    const { data, error } = await supabase
+      .from('recurring_expenses')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    recurringExpenses = data || [];
+  } catch (e) {
+    console.error('Load recurring expenses error:', e);
+  }
+}
+
+// Runs once per login/session: for every ACTIVE recurring rule this user
+// created that hasn't produced today's entry yet, insert today's expense
+// and stamp last_generated_date so it won't duplicate if this runs again.
+async function generateDueRecurringExpenses() {
+  if (!currentUser) return;
+  const today = new Date().toISOString().slice(0, 10);
+  const due = recurringExpenses.filter(r =>
+    r.active && r.created_by === currentUser.id && r.last_generated_date !== today
+  );
+  if (!due.length) return;
+
+  for (const r of due) {
+    try {
+      const { data, error } = await supabase.from('expenses').insert({
+        expense_date: today,
+        category: r.category,
+        description: r.description ? r.description : '(Auto daily expense)',
+        amount: r.amount,
+        created_by: currentUser.id
+      }).select().single();
+      if (error) throw error;
+      expenses.unshift(dbExpenseToLocal(data));
+
+      const { error: uerr } = await supabase
+        .from('recurring_expenses')
+        .update({ last_generated_date: today })
+        .eq('id', r.id);
+      if (uerr) throw uerr;
+      r.last_generated_date = today;
+    } catch (e) {
+      console.error('Auto-generate recurring expense failed:', e);
+    }
+  }
+  renderExpenses();
+  renderRecurringExpenses();
+  updateMonthlySummary();
+  updateStatus('🔁 Daily recurring expenses added');
+}
+
+function renderRecurringExpenses() {
+  const tbody = $('recurringExpensesBody');
+  if (!tbody) return;
+  const visible = recurringExpenses.filter(r => r.created_by === currentUser?.id || userRole === 'owner');
+  if (!visible.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;opacity:0.5;padding:14px;">No recurring expenses set. Tick "Repeat this every day" when adding an expense.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = visible.map(r => `
+    <tr>
+      <td>${r.category}</td>
+      <td>${r.description || '-'}</td>
+      <td>${fmt(r.amount)}</td>
+      <td>${r.active ? '🟢 Active' : '⏸️ Paused'}</td>
+      <td>
+        <button class="btn btn-sm" onclick="toggleRecurringExpense('${r.id}', ${!r.active})">${r.active ? '⏸️ Pause' : '▶️ Resume'}</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteRecurringExpense('${r.id}')">🗑️</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+async function toggleRecurringExpense(id, newActive) {
+  try {
+    const { error } = await supabase.from('recurring_expenses').update({ active: newActive }).eq('id', id);
+    if (error) throw error;
+    const r = recurringExpenses.find(x => x.id === id);
+    if (r) r.active = newActive;
+    renderRecurringExpenses();
+    updateStatus(newActive ? '▶️ Recurring expense resumed' : '⏸️ Recurring expense paused');
+  } catch (e) {
+    console.error('Toggle recurring expense error:', e);
+    alert('❌ Could not update: ' + e.message);
+  }
+}
+
+async function deleteRecurringExpense(id) {
+  if (!confirm('Stop this recurring expense? Past auto-added entries stay in your Expenses list.')) return;
+  try {
+    const { error } = await supabase.from('recurring_expenses').delete().eq('id', id);
+    if (error) throw error;
+    recurringExpenses = recurringExpenses.filter(r => r.id !== id);
+    renderRecurringExpenses();
+    updateStatus('🗑️ Recurring expense removed');
+  } catch (e) {
+    console.error('Delete recurring expense error:', e);
+    alert('❌ Could not delete: ' + e.message);
+  }
 }
 
 function updateExpenseStats() {
@@ -4381,6 +4523,9 @@ async function cloudLoad() {
     updateOrderStats();
     updateCustomerSelect();
     renderExpenses();
+    await loadRecurringExpenses();
+    await generateDueRecurringExpenses();
+    renderRecurringExpenses();
     updateStatus('☁️ Cloud data loaded');
   } catch (e) {
     console.error('Cloud load error:', e);
@@ -4789,7 +4934,7 @@ function activateAppTab(tabId){
   if (tabId === 'history') renderHistory();
   if (tabId === 'production') calcProduction();
   if (tabId === 'orders') { renderOrders(); renderCustomers(); renderDelivery(); updateOrderStats(); }
-  if (tabId === 'expenses') renderExpenses();
+  if (tabId === 'expenses') { renderExpenses(); renderRecurringExpenses(); }
   if (tabId === 'profile') { updateAuthUI(); if (userRole === 'owner') loadStaffList(); }
 }
 
@@ -4845,6 +4990,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   updateCustomerSelect();
   renderExpenses();
   updateMonthlySummary();
+
+  // ---- RECURRING DAILY EXPENSES: load rules, then auto-add today's due ones ----
+  await loadRecurringExpenses();
+  await generateDueRecurringExpenses();
+  renderRecurringExpenses();
 
   // ---- LOAD CLOUD DATA (silent, no alert on empty) ----
   // app_data still holds: state (pricing/production settings), history, snapshots.
@@ -4934,6 +5084,8 @@ window.openNewExpense = openNewExpense;
 window.saveExpense = saveExpense;
 window.deleteExpense = deleteExpense;
 window.exportExpensesCSV = exportExpensesCSV;
+window.toggleRecurringExpense = toggleRecurringExpense;
+window.deleteRecurringExpense = deleteRecurringExpense;
 window.viewInvoice = viewInvoice;
 window.printInvoicePDF = printInvoicePDF;
 window.shareInvoiceWhatsApp = shareInvoiceWhatsApp;
