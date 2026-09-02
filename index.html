@@ -3223,6 +3223,7 @@ let currentUser = null;
 let userProfile = null;
 let userRole = 'owner';   // 'owner' | 'staff'
 let businessId = null;    // the effective account whose data everyone on the team shares
+let staffSalaryChannel = null; // realtime channel: pushes owner's salary edits to the staff member live
 
 async function loadUserProfile() {
   if (!currentUser) return;
@@ -3254,6 +3255,49 @@ async function loadUserProfile() {
     businessId = currentUser.id;
   }
   applyRoleUI();
+  initStaffRealtimeSync();
+  if (userRole === 'staff') loadMySalaryData();
+}
+
+// ==================== LIVE SALARY SYNC (staff-only) ====================
+// Whenever the owner edits this staff member's base salary/daily rate
+// (profiles table) or adds/edits/deletes a salary entry (staff_salaries
+// table), push the change to this staff member's screen immediately —
+// no refresh needed.
+function initStaffRealtimeSync() {
+  // Always tear down any previous subscription first, so re-login / token
+  // refresh / role changes never end up with duplicate live channels.
+  if (staffSalaryChannel) {
+    supabase.removeChannel(staffSalaryChannel);
+    staffSalaryChannel = null;
+  }
+  if (userRole !== 'staff' || !currentUser) return;
+
+  staffSalaryChannel = supabase
+    .channel('staff-salary-sync-' + currentUser.id)
+    .on('postgres_changes', {
+      event: 'UPDATE',
+      schema: 'public',
+      table: 'profiles',
+      filter: `id=eq.${currentUser.id}`
+    }, (payload) => {
+      // Owner changed base salary / daily rate settings
+      userProfile = Object.assign({}, userProfile, payload.new);
+      if ($('myBaseSalary')) $('myBaseSalary').textContent = fmt(Number(userProfile.base_salary) || 0);
+      if ($('myDailyRate')) $('myDailyRate').textContent = fmt(Number(userProfile.daily_rate) || 0);
+      updateStatus('🔄 Salary settings updated');
+    })
+    .on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'staff_salaries',
+      filter: `staff_id=eq.${currentUser.id}`
+    }, () => {
+      // Owner added/edited/deleted a salary entry (daily log, bonus, advance, deduction)
+      loadMySalaryData();
+      updateStatus('🔄 Salary updated');
+    })
+    .subscribe();
 }
 
 function applyRoleUI() {
@@ -4955,6 +4999,10 @@ async function authAction() {
 }
 
 async function logout() {
+  if (staffSalaryChannel) {
+    supabase.removeChannel(staffSalaryChannel);
+    staffSalaryChannel = null;
+  }
   await supabase.auth.signOut();
   currentUser = null;
   userProfile = null;
