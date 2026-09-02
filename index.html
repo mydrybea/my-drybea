@@ -2292,10 +2292,30 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
     <hr>
   </div>
 
+  <style>
+    /* ---- Staff dashboard tabs: scrollable bottom nav when many tabs are visible ---- */
+    .app-nav.staff-nav{ overflow-x:auto; flex-wrap:nowrap; -webkit-overflow-scrolling:touch; scrollbar-width:none; }
+    .app-nav.staff-nav::-webkit-scrollbar{ display:none; }
+    .app-nav.staff-nav .tab-btn{ flex:0 0 auto; min-width:70px; }
+    [data-staff-only]{ display:none; }
+    .emoji-nav-icon{ font-size:16px; line-height:1; display:flex; align-items:center; justify-content:center; width:17px; height:17px; }
+    .status-pill{ display:inline-flex; align-items:center; gap:6px; padding:5px 12px; border-radius:20px; font-size:.72rem; font-weight:800; }
+    .status-pill.pending{ background:var(--warn-bg); color:var(--warn); }
+    .status-pill.approved{ background:var(--green-subtle); color:var(--green); }
+    .status-pill.rejected{ background:var(--bad-bg); color:var(--bad); }
+    .attend-btn-row{ display:flex; gap:10px; flex-wrap:wrap; }
+    .attend-btn-row .btn{ flex:1; min-width:140px; min-height:52px; font-size:.9rem; }
+    .work-note-box textarea{ width:100%; min-height:90px; resize:vertical; font-family:var(--font); background:#07110d; color:var(--text-main); border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px 12px; }
+  </style>
   <nav class="tabs no-print app-nav" role="tablist" aria-label="Main navigation">
     <button class="tab-btn active" data-tab="dashboard" role="tab" aria-label="Home" data-owner-only><span class="nav-icon icon-home"></span><span>Home</span></button>
     <button class="tab-btn" data-tab="orders" role="tab" aria-label="Orders"><span class="nav-icon icon-orders"></span><span>Order</span></button>
     <button class="tab-btn" data-tab="income" role="tab" aria-label="Income" data-owner-only><span class="nav-icon icon-income"></span><span>Income</span></button>
+    <button class="tab-btn" data-tab="my-salary" role="tab" aria-label="My Salary" data-staff-only><span class="nav-icon emoji-nav-icon">💰</span><span>My Salary</span></button>
+    <button class="tab-btn" data-tab="daily-pay" role="tab" aria-label="Daily Pay" data-staff-only><span class="nav-icon emoji-nav-icon">📅</span><span>Daily Pay</span></button>
+    <button class="tab-btn" data-tab="work-update" role="tab" aria-label="Work Update" data-staff-only><span class="nav-icon emoji-nav-icon">📝</span><span>Work Update</span></button>
+    <button class="tab-btn" data-tab="attendance" role="tab" aria-label="Attendance" data-staff-only><span class="nav-icon emoji-nav-icon">🕒</span><span>Attendance</span></button>
+    <button class="tab-btn" data-tab="advance" role="tab" aria-label="Advance" data-staff-only><span class="nav-icon emoji-nav-icon">💸</span><span>Advance</span></button>
     <button class="tab-btn" data-tab="profile" role="tab" aria-label="Profile"><span class="nav-icon icon-profile"></span><span>Profile</span></button>
   </nav>
 
@@ -2358,6 +2378,138 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
     </div>
   </section>
 
+  <!-- ============ MY SALARY TAB (staff-only) ============ -->
+  <section id="my-salary" class="tab-panel" role="tabpanel" style="display:none;">
+    <div class="mobile-greeting no-print" style="padding:0 0 8px;">
+      <div><span class="eyebrow">MY PAY</span><h2><span class="pro-title-icon green" aria-hidden="true"><span class="nav-icon emoji-nav-icon">💰</span></span><span>My Salary</span></h2><p class="pro-subtitle green">Your salary summary — visible only to you.</p></div>
+      <div class="profile-dot"><span class="nav-icon emoji-nav-icon">💰</span></div>
+    </div>
+    <div class="stat-grid">
+      <div class="stat"><div class="k">Base Monthly</div><div class="v" id="mySalBase">Rs. 0</div></div>
+      <div class="stat"><div class="k">Standard Daily Rate</div><div class="v" id="mySalDailyRate">Rs. 0</div></div>
+    </div>
+    <div class="stat-grid" style="margin-top:10px;">
+      <div class="stat accent"><div class="k">This Month Daily Pay</div><div class="v" id="mySalSumDaily">Rs. 0</div></div>
+      <div class="stat"><div class="k">Bonuses</div><div class="v" id="mySalSumBonus">Rs. 0</div></div>
+      <div class="stat"><div class="k">Advances / Deductions</div><div class="v" id="mySalSumMinus">Rs. 0</div></div>
+      <div class="stat accent"><div class="k">Net Payable (Month)</div><div class="v" id="mySalSumNet">Rs. 0</div></div>
+    </div>
+    <div class="card" style="margin-top:16px;">
+      <h2><span class="pro-title-icon gold" aria-hidden="true"><span class="nav-icon emoji-nav-icon">🧾</span></span><span>Payslip History</span></h2>
+      <p class="pro-subtitle gold">Every salary entry the owner has recorded for you.</p>
+      <div class="table-wrap" style="margin-top:10px;">
+        <table>
+          <thead><tr><th>Date</th><th>Type</th><th>Amount</th><th>Note</th></tr></thead>
+          <tbody id="mySalaryHistoryBody"><tr><td colspan="4" style="text-align:center;opacity:.5;padding:14px;">No entries yet.</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ DAILY PAY TAB (staff-only) ============ -->
+  <section id="daily-pay" class="tab-panel" role="tabpanel" style="display:none;">
+    <div class="mobile-greeting no-print" style="padding:0 0 8px;">
+      <div><span class="eyebrow">DAILY RATE</span><h2><span class="pro-title-icon green" aria-hidden="true"><span class="nav-icon emoji-nav-icon">📅</span></span><span>Daily Pay</span></h2><p class="pro-subtitle green">Days worked and daily pay logged this month.</p></div>
+      <div class="profile-dot"><span class="nav-icon emoji-nav-icon">📅</span></div>
+    </div>
+    <div class="stat-grid">
+      <div class="stat accent"><div class="k">Days Paid This Month</div><div class="v" id="dpDaysCount">0</div></div>
+      <div class="stat accent"><div class="k">Month Total</div><div class="v" id="dpMonthTotal">Rs. 0</div></div>
+    </div>
+    <div class="card" style="margin-top:16px;">
+      <h2><span class="pro-title-icon gold" aria-hidden="true"><span class="nav-icon emoji-nav-icon">📋</span></span><span>Day-by-Day</span></h2>
+      <div class="table-wrap" style="margin-top:10px;">
+        <table>
+          <thead><tr><th>Date</th><th>Amount</th><th>Note</th></tr></thead>
+          <tbody id="dpListBody"><tr><td colspan="3" style="text-align:center;opacity:.5;padding:14px;">No daily pay logged this month yet.</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ MY WORK UPDATE TAB (staff-only) ============ -->
+  <section id="work-update" class="tab-panel" role="tabpanel" style="display:none;">
+    <div class="mobile-greeting no-print" style="padding:0 0 8px;">
+      <div><span class="eyebrow">DAILY SUMMARY</span><h2><span class="pro-title-icon green" aria-hidden="true"><span class="nav-icon emoji-nav-icon">📝</span></span><span>My Work Update</span></h2><p class="pro-subtitle green">What you did today, in one place.</p></div>
+      <div class="profile-dot"><span class="nav-icon emoji-nav-icon">📝</span></div>
+    </div>
+    <div class="stat-grid">
+      <div class="stat accent"><div class="k">Orders Today</div><div class="v" id="wuOrdersToday">0</div></div>
+      <div class="stat"><div class="k">Orders This Month</div><div class="v" id="wuOrdersMonth">0</div></div>
+    </div>
+    <div class="card work-note-box" style="margin-top:16px;">
+      <h2><span class="pro-title-icon gold" aria-hidden="true"><span class="nav-icon emoji-nav-icon">✍️</span></span><span>Today's Note</span></h2>
+      <p class="pro-subtitle gold">Add anything the auto-count doesn't capture — production, deliveries, tasks.</p>
+      <textarea id="wuNoteText" placeholder="e.g. Packed 40 balaya bags, delivered 3 orders in Kandy area..."></textarea>
+      <div class="btn-row" style="margin-top:10px;">
+        <button class="btn btn-primary" onclick="saveWorkNote()">💾 Save Today's Note</button>
+      </div>
+    </div>
+    <div class="card" style="margin-top:16px;">
+      <h2><span class="pro-title-icon gold" aria-hidden="true"><span class="nav-icon emoji-nav-icon">🗂️</span></span><span>Recent Updates</span></h2>
+      <div class="table-wrap" style="margin-top:10px;">
+        <table>
+          <thead><tr><th>Date</th><th>Orders</th><th>Note</th></tr></thead>
+          <tbody id="wuHistoryBody"><tr><td colspan="3" style="text-align:center;opacity:.5;padding:14px;">No updates yet.</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ ATTENDANCE TAB (staff-only) ============ -->
+  <section id="attendance" class="tab-panel" role="tabpanel" style="display:none;">
+    <div class="mobile-greeting no-print" style="padding:0 0 8px;">
+      <div><span class="eyebrow">CHECK IN / OUT</span><h2><span class="pro-title-icon green" aria-hidden="true"><span class="nav-icon emoji-nav-icon">🕒</span></span><span>Attendance</span></h2><p class="pro-subtitle green">Log your work day with one tap.</p></div>
+      <div class="profile-dot"><span class="nav-icon emoji-nav-icon">🕒</span></div>
+    </div>
+    <div class="card">
+      <div id="attendTodayStatus" class="notice" style="margin-bottom:12px;">Loading today's status...</div>
+      <div class="attend-btn-row">
+        <button class="btn btn-primary" id="attendStartBtn" onclick="startDay()">▶️ Start Day</button>
+        <button class="btn btn-danger" id="attendEndBtn" onclick="endDay()" disabled>⏹️ End Day</button>
+      </div>
+    </div>
+    <div class="card" style="margin-top:16px;">
+      <h2><span class="pro-title-icon gold" aria-hidden="true"><span class="nav-icon emoji-nav-icon">📆</span></span><span>This Month's Log</span></h2>
+      <div class="table-wrap" style="margin-top:10px;">
+        <table>
+          <thead><tr><th>Date</th><th>Start</th><th>End</th><th>Hours</th></tr></thead>
+          <tbody id="attendLogBody"><tr><td colspan="4" style="text-align:center;opacity:.5;padding:14px;">No attendance logged this month yet.</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ ADVANCE REQUEST TAB (staff-only) ============ -->
+  <section id="advance" class="tab-panel" role="tabpanel" style="display:none;">
+    <div class="mobile-greeting no-print" style="padding:0 0 8px;">
+      <div><span class="eyebrow">SALARY ADVANCE</span><h2><span class="pro-title-icon green" aria-hidden="true"><span class="nav-icon emoji-nav-icon">💸</span></span><span>Advance Request</span></h2><p class="pro-subtitle green">Request an advance — the owner gets notified instantly.</p></div>
+      <div class="profile-dot"><span class="nav-icon emoji-nav-icon">💸</span></div>
+    </div>
+    <div class="card">
+      <div class="field">
+        <label>Amount Requested (Rs.)</label>
+        <div class="input-prefix"><span>Rs.</span><input type="number" id="advAmount" value="0" min="0"></div>
+      </div>
+      <div class="field">
+        <label>Reason</label>
+        <input type="text" id="advReason" placeholder="e.g. Medical expense, family need...">
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="submitAdvanceRequest()">📲 Request &amp; Notify Owner</button>
+      </div>
+    </div>
+    <div class="card" style="margin-top:16px;">
+      <h2><span class="pro-title-icon gold" aria-hidden="true"><span class="nav-icon emoji-nav-icon">📜</span></span><span>My Requests</span></h2>
+      <div class="table-wrap" style="margin-top:10px;">
+        <table>
+          <thead><tr><th>Date</th><th>Amount</th><th>Reason</th><th>Status</th></tr></thead>
+          <tbody id="advMyHistoryBody"><tr><td colspan="4" style="text-align:center;opacity:.5;padding:14px;">No requests yet.</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
   <!-- ============ PROFILE TAB ============ -->
   <section id="profile" class="tab-panel" role="tabpanel" style="display:none;">
     <div class="profile-panel card">
@@ -2372,31 +2524,25 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
       </div>
     </div>
 
-    <div class="card" data-staff-only style="margin-top:16px;">
-      <h2><span class="pro-title-icon gold" aria-hidden="true"><span class="nav-icon icon-expense"></span></span><span>My Salary</span></h2>
-      <p class="pro-subtitle gold">Your pay details, updated by your employer.</p>
-
-      <div class="stat-grid">
-        <div class="stat"><div class="k">Base Monthly Salary</div><div class="v" id="myBaseSalary">Rs. 0</div></div>
-        <div class="stat"><div class="k">Daily Rate</div><div class="v" id="myDailyRate">Rs. 0</div></div>
+    <div class="card" data-owner-only style="margin-top:16px;">
+      <h2><span class="pro-title-icon gold" aria-hidden="true"><span class="nav-icon emoji-nav-icon">📲</span></span><span>Business WhatsApp Number</span></h2>
+      <p class="pro-subtitle gold">Advance requests from staff open a pre-filled WhatsApp message to this number.</p>
+      <div class="field">
+        <label>WhatsApp Number <span class="hint">(with country code, e.g. 94771234567)</span></label>
+        <input type="text" id="ownerWhatsapp" placeholder="94771234567">
       </div>
-
-      <div class="stat-grid" style="margin-top:10px;">
-        <div class="stat accent"><div class="k">This Month Daily Pay</div><div class="v" id="mySalSumDaily">Rs. 0</div></div>
-        <div class="stat"><div class="k">Bonuses</div><div class="v" id="mySalSumBonus">Rs. 0</div></div>
-        <div class="stat"><div class="k">Advances / Deductions</div><div class="v" id="mySalSumMinus">Rs. 0</div></div>
-        <div class="stat accent"><div class="k">Net Payable (Month)</div><div class="v" id="mySalSumNet">Rs. 0</div></div>
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="saveOwnerWhatsapp()">💾 Save Number</button>
       </div>
+    </div>
 
-      <div class="btn-row" style="margin-top:14px;">
-        <button class="btn btn-primary" onclick="requestSalaryViaWhatsApp()">💬 Request Salary via WhatsApp</button>
-      </div>
-
-      <p class="sub" style="margin-top:14px;">Full history:</p>
-      <div class="table-wrap">
+    <div class="card" data-owner-only style="margin-top:16px;">
+      <h2><span class="pro-title-icon gold" aria-hidden="true"><span class="nav-icon emoji-nav-icon">💸</span></span><span>Pending Advance Requests</span></h2>
+      <p class="pro-subtitle gold">Approve or reject advance requests from your staff.</p>
+      <div class="table-wrap" style="margin-top:10px;">
         <table>
-          <thead><tr><th>Date</th><th>Time</th><th>Type</th><th>Amount</th><th>Method</th><th>Note</th></tr></thead>
-          <tbody id="mySalaryHistoryBody"><tr><td colspan="6" style="text-align:center;opacity:.5;padding:14px;">Loading…</td></tr></tbody>
+          <thead><tr><th>Staff</th><th>Date</th><th>Amount</th><th>Reason</th><th>Status</th><th>Actions</th></tr></thead>
+          <tbody id="advOwnerBody"><tr><td colspan="6" style="text-align:center;opacity:.5;padding:14px;">No advance requests yet.</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -2443,28 +2589,13 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
 
         <!-- DAILY MODE: quick one-tap log of what was paid today -->
         <div id="salaryModeDaily">
-          <div class="grid-2">
-            <div class="field">
-              <label>Date</label>
-              <input type="date" id="salDailyDate">
-            </div>
-            <div class="field">
-              <label>Time</label>
-              <input type="time" id="salDailyTime">
-            </div>
+          <div class="field">
+            <label>Date</label>
+            <input type="date" id="salDailyDate">
           </div>
           <div class="field">
             <label>Amount Paid Today (Rs.)</label>
             <div class="input-prefix"><span>Rs.</span><input type="number" id="salDailyAmount" value="0" min="0"></div>
-          </div>
-          <div class="field">
-            <label>Payment Method</label>
-            <select id="salDailyMethod">
-              <option value="cash">💵 Cash</option>
-              <option value="bank">🏦 Bank Transfer</option>
-              <option value="online">📱 Online / Mobile Payment</option>
-              <option value="other">🔗 Other</option>
-            </select>
           </div>
           <div class="field">
             <label>Note</label>
@@ -2506,21 +2637,6 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
               <input type="date" id="salEntryDate">
             </div>
           </div>
-          <div class="grid-2">
-            <div class="field">
-              <label>Time</label>
-              <input type="time" id="salEntryTime">
-            </div>
-            <div class="field">
-              <label>Payment Method</label>
-              <select id="salEntryMethod">
-                <option value="cash">💵 Cash</option>
-                <option value="bank">🏦 Bank Transfer</option>
-                <option value="online">📱 Online / Mobile Payment</option>
-                <option value="other">🔗 Other</option>
-              </select>
-            </div>
-          </div>
           <div class="field">
             <label>Amount (Rs.)</label>
             <div class="input-prefix"><span>Rs.</span><input type="number" id="salEntryAmount" value="0" min="0"></div>
@@ -2543,7 +2659,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
 
         <div class="table-wrap" style="margin-top:14px;">
           <table>
-            <thead><tr><th>Date</th><th>Time</th><th>Type</th><th>Amount</th><th>Method</th><th>Note</th><th>Actions</th></tr></thead>
+            <thead><tr><th>Date</th><th>Type</th><th>Amount</th><th>Note</th><th>Actions</th></tr></thead>
             <tbody id="salaryHistoryBody"></tbody>
           </table>
         </div>
@@ -3257,7 +3373,6 @@ let currentUser = null;
 let userProfile = null;
 let userRole = 'owner';   // 'owner' | 'staff'
 let businessId = null;    // the effective account whose data everyone on the team shares
-let staffSalaryChannel = null; // realtime channel: pushes owner's salary edits to the staff member live
 
 async function loadUserProfile() {
   if (!currentUser) return;
@@ -3289,49 +3404,6 @@ async function loadUserProfile() {
     businessId = currentUser.id;
   }
   applyRoleUI();
-  initStaffRealtimeSync();
-  if (userRole === 'staff') loadMySalaryData();
-}
-
-// ==================== LIVE SALARY SYNC (staff-only) ====================
-// Whenever the owner edits this staff member's base salary/daily rate
-// (profiles table) or adds/edits/deletes a salary entry (staff_salaries
-// table), push the change to this staff member's screen immediately —
-// no refresh needed.
-function initStaffRealtimeSync() {
-  // Always tear down any previous subscription first, so re-login / token
-  // refresh / role changes never end up with duplicate live channels.
-  if (staffSalaryChannel) {
-    supabase.removeChannel(staffSalaryChannel);
-    staffSalaryChannel = null;
-  }
-  if (userRole !== 'staff' || !currentUser) return;
-
-  staffSalaryChannel = supabase
-    .channel('staff-salary-sync-' + currentUser.id)
-    .on('postgres_changes', {
-      event: 'UPDATE',
-      schema: 'public',
-      table: 'profiles',
-      filter: `id=eq.${currentUser.id}`
-    }, (payload) => {
-      // Owner changed base salary / daily rate settings
-      userProfile = Object.assign({}, userProfile, payload.new);
-      if ($('myBaseSalary')) $('myBaseSalary').textContent = fmt(Number(userProfile.base_salary) || 0);
-      if ($('myDailyRate')) $('myDailyRate').textContent = fmt(Number(userProfile.daily_rate) || 0);
-      updateStatus('🔄 Salary settings updated');
-    })
-    .on('postgres_changes', {
-      event: '*',
-      schema: 'public',
-      table: 'staff_salaries',
-      filter: `staff_id=eq.${currentUser.id}`
-    }, () => {
-      // Owner added/edited/deleted a salary entry (daily log, bonus, advance, deduction)
-      loadMySalaryData();
-      updateStatus('🔄 Salary updated');
-    })
-    .subscribe();
 }
 
 function applyRoleUI() {
@@ -3342,6 +3414,8 @@ function applyRoleUI() {
   document.querySelectorAll('[data-staff-only]').forEach(el => {
     el.style.display = isStaff ? '' : 'none';
   });
+  const navEl = document.querySelector('.app-nav');
+  if (navEl) navEl.classList.toggle('staff-nav', isStaff);
   const roleBadge = $('roleBadge');
   if (roleBadge) roleBadge.textContent = isStaff ? '👤 Staff' : '👑 Owner';
   // Staff can't land on the Home dashboard (it's owner-only) — send them
@@ -3426,8 +3500,6 @@ let salaryEntries = [];
 let salaryMode = 'daily';
 let currentSalaryStaffId = '';
 const SAL_TYPE_LABEL = { daily: '⚡ Daily', bonus: '➕ Bonus', advance: '💸 Advance', deduction: '➖ Deduction' };
-const SAL_METHOD_LABEL = { cash: '💵 Cash', bank: '🏦 Bank Transfer', online: '📱 Online', other: '🔗 Other' };
-const STAFF_WHATSAPP_NUMBER = '94762432963'; // +94 76 243 2963, no leading 0 / no +, per wa.me format
 
 function populateSalaryStaffSelect(list) {
   staffListCache = list || [];
@@ -3461,8 +3533,6 @@ async function onSalaryStaffChange() {
   if (panel) panel.style.display = '';
   $('salDailyDate').value = new Date().toISOString().slice(0, 10);
   $('salEntryDate').value = new Date().toISOString().slice(0, 10);
-  if ($('salDailyTime')) $('salDailyTime').value = new Date().toTimeString().slice(0, 5);
-  if ($('salEntryTime')) $('salEntryTime').value = new Date().toTimeString().slice(0, 5);
 
   const staff = staffListCache.find(s => s.id === staffId);
   $('salBaseMonthly').value = (staff && staff.base_salary) || 0;
@@ -3490,12 +3560,10 @@ async function saveSalarySettings() {
 async function saveDailySalary() {
   if (!currentSalaryStaffId) { alert('Select a staff member first.'); return; }
   const date = $('salDailyDate').value || new Date().toISOString().slice(0, 10);
-  const time = $('salDailyTime').value || new Date().toTimeString().slice(0, 5);
   const amount = Number($('salDailyAmount').value) || 0;
-  const method = $('salDailyMethod').value;
   const note = $('salDailyNote').value.trim();
   if (amount <= 0) { alert('Enter an amount greater than 0!'); return; }
-  const ok = await insertSalaryEntry({ entry_date: date, entry_time: time, amount, entry_type: 'daily', payment_method: method, note });
+  const ok = await insertSalaryEntry({ entry_date: date, amount, entry_type: 'daily', note });
   if (ok) { $('salDailyAmount').value = 0; $('salDailyNote').value = ''; }
 }
 
@@ -3503,16 +3571,14 @@ async function addSalaryEntry() {
   if (!currentSalaryStaffId) { alert('Select a staff member first.'); return; }
   const type = $('salEntryType').value;
   const date = $('salEntryDate').value || new Date().toISOString().slice(0, 10);
-  const time = $('salEntryTime').value || new Date().toTimeString().slice(0, 5);
   const amount = Number($('salEntryAmount').value) || 0;
-  const method = $('salEntryMethod').value;
   const note = $('salEntryNote').value.trim();
   if (amount <= 0) { alert('Enter an amount greater than 0!'); return; }
-  const ok = await insertSalaryEntry({ entry_date: date, entry_time: time, amount, entry_type: type, payment_method: method, note });
+  const ok = await insertSalaryEntry({ entry_date: date, amount, entry_type: type, note });
   if (ok) { $('salEntryAmount').value = 0; $('salEntryNote').value = ''; }
 }
 
-async function insertSalaryEntry({ entry_date, entry_time, amount, entry_type, payment_method, note }) {
+async function insertSalaryEntry({ entry_date, amount, entry_type, note }) {
   if (!currentUser) { alert('Please login first.'); return false; }
   const staff = staffListCache.find(s => s.id === currentSalaryStaffId);
   const row = {
@@ -3520,10 +3586,8 @@ async function insertSalaryEntry({ entry_date, entry_time, amount, entry_type, p
     staff_id: currentSalaryStaffId,
     staff_name: staff ? (staff.display_name || null) : null,
     entry_date,
-    entry_time: entry_time || null,
     amount,
     entry_type,
-    payment_method: payment_method || null,
     note: note || null,
     created_by: currentUser.id
   };
@@ -3575,15 +3639,13 @@ function renderSalaryHistory() {
   const tbody = $('salaryHistoryBody');
   if (!tbody) return;
   if (!salaryEntries.length) {
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;opacity:0.5;padding:14px;">No salary entries yet.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;opacity:0.5;padding:14px;">No salary entries yet.</td></tr>';
   } else {
     tbody.innerHTML = salaryEntries.map(s => `
       <tr>
         <td>${s.entry_date}</td>
-        <td>${s.entry_time || '-'}</td>
         <td>${SAL_TYPE_LABEL[s.entry_type] || s.entry_type}</td>
         <td>${fmt(s.amount)}</td>
-        <td>${SAL_METHOD_LABEL[s.payment_method] || s.payment_method || '-'}</td>
         <td>${s.note || '-'}</td>
         <td><button class="btn btn-sm btn-danger" onclick="deleteSalaryEntry('${s.id}')">🗑️</button></td>
       </tr>
@@ -3605,19 +3667,13 @@ function updateSalarySummary() {
   if ($('salSumNet')) $('salSumNet').textContent = fmt(net);
 }
 
-// ==================== MY SALARY (staff-only, read-only view) ====================
-let mySalaryEntries = [];
+let isAuthModeLogin = true; // true=login, false=signup
 
-async function loadMySalaryData() {
-  if (!currentUser || userRole !== 'staff') return;
+// ==================== MY SALARY (staff-only, read-only view of own data) ====================
+let myFullSalaryEntries = [];
 
-  // Base salary / daily rate live on the staff member's own profile row,
-  // which is already loaded into userProfile during login.
-  const base = Number(userProfile && userProfile.base_salary) || 0;
-  const rate = Number(userProfile && userProfile.daily_rate) || 0;
-  if ($('myBaseSalary')) $('myBaseSalary').textContent = fmt(base);
-  if ($('myDailyRate')) $('myDailyRate').textContent = fmt(rate);
-
+async function loadMySalary() {
+  if (!currentUser) return;
   try {
     const { data, error } = await supabase
       .from('staff_salaries')
@@ -3625,59 +3681,351 @@ async function loadMySalaryData() {
       .eq('staff_id', currentUser.id)
       .order('entry_date', { ascending: false });
     if (error) throw error;
-    mySalaryEntries = data || [];
-    renderMySalaryHistory();
+    myFullSalaryEntries = data || [];
+    if ($('mySalBase')) $('mySalBase').textContent = fmt((userProfile && userProfile.base_salary) || 0);
+    if ($('mySalDailyRate')) $('mySalDailyRate').textContent = fmt((userProfile && userProfile.daily_rate) || 0);
+    renderMySalary();
   } catch (e) {
     console.error('Load my salary error:', e);
-    const tbody = $('mySalaryHistoryBody');
-    if (tbody) tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;opacity:.5;padding:14px;">⚠️ Could not load salary history.</td></tr>';
+    updateStatus('⚠️ Could not load salary');
   }
 }
 
-function renderMySalaryHistory() {
+function renderMySalary() {
   const tbody = $('mySalaryHistoryBody');
   if (tbody) {
-    if (!mySalaryEntries.length) {
-      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;opacity:0.5;padding:14px;">No salary entries yet.</td></tr>';
-    } else {
-      tbody.innerHTML = mySalaryEntries.map(s => `
-        <tr>
-          <td>${s.entry_date}</td>
-          <td>${s.entry_time || '-'}</td>
-          <td>${SAL_TYPE_LABEL[s.entry_type] || s.entry_type}</td>
-          <td>${fmt(s.amount)}</td>
-          <td>${SAL_METHOD_LABEL[s.payment_method] || s.payment_method || '-'}</td>
-          <td>${s.note || '-'}</td>
-        </tr>
-      `).join('');
-    }
+    tbody.innerHTML = myFullSalaryEntries.length ? myFullSalaryEntries.map(s => `
+      <tr>
+        <td>${s.entry_date}</td>
+        <td>${SAL_TYPE_LABEL[s.entry_type] || s.entry_type}</td>
+        <td>${fmt(s.amount)}</td>
+        <td>${s.note || '-'}</td>
+      </tr>
+    `).join('') : '<tr><td colspan="4" style="text-align:center;opacity:.5;padding:14px;">No entries yet.</td></tr>';
   }
-
   const ym = new Date().toISOString().slice(0, 7);
-  const thisMonth = mySalaryEntries.filter(s => (s.entry_date || '').slice(0, 7) === ym);
+  const thisMonth = myFullSalaryEntries.filter(s => (s.entry_date || '').slice(0, 7) === ym);
   const daily = thisMonth.filter(s => s.entry_type === 'daily').reduce((a, s) => a + Number(s.amount), 0);
   const bonus = thisMonth.filter(s => s.entry_type === 'bonus').reduce((a, s) => a + Number(s.amount), 0);
   const minus = thisMonth.filter(s => s.entry_type === 'advance' || s.entry_type === 'deduction').reduce((a, s) => a + Number(s.amount), 0);
-  const net = daily + bonus - minus;
   if ($('mySalSumDaily')) $('mySalSumDaily').textContent = fmt(daily);
   if ($('mySalSumBonus')) $('mySalSumBonus').textContent = fmt(bonus);
   if ($('mySalSumMinus')) $('mySalSumMinus').textContent = fmt(minus);
-  if ($('mySalSumNet')) $('mySalSumNet').textContent = fmt(net);
+  if ($('mySalSumNet')) $('mySalSumNet').textContent = fmt(daily + bonus - minus);
 }
 
-function requestSalaryViaWhatsApp() {
-  if (userRole !== 'staff') return;
-  const name = (userProfile && userProfile.display_name) || (currentUser && currentUser.email) || 'Staff member';
-  const now = new Date();
-  const dateStr = now.toLocaleDateString();
-  const timeStr = now.toTimeString().slice(0, 5);
-  const net = ($('mySalSumNet') && $('mySalSumNet').textContent) || 'Rs. 0';
-  const msg = `Hi, I would like to request my salary payment.\n\nName: ${name}\nRequest Date/Time: ${dateStr}, ${timeStr}\nCurrent Net Payable (this month): ${net}\n\nPlease let me know when it can be arranged. Thank you.`;
-  const url = `https://wa.me/${STAFF_WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`;
-  window.open(url, '_blank');
+// ==================== DAILY PAY (staff-only) ====================
+function renderDailyPay() {
+  const ym = new Date().toISOString().slice(0, 7);
+  const dailyThisMonth = myFullSalaryEntries
+    .filter(s => s.entry_type === 'daily' && (s.entry_date || '').slice(0, 7) === ym)
+    .sort((a, b) => (a.entry_date < b.entry_date ? 1 : -1));
+  const total = dailyThisMonth.reduce((a, s) => a + Number(s.amount), 0);
+  if ($('dpDaysCount')) $('dpDaysCount').textContent = dailyThisMonth.length;
+  if ($('dpMonthTotal')) $('dpMonthTotal').textContent = fmt(total);
+  const tbody = $('dpListBody');
+  if (tbody) {
+    tbody.innerHTML = dailyThisMonth.length ? dailyThisMonth.map(s => `
+      <tr><td>${s.entry_date}</td><td>${fmt(s.amount)}</td><td>${s.note || '-'}</td></tr>
+    `).join('') : '<tr><td colspan="3" style="text-align:center;opacity:.5;padding:14px;">No daily pay logged this month yet.</td></tr>';
+  }
 }
 
-let isAuthModeLogin = true; // true=login, false=signup
+// ==================== MY WORK UPDATE (staff-only) ====================
+function todayStr() { return new Date().toISOString().slice(0, 10); }
+
+function updateWorkUpdateStats() {
+  const today = todayStr();
+  const ym = today.slice(0, 7);
+  const mine = orders.filter(o => o.createdBy === currentUser.id);
+  const todayCount = mine.filter(o => (o.createdAt || '').slice(0, 10) === today).length;
+  const monthCount = mine.filter(o => (o.createdAt || '').slice(0, 7) === ym).length;
+  if ($('wuOrdersToday')) $('wuOrdersToday').textContent = todayCount;
+  if ($('wuOrdersMonth')) $('wuOrdersMonth').textContent = monthCount;
+}
+
+async function saveWorkNote() {
+  if (!currentUser) { alert('Please login first.'); return; }
+  const note = $('wuNoteText').value.trim();
+  if (!note) { alert('Write something first!'); return; }
+  try {
+    const { error } = await supabase.from('attendance').upsert({
+      owner_id: businessId,
+      staff_id: currentUser.id,
+      staff_name: (userProfile && userProfile.display_name) || null,
+      work_date: todayStr(),
+      work_note: note
+    }, { onConflict: 'staff_id,work_date' });
+    if (error) throw error;
+    updateStatus('✅ Work update saved');
+    $('wuNoteText').value = '';
+    await loadWorkUpdateHistory();
+  } catch (e) {
+    console.error('Save work note error:', e);
+    alert('❌ Could not save work update: ' + e.message);
+  }
+}
+
+async function loadWorkUpdateHistory() {
+  if (!currentUser) return;
+  try {
+    const { data, error } = await supabase
+      .from('attendance')
+      .select('*')
+      .eq('staff_id', currentUser.id)
+      .order('work_date', { ascending: false })
+      .limit(30);
+    if (error) throw error;
+    const tbody = $('wuHistoryBody');
+    if (!tbody) return;
+    const rows = (data || []).filter(r => r.work_note);
+    tbody.innerHTML = rows.length ? rows.map(r => {
+      const dayOrders = orders.filter(o => o.createdBy === currentUser.id && (o.createdAt || '').slice(0, 10) === r.work_date).length;
+      return `<tr><td>${r.work_date}</td><td>${dayOrders}</td><td>${r.work_note}</td></tr>`;
+    }).join('') : '<tr><td colspan="3" style="text-align:center;opacity:.5;padding:14px;">No updates yet.</td></tr>';
+  } catch (e) {
+    console.error('Load work update history error:', e);
+  }
+}
+
+// ==================== ATTENDANCE (staff-only) ====================
+let todayAttendanceRow = null;
+
+async function loadTodayAttendance() {
+  if (!currentUser) return;
+  try {
+    const { data, error } = await supabase
+      .from('attendance')
+      .select('*')
+      .eq('staff_id', currentUser.id)
+      .eq('work_date', todayStr())
+      .maybeSingle();
+    if (error) throw error;
+    todayAttendanceRow = data || null;
+    renderTodayAttendanceStatus();
+  } catch (e) {
+    console.error('Load today attendance error:', e);
+  }
+}
+
+function renderTodayAttendanceStatus() {
+  const box = $('attendTodayStatus');
+  const startBtn = $('attendStartBtn');
+  const endBtn = $('attendEndBtn');
+  if (!box) return;
+  if (!todayAttendanceRow || !todayAttendanceRow.check_in) {
+    box.textContent = "You haven't started today yet.";
+    box.className = 'notice warn';
+    if (startBtn) startBtn.disabled = false;
+    if (endBtn) endBtn.disabled = true;
+  } else if (!todayAttendanceRow.check_out) {
+    box.textContent = '🟢 Checked in at ' + new Date(todayAttendanceRow.check_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + '. Day in progress.';
+    box.className = 'notice';
+    if (startBtn) startBtn.disabled = true;
+    if (endBtn) endBtn.disabled = false;
+  } else {
+    box.textContent = '✅ Day complete — ' + new Date(todayAttendanceRow.check_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' to ' + new Date(todayAttendanceRow.check_out).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + '.';
+    box.className = 'notice';
+    if (startBtn) startBtn.disabled = true;
+    if (endBtn) endBtn.disabled = true;
+  }
+}
+
+async function startDay() {
+  if (!currentUser) { alert('Please login first.'); return; }
+  try {
+    const { data, error } = await supabase.from('attendance').upsert({
+      owner_id: businessId,
+      staff_id: currentUser.id,
+      staff_name: (userProfile && userProfile.display_name) || null,
+      work_date: todayStr(),
+      check_in: new Date().toISOString()
+    }, { onConflict: 'staff_id,work_date' }).select().single();
+    if (error) throw error;
+    todayAttendanceRow = data;
+    renderTodayAttendanceStatus();
+    updateStatus('✅ Day started');
+    await loadAttendanceLog();
+  } catch (e) {
+    console.error('Start day error:', e);
+    alert('❌ Could not start day: ' + e.message);
+  }
+}
+
+async function endDay() {
+  if (!currentUser) return;
+  try {
+    const { data, error } = await supabase.from('attendance').upsert({
+      owner_id: businessId,
+      staff_id: currentUser.id,
+      staff_name: (userProfile && userProfile.display_name) || null,
+      work_date: todayStr(),
+      check_out: new Date().toISOString()
+    }, { onConflict: 'staff_id,work_date' }).select().single();
+    if (error) throw error;
+    todayAttendanceRow = data;
+    renderTodayAttendanceStatus();
+    updateStatus('✅ Day ended');
+    await loadAttendanceLog();
+  } catch (e) {
+    console.error('End day error:', e);
+    alert('❌ Could not end day: ' + e.message);
+  }
+}
+
+async function loadAttendanceLog() {
+  if (!currentUser) return;
+  try {
+    const ym = todayStr().slice(0, 7);
+    const { data, error } = await supabase
+      .from('attendance')
+      .select('*')
+      .eq('staff_id', currentUser.id)
+      .gte('work_date', ym + '-01')
+      .order('work_date', { ascending: false });
+    if (error) throw error;
+    const tbody = $('attendLogBody');
+    if (!tbody) return;
+    tbody.innerHTML = (data && data.length) ? data.map(r => {
+      const hrs = (r.check_in && r.check_out) ? (((new Date(r.check_out) - new Date(r.check_in)) / 3600000).toFixed(1) + ' hrs') : '-';
+      const inT = r.check_in ? new Date(r.check_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-';
+      const outT = r.check_out ? new Date(r.check_out).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-';
+      return `<tr><td>${r.work_date}</td><td>${inT}</td><td>${outT}</td><td>${hrs}</td></tr>`;
+    }).join('') : '<tr><td colspan="4" style="text-align:center;opacity:.5;padding:14px;">No attendance logged this month yet.</td></tr>';
+  } catch (e) {
+    console.error('Load attendance log error:', e);
+  }
+}
+
+// ==================== ADVANCE REQUESTS ====================
+async function submitAdvanceRequest() {
+  if (!currentUser) { alert('Please login first.'); return; }
+  const amount = Number($('advAmount').value) || 0;
+  const reason = $('advReason').value.trim();
+  if (amount <= 0) { alert('Enter an amount greater than 0!'); return; }
+  try {
+    const { error } = await supabase.from('advance_requests').insert({
+      owner_id: businessId,
+      staff_id: currentUser.id,
+      staff_name: (userProfile && userProfile.display_name) || null,
+      amount, reason: reason || null, status: 'pending'
+    });
+    if (error) throw error;
+    $('advAmount').value = 0;
+    $('advReason').value = '';
+    updateStatus('✅ Advance request sent');
+    await notifyOwnerWhatsApp(amount, reason);
+    await loadMyAdvanceRequests();
+  } catch (e) {
+    console.error('Advance request error:', e);
+    alert('❌ Could not send request: ' + e.message);
+  }
+}
+
+async function notifyOwnerWhatsApp(amount, reason) {
+  try {
+    const { data, error } = await supabase.from('profiles').select('whatsapp_number,display_name').eq('id', businessId).maybeSingle();
+    if (error) throw error;
+    if (!data || !data.whatsapp_number) {
+      alert('⚠️ Request saved, but the owner has not set a WhatsApp number yet in their Profile, so no WhatsApp message was sent.');
+      return;
+    }
+    const staffName = (userProfile && userProfile.display_name) || 'A staff member';
+    const msg = `💸 Advance Request\nFrom: ${staffName}\nAmount: Rs. ${amount}\nReason: ${reason || '-'}\n\nPlease open the app to approve or reject.`;
+    const digits = String(data.whatsapp_number).replace(/[^0-9]/g, '');
+    window.open('https://wa.me/' + digits + '?text=' + encodeURIComponent(msg), '_blank');
+  } catch (e) {
+    console.error('WhatsApp notify error:', e);
+  }
+}
+
+async function loadMyAdvanceRequests() {
+  if (!currentUser) return;
+  try {
+    const { data, error } = await supabase
+      .from('advance_requests')
+      .select('*')
+      .eq('staff_id', currentUser.id)
+      .order('requested_at', { ascending: false });
+    if (error) throw error;
+    const tbody = $('advMyHistoryBody');
+    if (!tbody) return;
+    tbody.innerHTML = (data && data.length) ? data.map(r => `
+      <tr>
+        <td>${(r.requested_at || '').slice(0, 10)}</td>
+        <td>${fmt(r.amount)}</td>
+        <td>${r.reason || '-'}</td>
+        <td><span class="status-pill ${r.status}">${r.status}</span></td>
+      </tr>
+    `).join('') : '<tr><td colspan="4" style="text-align:center;opacity:.5;padding:14px;">No requests yet.</td></tr>';
+  } catch (e) {
+    console.error('Load my advance requests error:', e);
+  }
+}
+
+// ==================== OWNER: ADVANCE APPROVALS + WHATSAPP NUMBER ====================
+async function saveOwnerWhatsapp() {
+  if (!currentUser || userRole !== 'owner') return;
+  const num = $('ownerWhatsapp').value.trim();
+  try {
+    const { error } = await supabase.from('profiles').update({ whatsapp_number: num || null }).eq('id', currentUser.id);
+    if (error) throw error;
+    updateStatus('✅ WhatsApp number saved');
+  } catch (e) {
+    console.error('Save owner whatsapp error:', e);
+    alert('❌ Could not save number: ' + e.message);
+  }
+}
+
+async function loadOwnerAdvanceRequests() {
+  if (!currentUser || userRole !== 'owner') return;
+  try {
+    const { data, error } = await supabase
+      .from('advance_requests')
+      .select('*')
+      .eq('owner_id', currentUser.id)
+      .order('requested_at', { ascending: false });
+    if (error) throw error;
+    renderOwnerAdvanceRequests(data || []);
+  } catch (e) {
+    console.error('Load owner advance requests error:', e);
+  }
+}
+
+function renderOwnerAdvanceRequests(list) {
+  const tbody = $('advOwnerBody');
+  if (!tbody) return;
+  tbody.innerHTML = list.length ? list.map(r => `
+    <tr>
+      <td>${r.staff_name || '(no name)'}</td>
+      <td>${(r.requested_at || '').slice(0, 10)}</td>
+      <td>${fmt(r.amount)}</td>
+      <td>${r.reason || '-'}</td>
+      <td><span class="status-pill ${r.status}">${r.status}</span></td>
+      <td>${r.status === 'pending' ? `
+        <button class="btn btn-sm btn-primary" onclick="decideAdvance('${r.id}','approved')">✅</button>
+        <button class="btn btn-sm btn-danger" onclick="decideAdvance('${r.id}','rejected')">❌</button>
+      ` : '-'}</td>
+    </tr>
+  `).join('') : '<tr><td colspan="6" style="text-align:center;opacity:.5;padding:14px;">No advance requests yet.</td></tr>';
+}
+
+async function decideAdvance(id, status) {
+  if (!currentUser) return;
+  try {
+    const { error } = await supabase.from('advance_requests').update({
+      status, decided_at: new Date().toISOString(), decided_by: currentUser.id
+    }).eq('id', id).eq('owner_id', currentUser.id);
+    if (error) throw error;
+    updateStatus(status === 'approved' ? '✅ Advance approved' : '❌ Advance rejected');
+    await loadOwnerAdvanceRequests();
+  } catch (e) {
+    console.error('Decide advance error:', e);
+    alert('❌ Could not update request: ' + e.message);
+  }
+}
+
+
 
 // ==================== STATE ====================
 let state = {
@@ -4129,6 +4477,7 @@ function dbOrderToLocal(o) {
     address: o.address || '',
     notes: o.notes || '',
     status: o.status || 'pending',
+    createdBy: o.created_by || null,
     createdAt: o.created_at || new Date().toISOString()
   };
 }
@@ -4541,7 +4890,8 @@ async function createOrder() {
     customer_id: customerId,
     product_size_g: Number(product) || 0,
     qty, unit_price: unitPrice, total,
-    address, notes, status: 'pending'
+    address, notes, status: 'pending',
+    created_by: currentUser.id
   };
   try {
     const { error } = await supabase.from('orders').insert(row);
@@ -4554,7 +4904,7 @@ async function createOrder() {
 
   orders.unshift({
     id: row.id, customerId, product, qty, unitPrice, total,
-    address, notes, status: 'pending', createdAt: new Date().toISOString()
+    address, notes, status: 'pending', createdBy: currentUser.id, createdAt: new Date().toISOString()
   });
   saveOrders();
   renderOrders();
@@ -5059,10 +5409,6 @@ async function authAction() {
 }
 
 async function logout() {
-  if (staffSalaryChannel) {
-    supabase.removeChannel(staffSalaryChannel);
-    staffSalaryChannel = null;
-  }
   await supabase.auth.signOut();
   currentUser = null;
   userProfile = null;
@@ -5393,10 +5739,15 @@ document.querySelectorAll('[data-ribbon="true"]').forEach(btn => {
 });
 
 const OWNER_ONLY_TABS = ['dashboard', 'calculator', 'production', 'history', 'data', 'monthly-summary', 'income'];
+const STAFF_ONLY_TABS = ['my-salary', 'daily-pay', 'work-update', 'attendance', 'advance'];
 
 function activateAppTab(tabId){
   if (OWNER_ONLY_TABS.includes(tabId) && userRole === 'staff') {
     alert('🔒 This section is only available to the business owner.');
+    return;
+  }
+  if (STAFF_ONLY_TABS.includes(tabId) && userRole === 'owner') {
+    alert('🔒 This section is only available to staff accounts.');
     return;
   }
   const panel = document.getElementById(tabId);
@@ -5414,7 +5765,19 @@ function activateAppTab(tabId){
   if (tabId === 'production') calcProduction();
   if (tabId === 'orders') { renderOrders(); renderCustomers(); renderDelivery(); updateOrderStats(); }
   if (tabId === 'expenses') { renderExpenses(); renderRecurringExpenses(); }
-  if (tabId === 'profile') { updateAuthUI(); if (userRole === 'owner') loadStaffList(); else if (userRole === 'staff') loadMySalaryData(); }
+  if (tabId === 'my-salary') loadMySalary();
+  if (tabId === 'daily-pay') { loadMySalary().then(renderDailyPay); }
+  if (tabId === 'work-update') { updateWorkUpdateStats(); loadWorkUpdateHistory(); $('wuNoteText').value = ''; }
+  if (tabId === 'attendance') { loadTodayAttendance(); loadAttendanceLog(); }
+  if (tabId === 'advance') loadMyAdvanceRequests();
+  if (tabId === 'profile') {
+    updateAuthUI();
+    if (userRole === 'owner') {
+      loadStaffList();
+      loadOwnerAdvanceRequests();
+      if ($('ownerWhatsapp') && userProfile) $('ownerWhatsapp').value = userProfile.whatsapp_number || '';
+    }
+  }
 }
 
 document.querySelectorAll('[data-home-tab],[data-open-tab]').forEach(btn => {
