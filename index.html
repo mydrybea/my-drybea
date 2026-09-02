@@ -2379,6 +2379,31 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
 @media(max-width:900px){.world-staff-actions{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
 @media(max-width:520px){.world-staff-actions{grid-template-columns:1fr 1fr!important;gap:8px!important}.world-staff-actions .staff-launch{min-height:86px;padding:10px}.world-staff-actions .staff-launch small{font-size:.57rem}.owner-qahint{display:none}}
 </style>
+
+<style id="final-staff-four-nav">
+/* FINAL STAFF NAV — EXACTLY 4 BUTTONS */
+.app-nav.staff-nav .tab-btn{display:none!important;flex:1 1 0;min-width:0!important;justify-content:center}
+.app-nav.staff-nav .tab-btn[data-tab="staff-home"],
+.app-nav.staff-nav .tab-btn[data-tab="orders"],
+.app-nav.staff-nav .tab-btn[data-tab="my-salary"],
+.app-nav.staff-nav .tab-btn[data-tab="profile"]{display:flex!important}
+.app-nav.staff-nav{display:flex!important;gap:6px;overflow:hidden!important;flex-wrap:nowrap!important}
+</style>
+<style id="final-four-staff-nav-lock">
+/* MY DRYBEA — Staff navigation hard lock: exactly four visible buttons */
+@media(min-width:1px){
+  body.staff-mode .app-nav.staff-nav .tab-btn{display:none!important;}
+  body.staff-mode .app-nav.staff-nav .tab-btn[data-tab="staff-home"],
+  body.staff-mode .app-nav.staff-nav .tab-btn[data-tab="orders"],
+  body.staff-mode .app-nav.staff-nav .tab-btn[data-tab="my-salary"],
+  body.staff-mode .app-nav.staff-nav .tab-btn[data-tab="profile"]{display:flex!important;}
+}
+</style>
+
+<style id="secure-staff-sale-css">
+[data-staff-order-customer] .field{margin-bottom:10px}
+.staff-sale-ref{font-weight:950;letter-spacing:.08em}
+</style>
 </head>
 <body>
 
@@ -2439,7 +2464,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
     .app-nav.staff-nav{ overflow-x:auto; flex-wrap:nowrap; -webkit-overflow-scrolling:touch; scrollbar-width:none; }
     .app-nav.staff-nav::-webkit-scrollbar{ display:none; }
     .app-nav.staff-nav .tab-btn{ flex:0 0 auto; min-width:70px; }
-/* Simple staff navigation: keep the primary five steps visible. Other staff tools remain available from Staff Home. */
+/* Staff navigation: My Salary is a staff-only navigation item. Other staff tools remain available from Staff Home. */
 .app-nav.staff-nav .tab-btn[data-tab="daily-pay"],
 .app-nav.staff-nav .tab-btn[data-tab="attendance"],
 .app-nav.staff-nav .tab-btn[data-tab="advance"],
@@ -2450,9 +2475,6 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
 .app-nav.staff-nav .tab-btn[data-tab="staff-home"],
 .app-nav.staff-nav .tab-btn[data-tab="orders"],
 .app-nav.staff-nav .tab-btn[data-tab="my-salary"],
-.app-nav.staff-nav .tab-btn[data-tab="attendance"],
-.app-nav.staff-nav .tab-btn[data-tab="advance"],
-.app-nav.staff-nav .tab-btn[data-tab="expenses"],
 .app-nav.staff-nav .tab-btn[data-tab="profile"]{display:flex!important;}
     /* Staff navigation is controlled by applyRoleUI() after the Supabase profile loads. */
     .emoji-nav-icon{ font-size:16px; line-height:1; display:flex; align-items:center; justify-content:center; width:17px; height:17px; }
@@ -2468,9 +2490,9 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
     <button class="tab-btn active" data-tab="dashboard" role="tab" aria-label="Home" data-owner-only><i class="business-icon" data-lucide="house" aria-hidden="true"></i><span>Home</span></button>
     <button class="tab-btn" data-tab="my-staff" role="tab" aria-label="My Staff" data-owner-only><i class="business-icon" data-lucide="users-round" aria-hidden="true"></i><span>My Staff</span></button>
     <button class="tab-btn" data-tab="staff-home" role="tab" aria-label="Staff Home" data-staff-only><i class="business-icon" data-lucide="layout-dashboard" aria-hidden="true"></i><span>Staff Home</span></button>
+    <button class="tab-btn" data-tab="my-salary" role="tab" aria-label="My Salary" data-staff-only><i class="business-icon" data-lucide="wallet-cards" aria-hidden="true"></i><span>My Salary</span></button>
     <button class="tab-btn" data-tab="orders" role="tab" aria-label="Orders"><i class="business-icon" data-lucide="shopping-bag" aria-hidden="true"></i><span>Orders</span></button>
     <button class="tab-btn" data-tab="income" role="tab" aria-label="Income" data-owner-only><i class="business-icon" data-lucide="trending-up" aria-hidden="true"></i><span>Income</span></button>
-    <button class="tab-btn" data-tab="my-salary" role="tab" aria-label="My Salary"><i class="business-icon" data-lucide="wallet-cards" aria-hidden="true"></i><span>My Salary</span></button>
     <button class="tab-btn" data-tab="expenses" role="tab" aria-label="Daily Expenses" data-staff-only><i class="business-icon" data-lucide="receipt" aria-hidden="true"></i><span>Daily Expenses</span></button>
     <button class="tab-btn" data-tab="daily-pay" role="tab" aria-label="Daily Pay" data-staff-only><i class="business-icon" data-lucide="calendar-days" aria-hidden="true"></i><span>Daily Pay</span></button>
     <button class="tab-btn" data-tab="work-update" role="tab" aria-label="Work Update" data-staff-only><i class="business-icon" data-lucide="notebook-pen" aria-hidden="true"></i><span>Work Update</span></button>
@@ -3343,21 +3365,6 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
             <span class="home-action-copy"><strong>Dashboard</strong><small>Business at a glance</small></span>
             <span class="quick-status" aria-hidden="true"></span>
           </button>
-          <button class="home-action gold" data-home-tab="my-staff" data-ribbon="true" aria-label="Open My Staff">
-            <span class="home-icon"><i class="business-icon" data-lucide="users-round" aria-hidden="true"></i></span>
-            <span class="home-action-copy"><strong>My Staff</strong><small>Team, tasks, payroll & verification</small></span>
-            <span class="quick-status" aria-hidden="true"></span>
-          </button>
-          <button class="home-action" data-home-tab="income" data-ribbon="true" aria-label="Open Income">
-            <span class="home-icon"><i class="business-icon" data-lucide="trending-up" aria-hidden="true"></i></span>
-            <span class="home-action-copy"><strong>Income</strong><small>Revenue, margin & performance</small></span>
-            <span class="quick-status" aria-hidden="true"></span>
-          </button>
-          <button class="home-action" data-home-tab="my-salary" data-ribbon="true" aria-label="Open Salary Control">
-            <span class="home-icon"><i class="business-icon" data-lucide="wallet-cards" aria-hidden="true"></i></span>
-            <span class="home-action-copy"><strong>Salary</strong><small>Daily & monthly payroll control</small></span>
-            <span class="quick-status" aria-hidden="true"></span>
-          </button>
           <button class="home-action" data-home-tab="calculator" data-ribbon="true" aria-label="Open Costing">
             <span class="home-icon"><i class="business-icon" data-lucide="calculator" aria-hidden="true"></i></span>
             <span class="home-action-copy"><strong>Costing</strong><small>Calculate price, cost & profit</small></span>
@@ -3643,10 +3650,18 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
 <div class="modal-backdrop" id="orderModal">
   <div class="modal">
     <h3><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="shopping-bag" aria-hidden="true"></i></span><span>New Order</span></h3><p class="pro-subtitle green">Capture the sale cleanly from the first field.</p>
-    <div class="field">
+    <div class="field" data-owner-order-customer>
       <label>Customer</label>
       <select id="orderCustomer"></select>
-      <div class="field" data-owner-order-referral style="display:none;margin-top:10px;">
+    </div>
+    <div data-staff-order-customer style="display:none;">
+      <div class="notice" style="margin-bottom:10px;padding:10px 12px;font-size:.72rem;"><i class="business-icon icon-inline" data-lucide="shield-check"></i> Staff orders do not use the customer master list. Customer details are stored only inside this sale record for owner verification.</div>
+      <div class="grid-2">
+        <div class="field"><label>Customer Name</label><input id="staffOrderCustomerName" type="text" placeholder="Customer name" autocomplete="off"></div>
+        <div class="field"><label>Customer Phone</label><input id="staffOrderCustomerPhone" type="text" placeholder="Phone number" autocomplete="off"></div>
+      </div>
+    </div>
+    <div class="field" data-owner-order-referral style="display:none;margin-top:10px;">
         <label>Staff Reference for this Order</label>
         <select id="orderReferralStaffSelect"><option value="">Auto from customer / No referral</option></select>
         <small style="display:block;margin-top:6px;color:var(--text-muted);">Owner verification control. The selected reference is attached to this order before commission review.</small>
@@ -3867,22 +3882,21 @@ function applyRoleUI() {
   });
 
   // Staff workspace: operational tabs only; owner-only tabs stay hidden.
-  const staffTabs = ['staff-home','orders','my-salary','expenses','daily-pay','work-update','attendance','advance','my-commission','my-tasks','announcements','profile'];
+  const staffTabs = ['staff-home','orders','my-salary','profile'];
   document.querySelectorAll('[data-staff-only]').forEach(el => {
     const tab = el.getAttribute('data-tab');
     el.style.display = (isStaff && staffTabs.includes(tab)) ? 'flex' : 'none';
   });
-  // My Salary is a shared secure workspace: staff sees their own pay; owner can open salary control.
-  const sharedSalaryNav = document.querySelector('.tab-btn[data-tab="my-salary"]');
-  if (sharedSalaryNav) sharedSalaryNav.style.display = 'flex';
-
   document.querySelectorAll('.tab-btn').forEach(el => {
     const tab = el.getAttribute('data-tab');
     if (isStaff) {
-      const allowed = ['staff-home','orders','my-salary','expenses','daily-pay','work-update','attendance','advance','my-commission','my-tasks','announcements','profile'].includes(tab);
+      const allowed = ['staff-home','orders','my-salary','profile'].includes(tab);
       el.style.display = allowed ? 'flex' : 'none';
     }
   });
+
+  const salaryNav = document.querySelector('.tab-btn[data-tab="my-salary"]');
+  if (salaryNav) salaryNav.style.display = isStaff ? 'flex' : 'none';
 
   const navEl = document.querySelector('.app-nav');
   if (navEl) navEl.classList.toggle('staff-nav', isStaff);
@@ -5185,16 +5199,22 @@ function generateOrderId() {
 }
 
 function getCustomerName(id) {
-  const c = customers.find(c => c.id === id);
-  return c ? c.name : 'Unknown';
+  const c = customers.find(c => String(c.id) === String(id));
+  if(c) return c.name;
+  const o = (orders||[]).find(x => String(x.customerId) === String(id));
+  return o?.customerName || 'Unknown';
 }
 function getCustomerAddress(id) {
-  const c = customers.find(c => c.id === id);
-  return c ? c.address : '';
+  const c = customers.find(c => String(c.id) === String(id));
+  if(c) return c.address || '';
+  const o = (orders||[]).find(x => String(x.customerId) === String(id));
+  return o?.address || '';
 }
 function getCustomerPhone(id) {
-  const c = customers.find(c => c.id === id);
-  return c ? c.phone : '';
+  const c = customers.find(c => String(c.id) === String(id));
+  if(c) return c.phone || '';
+  const o = (orders||[]).find(x => String(x.customerId) === String(id));
+  return o?.customerPhone || '';
 }
 
 // ==================== SUPABASE-BACKED CUSTOMERS/ORDERS ====================
@@ -5208,7 +5228,10 @@ function dbCustomerToLocal(c) {
 function dbOrderToLocal(o) {
   return {
     id: o.id,
-    customerId: o.customer_id,
+    customerId: o.customer_id || null,
+    customerName: o.customer_name_snapshot || '',
+    customerPhone: o.customer_phone_snapshot || '',
+    orderRefNo: o.order_ref_no || null,
     product: String(o.product_size_g),
     qty: Number(o.qty),
     unitPrice: Number(o.unit_price),
@@ -5225,7 +5248,10 @@ function dbOrderToLocal(o) {
 }
 
 async function loadCustomersFromCloud() {
-  if (!currentUser) return;
+  if (!currentUser || userRole === 'staff') {
+    if (userRole === 'staff') { customers = []; saveCustomers(); }
+    return;
+  }
   try {
     const { data, error } = await supabase
       .from('customers')
@@ -5244,11 +5270,9 @@ async function loadCustomersFromCloud() {
 async function loadOrdersFromCloud() {
   if (!currentUser) return;
   try {
-    const { data, error } = await supabase
-      .from('orders')
-      .select('*')
-      .eq('user_id', businessId)
-      .order('created_at', { ascending: false });
+    let q = supabase.from('orders').select('*').eq('user_id', businessId);
+    if (userRole === 'staff') q = q.eq('created_by', currentUser.id);
+    const { data, error } = await q.order('created_at', { ascending: false });
     if (error) throw error;
     orders = (data || []).map(dbOrderToLocal);
     saveOrders();
@@ -5560,6 +5584,7 @@ async function saveCustomer() {
 function renderCustomers() {
   const tbody = $('customersBody');
   const isStaff = userRole === 'staff';
+  if (isStaff) { if(tbody) tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;opacity:.45;padding:20px;">Customer master list is owner-only.</td></tr>'; return; }
   if (customers.length === 0) {
     tbody.innerHTML = `<tr><td colspan="${isStaff ? 4 : 5}" style="text-align:center;opacity:0.5;padding:20px;">No customers yet.</td></tr>`;
     return;
@@ -5596,6 +5621,7 @@ async function deleteCustomer(id) {
 
 function updateCustomerSelect() {
   const select = $('orderCustomer');
+  if (userRole === 'staff') { if(select) select.innerHTML = '<option value="">Staff sale — customer details entered in this order</option>'; return; }
   if (customers.length === 0) {
     select.innerHTML = '<option value="">— Add customer first —</option>';
     return;
@@ -5604,15 +5630,24 @@ function updateCustomerSelect() {
 }
 
 function openNewOrder() {
-  if (customers.length === 0) {
-    alert('Please add a customer first!');
-    openNewCustomer();
-    return;
+  const staffBlock=document.querySelector('[data-staff-order-customer]');
+  const ownerBlock=document.querySelector('[data-owner-order-customer]');
+  if(userRole==='staff'){
+    if(staffBlock) staffBlock.style.display='';
+    if(ownerBlock) ownerBlock.style.display='none';
+    const ref=document.querySelector('[data-owner-order-referral]'); if(ref) ref.style.display='none';
+    if($('staffOrderCustomerName')) $('staffOrderCustomerName').value='';
+    if($('staffOrderCustomerPhone')) $('staffOrderCustomerPhone').value='';
+  } else {
+    if(staffBlock) staffBlock.style.display='none';
+    if(ownerBlock) ownerBlock.style.display='';
+    updateCustomerSelect();
+    populateStaffReferralSelectors();
+    const f=document.querySelector('[data-owner-order-referral]'); if(f) f.style.display='';
+    const c=customers.find(x=>String(x.id)===String($('orderCustomer').value)); if($('orderReferralStaffSelect') && c?.referralStaffId) $('orderReferralStaffSelect').value=c.referralStaffId;
   }
-  updateCustomerSelect();
-  if(userRole==='owner'){ populateStaffReferralSelectors(); const f=document.querySelector('[data-owner-order-referral]'); if(f) f.style.display=''; }
-  const c=customers.find(x=>String(x.id)===String($('orderCustomer').value)); if($('orderReferralStaffSelect') && c?.referralStaffId) $('orderReferralStaffSelect').value=c.referralStaffId;
   $('orderModal').classList.add('active');
+  if(window.lucide) lucide.createIcons({attrs:{'stroke-width':1.9,'stroke-linecap':'round','stroke-linejoin':'round'}});
 }
 
 function openNewCustomer() {
@@ -5624,65 +5659,128 @@ function openNewCustomer() {
 }
 
 async function createOrder() {
-  const customerId = $('orderCustomer').value;
   const product = $('orderProduct').value;
   const qty = Number($('orderQty').value) || 0;
   const unitPrice = Number($('orderUnitPrice').value) || 0;
-  const address = $('orderAddress').value.trim() || getCustomerAddress(customerId);
   const notes = $('orderNotes').value.trim();
-  if (!customerId) { alert('Select a customer!'); return; }
   if (qty <= 0) { alert('Quantity must be at least 1!'); return; }
   if (unitPrice <= 0) { alert('Unit price required!'); return; }
   if (!currentUser) { alert('Please login first.'); return; }
 
+  // STAFF MODE: no customer master list. The sale itself owns the customer snapshot.
+  if (userRole === 'staff') {
+    const customerName = $('staffOrderCustomerName')?.value.trim() || '';
+    const customerPhone = $('staffOrderCustomerPhone')?.value.trim() || '';
+    const address = $('orderAddress').value.trim();
+    if (!customerName) { alert('Customer name is required.'); return; }
+    if (!address) { alert('Delivery address is required.'); return; }
+
+    try {
+      // Server creates the immutable random SALE REF and the pending commission claim atomically.
+      const { data, error } = await supabase.rpc('create_staff_sale_secure', {
+        p_product_size_g: Number(product) || 0,
+        p_qty: qty,
+        p_unit_price: unitPrice,
+        p_customer_name: customerName,
+        p_customer_phone: customerPhone,
+        p_customer_address: address,
+        p_notes: notes
+      });
+      if (error) throw error;
+      const row = data;
+      orders.unshift({
+        id: row.id,
+        customerId: row.customer_id || null,
+        customerName: row.customer_name_snapshot || customerName,
+        customerPhone: row.customer_phone_snapshot || customerPhone,
+        product, qty, unitPrice, total: Number(row.total)||qty*unitPrice,
+        address: row.customer_address_snapshot || address,
+        notes: row.notes || notes,
+        status: row.status || 'pending',
+        createdBy: row.created_by || currentUser.id,
+        createdAt: row.created_at || new Date().toISOString(),
+        orderRefNo: row.order_ref_no,
+        referralStaffId: row.referral_staff_id || currentUser.id,
+        referralStaffReference: row.referral_staff_reference || userProfile?.staff_reference || '',
+        referralStatus: row.referral_status || 'pending_verification'
+      });
+      saveOrders();
+      await loadCommissionClaims();
+      renderOrders(); renderDelivery(); updateOrderStats();
+      closeModal('orderModal');
+      $('staffOrderCustomerName').value=''; $('staffOrderCustomerPhone').value='';
+      $('orderQty').value=1; $('orderUnitPrice').value=350; $('orderAddress').value=''; $('orderNotes').value='';
+      updateStatus(`🔐 Sale ${row.order_ref_no} created · pending owner verification`);
+    } catch (e) {
+      console.error('Secure staff sale error:', e);
+      alert('❌ Could not create secure sale: ' + e.message);
+    }
+    return;
+  }
+
+  // OWNER MODE: existing customer master workflow remains available.
+  const customerId = $('orderCustomer').value;
+  const address = $('orderAddress').value.trim() || getCustomerAddress(customerId);
+  if (!customerId) { alert('Select a customer!'); return; }
   const customer = customers.find(c=>String(c.id)===String(customerId));
   let referralStaffId = customer?.referralStaffId || null;
   let referralStaffReference = customer?.referralStaffReference || null;
-  if (userRole === 'staff') {
-    referralStaffId = currentUser.id;
-    referralStaffReference = userProfile?.staff_reference || null;
-  } else if (userRole === 'owner' && $('orderReferralStaffSelect')?.value) {
+  if ($('orderReferralStaffSelect')?.value) {
     referralStaffId = $('orderReferralStaffSelect').value;
     referralStaffReference = (staffListCache||[]).find(s=>String(s.id)===String(referralStaffId))?.staff_reference || null;
   }
   const total = qty * unitPrice;
-  const row = { id: generateOrderId(), user_id: businessId, customer_id: customerId, product_size_g: Number(product)||0, qty, unit_price: unitPrice, total, address, notes, status:'pending', created_by:currentUser.id, referral_staff_id: referralStaffId, referral_staff_reference: referralStaffReference, referral_status: referralStaffId ? 'pending_verification' : 'none' };
+  const row = { id: generateOrderId(), user_id: businessId, customer_id: customerId, product_size_g: Number(product)||0, qty, unit_price:unitPrice, total, address, notes, status:'pending', created_by:currentUser.id, referral_staff_id:referralStaffId, referral_staff_reference:referralStaffReference, referral_status:referralStaffId?'pending_verification':'none' };
   try {
     const { data, error } = await supabase.from('orders').insert(row).select().single();
     if (error) throw error;
-    // Staff-created referral orders automatically create a PENDING claim for owner verification.
     if (referralStaffId) {
-      const staffId = String(referralStaffId);
-      const claim = { owner_id: businessId, staff_id: staffId, staff_reference: referralStaffReference || '', order_id: String(data.id), customer_id: String(customerId), customer_name: customer?.name || '', customer_phone: customer?.phone || '', order_total: total, commission_rate: STAFF_COMMISSION_RATE, commission_amount: 0, status:'pending', order_snapshot:{ order_id:data.id, customer_id:customerId, customer_name:customer?.name||'', product_size_g:Number(product)||0, qty, unit_price:unitPrice, total, address, notes, created_by:currentUser.id, referral_staff_id:staffId, referral_staff_reference:referralStaffReference } };
+      const claim = { owner_id: businessId, staff_id:String(referralStaffId), staff_reference:referralStaffReference||'', order_id:String(data.id), customer_id:String(customerId), customer_name:customer?.name||'', customer_phone:customer?.phone||'', order_total:total, commission_rate:STAFF_COMMISSION_RATE, commission_amount:0, status:'pending', order_ref_no:data.order_ref_no||null, order_snapshot:{order_id:data.id,order_ref_no:data.order_ref_no||null,customer_id:customerId,customer_name:customer?.name||'',product_size_g:Number(product)||0,qty,unit_price:unitPrice,total,address,notes,created_by:currentUser.id,referral_staff_id:String(referralStaffId),referral_staff_reference:referralStaffReference} };
       const { error: ce } = await supabase.from('staff_commission_claims').insert(claim);
-      if (ce) { console.error('Commission claim create failed:',ce); updateStatus('⚠️ Order saved, but commission verification claim failed'); }
+      if (ce) console.error('Owner referral claim create failed:',ce);
     }
   } catch (e) { console.error('Create order error:',e); alert('❌ Could not save order: '+e.message); return; }
-  orders.unshift({ id:row.id, customerId, product, qty, unitPrice, total, address, notes, status:'pending', createdBy:currentUser.id, createdAt:new Date().toISOString(), referralStaffId, referralStaffReference, referralStatus: referralStaffId?'pending_verification':'none' });
+  orders.unshift({id:row.id,customerId,product,qty,unitPrice,total,address,notes,status:'pending',createdBy:currentUser.id,createdAt:new Date().toISOString(),referralStaffId,referralStaffReference,referralStatus:referralStaffId?'pending_verification':'none',orderRefNo:row.order_ref_no||null});
   saveOrders(); renderOrders(); renderDelivery(); updateOrderStats(); closeModal('orderModal');
   $('orderQty').value=1; $('orderUnitPrice').value=350; $('orderAddress').value=''; $('orderNotes').value='';
   updateStatus(referralStaffId ? '📨 Sale sent to owner for commission verification' : '✅ Order created');
 }
-
 function renderOrders() {
   const tbody = $('ordersBody');
-  if (orders.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;opacity:0.5;padding:20px;">No orders yet.</td></tr>';
+  if (!tbody) return;
+  // OWNER: sees every order in the business.
+  // STAFF: sees only sales created by that staff member.
+  const visibleOrders = userRole === 'staff'
+    ? (orders || []).filter(o => String(o.createdBy || '') === String(currentUser?.id || ''))
+    : (orders || []);
+
+  if (visibleOrders.length === 0) {
+    const msg = userRole === 'staff' ? 'No sales created by you yet.' : 'No orders yet.';
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;opacity:0.5;padding:20px;">${msg}</td></tr>`;
     return;
   }
-  tbody.innerHTML = orders.map((order, index) => {
+
+  const claims = window.staffCommissionClaims || [];
+  tbody.innerHTML = visibleOrders.map((order) => {
+    const index = orders.indexOf(order);
+    const claim = claims.find(c => String(c.order_ref_no || '') === String(order.orderRefNo || '') && String(c.order_id) === String(order.id) && (userRole === 'owner' || String(c.staff_id) === String(currentUser?.id)));
+    const commissionCell = claim?.status === 'approved'
+      ? `<div style="font-weight:900;color:#087b3e;">+ ${fmt(Number(claim.commission_amount)||0)}</div><small style="color:#087b3e;">12% Verified</small>`
+      : (claim?.status === 'pending' ? '<small style="color:#a27b1b;font-weight:800;">Pending verification</small>' : '<small style="opacity:.45;">—</small>');
+    const actions = userRole === 'owner'
+      ? `<button class="btn btn-sm" onclick="viewInvoice(${index})"><i class="business-icon" data-lucide="receipt-text" aria-hidden="true"></i></button>
+         <button class="btn btn-sm" onclick="cycleStatus(${index})"><i class="business-icon" data-lucide="refresh-cw" aria-hidden="true"></i></button>
+         <button class="btn btn-sm btn-danger" onclick="deleteOrder(${index})"><i class="business-icon" data-lucide="trash-2" aria-hidden="true"></i></button>`
+      : '<span style="font-size:.68rem;font-weight:800;opacity:.55;">VIEW ONLY</span>';
     return `<tr>
       <td><strong>${order.id}</strong></td>
       <td>${new Date(order.createdAt).toLocaleDateString()}</td>
-      <td>${getCustomerName(order.customerId)}</td>
+      <td><strong>${escapeHtmlSafe(order.customerName || getCustomerName(order.customerId) || 'Customer')}</strong>${order.orderRefNo?`<br><small style="font-weight:900;letter-spacing:.06em;opacity:.7;">${escapeHtmlSafe(order.orderRefNo)}</small>`:''}</td>
       <td>${order.qty} × ${order.product}g</td>
       <td>${fmt(order.total)}</td>
       <td>${getStatusBadge(order.status)}</td>
-      <td>
-        <button class="btn btn-sm" onclick="viewInvoice(${index})"><i class="business-icon" data-lucide="receipt-text" aria-hidden="true"></i></button>
-        <button class="btn btn-sm" onclick="cycleStatus(${index})"><i class="business-icon" data-lucide="refresh-cw" aria-hidden="true"></i></button>
-        <button class="btn btn-sm btn-danger" onclick="deleteOrder(${index})"><i class="business-icon" data-lucide="trash-2" aria-hidden="true"></i></button>
-      </td>
+      <td>${commissionCell}</td>
+      <td>${actions}</td>
     </tr>`;
   }).join('');
   if (window.lucide) lucide.createIcons({ attrs: { 'stroke-width': 1.9, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' } });
@@ -5699,6 +5797,7 @@ function getStatusBadge(status) {
 }
 
 async function cycleStatus(index) {
+  if (userRole !== 'owner') { alert('🔒 Only the business owner can change order status.'); return; }
   const cycle = ['pending', 'shipped', 'delivered', 'cancelled'];
   const order = orders[index];
   if (!currentUser) { alert('Please login first.'); return; }
@@ -5721,6 +5820,7 @@ async function cycleStatus(index) {
 }
 
 async function deleteOrder(index) {
+  if (userRole !== 'owner') { alert('🔒 Only the business owner can delete orders.'); return; }
   if (!confirm('Delete this order?')) return;
   if (!currentUser) { alert('Please login first.'); return; }
   const order = orders[index];
@@ -5769,9 +5869,9 @@ function renderDelivery() {
 
 function viewInvoice(index) {
   const order = orders[index];
-  const customerName = getCustomerName(order.customerId);
+  const customerName = order.customerName || getCustomerName(order.customerId);
   const customerAddress = order.address || getCustomerAddress(order.customerId);
-  const customerPhone = userRole === 'staff' ? '' : getCustomerPhone(order.customerId);
+  const customerPhone = userRole === 'staff' ? (order.customerPhone || '') : getCustomerPhone(order.customerId);
 
   const invoiceHTML = `
     <div class="inv-card">
@@ -5846,6 +5946,7 @@ function shareInvoiceWhatsApp(index) {
   const customerPhone = userRole === 'staff' ? '' : getCustomerPhone(order.customerId);
   let message = `🧾 *MY DRYBEA - INVOICE*\n\n`;
   message += `*Order ID:* ${order.id}\n`;
+  if (order.orderRefNo) message += `*Sale Ref:* ${order.orderRefNo}\n`;
   message += `*Date:* ${new Date(order.createdAt).toLocaleDateString()}\n`;
   message += `*Customer:* ${customerName}\n`;
   if (customerPhone) message += `*Phone:* ${customerPhone}\n`;
@@ -6088,7 +6189,7 @@ async function cloudLoad() {
     renderHistory();
     saveAll();
     // customers/orders/expenses live in their own tables — refresh those too
-    await Promise.all([loadCustomersFromCloud(), loadOrdersFromCloud(), loadExpensesFromCloud()]);
+    await Promise.all([userRole==='owner'?loadCustomersFromCloud():Promise.resolve(), loadOrdersFromCloud(), loadExpensesFromCloud()]);
     renderOrders();
     renderCustomers();
     renderDelivery();
@@ -6698,19 +6799,20 @@ async function ownerDeleteTask(id){if(userRole!=='owner'||!confirm('Delete this 
 async function ownerDeleteNotice(id){if(userRole!=='owner'||!confirm('Delete this notice?'))return;try{const {error}=await supabase.from('staff_announcements').delete().eq('id',id).eq('owner_id',currentUser.id);if(error)throw error;cacheStaffData({notices:(getMyStaffDataState().notices||[]).filter(x=>x.id!==id)});renderOwnerStaffManagement();renderStaffAnnouncements();}catch(e){alert('❌ Notice delete failed: '+e.message);}}
 
 function renderOwnerStaffPerformance(){
-  const list=staffListCache||[],month=new Date().toISOString().slice(0,7),perf=getOwnerPerformanceState();let totalSales=0,totalCommission=0;
+  const list=staffListCache||[],month=new Date().toISOString().slice(0,7),perf=getOwnerPerformanceState();
+  const claims=(window.staffCommissionClaims||[]).filter(c=>c.status==='approved' && String(c.submitted_at||c.verified_at||'').slice(0,7)===month);
+  let totalSales=0,totalCommission=0;
   const rows=list.map(st=>{
-    const eligible=(orders||[]).filter(o=>{const d=new Date(o.createdAt||o.date||0),c=customers.find(x=>String(x.id)===String(o.customerId));return o.status!=='cancelled'&&d.toISOString().slice(0,7)===month&&String(c?.referralStaffId||'')===String(st.id);});
-    const sales=eligible.reduce((a,o)=>a+(Number(o.total)||0),0),commission=sales*STAFF_COMMISSION_RATE;totalSales+=sales;totalCommission+=commission;
+    const eligible=claims.filter(c=>String(c.staff_id)===String(st.id));
+    const sales=eligible.reduce((a,c)=>a+(Number(c.order_total)||0),0),commission=eligible.reduce((a,c)=>a+(Number(c.commission_amount)||0),0);totalSales+=sales;totalCommission+=commission;
     const open=(getMyStaffDataState().tasks||[]).filter(t=>String(t.staff_id)===String(st.id)&&!taskDone(t)).length,p=perf[st.id]||{};
-    return `<tr><td><strong>${escapeHtmlSafe(st.display_name||'(no name)')}</strong><br><small>${escapeHtmlSafe(st.id)}</small></td><td><select id="staffStatus_${st.id}" class="staff-edit-input"><option value="active" ${(p.status||'active')==='active'?'selected':''}>Active</option><option value="paused" ${p.status==='paused'?'selected':''}>Paused</option></select></td><td>${eligible.length}</td><td>${fmt(sales)}</td><td><strong>12%</strong><br><small>Auto</small></td><td>${fmt(commission)}</td><td>${open}</td><td><input id="staffTarget_${st.id}" class="staff-edit-input" type="number" min="0" value="${Number(p.target)||0}" placeholder="Rs."></td><td><input id="staffNote_${st.id}" class="staff-edit-input" value="${escapeHtmlSafe(p.note||p.notes||'')}" placeholder="Owner note"></td><td><button class="btn btn-sm btn-primary" onclick="editOwnerStaffPerformance('${st.id}')"><i class="business-icon" data-lucide="save"></i></button></td></tr>`;
+    return `<tr><td><strong>${escapeHtmlSafe(st.display_name||'(no name)')}</strong><br><small>${escapeHtmlSafe(st.staff_reference||st.id||'')}</small></td><td><select id="staffStatus_${st.id}" class="staff-edit-input"><option value="active" ${(p.status||'active')==='active'?'selected':''}>Active</option><option value="paused" ${p.status==='paused'?'selected':''}>Paused</option></select></td><td>${eligible.length}</td><td>${fmt(sales)}</td><td><strong>12%</strong><br><small>Owner verified</small></td><td>${fmt(commission)}</td><td>${open}</td><td><input id="staffTarget_${st.id}" class="staff-edit-input" type="number" min="0" value="${Number(p.target)||0}" placeholder="Rs."></td><td><input id="staffNote_${st.id}" class="staff-edit-input" value="${escapeHtmlSafe(p.note||p.notes||'')}" placeholder="Owner note"></td><td><button class="btn btn-sm btn-primary" onclick="editOwnerStaffPerformance('${st.id}')"><i class="business-icon" data-lucide="save"></i></button></td></tr>`;
   }).join('')||'<tr><td colspan="10" style="text-align:center;opacity:.5;padding:18px;">No staff added yet.</td></tr>';
   if($('ownerStaffPerformanceBody'))$('ownerStaffPerformanceBody').innerHTML=rows;if($('ownerStaffCount'))$('ownerStaffCount').textContent=list.length;if($('ownerStaffSales'))$('ownerStaffSales').textContent=fmt(totalSales);if($('ownerStaffCommission'))$('ownerStaffCommission').textContent=fmt(totalCommission);if($('ownerCommissionTotal2'))$('ownerCommissionTotal2').textContent=fmt(totalCommission);
-  if($('ownerCommissionBody'))$('ownerCommissionBody').innerHTML=list.map(st=>{const sales=(orders||[]).filter(o=>{const d=new Date(o.createdAt||o.date||0),c=customers.find(x=>String(x.id)===String(o.customerId));return o.status!=='cancelled'&&d.toISOString().slice(0,7)===month&&String(c?.referralStaffId||'')===String(st.id);}).reduce((a,o)=>a+(Number(o.total)||0),0);return `<tr><td>${escapeHtmlSafe(st.display_name||'(no name)')}</td><td>${fmt(sales)}</td><td>${fmt(sales*STAFF_COMMISSION_RATE)}</td></tr>`;}).join('')||'<tr><td colspan="3" style="text-align:center;opacity:.5;padding:18px;">No referral sales this month.</td></tr>';
+  if($('ownerCommissionBody'))$('ownerCommissionBody').innerHTML=list.map(st=>{const cs=claims.filter(c=>String(c.staff_id)===String(st.id));const sales=cs.reduce((a,c)=>a+(Number(c.order_total)||0),0),commission=cs.reduce((a,c)=>a+(Number(c.commission_amount)||0),0);return `<tr><td>${escapeHtmlSafe(st.display_name||'(no name)')}</td><td>${fmt(sales)}</td><td>${fmt(commission)}</td></tr>`;}).join('')||'<tr><td colspan="3" style="text-align:center;opacity:.5;padding:18px;">No owner-verified commission sales this month.</td></tr>';
   const sel=$('ownerTaskStaff');if(sel){const prev=sel.value;sel.innerHTML='<option value="">-- Select staff --</option>'+list.map(st=>`<option value="${st.id}">${escapeHtmlSafe(st.display_name||'(no name)')}</option>`).join('');if(list.some(x=>x.id===prev))sel.value=prev;}
   if(window.lucide)lucide.createIcons();
 }
-
 function renderOwnerStaffManagement(){
   const tasks=getMyStaffDataState().tasks||[],notices=getMyStaffDataState().notices||[];
   const taskEl=$('ownerStaffTaskManagement');if(taskEl)taskEl.innerHTML=tasks.length?tasks.map(t=>`<div class="notice-row"><div class="notice-main"><strong>${escapeHtmlSafe(t.title)}</strong><small>${escapeHtmlSafe((staffListCache||[]).find(s=>String(s.id)===String(t.staff_id))?.display_name||t.staff_id||'Staff')} · ${taskDone(t)?'Completed':'Open'}</small></div><div style="display:flex;gap:6px;"><button class="btn btn-xs" onclick="ownerToggleTask('${t.id}')">${taskDone(t)?'Reopen':'Done'}</button><button class="btn btn-xs btn-danger" onclick="ownerDeleteTask('${t.id}')">Delete</button></div></div>`).join(''):'<div class="notice">No assigned tasks.</div>';
@@ -6749,7 +6851,7 @@ async function loadCommissionClaims(){
 function renderCommissionClaims(){
   const body=$('ownerCommissionClaimsBody'); if(body && userRole==='owner'){
     const list=window.staffCommissionClaims||[];
-    body.innerHTML=list.map(c=>`<tr><td><strong>${escapeHtmlSafe(c.staff_reference||'-')}</strong></td><td>${escapeHtmlSafe(c.order_id||'-')}</td><td>${escapeHtmlSafe(c.customer_name||'-')}</td><td>${fmt(Number(c.order_total)||0)}</td><td>${c.status==='approved'?fmt(Number(c.commission_amount)||0):'—'}</td><td><span class="status-pill ${c.status==='approved'?'approved':c.status==='rejected'?'rejected':'pending'}">${escapeHtmlSafe(c.status)}</span></td><td>${c.status==='pending'?`<button class="btn btn-xs btn-primary" onclick="verifyCommissionClaim('${c.id}','approved')">Approve</button> <button class="btn btn-xs btn-danger" onclick="verifyCommissionClaim('${c.id}','rejected')">Reject</button>`:'Verified'}</td></tr>`).join('')||'<tr><td colspan="7" style="text-align:center;opacity:.5;padding:18px;">No commission claims.</td></tr>';
+    body.innerHTML=list.map(c=>`<tr><td><strong>${escapeHtmlSafe(c.staff_reference||'-')}</strong></td><td><strong>${escapeHtmlSafe(c.order_ref_no||'-')}</strong><br><small>${escapeHtmlSafe(c.order_id||'-')}</small></td><td>${escapeHtmlSafe(c.customer_name||'-')}</td><td>${fmt(Number(c.order_total)||0)}</td><td>${c.status==='approved'?fmt(Number(c.commission_amount)||0):'—'}</td><td><span class="status-pill ${c.status==='approved'?'approved':c.status==='rejected'?'rejected':'pending'}">${escapeHtmlSafe(c.status)}</span></td><td>${c.status==='pending'?`<button class="btn btn-xs btn-primary" onclick="verifyCommissionClaim('${c.id}','approved')">Approve</button> <button class="btn btn-xs btn-danger" onclick="verifyCommissionClaim('${c.id}','rejected')">Reject</button>`:'Verified'}</td></tr>`).join('')||'<tr><td colspan="7" style="text-align:center;opacity:.5;padding:18px;">No commission claims.</td></tr>';
   }
 }
 
@@ -6802,9 +6904,9 @@ async function refreshStaffWorkspaceData(tabId){
   if(!currentUser || userRole!=='staff') return;
   const seq=++staffWorkspaceLoadSeq;
   try{
-    if(['staff-home','my-commission','my-tasks','announcements'].includes(tabId)){
+    if(['staff-home','orders','my-commission','my-tasks','announcements'].includes(tabId)){
       await loadCommissionClaims();
-      await Promise.all([loadCustomersFromCloud(),loadOrdersFromCloud(),cloudLoadStaffTasks(),cloudLoadNotices(),cloudLoadReferralUploads(),cloudLoadPerformance(new Date().toISOString().slice(0,7)),cloudLoadCommission()]);
+      await Promise.all([userRole==='owner'?loadCustomersFromCloud():Promise.resolve(),loadOrdersFromCloud(),cloudLoadStaffTasks(),cloudLoadNotices(),cloudLoadReferralUploads(),cloudLoadPerformance(new Date().toISOString().slice(0,7)),cloudLoadCommission()]);
     }
     if(seq!==staffWorkspaceLoadSeq) return;
     renderStaffTasks(); renderStaffAnnouncements(); refreshMyCommission(); refreshStaffHome();
@@ -6850,7 +6952,7 @@ function activateAppTab(tabId){
   if (tabId === 'monthly-summary') { updateMonthlySummary(); }
   if (tabId === 'history') renderHistory();
   if (tabId === 'production') calcProduction();
-  if (tabId === 'orders') { renderOrders(); renderCustomers(); renderDelivery(); updateOrderStats(); }
+  if (tabId === 'orders') { loadCommissionClaims().finally(() => { renderOrders(); renderCustomers(); renderDelivery(); updateOrderStats(); }); }
   if (tabId === 'my-staff') { refreshMyStaffPage(); loadMyStaffOwnerData(); }
   if (tabId === 'expenses') { renderExpenses(); renderRecurringExpenses(); }
   if (tabId === 'my-salary') {
@@ -6945,7 +7047,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // ---- LOAD CUSTOMERS/ORDERS/EXPENSES FROM THEIR OWN SUPABASE TABLES ----
   // (source of truth — same data across every device/browser)
-  await Promise.all([loadCustomersFromCloud(), loadOrdersFromCloud(), loadExpensesFromCloud()]);
+  await Promise.all([userRole==='owner'?loadCustomersFromCloud():Promise.resolve(), loadOrdersFromCloud(), loadExpensesFromCloud()]);
   renderOrders();
   renderCustomers();
   renderDelivery();
