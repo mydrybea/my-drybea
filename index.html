@@ -3766,8 +3766,15 @@ async function saveExpense() {
     const { data, error } = await supabase.from('expenses').insert(row).select().single();
     if (error) throw error;
     expenses.unshift(dbExpenseToLocal(data));
+  } catch (e) {
+    console.error('Save expense error:', e);
+    alert('❌ Could not save expense: ' + e.message);
+    return;
+  }
 
-    if (isRecurring) {
+  let recurringWarning = '';
+  if (isRecurring) {
+    try {
       const today = new Date().toISOString().slice(0, 10);
       const { data: rdata, error: rerror } = await supabase.from('recurring_expenses').insert({
         created_by: currentUser.id,
@@ -3779,18 +3786,22 @@ async function saveExpense() {
       }).select().single();
       if (rerror) throw rerror;
       recurringExpenses.unshift(rdata);
+    } catch (e) {
+      console.error('Save recurring rule error:', e);
+      recurringWarning = ' (⚠️ but "repeat daily" failed: ' + e.message + ')';
     }
-  } catch (e) {
-    console.error('Save expense error:', e);
-    alert('❌ Could not save expense: ' + e.message);
-    return;
   }
 
   renderExpenses();
   renderRecurringExpenses();
   updateMonthlySummary();
   closeModal('expenseModal');
-  updateStatus(isRecurring ? '✅ Expense saved — set to repeat daily' : '✅ Expense saved');
+  if (recurringWarning) {
+    alert('✅ Expense saved' + recurringWarning);
+    updateStatus('⚠️ Expense saved, recurring rule failed');
+  } else {
+    updateStatus(isRecurring ? '✅ Expense saved — set to repeat daily' : '✅ Expense saved');
+  }
 }
 
 async function deleteExpense(id) {
