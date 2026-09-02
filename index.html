@@ -6927,6 +6927,9 @@ async function verifyCommissionClaim(id,status){
     if(b){b.disabled=false;b.textContent=b.dataset.originalText || (status==='approved'?'Approve':'Reject');}
   }
 }
+// Explicitly expose on window so inline onclick="verifyCommissionClaim(...)" handlers
+// can never fail to find this function, regardless of load order or bundling.
+window.verifyCommissionClaim = verifyCommissionClaim;
 
 async function loadMyStaffOwnerData(){
   if(!currentUser||userRole!=='owner')return;
