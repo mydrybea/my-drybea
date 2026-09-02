@@ -4057,7 +4057,7 @@ function viewInvoice(index) {
   const order = orders[index];
   const customerName = getCustomerName(order.customerId);
   const customerAddress = order.address || getCustomerAddress(order.customerId);
-  const customerPhone = getCustomerPhone(order.customerId);
+  const customerPhone = userRole === 'staff' ? '' : getCustomerPhone(order.customerId);
 
   const invoiceHTML = `
     <div class="inv-card">
@@ -4129,7 +4129,7 @@ function shareInvoiceWhatsApp(index) {
   const order = orders[index];
   const customerName = getCustomerName(order.customerId);
   const customerAddress = order.address || getCustomerAddress(order.customerId);
-  const customerPhone = getCustomerPhone(order.customerId);
+  const customerPhone = userRole === 'staff' ? '' : getCustomerPhone(order.customerId);
   let message = `🧾 *MY DRYBEA - INVOICE*\n\n`;
   message += `*Order ID:* ${order.id}\n`;
   message += `*Date:* ${new Date(order.createdAt).toLocaleDateString()}\n`;
