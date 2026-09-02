@@ -2351,6 +2351,34 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
 @media(max-width:520px){.staff-suite-grid{grid-template-columns:1fr 1fr}.commission-grid{grid-template-columns:1fr}.staff-suite-hero{padding:14px}}
 </style>
 
+<style id="world-class-quick-actions-css">
+.quick-access-card{background:linear-gradient(145deg,rgba(255,255,255,.98),rgba(246,251,248,.96));border:1px solid rgba(10,143,67,.12);border-radius:24px;padding:14px;box-shadow:0 18px 50px rgba(18,45,31,.08),inset 0 1px 0 rgba(255,255,255,.9)}
+.home-actions-title{display:flex;align-items:center;gap:9px;font-weight:900;letter-spacing:.12em;color:#5d7067!important}
+.home-actions-title::before{content:'';width:9px;height:9px;border-radius:50%;background:var(--app-green);box-shadow:0 0 0 5px rgba(10,143,67,.10)}
+.home-action{min-height:98px!important;border-radius:19px!important;border:1px solid rgba(25,55,40,.09)!important;box-shadow:0 9px 26px rgba(18,45,31,.055)!important;background:linear-gradient(180deg,#fff,#fbfdfc)!important}
+.home-action:hover{transform:translateY(-3px)!important;box-shadow:0 16px 34px rgba(10,143,67,.13)!important;border-color:rgba(10,143,67,.26)!important}
+.home-action.primary{background:linear-gradient(135deg,#0a8f43,#066f37)!important;color:#fff!important}
+.home-action.gold{background:linear-gradient(180deg,#fffdf5,#fff)!important}
+.home-action .home-icon{box-shadow:0 5px 14px rgba(10,143,67,.08)}
+.salary-access-banner{display:flex;align-items:center;justify-content:space-between;gap:14px;margin:0 0 14px;padding:13px 15px;border:1px solid rgba(201,164,77,.30);border-radius:16px;background:linear-gradient(135deg,rgba(201,164,77,.10),rgba(10,143,67,.055));}
+.salary-access-banner strong{display:block;font-size:.72rem;letter-spacing:.06em;color:#8a6915}.salary-access-banner span{display:block;margin-top:3px;font-size:.68rem;color:var(--text-muted)}
+@media(max-width:700px){.salary-access-banner{align-items:flex-start;flex-direction:column}.salary-access-banner .btn{width:100%}}
+.app-nav.staff-nav .tab-btn[data-tab="my-salary"]{display:flex!important}
+</style>
+
+<style id="my-drybea-final-staff-owner-polish">
+/* FINAL OWNER / STAFF ACTION POLISH */
+.staff-ref-pill{display:inline-flex;align-items:center;padding:5px 9px;border-radius:999px;background:#eef8f1;border:1px solid #cfe7d7;color:#087b3e;font-size:.68rem;font-weight:900;letter-spacing:.04em;white-space:nowrap}
+.world-staff-actions{grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:12px!important}
+.world-staff-actions .staff-launch{position:relative;min-height:92px;padding:13px 14px;border-radius:18px;overflow:hidden;box-shadow:0 8px 22px rgba(15,55,35,.06)}
+.world-staff-actions .staff-launch em{position:absolute;right:10px;top:9px;font-style:normal;font-size:.45rem;font-weight:900;letter-spacing:.08em;color:#829087;background:#f2f6f3;padding:3px 6px;border-radius:999px}
+.world-staff-actions .staff-launch.gold{border-color:#eadfbf;background:linear-gradient(145deg,#fffdf5,#fff)}
+.world-staff-actions .staff-launch.primary em{background:rgba(255,255,255,.13);color:rgba(255,255,255,.8)}
+.owner-qahint{margin-left:auto;font-size:.48rem;letter-spacing:.1em;color:#a27b1b;background:#fff9e9;border:1px solid #eee0b7;border-radius:999px;padding:4px 7px}
+[data-owner-only]{ }
+@media(max-width:900px){.world-staff-actions{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
+@media(max-width:520px){.world-staff-actions{grid-template-columns:1fr 1fr!important;gap:8px!important}.world-staff-actions .staff-launch{min-height:86px;padding:10px}.world-staff-actions .staff-launch small{font-size:.57rem}.owner-qahint{display:none}}
+</style>
 </head>
 <body>
 
@@ -2413,6 +2441,8 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
     .app-nav.staff-nav .tab-btn{ flex:0 0 auto; min-width:70px; }
 /* Simple staff navigation: keep the primary five steps visible. Other staff tools remain available from Staff Home. */
 .app-nav.staff-nav .tab-btn[data-tab="daily-pay"],
+.app-nav.staff-nav .tab-btn[data-tab="attendance"],
+.app-nav.staff-nav .tab-btn[data-tab="advance"],
 .app-nav.staff-nav .tab-btn[data-tab="work-update"],
 .app-nav.staff-nav .tab-btn[data-tab="my-commission"],
 .app-nav.staff-nav .tab-btn[data-tab="my-tasks"],
@@ -2422,6 +2452,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
 .app-nav.staff-nav .tab-btn[data-tab="my-salary"],
 .app-nav.staff-nav .tab-btn[data-tab="attendance"],
 .app-nav.staff-nav .tab-btn[data-tab="advance"],
+.app-nav.staff-nav .tab-btn[data-tab="expenses"],
 .app-nav.staff-nav .tab-btn[data-tab="profile"]{display:flex!important;}
     /* Staff navigation is controlled by applyRoleUI() after the Supabase profile loads. */
     .emoji-nav-icon{ font-size:16px; line-height:1; display:flex; align-items:center; justify-content:center; width:17px; height:17px; }
@@ -2437,9 +2468,10 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
     <button class="tab-btn active" data-tab="dashboard" role="tab" aria-label="Home" data-owner-only><i class="business-icon" data-lucide="house" aria-hidden="true"></i><span>Home</span></button>
     <button class="tab-btn" data-tab="my-staff" role="tab" aria-label="My Staff" data-owner-only><i class="business-icon" data-lucide="users-round" aria-hidden="true"></i><span>My Staff</span></button>
     <button class="tab-btn" data-tab="staff-home" role="tab" aria-label="Staff Home" data-staff-only><i class="business-icon" data-lucide="layout-dashboard" aria-hidden="true"></i><span>Staff Home</span></button>
-    <button class="tab-btn" data-tab="orders" role="tab" aria-label="Orders"><i class="business-icon" data-lucide="shopping-bag" aria-hidden="true"></i><span>Order</span></button>
+    <button class="tab-btn" data-tab="orders" role="tab" aria-label="Orders"><i class="business-icon" data-lucide="shopping-bag" aria-hidden="true"></i><span>Orders</span></button>
     <button class="tab-btn" data-tab="income" role="tab" aria-label="Income" data-owner-only><i class="business-icon" data-lucide="trending-up" aria-hidden="true"></i><span>Income</span></button>
-    <button class="tab-btn" data-tab="my-salary" role="tab" aria-label="My Salary" data-staff-only><i class="business-icon" data-lucide="wallet-cards" aria-hidden="true"></i><span>My Salary</span></button>
+    <button class="tab-btn" data-tab="my-salary" role="tab" aria-label="My Salary"><i class="business-icon" data-lucide="wallet-cards" aria-hidden="true"></i><span>My Salary</span></button>
+    <button class="tab-btn" data-tab="expenses" role="tab" aria-label="Daily Expenses" data-staff-only><i class="business-icon" data-lucide="receipt" aria-hidden="true"></i><span>Daily Expenses</span></button>
     <button class="tab-btn" data-tab="daily-pay" role="tab" aria-label="Daily Pay" data-staff-only><i class="business-icon" data-lucide="calendar-days" aria-hidden="true"></i><span>Daily Pay</span></button>
     <button class="tab-btn" data-tab="work-update" role="tab" aria-label="Work Update" data-staff-only><i class="business-icon" data-lucide="notebook-pen" aria-hidden="true"></i><span>Work Update</span></button>
     <button class="tab-btn" data-tab="attendance" role="tab" aria-label="Attendance" data-staff-only><i class="business-icon" data-lucide="clock-3" aria-hidden="true"></i><span>Attendance</span></button>
@@ -2452,7 +2484,11 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
 
   <!-- ============ INCOME TAB ============ -->
   <section id="income" class="tab-panel" role="tabpanel" style="display:none;">
-    <div class="mobile-greeting no-print" style="padding:0 0 8px;">
+    <div class="mobile-greeting no-print" style="padding:0 0 8px;"><div class="salary-access-banner" data-owner-only>
+      <div><strong><i class="business-icon icon-inline" data-lucide="crown"></i> OWNER SALARY CONTROL</strong><span>Daily payroll, monthly payroll, bonuses, advances, deductions and commission verification are controlled from the secure Salary Manager.</span></div>
+      <button class="btn btn-primary btn-sm" type="button" onclick="activateAppTab('profile');setTimeout(()=>document.getElementById('salaryStaffSelect')?.scrollIntoView({behavior:'smooth',block:'center'}),120)"><i class="business-icon icon-inline" data-lucide="settings-2"></i> Manage Staff Salary</button>
+    </div>
+    
       <div><span class="eyebrow">FINANCIAL OVERVIEW</span><h2><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="trending-up" aria-hidden="true"></i></span><span>Income</span></h2><p class="pro-subtitle green">See what the business is earning at a glance.</p><p>Revenue, profit and fixed-cost position at a glance.</p></div>
       <div class="profile-dot"><i class="business-icon" data-lucide="trending-up" aria-hidden="true"></i></div>
     </div>
@@ -2524,15 +2560,18 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
     </div>
     <div class="card" style="margin-top:16px;">
       <h2><span class="pro-title-icon gold"><i class="business-icon" data-lucide="zap"></i></span><span>Quick Actions</span></h2>
-      <div class="staff-launch-grid">
-        <button class="staff-launch primary" onclick="activateAppTab('orders')"><span class="launch-icon"><i class="business-icon" data-lucide="shopping-bag"></i></span><span><b>New Sale</b><small>Create / manage orders</small></span></button>
-        <button class="staff-launch" onclick="activateAppTab('attendance')"><span class="launch-icon"><i class="business-icon" data-lucide="clock-3"></i></span><span><b>Attendance</b><small>Start / end your day</small></span></button>
-        <button class="staff-launch" onclick="activateAppTab('my-salary')"><span class="launch-icon"><i class="business-icon" data-lucide="wallet-cards"></i></span><span><b>My Salary</b><small>View your pay</small></span></button>
-        <button class="staff-launch" onclick="activateAppTab('advance')"><span class="launch-icon"><i class="business-icon" data-lucide="hand-coins"></i></span><span><b>Advance</b><small>Request salary advance</small></span></button>
-        <button class="staff-launch" onclick="activateAppTab('my-tasks')"><span class="launch-icon"><i class="business-icon" data-lucide="list-checks"></i></span><span><b>My Tasks</b><small>Complete assigned work</small></span></button>
-        <button class="staff-launch" onclick="activateAppTab('work-update')"><span class="launch-icon"><i class="business-icon" data-lucide="notebook-pen"></i></span><span><b>Work Update</b><small>Send today's update</small></span></button>
-        <button class="staff-launch" onclick="activateAppTab('my-commission')"><span class="launch-icon"><i class="business-icon" data-lucide="badge-percent"></i></span><span><b>Commission</b><small>Track your earnings</small></span></button>
-        <button class="staff-launch" onclick="activateAppTab('announcements')"><span class="launch-icon"><i class="business-icon" data-lucide="megaphone"></i></span><span><b>Notices</b><small>Read team updates</small></span></button>
+      <div class="staff-launch-grid world-staff-actions">
+        <button type="button" class="staff-launch primary" data-staff-action="sale" onclick="safeStaffQuickAction('orders')"><span class="launch-icon"><i class="business-icon" data-lucide="shopping-bag"></i></span><span><b>New Sale</b><small>Create / manage orders</small></span><em>SALE</em></button>
+        <button type="button" class="staff-launch" data-staff-action="expense" onclick="safeStaffQuickAction('expenses')"><span class="launch-icon"><i class="business-icon" data-lucide="receipt"></i></span><span><b>Daily Expenses</b><small>Record today's business cost</small></span><em>DAILY</em></button>
+        <button type="button" class="staff-launch gold" data-staff-action="salary" onclick="safeStaffQuickAction('my-salary')"><span class="launch-icon"><i class="business-icon" data-lucide="wallet-cards"></i></span><span><b>My Salary</b><small>Daily + monthly pay</small></span><em>PAYROLL</em></button>
+        <button type="button" class="staff-launch" onclick="safeStaffQuickAction('daily-pay')"><span class="launch-icon"><i class="business-icon" data-lucide="calendar-days"></i></span><span><b>Daily Pay</b><small>Day-by-day salary</small></span><em>DAILY</em></button>
+        <button type="button" class="staff-launch" onclick="safeStaffQuickAction('advance')"><span class="launch-icon"><i class="business-icon" data-lucide="hand-coins"></i></span><span><b>Advance</b><small>Request salary advance</small></span><em>CASH</em></button>
+        <button type="button" class="staff-launch" onclick="safeStaffQuickAction('my-tasks')"><span class="launch-icon"><i class="business-icon" data-lucide="list-checks"></i></span><span><b>My Tasks</b><small>Complete assigned work</small></span><em>TASKS</em></button>
+        <button type="button" class="staff-launch" onclick="safeStaffQuickAction('work-update')"><span class="launch-icon"><i class="business-icon" data-lucide="notebook-pen"></i></span><span><b>Work Update</b><small>Send today's update</small></span><em>UPDATE</em></button>
+        <button type="button" class="staff-launch" onclick="safeStaffQuickAction('my-commission')"><span class="launch-icon"><i class="business-icon" data-lucide="badge-percent"></i></span><span><b>Commission</b><small>Verified earnings only</small></span><em>VERIFY</em></button>
+        <button type="button" class="staff-launch" onclick="safeStaffQuickAction('announcements')"><span class="launch-icon"><i class="business-icon" data-lucide="megaphone"></i></span><span><b>Notices</b><small>Read team updates</small></span><em>TEAM</em></button>
+        <button type="button" class="staff-launch" onclick="safeStaffQuickAction('attendance')"><span class="launch-icon"><i class="business-icon" data-lucide="clock-3"></i></span><span><b>Attendance</b><small>Clock & work log</small></span><em>TIME</em></button>
+        <button type="button" class="staff-launch" onclick="safeStaffQuickAction('profile')"><span class="launch-icon"><i class="business-icon" data-lucide="user-round"></i></span><span><b>Profile</b><small>Account & security</small></span><em>ACCOUNT</em></button>
       </div>
     </div>
     <div class="grid-2" style="margin-top:16px;">
@@ -2583,10 +2622,10 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
     <div class="card"><div id="staffNoticeList"><div class="notice">No announcements yet.</div></div></div>
   </section>
 
-  <!-- ============ MY SALARY TAB (staff-only) ============ -->
+  <!-- ============ MY SALARY TAB (shared: staff self-view + owner control) ============ -->
   <section id="my-salary" class="tab-panel" role="tabpanel" style="display:none;">
     <div class="mobile-greeting no-print" style="padding:0 0 8px;">
-      <div><span class="eyebrow">MY PAY</span><h2><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="wallet-cards" aria-hidden="true"></i></span><span>My Salary</span></h2><p class="pro-subtitle green">Your salary summary — visible only to you.</p></div>
+      <div><span class="eyebrow">MY PAY</span><h2><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="wallet-cards" aria-hidden="true"></i></span><span>My Salary</span></h2><p class="pro-subtitle green">Daily + monthly salary view with secure owner control.</p></div>
       <div class="profile-dot"><i class="business-icon" data-lucide="wallet-cards" aria-hidden="true"></i></div>
     </div>
     <div class="card smart-salary-card" style="margin-bottom:16px;">
@@ -2814,6 +2853,11 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
     <div class="card" style="margin-top:16px;">
       <h2><span class="pro-title-icon gold"><i class="business-icon" data-lucide="badge-percent"></i></span><span>Referral Commission Control</span></h2>
       <div class="stat-grid"><div class="stat accent"><div class="k">Commission Rate</div><div class="v">12%</div></div><div class="stat"><div class="k">Eligible Rule</div><div class="v" style="font-size:.9rem;">Customer Reference × Sale</div></div><div class="stat"><div class="k">This Month</div><div class="v" id="ownerCommissionTotal2">Rs. 0</div></div></div>
+      <div class="card" style="margin-top:14px;border-color:rgba(201,164,77,.28);">
+        <h3><span class="pro-title-icon gold"><i class="business-icon" data-lucide="shield-check"></i></span><span>Commission Verification Queue</span></h3>
+        <p class="staff-section-note">Staff sends the staff reference + customer + order details here. Commission is <strong>not added</strong> until the owner verifies the sale.</p>
+        <div class="table-wrap" style="margin-top:10px;"><table><thead><tr><th>Staff Ref</th><th>Order</th><th>Customer</th><th>Sale</th><th>12%</th><th>Status</th><th>Owner</th></tr></thead><tbody id="ownerCommissionClaimsBody"><tr><td colspan="7" style="text-align:center;opacity:.5;padding:18px;">No pending commission claims.</td></tr></tbody></table></div>
+      </div>
       <div class="table-wrap" style="margin-top:10px;"><table><thead><tr><th>Staff</th><th>Referral Sales</th><th>Commission</th></tr></thead><tbody id="ownerCommissionBody"><tr><td colspan="3" style="text-align:center;opacity:.5;padding:18px;">No referral sales this month.</td></tr></tbody></table></div>
     </div>
 
@@ -2896,8 +2940,8 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
       </div>
       <div class="table-wrap" style="margin-top:14px;">
         <table>
-          <thead><tr><th>Name</th><th>User ID</th><th>Actions</th></tr></thead>
-          <tbody id="staffBody"><tr><td colspan="3" style="text-align:center;opacity:.5;padding:14px;">No staff added yet.</td></tr></tbody>
+          <thead><tr><th>Name</th><th>Staff Reference</th><th>User ID</th><th data-owner-only>Actions</th></tr></thead>
+          <tbody id="staffBody"><tr><td colspan="4" style="text-align:center;opacity:.5;padding:14px;">No staff added yet.</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -3291,12 +3335,27 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
   <section id="dashboard" class="tab-panel active" role="tabpanel" style="display:block;">
 
     <div class="home-actions-wrap no-print">
-      <div class="home-actions-title">Quick access</div>
+      <div class="home-actions-title">Owner Quick Actions <span class="owner-qahint">CONTROL CENTRE</span></div>
       <div class="quick-access-card">
         <div class="home-actions">
           <button class="home-action primary" data-home-tab="dashboard" data-ribbon="true" aria-label="Open Dashboard">
             <span class="home-icon"><i class="business-icon" data-lucide="layout-dashboard" aria-hidden="true"></i></span>
             <span class="home-action-copy"><strong>Dashboard</strong><small>Business at a glance</small></span>
+            <span class="quick-status" aria-hidden="true"></span>
+          </button>
+          <button class="home-action gold" data-home-tab="my-staff" data-ribbon="true" aria-label="Open My Staff">
+            <span class="home-icon"><i class="business-icon" data-lucide="users-round" aria-hidden="true"></i></span>
+            <span class="home-action-copy"><strong>My Staff</strong><small>Team, tasks, payroll & verification</small></span>
+            <span class="quick-status" aria-hidden="true"></span>
+          </button>
+          <button class="home-action" data-home-tab="income" data-ribbon="true" aria-label="Open Income">
+            <span class="home-icon"><i class="business-icon" data-lucide="trending-up" aria-hidden="true"></i></span>
+            <span class="home-action-copy"><strong>Income</strong><small>Revenue, margin & performance</small></span>
+            <span class="quick-status" aria-hidden="true"></span>
+          </button>
+          <button class="home-action" data-home-tab="my-salary" data-ribbon="true" aria-label="Open Salary Control">
+            <span class="home-icon"><i class="business-icon" data-lucide="wallet-cards" aria-hidden="true"></i></span>
+            <span class="home-action-copy"><strong>Salary</strong><small>Daily & monthly payroll control</small></span>
             <span class="quick-status" aria-hidden="true"></span>
           </button>
           <button class="home-action" data-home-tab="calculator" data-ribbon="true" aria-label="Open Costing">
@@ -3587,6 +3646,11 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
     <div class="field">
       <label>Customer</label>
       <select id="orderCustomer"></select>
+      <div class="field" data-owner-order-referral style="display:none;margin-top:10px;">
+        <label>Staff Reference for this Order</label>
+        <select id="orderReferralStaffSelect"><option value="">Auto from customer / No referral</option></select>
+        <small style="display:block;margin-top:6px;color:var(--text-muted);">Owner verification control. The selected reference is attached to this order before commission review.</small>
+      </div>
       <div class="notice" style="margin-top:8px;padding:9px 12px;font-size:.72rem;"><i class="business-icon icon-inline" data-lucide="badge-percent"></i> If you create the sale as a staff user, it is automatically attributed to your 12% commission.</div>
     </div>
     <div class="grid-2">
@@ -3634,6 +3698,11 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
     <div class="field" data-owner-only>
       <label>Phone</label>
       <input type="text" id="custPhone" placeholder="Phone number">
+    </div>
+    <div class="field" data-owner-referral-field style="display:none;">
+      <label>Staff Reference</label>
+      <select id="custReferralStaffSelect"><option value="">No referral</option></select>
+      <small style="display:block;margin-top:6px;color:var(--text-muted);">Owner can assign the customer to a staff reference. This reference is copied to the order and sent for commission verification.</small>
     </div>
     <div class="field">
       <label>Address</label>
@@ -3798,16 +3867,19 @@ function applyRoleUI() {
   });
 
   // Staff workspace: operational tabs only; owner-only tabs stay hidden.
-  const staffTabs = ['staff-home','my-salary','daily-pay','work-update','attendance','advance','my-commission','my-tasks','announcements'];
+  const staffTabs = ['staff-home','orders','my-salary','expenses','daily-pay','work-update','attendance','advance','my-commission','my-tasks','announcements','profile'];
   document.querySelectorAll('[data-staff-only]').forEach(el => {
     const tab = el.getAttribute('data-tab');
     el.style.display = (isStaff && staffTabs.includes(tab)) ? 'flex' : 'none';
   });
+  // My Salary is a shared secure workspace: staff sees their own pay; owner can open salary control.
+  const sharedSalaryNav = document.querySelector('.tab-btn[data-tab="my-salary"]');
+  if (sharedSalaryNav) sharedSalaryNav.style.display = 'flex';
 
   document.querySelectorAll('.tab-btn').forEach(el => {
     const tab = el.getAttribute('data-tab');
     if (isStaff) {
-      const allowed = ['staff-home','orders','my-salary','daily-pay','work-update','attendance','advance','my-commission','my-tasks','announcements','profile'].includes(tab);
+      const allowed = ['staff-home','orders','my-salary','expenses','daily-pay','work-update','attendance','advance','my-commission','my-tasks','announcements','profile'].includes(tab);
       el.style.display = allowed ? 'flex' : 'none';
     }
   });
@@ -3850,14 +3922,14 @@ function renderStaffList(list) {
   const tbody = $('staffBody');
   if (!tbody) return;
   if (!list.length) {
-    tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;opacity:.5;padding:14px;">No staff added yet.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;opacity:.5;padding:14px;">No staff added yet.</td></tr>';
     return;
   }
   tbody.innerHTML = list.map(s => `
     <tr>
       <td>${s.display_name || '(no name)'}</td>
       <td style="font-size:11px;word-break:break-all;">${s.id}</td>
-      <td><button class="btn btn-sm btn-danger" aria-label="Remove staff" onclick="removeStaffMember('${s.id}')"><i class="business-icon" data-lucide="trash-2" aria-hidden="true"></i></button></td>
+      <td data-owner-only><button class="btn btn-sm btn-danger" aria-label="Remove staff" onclick="removeStaffMember('${s.id}')"><i class="business-icon" data-lucide="trash-2" aria-hidden="true"></i></button></td>
     </tr>
   `).join('');
   populateSalaryStaffSelect(list);
@@ -5131,7 +5203,7 @@ function getCustomerPhone(id) {
 // so every device/browser sees the same live data.
 
 function dbCustomerToLocal(c) {
-  return { id: c.id, name: c.name, phone: c.phone || '', address: c.address || '', referralStaffId: c.referral_staff_id || null, createdAt: c.created_at ? new Date(c.created_at).toLocaleDateString() : new Date().toLocaleDateString() };
+  return { id: c.id, name: c.name, phone: c.phone || '', address: c.address || '', referralStaffId: c.referral_staff_id || null, referralStaffReference: c.referral_staff_reference || null, createdAt: c.created_at ? new Date(c.created_at).toLocaleDateString() : new Date().toLocaleDateString() };
 }
 function dbOrderToLocal(o) {
   return {
@@ -5145,7 +5217,10 @@ function dbOrderToLocal(o) {
     notes: o.notes || '',
     status: o.status || 'pending',
     createdBy: o.created_by || null,
-    createdAt: o.created_at || new Date().toISOString()
+    createdAt: o.created_at || new Date().toISOString(),
+    referralStaffId: o.referral_staff_id || null,
+    referralStaffReference: o.referral_staff_reference || null,
+    referralStatus: o.referral_status || 'none'
   };
 }
 
@@ -5457,12 +5532,17 @@ async function saveCustomer() {
   if (!name) { alert('Customer name is required!'); return; }
   if (!currentUser) { alert('Please login first.'); return; }
 
-  const referralStaffId = userRole === 'staff' ? currentUser.id : null;
-  const row = { id: Date.now().toString(), user_id: businessId, name, phone, address, referral_staff_id: referralStaffId };
+  let referralStaffId = userRole === 'staff' ? currentUser.id : null;
+  let referralStaffReference = userRole === 'staff' ? (userProfile?.staff_reference || '') : null;
+  if (userRole === 'owner') {
+    referralStaffId = $('custReferralStaffSelect')?.value || null;
+    referralStaffReference = referralStaffId ? (staffListCache||[]).find(s=>String(s.id)===String(referralStaffId))?.staff_reference || '' : null;
+  }
+  const row = { id: Date.now().toString(), user_id: businessId, name, phone, address, referral_staff_id: referralStaffId, referral_staff_reference: referralStaffReference };
   try {
     let result = await supabase.from('customers').insert(row);
     if (result.error && /column|schema|does not exist/i.test(result.error.message||'')) {
-      const fallback = {...row}; delete fallback.referral_staff_id;
+      const fallback = {...row}; delete fallback.referral_staff_id; delete fallback.referral_staff_reference;
       result = await supabase.from('customers').insert(fallback);
     }
     if (result.error) throw result.error;
@@ -5471,15 +5551,10 @@ async function saveCustomer() {
     alert('❌ Could not save customer: ' + e.message);
     return;
   }
-  customers.unshift({ id: row.id, name, phone, address, referralStaffId: referralStaffId, createdAt: new Date().toLocaleDateString() });
-  saveCustomers();
-  renderCustomers();
-  updateCustomerSelect();
-  closeModal('customerModal');
-  $('custName').value = '';
-  $('custPhone').value = '';
-  $('custAddress').value = '';
-  updateStatus('✅ Customer saved');
+  customers.unshift({ id: row.id, name, phone, address, referralStaffId, referralStaffReference, createdAt: new Date().toLocaleDateString() });
+  saveCustomers(); renderCustomers(); updateCustomerSelect(); closeModal('customerModal');
+  $('custName').value = ''; $('custPhone').value = ''; $('custAddress').value = '';
+  updateStatus('✅ Customer saved with referral reference');
 }
 
 function renderCustomers() {
@@ -5535,13 +5610,16 @@ function openNewOrder() {
     return;
   }
   updateCustomerSelect();
+  if(userRole==='owner'){ populateStaffReferralSelectors(); const f=document.querySelector('[data-owner-order-referral]'); if(f) f.style.display=''; }
+  const c=customers.find(x=>String(x.id)===String($('orderCustomer').value)); if($('orderReferralStaffSelect') && c?.referralStaffId) $('orderReferralStaffSelect').value=c.referralStaffId;
   $('orderModal').classList.add('active');
 }
 
 function openNewCustomer() {
   const ref = document.querySelector('[data-staff-referral-field]');
   if(ref) ref.style.display = userRole === 'staff' ? '' : 'none';
-  if($('custReferralStaffName') && userRole === 'staff') $('custReferralStaffName').textContent = (userProfile&&userProfile.display_name) || currentUser?.email || 'your staff reference';
+  if($('custReferralStaffName') && userRole === 'staff') $('custReferralStaffName').textContent = ((userProfile&&userProfile.display_name)||currentUser?.email||'Staff') + ' · ' + ((userProfile&&userProfile.staff_reference)||('STF-'+currentUser.id.slice(0,8).toUpperCase()));
+  if(userRole==='owner'){ populateStaffReferralSelectors(); const f=document.querySelector('[data-owner-referral-field]'); if(f) f.style.display=''; }
   $('customerModal').classList.add('active');
 }
 
@@ -5552,45 +5630,38 @@ async function createOrder() {
   const unitPrice = Number($('orderUnitPrice').value) || 0;
   const address = $('orderAddress').value.trim() || getCustomerAddress(customerId);
   const notes = $('orderNotes').value.trim();
-
   if (!customerId) { alert('Select a customer!'); return; }
   if (qty <= 0) { alert('Quantity must be at least 1!'); return; }
   if (unitPrice <= 0) { alert('Unit price required!'); return; }
   if (!currentUser) { alert('Please login first.'); return; }
 
-  const total = qty * unitPrice;
-  const row = {
-    id: generateOrderId(),
-    user_id: businessId,
-    customer_id: customerId,
-    product_size_g: Number(product) || 0,
-    qty, unit_price: unitPrice, total,
-    address, notes, status: 'pending',
-    created_by: currentUser.id
-  };
-  try {
-    const { error } = await supabase.from('orders').insert(row);
-    if (error) throw error;
-  } catch (e) {
-    console.error('Create order error:', e);
-    alert('❌ Could not save order: ' + e.message);
-    return;
+  const customer = customers.find(c=>String(c.id)===String(customerId));
+  let referralStaffId = customer?.referralStaffId || null;
+  let referralStaffReference = customer?.referralStaffReference || null;
+  if (userRole === 'staff') {
+    referralStaffId = currentUser.id;
+    referralStaffReference = userProfile?.staff_reference || null;
+  } else if (userRole === 'owner' && $('orderReferralStaffSelect')?.value) {
+    referralStaffId = $('orderReferralStaffSelect').value;
+    referralStaffReference = (staffListCache||[]).find(s=>String(s.id)===String(referralStaffId))?.staff_reference || null;
   }
-
-  orders.unshift({
-    id: row.id, customerId, product, qty, unitPrice, total,
-    address, notes, status: 'pending', createdBy: currentUser.id, createdAt: new Date().toISOString()
-  });
-  saveOrders();
-  renderOrders();
-  renderDelivery();
-  updateOrderStats();
-  closeModal('orderModal');
-  $('orderQty').value = 1;
-  $('orderUnitPrice').value = 350;
-  $('orderAddress').value = '';
-  $('orderNotes').value = '';
-  updateStatus('✅ Order created');
+  const total = qty * unitPrice;
+  const row = { id: generateOrderId(), user_id: businessId, customer_id: customerId, product_size_g: Number(product)||0, qty, unit_price: unitPrice, total, address, notes, status:'pending', created_by:currentUser.id, referral_staff_id: referralStaffId, referral_staff_reference: referralStaffReference, referral_status: referralStaffId ? 'pending_verification' : 'none' };
+  try {
+    const { data, error } = await supabase.from('orders').insert(row).select().single();
+    if (error) throw error;
+    // Staff-created referral orders automatically create a PENDING claim for owner verification.
+    if (referralStaffId) {
+      const staffId = String(referralStaffId);
+      const claim = { owner_id: businessId, staff_id: staffId, staff_reference: referralStaffReference || '', order_id: String(data.id), customer_id: String(customerId), customer_name: customer?.name || '', customer_phone: customer?.phone || '', order_total: total, commission_rate: STAFF_COMMISSION_RATE, commission_amount: 0, status:'pending', order_snapshot:{ order_id:data.id, customer_id:customerId, customer_name:customer?.name||'', product_size_g:Number(product)||0, qty, unit_price:unitPrice, total, address, notes, created_by:currentUser.id, referral_staff_id:staffId, referral_staff_reference:referralStaffReference } };
+      const { error: ce } = await supabase.from('staff_commission_claims').insert(claim);
+      if (ce) { console.error('Commission claim create failed:',ce); updateStatus('⚠️ Order saved, but commission verification claim failed'); }
+    }
+  } catch (e) { console.error('Create order error:',e); alert('❌ Could not save order: '+e.message); return; }
+  orders.unshift({ id:row.id, customerId, product, qty, unitPrice, total, address, notes, status:'pending', createdBy:currentUser.id, createdAt:new Date().toISOString(), referralStaffId, referralStaffReference, referralStatus: referralStaffId?'pending_verification':'none' });
+  saveOrders(); renderOrders(); renderDelivery(); updateOrderStats(); closeModal('orderModal');
+  $('orderQty').value=1; $('orderUnitPrice').value=350; $('orderAddress').value=''; $('orderNotes').value='';
+  updateStatus(referralStaffId ? '📨 Sale sent to owner for commission verification' : '✅ Order created');
 }
 
 function renderOrders() {
@@ -6571,10 +6642,11 @@ function renderStaffAnnouncements(){
 
 function refreshMyCommission(){
   if(!currentUser)return;const now=new Date(),y=now.getFullYear(),m=now.getMonth();
-  const eligible=(orders||[]).filter(o=>{const c=customers.find(x=>String(x.id)===String(o.customerId));const d=new Date(o.createdAt||o.date||0);return String(c?.referralStaffId||'')===String(currentUser.id)&&o.status!=='cancelled'&&d.getFullYear()===y&&d.getMonth()===m;});
-  const sales=eligible.reduce((s,o)=>s+(Number(o.total)||0),0),commission=sales*STAFF_COMMISSION_RATE;
+  const claims=(window.staffCommissionClaims||[]).filter(c=>c.status==='approved');
+  const eligible=claims.filter(c=>{const d=new Date(c.verified_at||c.submitted_at||0);return String(c.staff_id)===String(currentUser.id)&&d.getFullYear()===y&&d.getMonth()===m;});
+  const sales=eligible.reduce((s,c)=>s+(Number(c.order_total)||0),0),commission=eligible.reduce((s,c)=>s+(Number(c.commission_amount)||0),0);
   if($('commissionMonthTotal'))$('commissionMonthTotal').textContent=fmt(commission);if($('commissionSalesTotal'))$('commissionSalesTotal').textContent=fmt(sales);if($('commissionSalesCount'))$('commissionSalesCount').textContent=eligible.length;
-  const body=$('commissionHistoryBody');if(body)body.innerHTML=eligible.map(o=>{const c=customers.find(x=>String(x.id)===String(o.customerId));return `<tr><td>${new Date(o.createdAt||Date.now()).toLocaleDateString()}</td><td>${escapeHtmlSafe(c?.name||'Customer')}</td><td>${fmt(Number(o.total)||0)}</td><td>${fmt((Number(o.total)||0)*STAFF_COMMISSION_RATE)}</td><td><span class="status-pill ${o.status==='delivered'?'approved':'pending'}">${escapeHtmlSafe(o.status||'pending')}</span></td></tr>`}).join('')||'<tr><td colspan="5" style="text-align:center;opacity:.5;padding:14px;">No eligible sales this month.</td></tr>';
+  const body=$('commissionHistoryBody');if(body)body.innerHTML=eligible.map(c=>`<tr><td>${new Date(c.verified_at||c.submitted_at||Date.now()).toLocaleDateString()}</td><td>${escapeHtmlSafe(c.customer_name||'Customer')}</td><td>${fmt(Number(c.order_total)||0)}</td><td>${fmt(Number(c.commission_amount)||0)}</td><td><span class="status-pill approved">approved</span></td></tr>`).join('')||'<tr><td colspan="5" style="text-align:center;opacity:.5;padding:14px;">No eligible sales this month.</td></tr>';
 }
 
 async function handleStaffReferralUpload(ev){
@@ -6650,6 +6722,49 @@ function renderOwnerStaffUploads(){
   el.innerHTML=list.length?list.map(x=>{let meta={};try{meta=JSON.parse(x.notes||'{}')||{};}catch(e){}const staff=(staffListCache||[]).find(s=>String(s.id)===String(x.staff_id));return `<tr><td>${escapeHtmlSafe(staff?.display_name||meta.staff_name||x.staff_id||'Staff')}</td><td>${escapeHtmlSafe(meta.month||'-')}</td><td>${fmt(Number(meta.sales)||0)}</td><td>${Number(meta.record_count)||0}</td><td>${new Date(x.created_at||Date.now()).toLocaleString()}</td><td><span class="badge badge-pending">Retained</span></td></tr>`;}).join(''):'<tr><td colspan="6" style="text-align:center;opacity:.5;padding:18px;">No staff uploads yet.</td></tr>';
 }
 
+async function populateStaffReferralSelectors(){
+  if(!currentUser) return;
+  try{
+    if(userRole==='owner') await loadStaffList();
+    const list=staffListCache||[];
+    const options='<option value="">No referral / Auto</option>'+list.map(s=>`<option value="${s.id}">${escapeHtmlSafe(s.display_name||'Staff')} — ${escapeHtmlSafe(s.staff_reference||'No Ref')}</option>`).join('');
+    if($('custReferralStaffSelect')) $('custReferralStaffSelect').innerHTML=options;
+    if($('orderReferralStaffSelect')) $('orderReferralStaffSelect').innerHTML=options;
+  }catch(e){console.error('Staff reference selector error',e);}
+}
+
+async function loadCommissionClaims(){
+  if(!currentUser) return [];
+  try{
+    const q=userRole==='owner'
+      ? supabase.from('staff_commission_claims').select('*').eq('owner_id',currentUser.id).order('submitted_at',{ascending:false})
+      : supabase.from('staff_commission_claims').select('*').eq('staff_id',currentUser.id).order('submitted_at',{ascending:false});
+    const {data,error}=await q; if(error) throw error;
+    window.staffCommissionClaims=data||[];
+    renderCommissionClaims();
+    return data||[];
+  }catch(e){console.error('Commission claims load:',e); return [];}
+}
+
+function renderCommissionClaims(){
+  const body=$('ownerCommissionClaimsBody'); if(body && userRole==='owner'){
+    const list=window.staffCommissionClaims||[];
+    body.innerHTML=list.map(c=>`<tr><td><strong>${escapeHtmlSafe(c.staff_reference||'-')}</strong></td><td>${escapeHtmlSafe(c.order_id||'-')}</td><td>${escapeHtmlSafe(c.customer_name||'-')}</td><td>${fmt(Number(c.order_total)||0)}</td><td>${c.status==='approved'?fmt(Number(c.commission_amount)||0):'—'}</td><td><span class="status-pill ${c.status==='approved'?'approved':c.status==='rejected'?'rejected':'pending'}">${escapeHtmlSafe(c.status)}</span></td><td>${c.status==='pending'?`<button class="btn btn-xs btn-primary" onclick="verifyCommissionClaim('${c.id}','approved')">Approve</button> <button class="btn btn-xs btn-danger" onclick="verifyCommissionClaim('${c.id}','rejected')">Reject</button>`:'Verified'}</td></tr>`).join('')||'<tr><td colspan="7" style="text-align:center;opacity:.5;padding:18px;">No commission claims.</td></tr>';
+  }
+}
+
+async function verifyCommissionClaim(id,status){
+  if(userRole!=='owner') return;
+  const note=status==='approved'?'Approved after owner verification':'Rejected by owner';
+  if(!confirm(status==='approved'?'Verify this sale and add commission?':'Reject this commission claim?')) return;
+  try{
+    const {data,error}=await supabase.rpc('verify_staff_commission_claim',{p_claim_id:id,p_status:status,p_owner_note:note});
+    if(error) throw error;
+    await loadCommissionClaims(); await loadOrdersFromCloud(); renderOwnerStaffPerformance();
+    updateStatus(status==='approved'?'✅ Commission verified and added':'❌ Commission claim rejected');
+  }catch(e){console.error(e);alert('❌ Commission verification failed: '+e.message);}
+}
+
 async function loadMyStaffOwnerData(){
   if(!currentUser||userRole!=='owner')return;
   try{await loadOwnerAdvanceRequests();}catch(e){console.error('MY STAFF advance load:',e);}
@@ -6657,7 +6772,7 @@ async function loadMyStaffOwnerData(){
   const pending=Array.from(document.querySelectorAll('#ownerStaffAdvanceBody .status-pill')).filter(x=>String(x.textContent).toLowerCase()==='pending').length;if($('ownerPendingAdvances'))$('ownerPendingAdvances').textContent=pending;
 }
 
-async function refreshMyStaffPage(){if(!currentUser||userRole!=='owner')return;await loadStaffList();await loadMyStaffData(false);renderOwnerStaffPerformance();renderOwnerStaffManagement();renderOwnerStaffUploads();await loadMyStaffOwnerData();}
+async function refreshMyStaffPage(){if(!currentUser||userRole!=='owner')return;await loadStaffList();await populateStaffReferralSelectors();await loadMyStaffData(false);await loadCommissionClaims();renderOwnerStaffPerformance();renderOwnerStaffManagement();renderOwnerStaffUploads();await loadMyStaffOwnerData();}
 
 function refreshStaffHome(){
   if(!currentUser)return;const name=(userProfile&&userProfile.display_name)||currentUser.email?.split('@')[0]||'Staff Member';if($('staffHomeName'))$('staffHomeName').textContent=name;
@@ -6680,7 +6795,7 @@ document.querySelectorAll('[data-ribbon="true"]').forEach(btn => {
 });
 
 const OWNER_ONLY_TABS = ['dashboard', 'my-staff', 'calculator', 'production', 'history', 'data', 'monthly-summary', 'income'];
-const STAFF_ONLY_TABS = ['staff-home', 'my-salary', 'daily-pay', 'work-update', 'attendance', 'advance', 'my-commission', 'my-tasks', 'announcements'];
+const STAFF_ONLY_TABS = ['staff-home', 'expenses', 'daily-pay', 'work-update', 'attendance', 'advance', 'my-commission', 'my-tasks', 'announcements'];
 
 let staffWorkspaceLoadSeq = 0;
 async function refreshStaffWorkspaceData(tabId){
@@ -6688,6 +6803,7 @@ async function refreshStaffWorkspaceData(tabId){
   const seq=++staffWorkspaceLoadSeq;
   try{
     if(['staff-home','my-commission','my-tasks','announcements'].includes(tabId)){
+      await loadCommissionClaims();
       await Promise.all([loadCustomersFromCloud(),loadOrdersFromCloud(),cloudLoadStaffTasks(),cloudLoadNotices(),cloudLoadReferralUploads(),cloudLoadPerformance(new Date().toISOString().slice(0,7)),cloudLoadCommission()]);
     }
     if(seq!==staffWorkspaceLoadSeq) return;
@@ -6698,8 +6814,17 @@ async function refreshStaffWorkspaceData(tabId){
   }
 }
 
+function safeStaffQuickAction(tabId){
+  const allowed=['staff-home','orders','my-salary','expenses','daily-pay','work-update','attendance','advance','my-commission','my-tasks','announcements','profile'];
+  if(userRole!=='staff'){ if(typeof activateAppTab==='function') return activateAppTab(tabId); return; }
+  if(!allowed.includes(tabId)){ alert('This staff action is not available.'); return; }
+  const target=document.getElementById(tabId);
+  if(!target){ alert('This page is not available in this build.'); return; }
+  activateAppTab(tabId);
+}
+
 function activateAppTab(tabId){
-  if (userRole === 'staff' && !['staff-home', 'orders', 'my-salary', 'daily-pay', 'work-update', 'attendance', 'advance', 'my-commission', 'my-tasks', 'announcements', 'profile'].includes(tabId)) {
+  if (userRole === 'staff' && !['staff-home', 'orders', 'my-salary', 'expenses', 'daily-pay', 'work-update', 'attendance', 'advance', 'my-commission', 'my-tasks', 'announcements', 'profile'].includes(tabId)) {
     alert('🔒 Staff access: use your staff workspace and assigned business sections.');
     return;
   }
@@ -6729,8 +6854,19 @@ function activateAppTab(tabId){
   if (tabId === 'my-staff') { refreshMyStaffPage(); loadMyStaffOwnerData(); }
   if (tabId === 'expenses') { renderExpenses(); renderRecurringExpenses(); }
   if (tabId === 'my-salary') {
-    loadMySalary();
-    initMySmartSalaryMonth();
+    if (userRole === 'owner') {
+      loadStaffList();
+      updateStatus('👑 Owner salary control opened — select a staff member below.');
+      setTimeout(() => {
+        const target = document.getElementById('salaryStaffSelect');
+        if (target) target.scrollIntoView({behavior:'smooth', block:'center'});
+        const panel = document.getElementById('salaryPanel');
+        if (panel) panel.style.display = '';
+      }, 80);
+    } else {
+      loadMySalary();
+      initMySmartSalaryMonth();
+    }
   }
   if (tabId === 'daily-pay') { loadMySalary().then(renderDailyPay); }
   if (tabId === 'work-update') { updateWorkUpdateStats(); loadWorkUpdateHistory(); $('wuNoteText').value = ''; }
@@ -6751,7 +6887,19 @@ function activateAppTab(tabId){
 }
 
 document.querySelectorAll('[data-home-tab],[data-open-tab]').forEach(btn => {
-  btn.addEventListener('click', () => activateAppTab(btn.dataset.homeTab || btn.dataset.openTab));
+  btn.addEventListener('click', (ev) => {
+    ev.preventDefault();
+    const target = btn.dataset.homeTab || btn.dataset.openTab;
+    if (target) activateAppTab(target);
+  });
+});
+// Safety net for quick-action buttons added/re-rendered after boot.
+document.addEventListener('click', (ev) => {
+  const btn = ev.target.closest && ev.target.closest('[data-home-tab],[data-open-tab]');
+  if (!btn || btn.dataset.quickBound === '1') return;
+  ev.preventDefault();
+  const target = btn.dataset.homeTab || btn.dataset.openTab;
+  if (target) activateAppTab(target);
 });
 
 document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -6912,6 +7060,8 @@ window.openAuthModal = openAuthModal;
 window.toggleAuthMode = toggleAuthMode;
 window.authAction = authAction;
 window.logout = logout;
+window.activateAppTab = activateAppTab;
+window.safeStaffQuickAction = safeStaffQuickAction;
 window.refreshStaffHome = refreshStaffHome;
 window.refreshMyCommission = refreshMyCommission;
 window.addStaffTask = addStaffTask;
