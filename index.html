@@ -359,6 +359,7 @@ body::before {
 
 .btn-sm { padding: 6px 10px; font-size: 0.78rem; border-radius: var(--radius-xs); }
 .btn-xs { padding: 4px 8px; font-size: 0.7rem; border-radius: 4px; }
+.btn:disabled{opacity:.55;cursor:wait;transform:none!important;box-shadow:none!important}
 
 /* ===== TABS ===== */
 .tabs {
@@ -4036,13 +4037,15 @@ function getSmartMonth(){
 
 function getCommissionForStaffMonth(staffId, month){
   if(!staffId)return 0;
-  const total=(orders||[]).filter(o=>{
-    if(o.status==='cancelled') return false;
-    if((o.createdAt||'').slice(0,7)!==month) return false;
-    const c=customers.find(x=>String(x.id)===String(o.customerId));
-    return String(c?.referralStaffId||'')===String(staffId);
-  }).reduce((s,o)=>s+(Number(o.total)||0),0);
-  return total*STAFF_COMMISSION_RATE;
+  // Commission is claim-based, never customer-master based. Staff do not load the customer list.
+  const claims=(window.staffCommissionClaims||[]).filter(c=>{
+    if(String(c.staff_id)!==String(staffId)) return false;
+    if(c.status!=='approved') return false;
+    const d=new Date(c.verified_at||c.submitted_at||0);
+    if(Number.isNaN(d.getTime())) return false;
+    return d.toISOString().slice(0,7)===month;
+  });
+  return claims.reduce((s,c)=>s+(Number(c.commission_amount)||0),0);
 }
 
 async function refreshSmartSalary(){
@@ -6859,12 +6862,57 @@ async function verifyCommissionClaim(id,status){
   if(userRole!=='owner') return;
   const note=status==='approved'?'Approved after owner verification':'Rejected by owner';
   if(!confirm(status==='approved'?'Verify this sale and add commission?':'Reject this commission claim?')) return;
+  const btn=document.querySelector(`button[onclick=\"verifyCommissionClaim('${id}','${status}')\"]`);
+  if(btn){btn.disabled=true;btn.dataset.originalText=btn.textContent;btn.textContent=status==='approved'?'Verifying…':'Rejecting…';}
   try{
     const {data,error}=await supabase.rpc('verify_staff_commission_claim',{p_claim_id:id,p_status:status,p_owner_note:note});
     if(error) throw error;
-    await loadCommissionClaims(); await loadOrdersFromCloud(); renderOwnerStaffPerformance();
-    updateStatus(status==='approved'?'✅ Commission verified and added':'❌ Commission claim rejected');
-  }catch(e){console.error(e);alert('❌ Commission verification failed: '+e.message);}
+
+    // Server is the source of truth. Refresh every dependent dataset/UI.
+    await loadCommissionClaims();
+    await loadOrdersFromCloud();
+    if(userRole==='owner'){
+      await loadStaffList();
+      await loadMyStaffData(false);
+    }
+
+    // Keep local state/cache aligned with the verified sale.
+    const verifiedClaim=data;
+    if(verifiedClaim?.order_id){
+      const localOrder=(orders||[]).find(o=>String(o.id)===String(verifiedClaim.order_id));
+      if(localOrder){
+        localOrder.referralStatus=status==='approved'?'approved':'rejected';
+        localOrder.commissionStatus=status;
+        localOrder.commissionAmount=Number(verifiedClaim.commission_amount)||0;
+        localOrder.orderRefNo=verifiedClaim.order_ref_no||localOrder.orderRefNo||null;
+        saveOrders();
+      }
+    }
+
+    // Update local + app_data cloud snapshot as well. Orders/claims themselves remain in Supabase tables.
+    saveAll();
+    await cloudSaveSilent();
+
+    renderOrders();
+    renderDelivery();
+    updateOrderStats();
+    calcAll();
+    calcDashboard();
+    calcProduction();
+    updateMonthlySummary();
+    renderHistory();
+    renderOwnerStaffPerformance();
+    renderOwnerStaffManagement();
+    refreshStaffHome();
+    refreshMyCommission();
+
+    updateStatus(status==='approved'?'✅ Sale verified · 12% commission added · all data synced':'❌ Commission claim rejected · all data synced');
+  }catch(e){
+    console.error('Commission verification failed:',e);
+    alert('❌ Commission verification failed: '+(e?.message||e));
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent=btn.dataset.originalText||'Approve';}
+  }
 }
 
 async function loadMyStaffOwnerData(){
