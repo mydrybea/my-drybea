@@ -2393,6 +2393,103 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
         </table>
       </div>
     </div>
+
+    <div class="card" data-owner-only style="margin-top:16px;">
+      <h2><span class="pro-title-icon gold" aria-hidden="true"><span class="nav-icon icon-expense"></span></span><span>Staff Salary</span></h2>
+      <p class="pro-subtitle gold">Only you can update salaries — staff members never see or edit this.</p>
+
+      <div class="field">
+        <label>Staff Member</label>
+        <select id="salaryStaffSelect" onchange="onSalaryStaffChange()">
+          <option value="">-- Select staff --</option>
+        </select>
+      </div>
+      <div id="salaryNoStaffNotice" class="notice warn" style="display:none;">Add a staff member above first.</div>
+
+      <div id="salaryPanel" style="display:none;">
+        <div class="mode-toggle">
+          <button class="btn active" data-smode="daily" onclick="setSalaryMode('daily')">⚡ Daily Update</button>
+          <button class="btn" data-smode="advanced" onclick="setSalaryMode('advanced')">🧮 Advanced</button>
+        </div>
+
+        <!-- DAILY MODE: quick one-tap log of what was paid today -->
+        <div id="salaryModeDaily">
+          <div class="field">
+            <label>Date</label>
+            <input type="date" id="salDailyDate">
+          </div>
+          <div class="field">
+            <label>Amount Paid Today (Rs.)</label>
+            <div class="input-prefix"><span>Rs.</span><input type="number" id="salDailyAmount" value="0" min="0"></div>
+          </div>
+          <div class="field">
+            <label>Note</label>
+            <input type="text" id="salDailyNote" placeholder="Optional note">
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-primary" onclick="saveDailySalary()">💾 Log Daily Salary</button>
+          </div>
+        </div>
+
+        <!-- ADVANCED MODE: base salary / daily rate reference + bonus/advance/deduction entries -->
+        <div id="salaryModeAdvanced" style="display:none;">
+          <div class="grid-2">
+            <div class="field">
+              <label>Base Monthly Salary (Rs.)</label>
+              <div class="input-prefix"><span>Rs.</span><input type="number" id="salBaseMonthly" value="0" min="0"></div>
+            </div>
+            <div class="field">
+              <label>Standard Daily Rate (Rs.)</label>
+              <div class="input-prefix"><span>Rs.</span><input type="number" id="salDailyRate" value="0" min="0"></div>
+            </div>
+          </div>
+          <div class="btn-row">
+            <button class="btn" onclick="saveSalarySettings()">💾 Save Salary Settings</button>
+          </div>
+          <hr style="border-color:var(--border);margin:16px 0;">
+          <p class="sub">Add a bonus, advance, or deduction entry:</p>
+          <div class="grid-2">
+            <div class="field">
+              <label>Entry Type</label>
+              <select id="salEntryType">
+                <option value="bonus">➕ Bonus</option>
+                <option value="advance">💸 Advance</option>
+                <option value="deduction">➖ Deduction</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Date</label>
+              <input type="date" id="salEntryDate">
+            </div>
+          </div>
+          <div class="field">
+            <label>Amount (Rs.)</label>
+            <div class="input-prefix"><span>Rs.</span><input type="number" id="salEntryAmount" value="0" min="0"></div>
+          </div>
+          <div class="field">
+            <label>Note</label>
+            <input type="text" id="salEntryNote" placeholder="Optional note">
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-primary" onclick="addSalaryEntry()">➕ Add Entry</button>
+          </div>
+        </div>
+
+        <div class="stat-grid" style="margin-top:16px;">
+          <div class="stat accent"><div class="k">This Month Daily Pay</div><div class="v" id="salSumDaily">Rs. 0</div></div>
+          <div class="stat"><div class="k">Bonuses</div><div class="v" id="salSumBonus">Rs. 0</div></div>
+          <div class="stat"><div class="k">Advances / Deductions</div><div class="v" id="salSumMinus">Rs. 0</div></div>
+          <div class="stat accent"><div class="k">Net Payable (Month)</div><div class="v" id="salSumNet">Rs. 0</div></div>
+        </div>
+
+        <div class="table-wrap" style="margin-top:14px;">
+          <table>
+            <thead><tr><th>Date</th><th>Type</th><th>Amount</th><th>Note</th><th>Actions</th></tr></thead>
+            <tbody id="salaryHistoryBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
   </section>
 
   <!-- ============ CALCULATOR TAB ============ -->
@@ -3014,6 +3111,8 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
         <option value="Raw Fish">Raw Fish</option>
         <option value="Rent">Rent</option>
         <option value="Utilities">Utilities</option>
+        <option value="Bill Payment">Bill Payment</option>
+        <option value="Staff Dining">Staff Dining</option>
         <option value="Other">Other</option>
       </select>
     </div>
@@ -3175,6 +3274,7 @@ function renderStaffList(list) {
       <td><button class="btn btn-sm btn-danger" onclick="removeStaffMember('${s.id}')">🗑️</button></td>
     </tr>
   `).join('');
+  populateSalaryStaffSelect(list);
 }
 
 async function addStaffMember() {
@@ -3213,6 +3313,180 @@ async function removeStaffMember(uid) {
     alert('❌ Could not remove staff: ' + e.message);
   }
 }
+
+// ==================== STAFF SALARY (owner-only) ====================
+let staffListCache = [];
+let salaryEntries = [];
+let salaryMode = 'daily';
+let currentSalaryStaffId = '';
+const SAL_TYPE_LABEL = { daily: '⚡ Daily', bonus: '➕ Bonus', advance: '💸 Advance', deduction: '➖ Deduction' };
+
+function populateSalaryStaffSelect(list) {
+  staffListCache = list || [];
+  const sel = $('salaryStaffSelect');
+  if (!sel) return;
+  const prev = sel.value;
+  sel.innerHTML = '<option value="">-- Select staff --</option>' +
+    staffListCache.map(s => `<option value="${s.id}">${s.display_name || '(no name)'}</option>`).join('');
+  if (prev && staffListCache.some(s => s.id === prev)) {
+    sel.value = prev;
+  } else {
+    currentSalaryStaffId = '';
+    if ($('salaryPanel')) $('salaryPanel').style.display = 'none';
+  }
+  const notice = $('salaryNoStaffNotice');
+  if (notice) notice.style.display = staffListCache.length ? 'none' : '';
+}
+
+function setSalaryMode(mode) {
+  salaryMode = mode;
+  document.querySelectorAll('#salaryPanel .mode-toggle .btn').forEach(b => b.classList.toggle('active', b.dataset.smode === mode));
+  if ($('salaryModeDaily')) $('salaryModeDaily').style.display = mode === 'daily' ? '' : 'none';
+  if ($('salaryModeAdvanced')) $('salaryModeAdvanced').style.display = mode === 'advanced' ? '' : 'none';
+}
+
+async function onSalaryStaffChange() {
+  const staffId = $('salaryStaffSelect').value;
+  currentSalaryStaffId = staffId;
+  const panel = $('salaryPanel');
+  if (!staffId) { if (panel) panel.style.display = 'none'; return; }
+  if (panel) panel.style.display = '';
+  $('salDailyDate').value = new Date().toISOString().slice(0, 10);
+  $('salEntryDate').value = new Date().toISOString().slice(0, 10);
+
+  const staff = staffListCache.find(s => s.id === staffId);
+  $('salBaseMonthly').value = (staff && staff.base_salary) || 0;
+  $('salDailyRate').value = (staff && staff.daily_rate) || 0;
+
+  await loadSalaryHistory(staffId);
+}
+
+async function saveSalarySettings() {
+  if (!currentSalaryStaffId) { alert('Select a staff member first.'); return; }
+  const base_salary = Number($('salBaseMonthly').value) || 0;
+  const daily_rate = Number($('salDailyRate').value) || 0;
+  try {
+    const { error } = await supabase.from('profiles').update({ base_salary, daily_rate }).eq('id', currentSalaryStaffId);
+    if (error) throw error;
+    const staff = staffListCache.find(s => s.id === currentSalaryStaffId);
+    if (staff) { staff.base_salary = base_salary; staff.daily_rate = daily_rate; }
+    updateStatus('✅ Salary settings saved');
+  } catch (e) {
+    console.error('Save salary settings error:', e);
+    alert('❌ Could not save salary settings: ' + e.message);
+  }
+}
+
+async function saveDailySalary() {
+  if (!currentSalaryStaffId) { alert('Select a staff member first.'); return; }
+  const date = $('salDailyDate').value || new Date().toISOString().slice(0, 10);
+  const amount = Number($('salDailyAmount').value) || 0;
+  const note = $('salDailyNote').value.trim();
+  if (amount <= 0) { alert('Enter an amount greater than 0!'); return; }
+  const ok = await insertSalaryEntry({ entry_date: date, amount, entry_type: 'daily', note });
+  if (ok) { $('salDailyAmount').value = 0; $('salDailyNote').value = ''; }
+}
+
+async function addSalaryEntry() {
+  if (!currentSalaryStaffId) { alert('Select a staff member first.'); return; }
+  const type = $('salEntryType').value;
+  const date = $('salEntryDate').value || new Date().toISOString().slice(0, 10);
+  const amount = Number($('salEntryAmount').value) || 0;
+  const note = $('salEntryNote').value.trim();
+  if (amount <= 0) { alert('Enter an amount greater than 0!'); return; }
+  const ok = await insertSalaryEntry({ entry_date: date, amount, entry_type: type, note });
+  if (ok) { $('salEntryAmount').value = 0; $('salEntryNote').value = ''; }
+}
+
+async function insertSalaryEntry({ entry_date, amount, entry_type, note }) {
+  if (!currentUser) { alert('Please login first.'); return false; }
+  const staff = staffListCache.find(s => s.id === currentSalaryStaffId);
+  const row = {
+    owner_id: currentUser.id,
+    staff_id: currentSalaryStaffId,
+    staff_name: staff ? (staff.display_name || null) : null,
+    entry_date,
+    amount,
+    entry_type,
+    note: note || null,
+    created_by: currentUser.id
+  };
+  try {
+    const { data, error } = await supabase.from('staff_salaries').insert(row).select().single();
+    if (error) throw error;
+    salaryEntries.unshift(data);
+    renderSalaryHistory();
+    updateStatus('✅ Salary entry saved');
+    return true;
+  } catch (e) {
+    console.error('Save salary entry error:', e);
+    alert('❌ Could not save salary entry: ' + e.message);
+    return false;
+  }
+}
+
+async function loadSalaryHistory(staffId) {
+  try {
+    const { data, error } = await supabase
+      .from('staff_salaries')
+      .select('*')
+      .eq('staff_id', staffId)
+      .order('entry_date', { ascending: false });
+    if (error) throw error;
+    salaryEntries = data || [];
+    renderSalaryHistory();
+  } catch (e) {
+    console.error('Load salary history error:', e);
+    updateStatus('⚠️ Could not load salary history');
+  }
+}
+
+async function deleteSalaryEntry(id) {
+  if (!confirm('Delete this salary entry?')) return;
+  try {
+    const { error } = await supabase.from('staff_salaries').delete().eq('id', id);
+    if (error) throw error;
+    salaryEntries = salaryEntries.filter(s => s.id !== id);
+    renderSalaryHistory();
+    updateStatus('🗑️ Salary entry deleted');
+  } catch (e) {
+    console.error('Delete salary entry error:', e);
+    alert('❌ Could not delete: ' + e.message);
+  }
+}
+
+function renderSalaryHistory() {
+  const tbody = $('salaryHistoryBody');
+  if (!tbody) return;
+  if (!salaryEntries.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;opacity:0.5;padding:14px;">No salary entries yet.</td></tr>';
+  } else {
+    tbody.innerHTML = salaryEntries.map(s => `
+      <tr>
+        <td>${s.entry_date}</td>
+        <td>${SAL_TYPE_LABEL[s.entry_type] || s.entry_type}</td>
+        <td>${fmt(s.amount)}</td>
+        <td>${s.note || '-'}</td>
+        <td><button class="btn btn-sm btn-danger" onclick="deleteSalaryEntry('${s.id}')">🗑️</button></td>
+      </tr>
+    `).join('');
+  }
+  updateSalarySummary();
+}
+
+function updateSalarySummary() {
+  const ym = new Date().toISOString().slice(0, 7);
+  const thisMonth = salaryEntries.filter(s => (s.entry_date || '').slice(0, 7) === ym);
+  const daily = thisMonth.filter(s => s.entry_type === 'daily').reduce((a, s) => a + Number(s.amount), 0);
+  const bonus = thisMonth.filter(s => s.entry_type === 'bonus').reduce((a, s) => a + Number(s.amount), 0);
+  const minus = thisMonth.filter(s => s.entry_type === 'advance' || s.entry_type === 'deduction').reduce((a, s) => a + Number(s.amount), 0);
+  const net = daily + bonus - minus;
+  if ($('salSumDaily')) $('salSumDaily').textContent = fmt(daily);
+  if ($('salSumBonus')) $('salSumBonus').textContent = fmt(bonus);
+  if ($('salSumMinus')) $('salSumMinus').textContent = fmt(minus);
+  if ($('salSumNet')) $('salSumNet').textContent = fmt(net);
+}
+
 let isAuthModeLogin = true; // true=login, false=signup
 
 // ==================== STATE ====================
@@ -5110,6 +5384,12 @@ window.authAction = authAction;
 window.logout = logout;
 window.addStaffMember = addStaffMember;
 window.removeStaffMember = removeStaffMember;
+window.setSalaryMode = setSalaryMode;
+window.onSalaryStaffChange = onSalaryStaffChange;
+window.saveSalarySettings = saveSalarySettings;
+window.saveDailySalary = saveDailySalary;
+window.addSalaryEntry = addSalaryEntry;
+window.deleteSalaryEntry = deleteSalaryEntry;
 window.takeSnapshot = takeSnapshot;
 window.restoreFromSnapshot = restoreFromSnapshot;
 
