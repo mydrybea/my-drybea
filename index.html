@@ -6839,6 +6839,7 @@ async function populateStaffReferralSelectors(){
 }
 
 async function loadCommissionClaims(){
+  if(currentUser && userRole==='owner' && !commissionRealtimeChannel) startCommissionRealtime();
   if(!currentUser) return [];
   try{
     const q=userRole==='owner'
@@ -6854,66 +6855,76 @@ async function loadCommissionClaims(){
 function renderCommissionClaims(){
   const body=$('ownerCommissionClaimsBody'); if(body && userRole==='owner'){
     const list=window.staffCommissionClaims||[];
-    body.innerHTML=list.map(c=>`<tr><td><strong>${escapeHtmlSafe(c.staff_reference||'-')}</strong></td><td><strong>${escapeHtmlSafe(c.order_ref_no||'-')}</strong><br><small>${escapeHtmlSafe(c.order_id||'-')}</small></td><td>${escapeHtmlSafe(c.customer_name||'-')}</td><td>${fmt(Number(c.order_total)||0)}</td><td>${c.status==='approved'?fmt(Number(c.commission_amount)||0):'—'}</td><td><span class="status-pill ${c.status==='approved'?'approved':c.status==='rejected'?'rejected':'pending'}">${escapeHtmlSafe(c.status)}</span></td><td>${c.status==='pending'?`<button class="btn btn-xs btn-primary" onclick="verifyCommissionClaim('${c.id}','approved')">Approve</button> <button class="btn btn-xs btn-danger" onclick="verifyCommissionClaim('${c.id}','rejected')">Reject</button>`:'Verified'}</td></tr>`).join('')||'<tr><td colspan="7" style="text-align:center;opacity:.5;padding:18px;">No commission claims.</td></tr>';
+    body.innerHTML=list.map(c=>`<tr><td><strong>${escapeHtmlSafe(c.staff_reference||'-')}</strong></td><td><strong>${escapeHtmlSafe(c.order_ref_no||'-')}</strong><br><small>${escapeHtmlSafe(c.order_id||'-')}</small></td><td>${escapeHtmlSafe(c.customer_name||'-')}</td><td>${fmt(Number(c.order_total)||0)}</td><td>${c.status==='approved'?fmt(Number(c.commission_amount)||0):'—'}</td><td><span class="status-pill ${c.status==='approved'?'approved':c.status==='rejected'?'rejected':'pending'}">${escapeHtmlSafe(c.status)}</span></td><td>${c.status==='pending'?`<button type="button" class="btn btn-xs btn-primary" onclick="verifyCommissionClaim('${c.id}','approved')">Approve</button> <button type="button" class="btn btn-xs btn-danger" onclick="verifyCommissionClaim('${c.id}','rejected')">Reject</button>`:'Verified'}</td></tr>`).join('')||'<tr><td colspan="7" style="text-align:center;opacity:.5;padding:18px;">No commission claims.</td></tr>';
   }
 }
 
+let commissionRealtimeChannel = null;
+let commissionRealtimeTimer = null;
+let commissionRefreshBusy = false;
+
+async function refreshCommissionRealtime(){
+  if(!currentUser || userRole!=='owner' || commissionRefreshBusy) return;
+  commissionRefreshBusy = true;
+  try{
+    await loadCommissionClaims();
+    await loadOrdersFromCloud();
+    try{ await loadStaffList(); }catch(e){}
+    try{ await loadMyStaffData(false); }catch(e){}
+    renderOwnerStaffPerformance();
+    renderOwnerStaffManagement();
+    renderOrders();
+    updateOrderStats();
+    calcAll(); calcDashboard(); calcProduction(); updateMonthlySummary();
+    refreshStaffHome(); refreshMyCommission();
+  }catch(e){ console.warn('Commission realtime refresh:',e); }
+  finally{ commissionRefreshBusy=false; }
+}
+
+function startCommissionRealtime(){
+  if(!currentUser || userRole!=='owner' || !window.supabase) return;
+  try{
+    if(commissionRealtimeChannel){ supabase.removeChannel(commissionRealtimeChannel); commissionRealtimeChannel=null; }
+    commissionRealtimeChannel = supabase.channel('mydrybea-commission-live')
+      .on('postgres_changes',{event:'*',schema:'public',table:'staff_commission_claims',filter:`owner_id=eq.${currentUser.id}`},()=>refreshCommissionRealtime())
+      .on('postgres_changes',{event:'*',schema:'public',table:'orders',filter:`user_id=eq.${currentUser.id}`},()=>refreshCommissionRealtime())
+      .subscribe((status)=>{ if(status==='SUBSCRIBED') console.log('MY DRYBEA commission realtime: connected'); });
+    if(commissionRealtimeTimer) clearInterval(commissionRealtimeTimer);
+    commissionRealtimeTimer=setInterval(()=>refreshCommissionRealtime(),5000);
+  }catch(e){ console.warn('Commission realtime setup:',e); }
+}
+
+function stopCommissionRealtime(){
+  try{ if(commissionRealtimeTimer) clearInterval(commissionRealtimeTimer); }catch(e){}
+  commissionRealtimeTimer=null;
+  try{ if(commissionRealtimeChannel) supabase.removeChannel(commissionRealtimeChannel); }catch(e){}
+  commissionRealtimeChannel=null;
+}
+
 async function verifyCommissionClaim(id,status){
-  if(userRole!=='owner') return;
+  if(userRole!=='owner') { alert('Only the owner can verify a commission claim.'); return; }
+  if(!id || !['approved','rejected'].includes(status)) { alert('Invalid commission action.'); return; }
   const note=status==='approved'?'Approved after owner verification':'Rejected by owner';
-  if(!confirm(status==='approved'?'Verify this sale and add commission?':'Reject this commission claim?')) return;
-  const btn=document.querySelector(`button[onclick=\"verifyCommissionClaim('${id}','${status}')\"]`);
-  if(btn){btn.disabled=true;btn.dataset.originalText=btn.textContent;btn.textContent=status==='approved'?'Verifying…':'Rejecting…';}
+  if(!confirm(status==='approved'?'Verify this sale and add 12% commission?':'Reject this commission claim?')) return;
+  const btn=document.querySelector(`button[onclick="verifyCommissionClaim('${id}','${status}')"]`);
+  if(btn){ btn.disabled=true; btn.dataset.originalText=btn.textContent; btn.textContent=status==='approved'?'Verifying…':'Rejecting…'; }
   try{
     const {data,error}=await supabase.rpc('verify_staff_commission_claim',{p_claim_id:id,p_status:status,p_owner_note:note});
     if(error) throw error;
-
-    // The RPC is the source of truth. Once the transaction succeeds,
-    // refreshes are deliberately best-effort so a secondary dashboard
-    // refresh failure cannot make a successful Approve/Reject look failed.
-    try{ await loadCommissionClaims(); }catch(e){ console.warn('Claims refresh after verification:',e); }
-    try{ await loadOrdersFromCloud(); }catch(e){ console.warn('Orders refresh after verification:',e); }
-    if(userRole==='owner'){
-      try{ await loadStaffList(); }catch(e){ console.warn('Staff refresh after verification:',e); }
-      try{ await loadMyStaffData(false); }catch(e){ console.warn('MY STAFF refresh after verification:',e); }
+    // Immediately reflect the authoritative RPC result in the UI.
+    if(data){
+      window.staffCommissionClaims=(window.staffCommissionClaims||[]).map(c=>String(c.id)===String(id)?data:c);
+      renderCommissionClaims();
     }
-
-    // Keep local state/cache aligned with the verified sale.
-    const verifiedClaim=data;
-    if(verifiedClaim?.order_id){
-      const localOrder=(orders||[]).find(o=>String(o.id)===String(verifiedClaim.order_id));
-      if(localOrder){
-        localOrder.referralStatus=status==='approved'?'approved':'rejected';
-        localOrder.commissionStatus=status;
-        localOrder.commissionAmount=Number(verifiedClaim.commission_amount)||0;
-        localOrder.orderRefNo=verifiedClaim.order_ref_no||localOrder.orderRefNo||null;
-        saveOrders();
-      }
-    }
-
-    // Update local + app_data cloud snapshot as well. Orders/claims themselves remain in Supabase tables.
-    saveAll();
-    await cloudSaveSilent();
-
-    renderOrders();
-    renderDelivery();
-    updateOrderStats();
-    calcAll();
-    calcDashboard();
-    calcProduction();
-    updateMonthlySummary();
-    renderHistory();
-    renderOwnerStaffPerformance();
-    renderOwnerStaffManagement();
-    refreshStaffHome();
-    refreshMyCommission();
-
-    updateStatus(status==='approved'?'✅ Sale verified · 12% commission added · all data synced':'❌ Commission claim rejected · all data synced');
+    await refreshCommissionRealtime();
+    updateStatus(status==='approved'?'✅ Approved · 12% commission added · LIVE SYNC':'❌ Rejected · LIVE SYNC');
   }catch(e){
     console.error('Commission verification failed:',e);
-    alert('❌ Commission verification failed: '+(e?.message||e));
+    alert('❌ Approve / Reject failed:\n'+(e?.message||String(e)));
+    try{ await loadCommissionClaims(); }catch(_e){}
   }finally{
-    if(btn){btn.disabled=false;btn.textContent=btn.dataset.originalText||'Approve';}
+    const b=document.querySelector(`button[onclick="verifyCommissionClaim('${id}','${status}')"]`);
+    if(b){b.disabled=false;b.textContent=b.dataset.originalText || (status==='approved'?'Approve':'Reject');}
   }
 }
 
