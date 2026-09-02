@@ -2372,6 +2372,31 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
       </div>
     </div>
 
+    <div class="card" data-staff-only style="margin-top:16px;">
+      <h2><span class="pro-title-icon gold" aria-hidden="true"><span class="nav-icon icon-expense"></span></span><span>My Salary</span></h2>
+      <p class="pro-subtitle gold">Your pay details, updated by your employer.</p>
+
+      <div class="stat-grid">
+        <div class="stat"><div class="k">Base Monthly Salary</div><div class="v" id="myBaseSalary">Rs. 0</div></div>
+        <div class="stat"><div class="k">Daily Rate</div><div class="v" id="myDailyRate">Rs. 0</div></div>
+      </div>
+
+      <div class="stat-grid" style="margin-top:10px;">
+        <div class="stat accent"><div class="k">This Month Daily Pay</div><div class="v" id="mySalSumDaily">Rs. 0</div></div>
+        <div class="stat"><div class="k">Bonuses</div><div class="v" id="mySalSumBonus">Rs. 0</div></div>
+        <div class="stat"><div class="k">Advances / Deductions</div><div class="v" id="mySalSumMinus">Rs. 0</div></div>
+        <div class="stat accent"><div class="k">Net Payable (Month)</div><div class="v" id="mySalSumNet">Rs. 0</div></div>
+      </div>
+
+      <p class="sub" style="margin-top:14px;">Full history:</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Date</th><th>Type</th><th>Amount</th><th>Note</th></tr></thead>
+          <tbody id="mySalaryHistoryBody"><tr><td colspan="4" style="text-align:center;opacity:.5;padding:14px;">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
     <div class="card" data-owner-only style="margin-top:16px;">
       <h2><span class="pro-title-icon gold" aria-hidden="true"><span class="nav-icon icon-profile"></span></span><span>Manage Staff</span></h2>
       <p class="pro-subtitle gold">Give trusted staff shared access to Orders, Customers &amp; Expenses. They won't see Costing, Production or History.</p>
@@ -3236,6 +3261,9 @@ function applyRoleUI() {
   document.querySelectorAll('[data-owner-only]').forEach(el => {
     el.style.display = isStaff ? 'none' : '';
   });
+  document.querySelectorAll('[data-staff-only]').forEach(el => {
+    el.style.display = isStaff ? '' : 'none';
+  });
   const roleBadge = $('roleBadge');
   if (roleBadge) roleBadge.textContent = isStaff ? '👤 Staff' : '👑 Owner';
   // Staff can't land on the Home dashboard (it's owner-only) — send them
@@ -3485,6 +3513,64 @@ function updateSalarySummary() {
   if ($('salSumBonus')) $('salSumBonus').textContent = fmt(bonus);
   if ($('salSumMinus')) $('salSumMinus').textContent = fmt(minus);
   if ($('salSumNet')) $('salSumNet').textContent = fmt(net);
+}
+
+// ==================== MY SALARY (staff-only, read-only view) ====================
+let mySalaryEntries = [];
+
+async function loadMySalaryData() {
+  if (!currentUser || userRole !== 'staff') return;
+
+  // Base salary / daily rate live on the staff member's own profile row,
+  // which is already loaded into userProfile during login.
+  const base = Number(userProfile && userProfile.base_salary) || 0;
+  const rate = Number(userProfile && userProfile.daily_rate) || 0;
+  if ($('myBaseSalary')) $('myBaseSalary').textContent = fmt(base);
+  if ($('myDailyRate')) $('myDailyRate').textContent = fmt(rate);
+
+  try {
+    const { data, error } = await supabase
+      .from('staff_salaries')
+      .select('*')
+      .eq('staff_id', currentUser.id)
+      .order('entry_date', { ascending: false });
+    if (error) throw error;
+    mySalaryEntries = data || [];
+    renderMySalaryHistory();
+  } catch (e) {
+    console.error('Load my salary error:', e);
+    const tbody = $('mySalaryHistoryBody');
+    if (tbody) tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;opacity:.5;padding:14px;">⚠️ Could not load salary history.</td></tr>';
+  }
+}
+
+function renderMySalaryHistory() {
+  const tbody = $('mySalaryHistoryBody');
+  if (tbody) {
+    if (!mySalaryEntries.length) {
+      tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;opacity:0.5;padding:14px;">No salary entries yet.</td></tr>';
+    } else {
+      tbody.innerHTML = mySalaryEntries.map(s => `
+        <tr>
+          <td>${s.entry_date}</td>
+          <td>${SAL_TYPE_LABEL[s.entry_type] || s.entry_type}</td>
+          <td>${fmt(s.amount)}</td>
+          <td>${s.note || '-'}</td>
+        </tr>
+      `).join('');
+    }
+  }
+
+  const ym = new Date().toISOString().slice(0, 7);
+  const thisMonth = mySalaryEntries.filter(s => (s.entry_date || '').slice(0, 7) === ym);
+  const daily = thisMonth.filter(s => s.entry_type === 'daily').reduce((a, s) => a + Number(s.amount), 0);
+  const bonus = thisMonth.filter(s => s.entry_type === 'bonus').reduce((a, s) => a + Number(s.amount), 0);
+  const minus = thisMonth.filter(s => s.entry_type === 'advance' || s.entry_type === 'deduction').reduce((a, s) => a + Number(s.amount), 0);
+  const net = daily + bonus - minus;
+  if ($('mySalSumDaily')) $('mySalSumDaily').textContent = fmt(daily);
+  if ($('mySalSumBonus')) $('mySalSumBonus').textContent = fmt(bonus);
+  if ($('mySalSumMinus')) $('mySalSumMinus').textContent = fmt(minus);
+  if ($('mySalSumNet')) $('mySalSumNet').textContent = fmt(net);
 }
 
 let isAuthModeLogin = true; // true=login, false=signup
@@ -5220,7 +5306,7 @@ function activateAppTab(tabId){
   if (tabId === 'production') calcProduction();
   if (tabId === 'orders') { renderOrders(); renderCustomers(); renderDelivery(); updateOrderStats(); }
   if (tabId === 'expenses') { renderExpenses(); renderRecurringExpenses(); }
-  if (tabId === 'profile') { updateAuthUI(); if (userRole === 'owner') loadStaffList(); }
+  if (tabId === 'profile') { updateAuthUI(); if (userRole === 'owner') loadStaffList(); else if (userRole === 'staff') loadMySalaryData(); }
 }
 
 document.querySelectorAll('[data-home-tab],[data-open-tab]').forEach(btn => {
