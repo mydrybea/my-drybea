@@ -2293,6 +2293,14 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
   </div>
 
   <style>
+    /* ---- SMART PAYROLL ---- */
+    .smart-salary-card{background:linear-gradient(145deg,var(--bg-card),rgba(16,185,129,.055));border-color:rgba(16,185,129,.22)}.staff-readonly{user-select:none}.staff-readonly input,.staff-readonly select,.staff-readonly textarea{pointer-events:none;opacity:.75}
+    .smart-salary-card .notice strong{font-size:.72rem;letter-spacing:.04em}
+    .smart-salary-card .notice span{font-size:1rem;font-weight:800;color:var(--text-main)}
+    @media(max-width:600px){
+      .smart-salary-card .grid-3{grid-template-columns:1fr 1fr}
+      #smartSalaryMonth{width:100%!important}
+    }
     /* ---- Staff dashboard tabs: scrollable bottom nav when many tabs are visible ---- */
     .app-nav.staff-nav{ overflow-x:auto; flex-wrap:nowrap; -webkit-overflow-scrolling:touch; scrollbar-width:none; }
     .app-nav.staff-nav::-webkit-scrollbar{ display:none; }
@@ -2384,6 +2392,38 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
       <div><span class="eyebrow">MY PAY</span><h2><span class="pro-title-icon green" aria-hidden="true"><span class="nav-icon emoji-nav-icon">💰</span></span><span>My Salary</span></h2><p class="pro-subtitle green">Your salary summary — visible only to you.</p></div>
       <div class="profile-dot"><span class="nav-icon emoji-nav-icon">💰</span></div>
     </div>
+    <div class="card smart-salary-card" style="margin-bottom:16px;">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;">
+        <div>
+          <h2 style="margin:0;">📊 Smart Payroll</h2>
+          <p class="pro-subtitle green" style="margin-bottom:0;">Read-only salary, attendance & overtime summary for your account.</p>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <label style="font-size:12px;font-weight:800;">Month
+            <input type="month" id="mySmartSalaryMonth" onchange="refreshMySmartSalary()" style="margin-left:6px;padding:8px 10px;border-radius:10px;border:1px solid var(--border);background:var(--bg-card);color:var(--text-main);">
+          </label>
+          <button class="btn btn-sm" type="button" onclick="printMySmartPayslip()">🧾 Print</button>
+        </div>
+      </div>
+
+      <div class="stat-grid" style="margin-top:14px;">
+        <div class="stat accent"><div class="k">Payroll Target</div><div class="v" id="mySmartTarget">Rs. 0</div></div>
+        <div class="stat"><div class="k">Paid / Recorded</div><div class="v" id="mySmartPaid">Rs. 0</div></div>
+        <div class="stat"><div class="k">Balance</div><div class="v" id="mySmartBalance">Rs. 0</div></div>
+        <div class="stat"><div class="k">Attendance Days</div><div class="v" id="mySmartDays">0</div></div>
+        <div class="stat"><div class="k">Worked Hours</div><div class="v" id="mySmartHours">0.0</div></div>
+        <div class="stat"><div class="k">Overtime Hours</div><div class="v" id="mySmartOtHours">0.0</div></div>
+        <div class="stat"><div class="k">Bonus</div><div class="v" id="mySmartBonus">Rs. 0</div></div>
+        <div class="stat"><div class="k">Advance / Deductions</div><div class="v" id="mySmartMinus">Rs. 0</div></div>
+        <div class="stat"><div class="k">Estimated OT Value</div><div class="v" id="mySmartOtValue">Rs. 0</div></div>
+      </div>
+
+      <div class="notice" style="margin-top:12px;">
+        <strong>🔒 STAFF READ-ONLY</strong>
+        <span id="mySmartSalaryInsight">Only the owner can create, edit or delete salary records.</span>
+      </div>
+    </div>
+
     <div class="stat-grid">
       <div class="stat"><div class="k">Base Monthly</div><div class="v" id="mySalBase">Rs. 0</div></div>
       <div class="stat"><div class="k">Standard Daily Rate</div><div class="v" id="mySalDailyRate">Rs. 0</div></div>
@@ -2582,6 +2622,43 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
       <div id="salaryNoStaffNotice" class="notice warn" style="display:none;">Add a staff member above first.</div>
 
       <div id="salaryPanel" style="display:none;">
+
+        <!-- SMART PAYROLL DASHBOARD -->
+        <div class="card smart-salary-card" style="margin-bottom:16px;">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">
+            <div>
+              <h2><span class="pro-title-icon green" aria-hidden="true"><span class="nav-icon emoji-nav-icon">🧠</span></span><span>Smart Payroll</span></h2>
+              <p class="pro-subtitle green">Attendance + salary entries combined into a quick payroll control center.</p>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <input type="month" id="smartSalaryMonth" style="width:auto;min-width:150px;" onchange="refreshSmartSalary()">
+              <button class="btn btn-sm" type="button" onclick="printSmartPayslip()">🧾 Print Payslip</button>
+            </div>
+          </div>
+
+          <div class="stat-grid" style="margin-top:12px;">
+            <div class="stat"><div class="k">Base Target</div><div class="v" id="smartBaseTarget">Rs. 0</div></div>
+            <div class="stat"><div class="k">Paid So Far</div><div class="v" id="smartPaid">Rs. 0</div></div>
+            <div class="stat good"><div class="k">Balance</div><div class="v" id="smartBalance">Rs. 0</div></div>
+            <div class="stat accent"><div class="k">Attendance Days</div><div class="v" id="smartDays">0</div></div>
+            <div class="stat"><div class="k">Worked Hours</div><div class="v" id="smartHours">0.0</div></div>
+            <div class="stat"><div class="k">OT Hours</div><div class="v" id="smartOtHours">0.0</div></div>
+          </div>
+
+          <div class="grid-3" style="margin-top:12px;">
+            <div class="notice" style="margin:0;"><strong>Bonus</strong><br><span id="smartBonus">Rs. 0</span></div>
+            <div class="notice warn" style="margin:0;"><strong>Advance + Deduction</strong><br><span id="smartMinus">Rs. 0</span></div>
+            <div class="notice" style="margin:0;"><strong>Estimated OT Value</strong><br><span id="smartOtValue">Rs. 0</span></div>
+          </div>
+
+          <div class="btn-row">
+            <button class="btn btn-primary" type="button" onclick="addEstimatedOTToPayroll()">➕ Add Estimated OT as Bonus</button>
+            <button class="btn" type="button" onclick="refreshSmartSalary()">↻ Recalculate</button>
+          </div>
+
+          <div id="smartSalaryInsight" class="notice" style="margin-top:12px;margin-bottom:0;">Select a staff member to calculate payroll insights.</div>
+        </div>
+
         <div class="mode-toggle">
           <button class="btn active" data-smode="daily" onclick="setSalaryMode('daily')">⚡ Daily Update</button>
           <button class="btn" data-smode="advanced" onclick="setSalaryMode('advanced')">🧮 Advanced</button>
@@ -3418,6 +3495,10 @@ function applyRoleUI() {
   if (navEl) navEl.classList.toggle('staff-nav', isStaff);
   const roleBadge = $('roleBadge');
   if (roleBadge) roleBadge.textContent = isStaff ? '👤 Staff' : '👑 Owner';
+  const ownerSalaryTab = document.querySelector('[data-tab="staff-salary"]');
+  if (ownerSalaryTab) ownerSalaryTab.style.display = isStaff ? 'none' : '';
+  const ownerSalaryEditor = $('salaryPanel');
+  if (ownerSalaryEditor && isStaff) ownerSalaryEditor.style.display = 'none';
   // Staff can't land on the Home dashboard (it's owner-only) — send them
   // straight to Orders instead.
   if (isStaff && typeof activateAppTab === 'function') {
@@ -3525,6 +3606,137 @@ function setSalaryMode(mode) {
   if ($('salaryModeAdvanced')) $('salaryModeAdvanced').style.display = mode === 'advanced' ? '' : 'none';
 }
 
+let smartAttendanceRows = [];
+let smartSalaryMonth = '';
+
+function initSmartSalaryMonth(){
+  const el = $('smartSalaryMonth');
+  if (!el) return;
+  if (!smartSalaryMonth) smartSalaryMonth = new Date().toISOString().slice(0,7);
+  el.value = smartSalaryMonth;
+}
+
+function getSmartMonth(){
+  const el = $('smartSalaryMonth');
+  smartSalaryMonth = (el && el.value) || smartSalaryMonth || new Date().toISOString().slice(0,7);
+  return smartSalaryMonth;
+}
+
+async function refreshSmartSalary(){
+  if (!currentSalaryStaffId) return;
+  const month = getSmartMonth();
+  const staff = staffListCache.find(s => s.id === currentSalaryStaffId);
+  const base = Number(staff && staff.base_salary) || 0;
+  const dailyRate = Number(staff && staff.daily_rate) || 0;
+
+  try {
+    const start = month + '-01';
+    const endDate = new Date(Number(month.slice(0,4)), Number(month.slice(5,7)), 0);
+    const end = month + '-' + String(endDate.getDate()).padStart(2,'0');
+
+    const { data: attendance, error: aErr } = await supabase
+      .from('attendance')
+      .select('*')
+      .eq('staff_id', currentSalaryStaffId)
+      .gte('work_date', start)
+      .lte('work_date', end)
+      .order('work_date', { ascending:false });
+    if (aErr) throw aErr;
+    smartAttendanceRows = attendance || [];
+
+    const monthEntries = (salaryEntries || []).filter(s => (s.entry_date || '').slice(0,7) === month);
+    const daily = monthEntries.filter(s => s.entry_type === 'daily').reduce((a,s)=>a+Number(s.amount||0),0);
+    const bonus = monthEntries.filter(s => s.entry_type === 'bonus').reduce((a,s)=>a+Number(s.amount||0),0);
+    const minus = monthEntries.filter(s => s.entry_type === 'advance' || s.entry_type === 'deduction').reduce((a,s)=>a+Number(s.amount||0),0);
+    const paid = daily + bonus - minus;
+    const days = smartAttendanceRows.filter(r => r.check_in).length;
+    const hours = smartAttendanceRows.reduce((sum,r)=>{
+      if (!r.check_in || !r.check_out) return sum;
+      return sum + Math.max(0,(new Date(r.check_out)-new Date(r.check_in))/3600000);
+    },0);
+    const otHours = smartAttendanceRows.reduce((sum,r)=>{
+      if (!r.check_in || !r.check_out) return sum;
+      const h = Math.max(0,(new Date(r.check_out)-new Date(r.check_in))/3600000);
+      return sum + Math.max(0,h-8);
+    },0);
+    const hourly = dailyRate > 0 ? dailyRate / 8 : 0;
+    const otValue = otHours * hourly * 1.5;
+    const target = base > 0 ? base : daily;
+    const balance = Math.max(0, target + bonus - minus - daily);
+
+    const set=(id,val)=>{const el=$(id);if(el)el.textContent=val;};
+    set('smartBaseTarget',fmt(target));
+    set('smartPaid',fmt(paid));
+    set('smartBalance',fmt(balance));
+    set('smartDays',String(days));
+    set('smartHours',hours.toFixed(1));
+    set('smartOtHours',otHours.toFixed(1));
+    set('smartBonus',fmt(bonus));
+    set('smartMinus',fmt(minus));
+    set('smartOtValue',fmt(otValue));
+
+    const insight = $('smartSalaryInsight');
+    if (insight) {
+      if (!days) insight.textContent = '⚠️ No attendance records found for this month.';
+      else if (otHours > 0 && dailyRate <= 0) insight.textContent = `💡 ${otHours.toFixed(1)} overtime hours detected. Set a daily rate to estimate OT value.`;
+      else if (balance > 0) insight.textContent = `💡 Payroll balance: ${fmt(balance)}. Estimated OT is ${fmt(otValue)}.`;
+      else insight.textContent = '✅ Payroll is fully covered for this month.';
+    }
+  } catch(e) {
+    console.error('Smart payroll error:',e);
+    const insight=$('smartSalaryInsight');
+    if(insight) insight.textContent='⚠️ Could not load attendance/payroll insights.';
+  }
+}
+
+async function addEstimatedOTToPayroll(){
+  if (!currentSalaryStaffId) { alert('Select a staff member first.'); return; }
+  const month = getSmartMonth();
+  const staff = staffListCache.find(s => s.id === currentSalaryStaffId);
+  const dailyRate = Number(staff && staff.daily_rate) || 0;
+  const otHours = smartAttendanceRows.reduce((sum,r)=>{
+    if (!r.check_in || !r.check_out) return sum;
+    return sum + Math.max(0,((new Date(r.check_out)-new Date(r.check_in))/3600000)-8);
+  },0);
+  const value = otHours * (dailyRate/8) * 1.5;
+  if (value <= 0) { alert(dailyRate > 0 ? 'No overtime value to add for this month.' : 'Set the staff daily rate first.'); return; }
+  if (!confirm(`Add estimated OT of ${fmt(value)} as a bonus for ${month}?`)) return;
+  const ok = await insertSalaryEntry({
+    entry_date: month + '-' + new Date(Number(month.slice(0,4)), Number(month.slice(5,7)), 0).getDate().toString().padStart(2,'0'),
+    amount: Math.round(value),
+    entry_type: 'bonus',
+    note: `Estimated OT — ${otHours.toFixed(1)} hrs × 1.5`
+  });
+  if (ok) await refreshSmartSalary();
+}
+
+function printSmartPayslip(){
+  if (!currentSalaryStaffId) { alert('Select a staff member first.'); return; }
+  const staff = staffListCache.find(s => s.id === currentSalaryStaffId);
+  const month = getSmartMonth();
+  const rows = (salaryEntries || []).filter(s => (s.entry_date||'').slice(0,7)===month);
+  const daily = rows.filter(s=>s.entry_type==='daily').reduce((a,s)=>a+Number(s.amount||0),0);
+  const bonus = rows.filter(s=>s.entry_type==='bonus').reduce((a,s)=>a+Number(s.amount||0),0);
+  const minus = rows.filter(s=>s.entry_type==='advance'||s.entry_type==='deduction').reduce((a,s)=>a+Number(s.amount||0),0);
+  const base = Number(staff && staff.base_salary)||0;
+  const net = (base || daily) + bonus - minus;
+  const w = window.open('', '_blank', 'width=760,height=900');
+  if(!w){alert('Please allow pop-ups to print the payslip.');return;}
+  w.document.write(`<!doctype html><html><head><title>MY DRYBEA Payslip</title><style>
+    body{font-family:Arial,sans-serif;padding:32px;color:#10231b}h1{margin:0;color:#059669}h2{margin:6px 0 24px}
+    .box{border:1px solid #ddd;border-radius:12px;padding:18px;margin:14px 0}.row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #eee}.total{font-size:20px;font-weight:800;color:#059669;border-top:2px solid #d4af37;border-bottom:0;margin-top:8px;padding-top:14px}
+    small{color:#667} @media print{button{display:none}}
+  </style></head><body><h1>MY DRYBEA</h1><h2>Staff Payslip — ${month}</h2>
+  <div class="box"><strong>Staff:</strong> ${staff?.display_name||'Staff Member'}<br><small>Generated ${new Date().toLocaleString()}</small></div>
+  <div class="box">
+    <div class="row"><span>Base / Daily Payroll</span><strong>${fmt(base||daily)}</strong></div>
+    <div class="row"><span>Bonus</span><strong>${fmt(bonus)}</strong></div>
+    <div class="row"><span>Advance + Deductions</span><strong>-${fmt(minus)}</strong></div>
+    <div class="row total"><span>Net Payable</span><strong>${fmt(net)}</strong></div>
+  </div><button onclick="window.print()">Print</button></body></html>`);
+  w.document.close(); w.focus(); setTimeout(()=>w.print(),250);
+}
+
 async function onSalaryStaffChange() {
   const staffId = $('salaryStaffSelect').value;
   currentSalaryStaffId = staffId;
@@ -3533,12 +3745,14 @@ async function onSalaryStaffChange() {
   if (panel) panel.style.display = '';
   $('salDailyDate').value = new Date().toISOString().slice(0, 10);
   $('salEntryDate').value = new Date().toISOString().slice(0, 10);
+  initSmartSalaryMonth();
 
   const staff = staffListCache.find(s => s.id === staffId);
   $('salBaseMonthly').value = (staff && staff.base_salary) || 0;
   $('salDailyRate').value = (staff && staff.daily_rate) || 0;
 
   await loadSalaryHistory(staffId);
+  await refreshSmartSalary();
 }
 
 async function saveSalarySettings() {
@@ -3596,6 +3810,7 @@ async function insertSalaryEntry({ entry_date, amount, entry_type, note }) {
     if (error) throw error;
     salaryEntries.unshift(data);
     renderSalaryHistory();
+    await refreshSmartSalary();
     updateStatus('✅ Salary entry saved');
     return true;
   } catch (e) {
@@ -3628,6 +3843,7 @@ async function deleteSalaryEntry(id) {
     if (error) throw error;
     salaryEntries = salaryEntries.filter(s => s.id !== id);
     renderSalaryHistory();
+    await refreshSmartSalary();
     updateStatus('🗑️ Salary entry deleted');
   } catch (e) {
     console.error('Delete salary entry error:', e);
@@ -3672,6 +3888,117 @@ let isAuthModeLogin = true; // true=login, false=signup
 // ==================== MY SALARY (staff-only, read-only view of own data) ====================
 let myFullSalaryEntries = [];
 
+let mySmartAttendanceRows = [];
+let mySmartSalaryMonth = '';
+
+function initMySmartSalaryMonth(){
+  const el = $('mySmartSalaryMonth');
+  if (!el) return;
+  if (!mySmartSalaryMonth) mySmartSalaryMonth = new Date().toISOString().slice(0,7);
+  el.value = mySmartSalaryMonth;
+}
+
+function getMySmartMonth(){
+  const el = $('mySmartSalaryMonth');
+  mySmartSalaryMonth = (el && el.value) || mySmartSalaryMonth || new Date().toISOString().slice(0,7);
+  return mySmartSalaryMonth;
+}
+
+async function refreshMySmartSalary(){
+  if (!currentUser || userRole !== 'staff') return;
+  const month = getMySmartMonth();
+  const base = Number((userProfile && userProfile.base_salary) || 0);
+  const dailyRate = Number((userProfile && userProfile.daily_rate) || 0);
+
+  try {
+    const start = month + '-01';
+    const endDate = new Date(Number(month.slice(0,4)), Number(month.slice(5,7)), 0);
+    const end = month + '-' + String(endDate.getDate()).padStart(2,'0');
+
+    const { data: attendance, error: aErr } = await supabase
+      .from('attendance')
+      .select('*')
+      .eq('staff_id', currentUser.id)
+      .gte('work_date', start)
+      .lte('work_date', end)
+      .order('work_date', { ascending:false });
+    if (aErr) throw aErr;
+    mySmartAttendanceRows = attendance || [];
+
+    const rows = (myFullSalaryEntries || []).filter(s => (s.entry_date || '').slice(0,7) === month);
+    const daily = rows.filter(s => s.entry_type === 'daily').reduce((a,s)=>a+Number(s.amount||0),0);
+    const bonus = rows.filter(s => s.entry_type === 'bonus').reduce((a,s)=>a+Number(s.amount||0),0);
+    const minus = rows.filter(s => s.entry_type === 'advance' || s.entry_type === 'deduction').reduce((a,s)=>a+Number(s.amount||0),0);
+    const paid = daily + bonus - minus;
+
+    const days = mySmartAttendanceRows.filter(r => r.check_in).length;
+    const hours = mySmartAttendanceRows.reduce((sum,r)=>{
+      if (!r.check_in || !r.check_out) return sum;
+      return sum + Math.max(0,(new Date(r.check_out)-new Date(r.check_in))/3600000);
+    },0);
+    const otHours = mySmartAttendanceRows.reduce((sum,r)=>{
+      if (!r.check_in || !r.check_out) return sum;
+      const h = Math.max(0,(new Date(r.check_out)-new Date(r.check_in))/3600000);
+      return sum + Math.max(0,h-8);
+    },0);
+
+    const hourly = dailyRate > 0 ? dailyRate / 8 : 0;
+    const otValue = otHours * hourly * 1.5;
+    const target = base > 0 ? base : daily;
+    const balance = Math.max(0, target + bonus - minus - daily);
+
+    const set=(id,val)=>{const el=$(id);if(el)el.textContent=val;};
+    set('mySmartTarget',fmt(target));
+    set('mySmartPaid',fmt(paid));
+    set('mySmartBalance',fmt(balance));
+    set('mySmartDays',String(days));
+    set('mySmartHours',hours.toFixed(1));
+    set('mySmartOtHours',otHours.toFixed(1));
+    set('mySmartBonus',fmt(bonus));
+    set('mySmartMinus',fmt(minus));
+    set('mySmartOtValue',fmt(otValue));
+
+    const insight = $('mySmartSalaryInsight');
+    if (insight) {
+      if (!days) insight.textContent = '⚠️ No attendance records found for this month.';
+      else if (otHours > 0 && dailyRate <= 0) insight.textContent = `💡 ${otHours.toFixed(1)} overtime hours detected. OT value is not estimated because no daily rate is set.`;
+      else if (balance > 0) insight.textContent = `💡 ${fmt(balance)} remains against the payroll target. Estimated OT: ${fmt(otValue)}.`;
+      else insight.textContent = '✅ Your recorded payroll is fully covered for this month.';
+    }
+  } catch(e) {
+    console.error('My smart payroll error:',e);
+    const insight=$('mySmartSalaryInsight');
+    if(insight) insight.textContent='⚠️ Could not load your attendance/payroll insights.';
+  }
+}
+
+function printMySmartPayslip(){
+  if (!currentUser || userRole !== 'staff') return;
+  const month = getMySmartMonth();
+  const rows = (myFullSalaryEntries || []).filter(s => (s.entry_date||'').slice(0,7)===month);
+  const daily = rows.filter(s=>s.entry_type==='daily').reduce((a,s)=>a+Number(s.amount||0),0);
+  const bonus = rows.filter(s=>s.entry_type==='bonus').reduce((a,s)=>a+Number(s.amount||0),0);
+  const minus = rows.filter(s=>s.entry_type==='advance'||s.entry_type==='deduction').reduce((a,s)=>a+Number(s.amount||0),0);
+  const base = Number((userProfile && userProfile.base_salary)||0);
+  const net = (base || daily) + bonus - minus;
+  const w = window.open('', '_blank', 'width=760,height=900');
+  if(!w){alert('Please allow pop-ups to print your payslip.');return;}
+  const staffName = (userProfile && userProfile.display_name) || currentUser.email || 'Staff Member';
+  w.document.write(`<!doctype html><html><head><title>MY DRYBEA Payslip</title><style>
+    body{font-family:Arial,sans-serif;padding:32px;color:#10231b}h1{margin:0;color:#059669}h2{margin:6px 0 24px}
+    .box{border:1px solid #ddd;border-radius:12px;padding:18px;margin:14px 0}.row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #eee}.total{font-size:20px;font-weight:800;color:#059669;border-top:2px solid #d4af37;border-bottom:0;margin-top:8px;padding-top:14px}
+    small{color:#667} @media print{button{display:none}}
+  </style></head><body><h1>MY DRYBEA</h1><h2>Staff Payslip — ${month}</h2>
+  <div class="box"><strong>Staff:</strong> ${staffName}<br><small>Read-only payslip • Generated ${new Date().toLocaleString()}</small></div>
+  <div class="box">
+    <div class="row"><span>Base / Daily Payroll</span><strong>${fmt(base||daily)}</strong></div>
+    <div class="row"><span>Bonus</span><strong>${fmt(bonus)}</strong></div>
+    <div class="row"><span>Advance + Deductions</span><strong>-${fmt(minus)}</strong></div>
+    <div class="row total"><span>Net Payable</span><strong>${fmt(net)}</strong></div>
+  </div><button onclick="window.print()">Print</button></body></html>`);
+  w.document.close(); w.focus(); setTimeout(()=>w.print(),250);
+}
+
 async function loadMySalary() {
   if (!currentUser) return;
   try {
@@ -3684,7 +4011,9 @@ async function loadMySalary() {
     myFullSalaryEntries = data || [];
     if ($('mySalBase')) $('mySalBase').textContent = fmt((userProfile && userProfile.base_salary) || 0);
     if ($('mySalDailyRate')) $('mySalDailyRate').textContent = fmt((userProfile && userProfile.daily_rate) || 0);
+    initMySmartSalaryMonth();
     renderMySalary();
+    await refreshMySmartSalary();
   } catch (e) {
     console.error('Load my salary error:', e);
     updateStatus('⚠️ Could not load salary');
