@@ -2365,9 +2365,32 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
       <span class="eyebrow">MY DRYBEA ACCOUNT</span>
       <h2 id="profileName">Business Owner</h2>
       <p id="profileEmail">Not signed in</p>
+      <p id="roleBadge" style="margin-top:6px;font-size:12px;font-weight:800;color:var(--gold2, #d6b45a);">👑 Owner</p>
       <div class="profile-actions">
         <button class="btn btn-primary" id="profileAuthAction" data-ribbon="true" onclick="openAuthModal()">Login</button>
         <button class="btn lock-btn" data-ribbon="true" onclick="lockApp()"><span class="nav-icon icon-lock"></span> Lock App</button>
+      </div>
+    </div>
+
+    <div class="card" data-owner-only style="margin-top:16px;">
+      <h2><span class="pro-title-icon gold" aria-hidden="true"><span class="nav-icon icon-profile"></span></span><span>Manage Staff</span></h2>
+      <p class="pro-subtitle gold">Give trusted staff shared access to Orders, Customers &amp; Expenses. They won't see Costing, Production or History.</p>
+      <div class="field">
+        <label>Staff User ID <span class="hint">(copy from Supabase → Authentication → Users)</span></label>
+        <input type="text" id="staffUid" placeholder="e.g. 7ac97394-148c-45df-b33c-61bf385b55b4">
+      </div>
+      <div class="field">
+        <label>Display Name</label>
+        <input type="text" id="staffName" placeholder="e.g. Kamal (Delivery)">
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="addStaffMember()">➕ Add Staff</button>
+      </div>
+      <div class="table-wrap" style="margin-top:14px;">
+        <table>
+          <thead><tr><th>Name</th><th>User ID</th><th>Actions</th></tr></thead>
+          <tbody id="staffBody"><tr><td colspan="3" style="text-align:center;opacity:.5;padding:14px;">No staff added yet.</td></tr></tbody>
+        </table>
       </div>
     </div>
   </section>
@@ -3054,6 +3077,118 @@ const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   }
 });
 let currentUser = null;
+let userProfile = null;
+let userRole = 'owner';   // 'owner' | 'staff'
+let businessId = null;    // the effective account whose data everyone on the team shares
+
+async function loadUserProfile() {
+  if (!currentUser) return;
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', currentUser.id)
+      .maybeSingle();
+    if (error) throw error;
+
+    if (!data) {
+      // First-ever login for this account: they become an "owner" of their own business.
+      const { error: insertErr } = await supabase
+        .from('profiles')
+        .insert({ id: currentUser.id, role: 'owner' });
+      if (insertErr) throw insertErr;
+      userProfile = { id: currentUser.id, role: 'owner', owner_id: null };
+    } else {
+      userProfile = data;
+    }
+
+    userRole = userProfile.role === 'staff' ? 'staff' : 'owner';
+    businessId = userRole === 'staff' ? userProfile.owner_id : currentUser.id;
+  } catch (e) {
+    console.error('Load profile error:', e);
+    // Fail safe: treat as an independent owner of their own data.
+    userRole = 'owner';
+    businessId = currentUser.id;
+  }
+  applyRoleUI();
+}
+
+function applyRoleUI() {
+  const isStaff = userRole === 'staff';
+  document.querySelectorAll('[data-owner-only]').forEach(el => {
+    el.style.display = isStaff ? 'none' : '';
+  });
+  const roleBadge = $('roleBadge');
+  if (roleBadge) roleBadge.textContent = isStaff ? '👤 Staff' : '👑 Owner';
+}
+
+async function loadStaffList() {
+  if (!currentUser || userRole !== 'owner') return;
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('owner_id', currentUser.id)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    renderStaffList(data || []);
+  } catch (e) {
+    console.error('Load staff error:', e);
+  }
+}
+
+function renderStaffList(list) {
+  const tbody = $('staffBody');
+  if (!tbody) return;
+  if (!list.length) {
+    tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;opacity:.5;padding:14px;">No staff added yet.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = list.map(s => `
+    <tr>
+      <td>${s.display_name || '(no name)'}</td>
+      <td style="font-size:11px;word-break:break-all;">${s.id}</td>
+      <td><button class="btn btn-sm btn-danger" onclick="removeStaffMember('${s.id}')">🗑️</button></td>
+    </tr>
+  `).join('');
+}
+
+async function addStaffMember() {
+  if (userRole !== 'owner') { alert('Only the business owner can add staff.'); return; }
+  const uid = $('staffUid').value.trim();
+  const name = $('staffName').value.trim();
+  if (!uid) { alert("Enter the staff member's Supabase User ID."); return; }
+  if (uid === currentUser.id) { alert('That is your own account.'); return; }
+
+  try {
+    const { error } = await supabase.from('profiles').upsert({
+      id: uid,
+      role: 'staff',
+      owner_id: currentUser.id,
+      display_name: name || null
+    });
+    if (error) throw error;
+    alert('✅ Staff member added. They can now log in and see your shared Orders, Customers & Expenses.');
+    $('staffUid').value = '';
+    $('staffName').value = '';
+    await loadStaffList();
+  } catch (e) {
+    console.error('Add staff error:', e);
+    alert('❌ Could not add staff: ' + e.message + '\n\nMake sure this User ID already exists in Supabase → Authentication → Users.');
+  }
+}
+
+async function removeStaffMember(uid) {
+  if (!confirm("Remove this staff member's access?")) return;
+  try {
+    const { error } = await supabase.from('profiles').delete().eq('id', uid).eq('owner_id', currentUser.id);
+    if (error) throw error;
+    await loadStaffList();
+  } catch (e) {
+    console.error('Remove staff error:', e);
+    alert('❌ Could not remove staff: ' + e.message);
+  }
+}
 let isAuthModeLogin = true; // true=login, false=signup
 
 // ==================== STATE ====================
@@ -3516,7 +3651,7 @@ async function loadCustomersFromCloud() {
     const { data, error } = await supabase
       .from('customers')
       .select('*')
-      .eq('user_id', currentUser.id)
+      .eq('user_id', businessId)
       .order('created_at', { ascending: false });
     if (error) throw error;
     customers = (data || []).map(dbCustomerToLocal);
@@ -3533,7 +3668,7 @@ async function loadOrdersFromCloud() {
     const { data, error } = await supabase
       .from('orders')
       .select('*')
-      .eq('user_id', currentUser.id)
+      .eq('user_id', businessId)
       .order('created_at', { ascending: false });
     if (error) throw error;
     orders = (data || []).map(dbOrderToLocal);
@@ -3564,7 +3699,7 @@ async function loadExpensesFromCloud() {
     const { data, error } = await supabase
       .from('expenses')
       .select('*')
-      .eq('created_by', currentUser.id)
+      .eq('created_by', businessId)
       .order('expense_date', { ascending: false });
     if (error) throw error;
     expenses = (data || []).map(dbExpenseToLocal);
@@ -3596,7 +3731,7 @@ async function saveExpense() {
     category,
     description,
     amount,
-    created_by: currentUser.id
+    created_by: businessId
   };
 
   try {
@@ -3619,7 +3754,7 @@ async function deleteExpense(id) {
   if (!confirm('Delete this expense?')) return;
   if (!currentUser) { alert('Please login first.'); return; }
   try {
-    const { error } = await supabase.from('expenses').delete().eq('id', id).eq('created_by', currentUser.id);
+    const { error } = await supabase.from('expenses').delete().eq('id', id).eq('created_by', businessId);
     if (error) throw error;
   } catch (e) {
     console.error('Delete expense error:', e);
@@ -3682,7 +3817,7 @@ async function saveCustomer() {
   if (!name) { alert('Customer name is required!'); return; }
   if (!currentUser) { alert('Please login first.'); return; }
 
-  const row = { id: Date.now().toString(), user_id: currentUser.id, name, phone, address };
+  const row = { id: Date.now().toString(), user_id: businessId, name, phone, address };
   try {
     const { error } = await supabase.from('customers').insert(row);
     if (error) throw error;
@@ -3723,7 +3858,7 @@ async function deleteCustomer(id) {
   if (!confirm('Delete this customer?')) return;
   if (!currentUser) { alert('Please login first.'); return; }
   try {
-    const { error } = await supabase.from('customers').delete().eq('id', id).eq('user_id', currentUser.id);
+    const { error } = await supabase.from('customers').delete().eq('id', id).eq('user_id', businessId);
     if (error) throw error;
   } catch (e) {
     console.error('Delete customer error:', e);
@@ -3777,7 +3912,7 @@ async function createOrder() {
   const total = qty * unitPrice;
   const row = {
     id: generateOrderId(),
-    user_id: currentUser.id,
+    user_id: businessId,
     customer_id: customerId,
     product_size_g: Number(product) || 0,
     qty, unit_price: unitPrice, total,
@@ -3847,7 +3982,7 @@ async function cycleStatus(index) {
   if (!currentUser) { alert('Please login first.'); return; }
   const newStatus = cycle[(cycle.indexOf(order.status) + 1) % cycle.length];
   try {
-    const { error } = await supabase.from('orders').update({ status: newStatus }).eq('id', order.id).eq('user_id', currentUser.id);
+    const { error } = await supabase.from('orders').update({ status: newStatus }).eq('id', order.id).eq('user_id', businessId);
     if (error) throw error;
   } catch (e) {
     console.error('Update order status error:', e);
@@ -3868,7 +4003,7 @@ async function deleteOrder(index) {
   if (!currentUser) { alert('Please login first.'); return; }
   const order = orders[index];
   try {
-    const { error } = await supabase.from('orders').delete().eq('id', order.id).eq('user_id', currentUser.id);
+    const { error } = await supabase.from('orders').delete().eq('id', order.id).eq('user_id', businessId);
     if (error) throw error;
   } catch (e) {
     console.error('Delete order error:', e);
@@ -4286,6 +4421,7 @@ async function authAction() {
     closeModal('authModal');
     updateAuthUI();
     // Load cloud data after login
+    await loadUserProfile();
     await cloudLoad();
     updateStatus('✅ Logged in as ' + currentUser.email);
   } catch (e) {
@@ -4297,6 +4433,9 @@ async function authAction() {
 async function logout() {
   await supabase.auth.signOut();
   currentUser = null;
+  userProfile = null;
+  userRole = 'owner';
+  businessId = null;
   window.location.replace('login.html');
 }
 
@@ -4621,7 +4760,13 @@ document.querySelectorAll('[data-ribbon="true"]').forEach(btn => {
   });
 });
 
+const OWNER_ONLY_TABS = ['calculator', 'production', 'history'];
+
 function activateAppTab(tabId){
+  if (OWNER_ONLY_TABS.includes(tabId) && userRole === 'staff') {
+    alert('🔒 This section is only available to the business owner.');
+    return;
+  }
   const panel = document.getElementById(tabId);
   if (!panel) return;
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -4637,7 +4782,7 @@ function activateAppTab(tabId){
   if (tabId === 'production') calcProduction();
   if (tabId === 'orders') { renderOrders(); renderCustomers(); renderDelivery(); updateOrderStats(); }
   if (tabId === 'expenses') renderExpenses();
-  if (tabId === 'profile') updateAuthUI();
+  if (tabId === 'profile') { updateAuthUI(); if (userRole === 'owner') loadStaffList(); }
 }
 
 document.querySelectorAll('[data-home-tab],[data-open-tab]').forEach(btn => {
@@ -4658,8 +4803,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     return;
   }
   currentUser = session.user;
-
-  // ---- LOAD LOCAL DATA (fast, offline-friendly first paint) ----
+  await loadUserProfile();
   loadState();
   loadHistory();
   loadOrders();
@@ -4735,6 +4879,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       window.location.replace('login.html');
     } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
       currentUser = session.user;
+      await loadUserProfile();
       updateAuthUI();
       if (appInitialized) {
         await cloudLoad();
@@ -4792,6 +4937,8 @@ window.openAuthModal = openAuthModal;
 window.toggleAuthMode = toggleAuthMode;
 window.authAction = authAction;
 window.logout = logout;
+window.addStaffMember = addStaffMember;
+window.removeStaffMember = removeStaffMember;
 window.takeSnapshot = takeSnapshot;
 window.restoreFromSnapshot = restoreFromSnapshot;
 
