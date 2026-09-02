@@ -2305,7 +2305,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
     .app-nav.staff-nav{ overflow-x:auto; flex-wrap:nowrap; -webkit-overflow-scrolling:touch; scrollbar-width:none; }
     .app-nav.staff-nav::-webkit-scrollbar{ display:none; }
     .app-nav.staff-nav .tab-btn{ flex:0 0 auto; min-width:70px; }
-    [data-staff-only]{ display:none; }
+    /* Staff navigation is controlled by applyRoleUI() after the Supabase profile loads. */
     .emoji-nav-icon{ font-size:16px; line-height:1; display:flex; align-items:center; justify-content:center; width:17px; height:17px; }
     .status-pill{ display:inline-flex; align-items:center; gap:6px; padding:5px 12px; border-radius:20px; font-size:.72rem; font-weight:800; }
     .status-pill.pending{ background:var(--warn-bg); color:var(--warn); }
@@ -3485,22 +3485,43 @@ async function loadUserProfile() {
 
 function applyRoleUI() {
   const isStaff = userRole === 'staff';
+
+  // Owner-only controls
   document.querySelectorAll('[data-owner-only]').forEach(el => {
     el.style.display = isStaff ? 'none' : '';
   });
+
+  // Staff salary navigation:
+  // Show ONLY My Salary for staff. Orders + Profile are shared tabs.
   document.querySelectorAll('[data-staff-only]').forEach(el => {
-    el.style.display = isStaff ? '' : 'none';
+    const tab = el.getAttribute('data-tab');
+    const allowedStaffTab = tab === 'my-salary';
+    el.style.display = (isStaff && allowedStaffTab) ? 'flex' : 'none';
   });
+
+  // Staff gets exactly 3 app pages:
+  // 1) Orders  2) My Salary  3) Profile
+  document.querySelectorAll('.tab-btn').forEach(el => {
+    const tab = el.getAttribute('data-tab');
+    if (isStaff) {
+      const allowed = ['orders', 'my-salary', 'profile'].includes(tab);
+      el.style.display = allowed ? 'flex' : 'none';
+    }
+  });
+
   const navEl = document.querySelector('.app-nav');
   if (navEl) navEl.classList.toggle('staff-nav', isStaff);
+
   const roleBadge = $('roleBadge');
   if (roleBadge) roleBadge.textContent = isStaff ? '👤 Staff' : '👑 Owner';
+
   const ownerSalaryTab = document.querySelector('[data-tab="staff-salary"]');
   if (ownerSalaryTab) ownerSalaryTab.style.display = isStaff ? 'none' : '';
+
   const ownerSalaryEditor = $('salaryPanel');
   if (ownerSalaryEditor && isStaff) ownerSalaryEditor.style.display = 'none';
-  // Staff can't land on the Home dashboard (it's owner-only) — send them
-  // straight to Orders instead.
+
+  // Staff always lands on Orders; only Orders, My Salary and Profile are available.
   if (isStaff && typeof activateAppTab === 'function') {
     activateAppTab('orders');
   }
@@ -6071,6 +6092,10 @@ const OWNER_ONLY_TABS = ['dashboard', 'calculator', 'production', 'history', 'da
 const STAFF_ONLY_TABS = ['my-salary', 'daily-pay', 'work-update', 'attendance', 'advance'];
 
 function activateAppTab(tabId){
+  if (userRole === 'staff' && !['orders', 'my-salary', 'profile'].includes(tabId)) {
+    alert('🔒 Staff access: Orders, My Salary and Profile only.');
+    return;
+  }
   if (OWNER_ONLY_TABS.includes(tabId) && userRole === 'staff') {
     alert('🔒 This section is only available to the business owner.');
     return;
@@ -6094,7 +6119,10 @@ function activateAppTab(tabId){
   if (tabId === 'production') calcProduction();
   if (tabId === 'orders') { renderOrders(); renderCustomers(); renderDelivery(); updateOrderStats(); }
   if (tabId === 'expenses') { renderExpenses(); renderRecurringExpenses(); }
-  if (tabId === 'my-salary') loadMySalary();
+  if (tabId === 'my-salary') {
+    loadMySalary();
+    initMySmartSalaryMonth();
+  }
   if (tabId === 'daily-pay') { loadMySalary().then(renderDailyPay); }
   if (tabId === 'work-update') { updateWorkUpdateStats(); loadWorkUpdateHistory(); $('wuNoteText').value = ''; }
   if (tabId === 'attendance') { loadTodayAttendance(); loadAttendanceLog(); }
@@ -6150,6 +6178,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   updateAuthUI();
   saveAll();
   updateStatus('✅ Ready');
+
+  // Re-apply role visibility after the initial UI render.
+  applyRoleUI();
 
   // ---- LOAD CUSTOMERS/ORDERS/EXPENSES FROM THEIR OWN SUPABASE TABLES ----
   // (source of truth — same data across every device/browser)
