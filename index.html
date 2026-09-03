@@ -2936,9 +2936,20 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
       </div>
       <div class="staff-suite-grid">
         <div class="staff-mini"><div class="mini-icon"><i class="business-icon" data-lucide="users-round"></i></div><strong id="ownerStaffCount">0</strong><span>Active staff</span></div>
+        <div class="staff-mini"><div class="mini-icon"><i class="business-icon" data-lucide="clock-3"></i></div><strong id="ownerStaffWorkingNow">0</strong><span>Working now</span></div>
         <div class="staff-mini"><div class="mini-icon"><i class="business-icon" data-lucide="shopping-bag"></i></div><strong id="ownerStaffSales">Rs. 0</strong><span>Referral sales this month</span></div>
         <div class="staff-mini"><div class="mini-icon"><i class="business-icon" data-lucide="badge-percent"></i></div><strong id="ownerStaffCommission">Rs. 0</strong><span>12% commission this month</span></div>
         <div class="staff-mini"><div class="mini-icon"><i class="business-icon" data-lucide="hand-coins"></i></div><strong id="ownerPendingAdvances">0</strong><span>Pending advances</span></div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px;">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;">
+        <div><h2><span class="pro-title-icon green"><i class="business-icon" data-lucide="clock-3"></i></span><span>Today's Attendance</span></h2><p class="pro-subtitle green">Live check-in / check-out and hours worked so far, per staff member.</p></div>
+        <button class="btn btn-sm" onclick="loadOwnerAttendanceToday()"><i class="business-icon icon-inline" data-lucide="refresh-cw"></i> Refresh</button>
+      </div>
+      <div class="table-wrap" style="margin-top:10px;">
+        <table class="staff-table-compact"><thead><tr><th>Staff</th><th>Status</th><th>Check-in</th><th>Check-out</th><th>Hours Today</th></tr></thead><tbody id="ownerAttendanceTodayBody"><tr><td colspan="5" style="text-align:center;opacity:.5;padding:18px;">Loading today's attendance...</td></tr></tbody></table>
       </div>
     </div>
 
@@ -4769,6 +4780,7 @@ async function startDay() {
     todayAttendanceRow = data;
     updateStatus('✅ Day started');
     loadAttendanceLog();
+    notifyOwnerAttendance('in', data.check_in);
   } catch (e) {
     console.error('Start day error:', e);
     alert('❌ Could not start day: ' + e.message + '\nTap Start Day to try again.');
@@ -4802,6 +4814,7 @@ async function endDay() {
     todayAttendanceRow = data;
     updateStatus('✅ Day ended');
     loadAttendanceLog();
+    notifyOwnerAttendance('out', data.check_out);
   } catch (e) {
     console.error('End day error:', e);
     alert('❌ Could not end day: ' + e.message + '\nTap End Day to try again.');
@@ -4832,6 +4845,43 @@ async function loadAttendanceLog() {
     console.error('Load attendance log error:', e);
     if (tbody) tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;opacity:.5;padding:14px;">Couldn\'t load this month\'s log — try again.</td></tr>';
   }
+}
+
+// Best-effort WhatsApp ping to the owner when a staff member starts/ends their day.
+// Mirrors notifyOwnerWhatsApp() used for advance requests: never blocks or fails the
+// attendance save above, which has already completed by the time this runs.
+async function notifyOwnerAttendance(action, whenIso) {
+  try {
+    if (!businessId) return;
+    const { data, error } = await supabase.from('profiles').select('whatsapp_number').eq('id', businessId).maybeSingle();
+    if (error) throw error;
+    if (!data || !data.whatsapp_number) return; // owner hasn't set a WhatsApp number — nothing to notify with
+    const staffName = (userProfile && userProfile.display_name) || 'A staff member';
+    const timeStr = new Date(whenIso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const verb = action === 'in' ? 'started' : 'ended';
+    const emoji = action === 'in' ? '🟢' : '🔴';
+    const msg = `${emoji} Attendance\n${staffName} ${verb} work at ${timeStr}\nDate: ${todayStr()}`;
+    const digits = String(data.whatsapp_number).replace(/[^0-9]/g, '');
+    const waLink = 'https://wa.me/' + digits + '?text=' + encodeURIComponent(msg);
+    // Wrapped in try/catch: some mobile in-app browsers throw instead of
+    // returning null when a popup is blocked. The fallback button below
+    // always covers that case.
+    try { window.open(waLink, '_blank'); } catch (_e) { /* ignored */ }
+    showAttendWaFallback(waLink, action);
+  } catch (e) {
+    console.error('Attendance WhatsApp notify error:', e);
+  }
+}
+
+function showAttendWaFallback(waLink, action) {
+  const holder = $('attendTodayStatus')?.closest('.card');
+  if (!holder) return;
+  document.getElementById('attendWaFallbackLink')?.remove();
+  const link = document.createElement('a');
+  link.href = waLink; link.target = '_blank'; link.rel = 'noopener';
+  link.className = 'btn btn-sm'; link.style.marginTop = '10px'; link.style.display = 'inline-flex'; link.id = 'attendWaFallbackLink';
+  link.innerHTML = '📲 Tap to notify owner you ' + (action === 'in' ? 'started' : 'ended') + ' your day';
+  holder.appendChild(link);
 }
 
 // ==================== ADVANCE REQUESTS ====================
@@ -7197,6 +7247,67 @@ async function loadMyStaffOwnerData(){
   // fills BOTH the Profile tab table (#advOwnerBody) and the MY STAFF tab table
   // (#ownerStaffAdvanceBody) directly from Supabase, and updates the pending badge.
   try{await loadOwnerAdvanceRequests();}catch(e){console.error('MY STAFF advance load:',e);}
+  try{await loadOwnerAttendanceToday();}catch(e){console.error('MY STAFF attendance load:',e);}
+}
+
+// ==================== OWNER: LIVE STAFF ATTENDANCE (today) ====================
+let ownerAttendanceToday = [];
+let ownerAttendanceTickTimer = null;
+
+function stopOwnerAttendanceTicker() {
+  if (ownerAttendanceTickTimer) { clearInterval(ownerAttendanceTickTimer); ownerAttendanceTickTimer = null; }
+}
+
+async function loadOwnerAttendanceToday() {
+  if (!currentUser || userRole !== 'owner') return;
+  try {
+    const { data, error } = await withTimeout(
+      supabase.from('attendance').select('*').eq('owner_id', currentUser.id).eq('work_date', todayStr()),
+      12000, "Loading today's attendance"
+    );
+    if (error) throw error;
+    ownerAttendanceToday = data || [];
+    renderOwnerAttendanceToday();
+  } catch (e) {
+    console.error('Load owner attendance today error:', e);
+    const tbody = $('ownerAttendanceTodayBody');
+    if (tbody) tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;opacity:.5;padding:14px;">Couldn\'t load today\'s attendance — tap Refresh to try again.</td></tr>';
+  }
+}
+
+function renderOwnerAttendanceToday() {
+  const tbody = $('ownerAttendanceTodayBody');
+  if (!tbody) return;
+  stopOwnerAttendanceTicker();
+  const list = staffListCache || [];
+  if (!list.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;opacity:.5;padding:14px;">No staff added yet.</td></tr>';
+    if ($('ownerStaffWorkingNow')) $('ownerStaffWorkingNow').textContent = '0';
+    return;
+  }
+  let workingNow = 0;
+  tbody.innerHTML = list.map(st => {
+    const row = ownerAttendanceToday.find(a => String(a.staff_id) === String(st.id));
+    const name = escapeHtmlSafe(st.display_name || '(no name)');
+    if (!row || !row.check_in) {
+      return `<tr><td><strong>${name}</strong></td><td><span class="badge badge-warn">Not started</span></td><td>-</td><td>-</td><td>-</td></tr>`;
+    }
+    const inT = new Date(row.check_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    if (!row.check_out) {
+      workingNow++;
+      const soFar = formatDuration(Date.now() - new Date(row.check_in).getTime());
+      return `<tr><td><strong>${name}</strong></td><td><span class="badge badge-good">🟢 Working</span></td><td>${inT}</td><td>-</td><td>${soFar}</td></tr>`;
+    }
+    const outT = new Date(row.check_out).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const hrs = formatDuration(new Date(row.check_out) - new Date(row.check_in));
+    return `<tr><td><strong>${name}</strong></td><td><span class="badge badge-shipped">✅ Done</span></td><td>${inT}</td><td>${outT}</td><td>${hrs}</td></tr>`;
+  }).join('');
+  if ($('ownerStaffWorkingNow')) $('ownerStaffWorkingNow').textContent = String(workingNow);
+  if (window.lucide) lucide.createIcons({ attrs: { 'stroke-width': 1.9, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' } });
+  // Keep "hours so far" ticking for anyone still checked in, without refetching from the network.
+  if (ownerAttendanceToday.some(a => a.check_in && !a.check_out)) {
+    ownerAttendanceTickTimer = setInterval(renderOwnerAttendanceToday, 30000);
+  }
 }
 
 async function refreshMyStaffPage(){if(!currentUser||userRole!=='owner')return;await loadStaffList();await populateStaffReferralSelectors();await loadMyStaffData(false);await loadCommissionClaims();renderOwnerStaffPerformance();renderOwnerStaffManagement();renderOwnerStaffUploads();await loadMyStaffOwnerData();}
@@ -7299,6 +7410,7 @@ function activateAppTab(tabId){
   if (tabId === 'work-update') { updateWorkUpdateStats(); loadWorkUpdateHistory(); $('wuNoteText').value = ''; }
   if (tabId === 'attendance') { loadTodayAttendance(); loadAttendanceLog(); }
   else if (typeof stopAttendanceTicker === 'function') { stopAttendanceTicker(); }
+  if (tabId !== 'my-staff' && typeof stopOwnerAttendanceTicker === 'function') { stopOwnerAttendanceTicker(); }
   if (tabId === 'advance') loadMyAdvanceRequests();
    if (tabId === 'staff-home') refreshStaffHome();
    if (tabId === 'my-commission') refreshMyCommission();
