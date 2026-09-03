@@ -7546,7 +7546,74 @@ function openAppNotifyDetail(nid){
   if(modal) modal.classList.add('active');
 }
 
+// ---- Shared notification builders (used by BOTH the live realtime handlers
+// below AND the catch-up sweep, so a missed-while-offline item looks exactly
+// like a live one). Each returns [title, message, type, opts].
+function nbAdvanceRequested(r){
+  return ['💸 New advance request', `${r.staff_name||'A staff member'} requested Rs. ${fmt(r.amount)}`, 'warn', { tab:'my-staff', details:[
+    {label:'Staff', value: r.staff_name || '-'}, {label:'Amount', value: 'Rs. '+fmt(r.amount)},
+    {label:'Reason', value: r.reason || '-'}, {label:'Status', value: r.status || 'pending'},
+    {label:'Requested at', value: r.requested_at ? new Date(r.requested_at).toLocaleString() : '-'}
+  ]}];
+}
+function nbAdvanceDecided(r){
+  return [r.status==='approved'?'✅ Advance approved':'❌ Advance rejected', `Rs. ${fmt(r.amount)} request was ${r.status}`, r.status==='approved'?'info':'warn', { tab:'advance', details:[
+    {label:'Amount', value: 'Rs. '+fmt(r.amount)}, {label:'Reason', value: r.reason || '-'},
+    {label:'Status', value: r.status}, {label:'Decided at', value: r.decided_at ? new Date(r.decided_at).toLocaleString() : '-'}
+  ]}];
+}
+function nbCheckedIn(r){
+  return ['🕒 '+(r.staff_name||'A staff member')+' checked in', 'Day started'+(r.work_note?' · left a work update':''), 'info', { tab:'my-staff', details:[
+    {label:'Staff', value: r.staff_name || '-'}, {label:'Date', value: r.work_date || '-'},
+    {label:'Check-in', value: r.check_in ? new Date(r.check_in).toLocaleTimeString() : '-'}, {label:'Work note', value: r.work_note || '-'}
+  ]}];
+}
+function nbCheckedOut(r){
+  return ['🕒 '+(r.staff_name||'A staff member')+' checked out', 'Day ended', 'info', { tab:'my-staff', details:[
+    {label:'Staff', value: r.staff_name || '-'}, {label:'Date', value: r.work_date || '-'},
+    {label:'Check-in', value: r.check_in ? new Date(r.check_in).toLocaleTimeString() : '-'},
+    {label:'Check-out', value: r.check_out ? new Date(r.check_out).toLocaleTimeString() : '-'}, {label:'Work note', value: r.work_note || '-'}
+  ]}];
+}
+function nbWorkUpdate(r){
+  return ['📝 Work update', (r.staff_name||'A staff member')+' posted a work update', 'info', { tab:'my-staff', details:[
+    {label:'Staff', value: r.staff_name || '-'}, {label:'Date', value: r.work_date || '-'}, {label:'Note', value: r.work_note || '-'}
+  ]}];
+}
+function nbCorrectionRequested(r){
+  return ['🚩 Correction request', `${r.staff_name||'A staff member'} asked to correct ${r.field==='check_in'?'check-in':'check-out'} time`, 'warn', { tab:'my-staff', details:[
+    {label:'Staff', value: r.staff_name || '-'}, {label:'Date', value: r.work_date || '-'},
+    {label:'Field', value: r.field==='check_in'?'Check-in':'Check-out'},
+    {label:'Requested time', value: r.requested_time ? new Date(r.requested_time).toLocaleString() : '-'}, {label:'Reason', value: r.reason || '-'}
+  ]}];
+}
+function nbNewSaleToVerify(r){
+  return ['🧾 New sale to verify', `${r.customer_name||'A sale'} · Rs. ${fmt(Number(r.order_total)||0)} awaiting verification`, 'info', { tab:'my-staff', details:[
+    {label:'Staff ref', value: r.staff_reference || '-'}, {label:'Order', value: r.order_ref_no || '-'},
+    {label:'Customer', value: r.customer_name || '-'}, {label:'Sale total', value: 'Rs. '+fmt(Number(r.order_total)||0)},
+    {label:'Commission (12%)', value: 'Rs. '+fmt(Number(r.order_total)*0.12||0)}
+  ]}];
+}
+function nbNewTask(r){
+  return ['📋 New task assigned', r.title||'Check My Tasks', 'info', { tab:'my-tasks', details:[
+    {label:'Task', value: r.title || '-'}, {label:'Priority', value: r.priority || 'normal'}, {label:'Status', value: r.status || 'pending'}
+  ]}];
+}
+function nbNewNotice(r){
+  return ['📣 '+(r.title||'New notice'), r.message||'', 'info', { tab:'announcements', details:[
+    {label:'Title', value: r.title || '-'}, {label:'Message', value: r.message || '-'}
+  ]}];
+}
+function nbCorrectionDecided(r){
+  return [r.status==='approved'?'✅ Correction approved':'❌ Correction rejected', (r.field==='check_in'?'Check-in':'Check-out')+' time correction was '+r.status, r.status==='approved'?'info':'warn', { tab:'attendance', details:[
+    {label:'Field', value: r.field==='check_in'?'Check-in':'Check-out'},
+    {label:'Requested time', value: r.requested_time ? new Date(r.requested_time).toLocaleString() : '-'},
+    {label:'Status', value: r.status}, {label:'Reason', value: r.reason || '-'}
+  ]}];
+}
+
 let appNotifyChannel = null;
+let appNotifyHeartbeat = null;
 
 function startAppNotifyRealtime(){
   if(!currentUser || !window.supabase) return;
@@ -7555,136 +7622,113 @@ function startAppNotifyRealtime(){
     const ch = supabase.channel('mydrybea-app-notify-'+currentUser.id);
 
     if(userRole === 'owner'){
-      // New advance request from a staff member.
-      ch.on('postgres_changes',{event:'INSERT',schema:'public',table:'advance_requests',filter:`owner_id=eq.${currentUser.id}`},(p)=>{
-        const r=p.new||{};
-        showAppNotification('💸 New advance request', `${r.staff_name||'A staff member'} requested Rs. ${fmt(r.amount)}`, 'warn', {
-          tab:'my-staff',
-          details:[
-            {label:'Staff', value: r.staff_name || '-'},
-            {label:'Amount', value: 'Rs. '+fmt(r.amount)},
-            {label:'Reason', value: r.reason || '-'},
-            {label:'Status', value: r.status || 'pending'},
-            {label:'Requested at', value: r.requested_at ? new Date(r.requested_at).toLocaleString() : '-'}
-          ]
-        });
-      });
-      // Staff attendance: check-in, check-out or work update.
-      ch.on('postgres_changes',{event:'INSERT',schema:'public',table:'attendance',filter:`owner_id=eq.${currentUser.id}`},(p)=>{
-        const r=p.new||{};
-        showAppNotification('🕒 '+(r.staff_name||'A staff member')+' checked in', 'Day started'+(r.work_note?' · left a work update':''), 'info', {
-          tab:'my-staff',
-          details:[
-            {label:'Staff', value: r.staff_name || '-'},
-            {label:'Date', value: r.work_date || '-'},
-            {label:'Check-in', value: r.check_in ? new Date(r.check_in).toLocaleTimeString() : '-'},
-            {label:'Work note', value: r.work_note || '-'}
-          ]
-        });
-      });
+      ch.on('postgres_changes',{event:'INSERT',schema:'public',table:'advance_requests',filter:`owner_id=eq.${currentUser.id}`},(p)=> showAppNotification(...nbAdvanceRequested(p.new||{})));
+      ch.on('postgres_changes',{event:'INSERT',schema:'public',table:'attendance',filter:`owner_id=eq.${currentUser.id}`},(p)=> showAppNotification(...nbCheckedIn(p.new||{})));
       ch.on('postgres_changes',{event:'UPDATE',schema:'public',table:'attendance',filter:`owner_id=eq.${currentUser.id}`},(p)=>{
         const r=p.new||{}, o=p.old||{};
-        const details=[
-          {label:'Staff', value: r.staff_name || '-'},
-          {label:'Date', value: r.work_date || '-'},
-          {label:'Check-in', value: r.check_in ? new Date(r.check_in).toLocaleTimeString() : '-'},
-          {label:'Check-out', value: r.check_out ? new Date(r.check_out).toLocaleTimeString() : '-'},
-          {label:'Work note', value: r.work_note || '-'}
-        ];
-        if(r.check_out && !o.check_out) showAppNotification('🕒 '+(r.staff_name||'A staff member')+' checked out', 'Day ended', 'info', {tab:'my-staff', details});
-        else if(r.work_note && r.work_note!==o.work_note) showAppNotification('📝 Work update', (r.staff_name||'A staff member')+' posted a work update', 'info', {tab:'my-staff', details});
+        if(r.check_out && !o.check_out) showAppNotification(...nbCheckedOut(r));
+        else if(r.work_note && r.work_note!==o.work_note) showAppNotification(...nbWorkUpdate(r));
       });
-      // Attendance correction requests.
-      ch.on('postgres_changes',{event:'INSERT',schema:'public',table:'attendance_corrections',filter:`owner_id=eq.${currentUser.id}`},(p)=>{
-        const r=p.new||{};
-        showAppNotification('🚩 Correction request', `${r.staff_name||'A staff member'} asked to correct ${r.field==='check_in'?'check-in':'check-out'} time`, 'warn', {
-          tab:'my-staff',
-          details:[
-            {label:'Staff', value: r.staff_name || '-'},
-            {label:'Date', value: r.work_date || '-'},
-            {label:'Field', value: r.field==='check_in'?'Check-in':'Check-out'},
-            {label:'Requested time', value: r.requested_time ? new Date(r.requested_time).toLocaleString() : '-'},
-            {label:'Reason', value: r.reason || '-'}
-          ]
-        });
-      });
-      // New sale pending owner verification (commission claim).
-      ch.on('postgres_changes',{event:'INSERT',schema:'public',table:'staff_commission_claims',filter:`owner_id=eq.${currentUser.id}`},(p)=>{
-        const r=p.new||{};
-        showAppNotification('🧾 New sale to verify', `${r.customer_name||'A sale'} · Rs. ${fmt(Number(r.order_total)||0)} awaiting verification`, 'info', {
-          tab:'my-staff',
-          details:[
-            {label:'Staff ref', value: r.staff_reference || '-'},
-            {label:'Order', value: r.order_ref_no || '-'},
-            {label:'Customer', value: r.customer_name || '-'},
-            {label:'Sale total', value: 'Rs. '+fmt(Number(r.order_total)||0)},
-            {label:'Commission (12%)', value: 'Rs. '+fmt(Number(r.order_total)*0.12||0)}
-          ]
-        });
-      });
+      ch.on('postgres_changes',{event:'INSERT',schema:'public',table:'attendance_corrections',filter:`owner_id=eq.${currentUser.id}`},(p)=> showAppNotification(...nbCorrectionRequested(p.new||{})));
+      ch.on('postgres_changes',{event:'INSERT',schema:'public',table:'staff_commission_claims',filter:`owner_id=eq.${currentUser.id}`},(p)=> showAppNotification(...nbNewSaleToVerify(p.new||{})));
     } else if(userRole === 'staff'){
-      // Your advance request was approved/rejected.
       ch.on('postgres_changes',{event:'UPDATE',schema:'public',table:'advance_requests',filter:`staff_id=eq.${currentUser.id}`},(p)=>{
         const r=p.new||{}, o=p.old||{};
-        if(r.status!==o.status && r.status!=='pending') showAppNotification(r.status==='approved'?'✅ Advance approved':'❌ Advance rejected', `Rs. ${fmt(r.amount)} request was ${r.status}`, r.status==='approved'?'info':'warn', {
-          tab:'advance',
-          details:[
-            {label:'Amount', value: 'Rs. '+fmt(r.amount)},
-            {label:'Reason', value: r.reason || '-'},
-            {label:'Status', value: r.status},
-            {label:'Decided at', value: r.decided_at ? new Date(r.decided_at).toLocaleString() : '-'}
-          ]
-        });
+        if(r.status!==o.status && r.status!=='pending') showAppNotification(...nbAdvanceDecided(r));
       });
-      // New task assigned to you.
-      ch.on('postgres_changes',{event:'INSERT',schema:'public',table:'staff_tasks',filter:`staff_id=eq.${currentUser.id}`},(p)=>{
-        const r=p.new||{};
-        showAppNotification('📋 New task assigned', r.title||'Check My Tasks', 'info', {
-          tab:'my-tasks',
-          details:[
-            {label:'Task', value: r.title || '-'},
-            {label:'Priority', value: r.priority || 'normal'},
-            {label:'Status', value: r.status || 'pending'}
-          ]
-        });
-      });
-      // New notice from the owner.
+      ch.on('postgres_changes',{event:'INSERT',schema:'public',table:'staff_tasks',filter:`staff_id=eq.${currentUser.id}`},(p)=> showAppNotification(...nbNewTask(p.new||{})));
       if(businessId){
-        ch.on('postgres_changes',{event:'INSERT',schema:'public',table:'staff_announcements',filter:`owner_id=eq.${businessId}`},(p)=>{
-          const r=p.new||{};
-          showAppNotification('📣 '+(r.title||'New notice'), r.message||'', 'info', {
-            tab:'announcements',
-            details:[
-              {label:'Title', value: r.title || '-'},
-              {label:'Message', value: r.message || '-'}
-            ]
-          });
-        });
+        ch.on('postgres_changes',{event:'INSERT',schema:'public',table:'staff_announcements',filter:`owner_id=eq.${businessId}`},(p)=> showAppNotification(...nbNewNotice(p.new||{})));
       }
-      // Your attendance correction request was decided.
       ch.on('postgres_changes',{event:'UPDATE',schema:'public',table:'attendance_corrections',filter:`staff_id=eq.${currentUser.id}`},(p)=>{
         const r=p.new||{}, o=p.old||{};
-        if(r.status!==o.status && r.status!=='pending') showAppNotification(r.status==='approved'?'✅ Correction approved':'❌ Correction rejected', (r.field==='check_in'?'Check-in':'Check-out')+' time correction was '+r.status, r.status==='approved'?'info':'warn', {
-          tab:'attendance',
-          details:[
-            {label:'Field', value: r.field==='check_in'?'Check-in':'Check-out'},
-            {label:'Requested time', value: r.requested_time ? new Date(r.requested_time).toLocaleString() : '-'},
-            {label:'Status', value: r.status},
-            {label:'Reason', value: r.reason || '-'}
-          ]
-        });
+        if(r.status!==o.status && r.status!=='pending') showAppNotification(...nbCorrectionDecided(r));
       });
     }
 
-    ch.subscribe((status)=>{ if(status==='SUBSCRIBED') console.log('MY DRYBEA app-notify realtime: connected'); });
+    ch.subscribe((status)=>{
+      if(status==='SUBSCRIBED'){
+        console.log('MY DRYBEA app-notify realtime: connected');
+        // Fetch anything that happened while we were disconnected/closed,
+        // right after the socket comes (back) up.
+        catchUpMissedNotifications();
+      }
+    });
     appNotifyChannel = ch;
+
+    // Wall-clock heartbeat: as long as the tab is open and nothing else has
+    // moved "last seen" forward, keep nudging it so a crash/kill doesn't
+    // leave the next catch-up scanning days of old history.
+    if(appNotifyHeartbeat) clearInterval(appNotifyHeartbeat);
+    appNotifyHeartbeat = setInterval(bumpAppNotifyLastSeen, 45000);
   }catch(e){ console.warn('App notify realtime setup:', e); }
 }
 
 function stopAppNotifyRealtime(){
   try{ if(appNotifyChannel) supabase.removeChannel(appNotifyChannel); }catch(e){}
   appNotifyChannel = null;
+  if(appNotifyHeartbeat){ clearInterval(appNotifyHeartbeat); appNotifyHeartbeat=null; }
 }
+
+// ---- "Away from the app" / offline catch-up ----
+// The realtime socket only delivers events while it's connected — anything
+// that happened while the tab was closed, backgrounded, or the phone had no
+// signal is simply missed by the .on() handlers above. This sweep asks
+// Supabase directly for anything newer than the last time we were sure we
+// were listening, and replays it through the same notification builders.
+function appNotifyLastSeenKey(){ return 'mydrybea_notify_lastseen_' + (currentUser?.id || 'anon'); }
+function getAppNotifyLastSeen(){ try{ return localStorage.getItem(appNotifyLastSeenKey()); }catch(e){ return null; } }
+function bumpAppNotifyLastSeen(){ try{ localStorage.setItem(appNotifyLastSeenKey(), new Date().toISOString()); }catch(e){} }
+
+let catchUpBusy = false;
+async function catchUpMissedNotifications(){
+  if(!currentUser || catchUpBusy) return;
+  const lastSeen = getAppNotifyLastSeen();
+  if(!lastSeen){ bumpAppNotifyLastSeen(); return; } // first time this device has ever run this — don't flood with old history
+  catchUpBusy = true;
+  try{
+    if(userRole === 'owner'){
+      const [advs, att, corr, claims] = await Promise.all([
+        supabase.from('advance_requests').select('*').eq('owner_id',currentUser.id).gt('requested_at',lastSeen).order('requested_at',{ascending:true}),
+        supabase.from('attendance').select('*').eq('owner_id',currentUser.id).or(`check_in.gt.${lastSeen},check_out.gt.${lastSeen}`).order('work_date',{ascending:true}),
+        supabase.from('attendance_corrections').select('*').eq('owner_id',currentUser.id).gt('requested_at',lastSeen).order('requested_at',{ascending:true}),
+        supabase.from('staff_commission_claims').select('*').eq('owner_id',currentUser.id).gt('submitted_at',lastSeen).order('submitted_at',{ascending:true})
+      ]);
+      (advs.data||[]).forEach(r=> showAppNotification(...nbAdvanceRequested(r)));
+      (att.data||[]).forEach(r=>{
+        if(r.check_in && r.check_in>lastSeen) showAppNotification(...nbCheckedIn(r));
+        if(r.check_out && r.check_out>lastSeen) showAppNotification(...nbCheckedOut(r));
+      });
+      (corr.data||[]).forEach(r=> showAppNotification(...nbCorrectionRequested(r)));
+      (claims.data||[]).forEach(r=> showAppNotification(...nbNewSaleToVerify(r)));
+    } else if(userRole === 'staff'){
+      const queries = [
+        supabase.from('advance_requests').select('*').eq('staff_id',currentUser.id).not('decided_at','is',null).gt('decided_at',lastSeen).order('decided_at',{ascending:true}),
+        supabase.from('staff_tasks').select('*').eq('staff_id',currentUser.id).gt('created_at',lastSeen).order('created_at',{ascending:true})
+      ];
+      if(businessId) queries.push(supabase.from('staff_announcements').select('*').eq('owner_id',businessId).gt('created_at',lastSeen).order('created_at',{ascending:true}));
+      const [advs, tasks, notices] = await Promise.all(queries);
+      (advs.data||[]).forEach(r=> showAppNotification(...nbAdvanceDecided(r)));
+      (tasks.data||[]).forEach(r=> showAppNotification(...nbNewTask(r)));
+      if(notices) (notices.data||[]).forEach(r=> showAppNotification(...nbNewNotice(r)));
+      // NOTE: attendance-correction decisions aren't caught up here — the
+      // decided_at column on that table isn't confirmed to exist, and a bad
+      // filter would abort the whole Promise.all above. Live-only for now.
+    }
+  }catch(e){ console.warn('Notification catch-up failed:', e); }
+  finally{ catchUpBusy = false; bumpAppNotifyLastSeen(); }
+}
+
+// Reconnect + catch up whenever the device comes back online, or the tab/PWA
+// is brought back to the foreground after being backgrounded — both are
+// cases where the websocket may have silently died without onclose firing.
+window.addEventListener('online', () => { if(currentUser) startAppNotifyRealtime(); });
+document.addEventListener('visibilitychange', () => {
+  if(document.visibilityState === 'visible' && currentUser){
+    if(!appNotifyChannel) startAppNotifyRealtime();
+    else catchUpMissedNotifications();
+  }
+});
 
 async function verifyCommissionClaim(id,status){
   if(userRole!=='owner') { alert('Only the owner can verify a commission claim.'); return; }
