@@ -7445,6 +7445,26 @@ window.refreshMyStaffPage = refreshMyStaffPage;
 window.loadOwnerAdvanceRequests = loadOwnerAdvanceRequests;
 window.startAdvanceRealtime = startAdvanceRealtime;
 window.stopAdvanceRealtime = stopAdvanceRealtime;
+// These are called from inline onclick="..." attributes in the HTML (and from
+// dynamically-generated row buttons), which run in global scope — the whole
+// app script is wrapped in an IIFE, so every function called that way MUST
+// be explicitly exposed here or the button click throws "is not defined".
+window.submitAdvanceRequest = submitAdvanceRequest;
+window.notifyOwnerWhatsApp = notifyOwnerWhatsApp;
+window.loadMyAdvanceRequests = loadMyAdvanceRequests;
+window.saveOwnerWhatsapp = saveOwnerWhatsapp;
+window.decideAdvance = decideAdvance;
+window.renderOwnerAdvanceRequests = renderOwnerAdvanceRequests;
+// Same "IIFE scope" issue found and fixed across the rest of the app —
+// these were also called from onclick="..." attributes but never exposed,
+// so they threw the exact same silent ReferenceError as the advance button.
+window.startDay = startDay;
+window.endDay = endDay;
+window.printMySmartPayslip = printMySmartPayslip;
+window.printSmartPayslip = printSmartPayslip;
+window.refreshSmartSalary = refreshSmartSalary;
+window.saveWorkNote = saveWorkNote;
+window.addEstimatedOTToPayroll = addEstimatedOTToPayroll;
 window.ownerAssignStaffTask = ownerAssignStaffTask;
 window.ownerPublishNotice = ownerPublishNotice;
 window.ownerToggleTask = ownerToggleTask;
