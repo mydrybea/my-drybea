@@ -2258,6 +2258,31 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
 @keyframes syncRing{0%{transform:scale(.7);opacity:.8}100%{transform:scale(1.7);opacity:0}}
 @keyframes spin{to{transform:rotate(360deg)}}
 .mini-spin{display:inline-block;width:13px;height:13px;border:2px solid currentColor;border-top-color:transparent;border-radius:50%;vertical-align:-2px;margin-right:5px;opacity:.85;animation:spin .7s linear infinite}
+
+/* Attendance Start/End Day buttons — explicit "done" (already completed) and
+   "locked" (not available yet) looks. ID + class selectors so these always
+   win over the theme's !important .btn-primary/.btn-danger color rules,
+   instead of relying on generic opacity dimming that can look too subtle. */
+#attendStartBtn.attend-btn-done, #attendEndBtn.attend-btn-done,
+#attendStartBtn.attend-btn-done:hover, #attendEndBtn.attend-btn-done:hover{
+  background:var(--bg-elevated) !important;
+  color:var(--text-muted) !important;
+  border:1px solid var(--border-strong) !important;
+  box-shadow:none !important;
+  opacity:1 !important;
+  cursor:not-allowed !important;
+  transform:none !important;
+}
+#attendStartBtn.attend-btn-locked, #attendEndBtn.attend-btn-locked,
+#attendStartBtn.attend-btn-locked:hover, #attendEndBtn.attend-btn-locked:hover{
+  background:transparent !important;
+  color:var(--text-muted) !important;
+  border:1px solid var(--border) !important;
+  box-shadow:none !important;
+  opacity:.55 !important;
+  cursor:not-allowed !important;
+  transform:none !important;
+}
 @media(max-width:680px){
   .sync-indicator{min-height:32px;padding:5px 8px;font-size:9px}
   .sync-time{font-size:8px}
@@ -4692,15 +4717,31 @@ function formatDuration(ms) {
   return h + 'h ' + m + 'm';
 }
 
-function setAttendBtnLoading(btn, loading, icon, label) {
+// Button visual states: 'active' (tappable), 'loading' (mid-request), 'done'
+// (already completed — check icon, muted), 'locked' (not available yet — muted).
+// 'done'/'locked' use dedicated CSS classes (see <style>) so they always look
+// visually disabled, regardless of the button's own themed colors.
+function setAttendBtnState(btn, mode, icon, label) {
   if (!btn) return;
-  if (loading) {
+  btn.classList.remove('attend-btn-done', 'attend-btn-locked');
+  if (mode === 'loading') {
     btn.disabled = true;
     btn.innerHTML = '<span class="mini-spin" aria-hidden="true"></span>' + label;
-  } else {
-    btn.innerHTML = '<i class="business-icon icon-inline" data-lucide="' + icon + '" aria-hidden="true"></i> ' + label;
-    if (window.lucide) lucide.createIcons({ attrs: { 'stroke-width': 1.9, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' } });
+    return;
   }
+  if (mode === 'done') {
+    btn.disabled = true;
+    btn.classList.add('attend-btn-done');
+    btn.innerHTML = '<i class="business-icon icon-inline" data-lucide="check" aria-hidden="true"></i> ' + label;
+  } else if (mode === 'locked') {
+    btn.disabled = true;
+    btn.classList.add('attend-btn-locked');
+    btn.innerHTML = '<i class="business-icon icon-inline" data-lucide="' + icon + '" aria-hidden="true"></i> ' + label;
+  } else {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="business-icon icon-inline" data-lucide="' + icon + '" aria-hidden="true"></i> ' + label;
+  }
+  if (window.lucide) lucide.createIcons({ attrs: { 'stroke-width': 1.9, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' } });
 }
 
 function stopAttendanceTicker() {
@@ -4735,23 +4776,22 @@ function renderTodayAttendanceStatus() {
   if (!todayAttendanceRow || !todayAttendanceRow.check_in) {
     box.textContent = "You haven't started today yet.";
     box.className = 'notice warn';
-    if (startBtn) setAttendBtnLoading(startBtn, false, 'play', 'Start Day');
-    if (startBtn) startBtn.disabled = false;
-    if (endBtn) { setAttendBtnLoading(endBtn, false, 'square', 'End Day'); endBtn.disabled = true; }
+    setAttendBtnState(startBtn, 'active', 'play', 'Start Day');
+    setAttendBtnState(endBtn, 'locked', 'square', 'End Day');
   } else if (!todayAttendanceRow.check_out) {
     const inTime = new Date(todayAttendanceRow.check_in);
     const tick = () => { box.textContent = '🟢 Checked in at ' + inTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' — ' + formatDuration(Date.now() - inTime.getTime()) + ' so far.'; };
     tick();
     attendanceTickTimer = setInterval(tick, 30000);
     box.className = 'notice';
-    if (startBtn) { setAttendBtnLoading(startBtn, false, 'play', 'Start Day'); startBtn.disabled = true; }
-    if (endBtn) { setAttendBtnLoading(endBtn, false, 'square', 'End Day'); endBtn.disabled = false; }
+    setAttendBtnState(startBtn, 'done', 'play', 'Started');
+    setAttendBtnState(endBtn, 'active', 'square', 'End Day');
   } else {
     const hrs = formatDuration(new Date(todayAttendanceRow.check_out) - new Date(todayAttendanceRow.check_in));
     box.textContent = '✅ Day complete — ' + new Date(todayAttendanceRow.check_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' to ' + new Date(todayAttendanceRow.check_out).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' (' + hrs + ').';
     box.className = 'notice';
-    if (startBtn) { setAttendBtnLoading(startBtn, false, 'play', 'Start Day'); startBtn.disabled = true; }
-    if (endBtn) { setAttendBtnLoading(endBtn, false, 'square', 'End Day'); endBtn.disabled = true; }
+    setAttendBtnState(startBtn, 'done', 'play', 'Started');
+    setAttendBtnState(endBtn, 'done', 'square', 'Ended');
   }
 }
 
@@ -4762,8 +4802,8 @@ async function startDay() {
   stopAttendanceTicker();
   const startBtn = $('attendStartBtn'), endBtn = $('attendEndBtn'), box = $('attendTodayStatus');
   // Give instant feedback the moment the user taps — don't wait on the network.
-  setAttendBtnLoading(startBtn, true, 'play', 'Starting…');
-  if (endBtn) endBtn.disabled = true;
+  setAttendBtnState(startBtn, 'loading', 'play', 'Starting…');
+  setAttendBtnState(endBtn, 'locked', 'square', 'End Day');
   if (box) { box.textContent = '⏳ Starting your day…'; box.className = 'notice'; }
   try {
     const { data, error } = await withTimeout(
@@ -4796,8 +4836,8 @@ async function endDay() {
   attendanceBusy = true;
   stopAttendanceTicker();
   const startBtn = $('attendStartBtn'), endBtn = $('attendEndBtn'), box = $('attendTodayStatus');
-  setAttendBtnLoading(endBtn, true, 'square', 'Ending…');
-  if (startBtn) startBtn.disabled = true;
+  setAttendBtnState(startBtn, 'done', 'play', 'Started');
+  setAttendBtnState(endBtn, 'loading', 'square', 'Ending…');
   if (box) { box.textContent = '⏳ Ending your day…'; box.className = 'notice'; }
   try {
     const { data, error } = await withTimeout(
