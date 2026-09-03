@@ -2487,6 +2487,105 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
     .attend-btn-row .btn{ flex:1; min-width:140px; min-height:52px; font-size:.9rem; }
     .work-note-box textarea{ width:100%; min-height:90px; resize:vertical; font-family:var(--font); background:#07110d; color:var(--text-main); border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px 12px; }
   </style>
+
+  <style id="my-drybea-premium-global-nav">
+  /* ==========================================================================
+     MY DRYBEA — PREMIUM GLOBAL-APP BOTTOM NAVIGATION (final pass)
+     Visual + visibility rules only. No auth / Supabase / business logic touched.
+     • Owner bottom nav  → exactly 5 buttons: Home · My Staff · Orders · Income · Profile
+       (Daily Expenses stays one tap away via Home ▸ Owner Quick Actions ▸ Expenses)
+     • Staff bottom nav  → exactly 5 buttons: Staff Home · Orders · My Salary · Daily Expenses · Profile
+     ========================================================================== */
+
+  /* ---- exact 5-button rule per role ---- */
+  body .app-nav:not(.staff-nav) .tab-btn[data-tab="expenses"]{ display:none !important; }
+  body .app-nav.staff-nav .tab-btn[data-tab="expenses"]{ display:flex !important; }
+
+  /* ---- floating glass capsule container ---- */
+  body .app-nav{
+    display:flex !important;
+    align-items:stretch !important;
+    gap:4px !important;
+    padding:6px !important;
+    border-radius:26px !important;
+    background:linear-gradient(180deg,rgba(13,26,21,.92),rgba(6,14,11,.96)) !important;
+    border:1px solid rgba(255,255,255,.08) !important;
+    box-shadow:0 18px 46px rgba(0,0,0,.55), 0 0 0 1px rgba(16,185,129,.06) !important;
+    backdrop-filter:blur(24px) saturate(160%) !important;
+    -webkit-backdrop-filter:blur(24px) saturate(160%) !important;
+  }
+  @media(max-width:768px){
+    body .app-nav{
+      position:fixed !important; left:12px !important; right:12px !important;
+      bottom:max(12px, env(safe-area-inset-bottom)) !important; top:auto !important;
+      width:auto !important; z-index:200 !important; margin:0 !important;
+    }
+    body .app-container{ padding-bottom:104px !important; }
+  }
+
+  /* ---- buttons ---- */
+  body .app-nav .tab-btn{
+    flex:1 1 0 !important; min-width:0 !important;
+    display:flex !important; flex-direction:column !important; align-items:center !important; justify-content:center !important;
+    gap:3px !important; padding:9px 2px !important; min-height:54px !important;
+    border-radius:19px !important; border:none !important; background:transparent !important;
+    color:rgba(210,229,220,.55) !important; font-weight:700 !important; font-size:.61rem !important;
+    letter-spacing:.01em !important; position:relative !important; overflow:visible !important;
+    transition:color .3s cubic-bezier(.4,0,.2,1), transform .18s ease !important;
+  }
+  body .app-nav .tab-btn span{ position:relative !important; z-index:1 !important; opacity:.9 !important; transition:opacity .25s ease, color .3s ease !important; }
+  body .app-nav .tab-btn .business-icon{
+    position:relative !important; z-index:1 !important;
+    width:20px !important; height:20px !important;
+    transition:transform .32s cubic-bezier(.34,1.56,.64,1), color .3s ease !important;
+  }
+  body .app-nav .tab-btn:active{ transform:scale(.90) !important; }
+
+  /* pill that glides in behind the active icon */
+  body .app-nav .tab-btn::before{
+    content:'' !important; position:absolute !important; top:2px !important; left:50% !important;
+    width:38px !important; height:30px !important; border-radius:14px !important;
+    background:linear-gradient(135deg,rgba(16,185,129,.22),rgba(163,230,53,.14)) !important;
+    box-shadow:0 6px 16px rgba(16,185,129,.28), inset 0 0 0 1px rgba(163,230,53,.20) !important;
+    opacity:0 !important; transform:translate(-50%,0) scale(.6) !important;
+    transition:opacity .3s ease, transform .32s cubic-bezier(.34,1.56,.64,1) !important;
+    z-index:0 !important;
+  }
+  body .app-nav .tab-btn.active{ color:#eafff2 !important; }
+  body .app-nav .tab-btn.active::before{ opacity:1 !important; transform:translate(-50%,0) scale(1) !important; }
+  body .app-nav .tab-btn.active .business-icon{ color:#5eeca0 !important; transform:translateY(-1px) !important; }
+  body .app-nav .tab-btn.active span{ color:#eafff2 !important; opacity:1 !important; font-weight:800 !important; }
+  body .app-nav .tab-btn.active::after{
+    content:'' !important; position:absolute !important; bottom:-1px !important; left:50% !important;
+    transform:translateX(-50%) !important; width:4px !important; height:4px !important; border-radius:50% !important;
+    background:#a3e635 !important; box-shadow:0 0 8px rgba(163,230,53,.9) !important;
+  }
+  body .app-nav .tab-btn:hover:not(.active){ color:#bfe9d3 !important; }
+
+  /* ---- light theme variant ---- */
+  html[data-theme="light"] body .app-nav{
+    background:linear-gradient(180deg,#ffffff,#f3faf6) !important;
+    border-color:rgba(8,127,67,.14) !important;
+    box-shadow:0 18px 44px rgba(16,48,32,.14) !important;
+  }
+  html[data-theme="light"] body .app-nav .tab-btn{ color:#7c8d84 !important; }
+  html[data-theme="light"] body .app-nav .tab-btn::before{
+    background:linear-gradient(135deg,rgba(8,127,67,.14),rgba(197,161,58,.14)) !important;
+    box-shadow:0 6px 16px rgba(8,127,67,.16), inset 0 0 0 1px rgba(8,127,67,.16) !important;
+  }
+  html[data-theme="light"] body .app-nav .tab-btn.active{ color:#08512b !important; }
+  html[data-theme="light"] body .app-nav .tab-btn.active .business-icon{ color:#0a8f43 !important; }
+  html[data-theme="light"] body .app-nav .tab-btn.active span{ color:#08512b !important; }
+
+  /* ---- desktop: sleek top capsule instead of stacked column ---- */
+  @media(min-width:769px){
+    body .app-nav .tab-btn{ flex-direction:row !important; min-height:46px !important; padding:10px 16px !important; font-size:.74rem !important; gap:7px !important; }
+    body .app-nav .tab-btn::before{ width:100% !important; height:100% !important; top:0 !important; left:0 !important; transform:scale(.94) !important; border-radius:14px !important; }
+    body .app-nav .tab-btn.active::before{ transform:scale(1) !important; }
+    body .app-nav .tab-btn.active::after{ display:none !important; }
+  }
+  </style>
+
   <nav class="tabs no-print app-nav" role="tablist" aria-label="Main navigation">
     <button class="tab-btn active" data-tab="dashboard" role="tab" aria-label="Home" data-owner-only><i class="business-icon" data-lucide="house" aria-hidden="true"></i><span>Home</span></button>
     <button class="tab-btn" data-tab="my-staff" role="tab" aria-label="My Staff" data-owner-only><i class="business-icon" data-lucide="users-round" aria-hidden="true"></i><span>My Staff</span></button>
