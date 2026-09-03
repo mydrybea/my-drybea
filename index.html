@@ -2892,7 +2892,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
     </div>
     <div class="grid-2" style="margin-top:16px;">
       <div class="card"><h2><span class="pro-title-icon green"><i class="business-icon" data-lucide="megaphone"></i></span><span>Latest Notices</span></h2><div id="staffHomeNotices"><div class="notice">No notices yet.</div></div></div>
-      <div class="card"><h2><span class="pro-title-icon orange"><i class="business-icon" data-lucide="list-checks"></i></span><span>My Tasks</span></h2><div id="staffHomeTasks"><div class="notice">No open tasks.</div></div></div>
+      <div class="card"><h2><span class="pro-title-icon orange"><i class="business-icon" data-lucide="list-checks"></i></span><span>My Tasks</span></h2><div id="staffHomeTasksList"><div class="notice">No open tasks.</div></div></div>
     </div>
   </section>
 
@@ -7475,7 +7475,7 @@ function renderStaffTasks(){
   const list=getStaffLocalTasks(),el=$('staffTaskList');if(!el)return;
   const rows=list.length?list.map(x=>`<div class="task-row"><div class="task-main ${taskDone(x)?'task-done':''}"><strong>${escapeHtmlSafe(x.title)}</strong><small><span class="priority-pill ${x.priority==='high'?'high':'normal'}">${x.priority==='high'?'HIGH':'NORMAL'}</span> · ${new Date(x.created_at||Date.now()).toLocaleDateString()}</small></div><div style="display:flex;gap:6px;"><button class="btn btn-sm ${taskDone(x)?'':'btn-primary'}" onclick="toggleStaffTask('${x.id}')"><i class="business-icon" data-lucide="${taskDone(x)?'rotate-ccw':'check'}"></i><span>${taskDone(x)?'Reopen':'Done'}</span></button></div></div>`).join(''):'<div class="notice">No assigned tasks yet.</div>';
   el.innerHTML=rows;if(window.lucide)lucide.createIcons();
-  const home=$('staffHomeTasks');if(home)home.innerHTML=list.filter(x=>!taskDone(x)).slice(0,4).map(x=>`<div class="task-row"><div class="task-main"><strong>${escapeHtmlSafe(x.title)}</strong><small>${x.priority==='high'?'High priority':'Normal'}</small></div><i class="business-icon" data-lucide="chevron-right"></i></div>`).join('')||'<div class="notice">No open tasks.</div>';if(window.lucide)lucide.createIcons();
+  const home=$('staffHomeTasksList');if(home)home.innerHTML=list.filter(x=>!taskDone(x)).slice(0,4).map(x=>`<div class="task-row"><div class="task-main"><strong>${escapeHtmlSafe(x.title)}</strong><small>${x.priority==='high'?'High priority':'Normal'}</small></div><i class="business-icon" data-lucide="chevron-right"></i></div>`).join('')||'<div class="notice">No open tasks.</div>';if(window.lucide)lucide.createIcons();
 }
 
 function getStaffNotices(){const c=getMyStaffDataState().notices;return Array.isArray(c)?c:[];}
@@ -8526,6 +8526,18 @@ window.toggleNotifySound = toggleNotifySound;
 window.startAppNotifyRealtime = startAppNotifyRealtime;
 window.stopAppNotifyRealtime = stopAppNotifyRealtime;
 window.showAppNotification = showAppNotification;
+// FIX: these were declared but never exposed on window, so every onclick/onchange
+// attribute calling them (order form size/qty/total, customer select, notification
+// bell, owner attendance refresh, smart salary month picker) silently failed with
+// "is not defined" and did nothing when tapped.
+window.selectOrderSize = selectOrderSize;
+window.stepOrderQty = stepOrderQty;
+window.updateOrderTotal = updateOrderTotal;
+window.onOrderCustomerChange = onOrderCustomerChange;
+window.openNotifyCenter = openNotifyCenter;
+window.openAppNotifyDetail = openAppNotifyDetail;
+window.refreshMySmartSalary = refreshMySmartSalary;
+window.loadOwnerAttendanceToday = loadOwnerAttendanceToday;
 
 })();
 </script>
