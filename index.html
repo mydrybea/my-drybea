@@ -3262,7 +3262,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
       <p class="pro-subtitle gold">Advance requests from staff open a pre-filled WhatsApp message to this number.</p>
       <div class="field">
         <label>WhatsApp Number <span class="hint">(with country code, e.g. 94771234567)</span></label>
-        <input type="text" id="ownerWhatsapp" placeholder="94771234567">
+        <input type="text" id="ownerWhatsapp" placeholder="94762432963">
       </div>
       <div class="btn-row">
         <button class="btn btn-primary" onclick="saveOwnerWhatsapp()"><i class="business-icon icon-inline" data-lucide="save" aria-hidden="true"></i> Save Number</button>
@@ -5258,18 +5258,25 @@ async function loadAttendanceLog() {
 // Best-effort WhatsApp ping to the owner when a staff member starts/ends their day.
 // Mirrors notifyOwnerWhatsApp() used for advance requests: never blocks or fails the
 // attendance save above, which has already completed by the time this runs.
+//
+// FALLBACK NUMBER: if the owner hasn't saved a number yet on the "Business WhatsApp
+// Number" screen (Profile tab), we still notify this number so nothing gets missed.
+// Once the owner saves their own number there, THEIR saved number is always used
+// instead — this constant only covers the "nothing saved yet" case.
+const DEFAULT_OWNER_WHATSAPP = '94762432963';
+
 async function notifyOwnerAttendance(action, whenIso) {
   try {
     if (!businessId) return;
     const { data, error } = await supabase.from('profiles').select('whatsapp_number').eq('id', businessId).maybeSingle();
     if (error) throw error;
-    if (!data || !data.whatsapp_number) return; // owner hasn't set a WhatsApp number — nothing to notify with
+    const rawNumber = (data && data.whatsapp_number) ? data.whatsapp_number : DEFAULT_OWNER_WHATSAPP;
     const staffName = (userProfile && userProfile.display_name) || 'A staff member';
     const timeStr = new Date(whenIso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const verb = action === 'in' ? 'started' : 'ended';
     const emoji = action === 'in' ? '🟢' : '🔴';
     const msg = `${emoji} Attendance\n${staffName} ${verb} work at ${timeStr}\nDate: ${todayStr()}`;
-    const digits = String(data.whatsapp_number).replace(/[^0-9]/g, '');
+    const digits = String(rawNumber).replace(/[^0-9]/g, '');
     const waLink = 'https://wa.me/' + digits + '?text=' + encodeURIComponent(msg);
     // Wrapped in try/catch: some mobile in-app browsers throw instead of
     // returning null when a popup is blocked. The fallback button below
@@ -5329,13 +5336,10 @@ async function notifyOwnerWhatsApp(amount, reason) {
   try {
     const { data, error } = await supabase.from('profiles').select('whatsapp_number,display_name').eq('id', businessId).maybeSingle();
     if (error) throw error;
-    if (!data || !data.whatsapp_number) {
-      updateStatus('⚠️ Request saved — the owner has not set a WhatsApp number yet in their Profile.');
-      return;
-    }
+    const rawNumber = (data && data.whatsapp_number) ? data.whatsapp_number : DEFAULT_OWNER_WHATSAPP;
     const staffName = (userProfile && userProfile.display_name) || 'A staff member';
     const msg = `💸 Advance Request\nFrom: ${staffName}\nAmount: Rs. ${amount}\nReason: ${reason || '-'}\n\nPlease open the app to approve or reject.`;
-    const digits = String(data.whatsapp_number).replace(/[^0-9]/g, '');
+    const digits = String(rawNumber).replace(/[^0-9]/g, '');
     const waLink = 'https://wa.me/' + digits + '?text=' + encodeURIComponent(msg);
     // Best-effort auto-open. Wrapped in try/catch because some mobile
     // in-app browsers (WhatsApp/Instagram/FB webviews) throw instead of
