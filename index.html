@@ -743,6 +743,92 @@ td.num { text-align: right; font-family: 'SF Mono', 'Fira Code', monospace; font
 
 .modal h3 { color: var(--green); margin-bottom: 14px; font-size: 1.1rem; }
 
+/* ===== NEW ORDER MODAL (om- = order modal) ===== */
+.om-section { margin-bottom: 18px; }
+.om-section:last-of-type { margin-bottom: 0; }
+
+.om-section-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+.om-section-title i { width: 14px; height: 14px; flex-shrink: 0; }
+
+.om-size-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+@media (max-width: 420px) { .om-size-grid { grid-template-columns: repeat(2, 1fr); } }
+
+.om-size-chip {
+  position: relative;
+  padding: 12px 6px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--border);
+  background: var(--bg-secondary);
+  text-align: center;
+  cursor: pointer;
+  user-select: none;
+  transition: all var(--transition);
+}
+.om-size-chip .om-size-val { display: block; font-weight: 800; font-size: 0.95rem; color: var(--text-main); }
+.om-size-chip .om-size-unit { display: block; font-size: 0.62rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px; }
+.om-size-chip:hover { border-color: var(--border-strong); transform: translateY(-1px); }
+.om-size-chip.active {
+  border-color: var(--green);
+  background: linear-gradient(135deg, var(--green-subtle), rgba(16,185,129,0.15));
+  box-shadow: 0 0 0 1px var(--green) inset, 0 4px 14px var(--green-glow);
+}
+.om-size-chip.active .om-size-val { color: var(--green); }
+.om-size-chip.active::after {
+  content: ''; position: absolute; top: 6px; right: 6px; width: 6px; height: 6px;
+  border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green-glow);
+}
+
+.om-qty-row { display: flex; align-items: stretch; gap: 8px; }
+.om-qty-row input { text-align: center; font-weight: 700; }
+.om-qty-btn {
+  width: 44px;
+  flex-shrink: 0;
+  border-radius: var(--radius-xs);
+  border: 1.5px solid var(--border);
+  background: var(--bg-secondary);
+  color: var(--text-main);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+.om-qty-btn i { width: 16px; height: 16px; }
+.om-qty-btn:hover { border-color: var(--green); color: var(--green); }
+.om-qty-btn:active { transform: scale(0.92); }
+
+.om-total-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: linear-gradient(135deg, rgba(16,185,129,0.12), rgba(212,175,55,0.08));
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+}
+.om-total-banner .om-total-label { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); }
+.om-total-banner .om-total-sub { font-size: 0.72rem; color: var(--text-dim); margin-top: 3px; }
+.om-total-banner .om-total-value { font-size: 1.35rem; font-weight: 900; color: var(--green); letter-spacing: -0.02em; white-space: nowrap; }
+
+.om-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 20px; }
+.om-actions .btn-primary { width: 100%; padding: 14px; font-size: 0.95rem; }
+.om-actions .btn-cancel-link {
+  width: 100%; background: transparent; border: none; box-shadow: none;
+  color: var(--text-muted); font-weight: 600; justify-content: center; padding: 8px;
+}
+.om-actions .btn-cancel-link:hover { color: var(--bad); background: transparent; transform: none; box-shadow: none; }
+
 /* ===== NOTICES ===== */
 .notice {
   background: var(--green-subtle);
@@ -3869,54 +3955,90 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
 <div class="modal-backdrop" id="orderModal">
   <div class="modal">
     <h3><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="shopping-bag" aria-hidden="true"></i></span><span>New Order</span></h3><p class="pro-subtitle green">Capture the sale cleanly from the first field.</p>
-    <div class="field" data-owner-order-customer>
-      <label>Customer</label>
-      <select id="orderCustomer"></select>
+
+    <div class="om-section" data-owner-order-customer>
+      <div class="om-section-title"><i class="business-icon" data-lucide="user-round" aria-hidden="true"></i> Customer</div>
+      <div class="field" style="margin-bottom:0;">
+        <select id="orderCustomer" onchange="onOrderCustomerChange()"></select>
+      </div>
     </div>
-    <div data-staff-order-customer style="display:none;">
+
+    <div class="om-section" data-staff-order-customer style="display:none;">
+      <div class="om-section-title"><i class="business-icon" data-lucide="user-round" aria-hidden="true"></i> Customer</div>
       <div class="notice" style="margin-bottom:10px;padding:10px 12px;font-size:.72rem;"><i class="business-icon icon-inline" data-lucide="shield-check"></i> Staff orders do not use the customer master list. Customer details are stored only inside this sale record for owner verification.</div>
       <div class="grid-2">
         <div class="field"><label>Customer Name</label><input id="staffOrderCustomerName" type="text" placeholder="Customer name" autocomplete="off"></div>
-        <div class="field"><label>Customer Phone</label><input id="staffOrderCustomerPhone" type="text" placeholder="Phone number" autocomplete="off"></div>
+        <div class="field"><label>Customer Phone</label><input id="staffOrderCustomerPhone" type="text" placeholder="07XXXXXXXX" autocomplete="off" inputmode="tel"></div>
       </div>
     </div>
-    <div class="field" data-owner-order-referral style="display:none;margin-top:10px;">
+
+    <div class="om-section" data-owner-order-referral style="display:none;">
+      <div class="field" style="margin-bottom:8px;">
         <label>Staff Reference for this Order</label>
         <select id="orderReferralStaffSelect"><option value="">Auto from customer / No referral</option></select>
-        <small style="display:block;margin-top:6px;color:var(--text-muted);">Owner verification control. The selected reference is attached to this order before commission review.</small>
       </div>
-      <div class="notice" style="margin-top:8px;padding:9px 12px;font-size:.72rem;"><i class="business-icon icon-inline" data-lucide="badge-percent"></i> If you create the sale as a staff user, it is automatically attributed to your 12% commission.</div>
+      <small style="display:block;margin-bottom:8px;color:var(--text-muted);font-size:.72rem;">Owner verification control. The selected reference is attached to this order before commission review.</small>
+      <div class="notice" style="margin:0;padding:9px 12px;font-size:.72rem;"><i class="business-icon icon-inline" data-lucide="badge-percent"></i> If you create the sale as a staff user, it is automatically attributed to your 12% commission.</div>
     </div>
-    <div class="grid-2">
-      <div class="field">
-        <label>Product Size</label>
-        <select id="orderProduct">
-          <option value="50">50g Pack</option>
-          <option value="100">100g Pack</option>
-          <option value="500">500g Pack</option>
-          <option value="1000">1kg Pack</option>
-        </select>
+
+    <div class="om-section">
+      <div class="om-section-title"><i class="business-icon" data-lucide="package" aria-hidden="true"></i> Product &amp; Quantity</div>
+
+      <select id="orderProduct" class="sr-only" aria-hidden="true" tabindex="-1">
+        <option value="50">50g Pack</option>
+        <option value="100">100g Pack</option>
+        <option value="500">500g Pack</option>
+        <option value="1000">1kg Pack</option>
+      </select>
+
+      <div class="om-size-grid" id="orderSizeGrid" role="radiogroup" aria-label="Product size">
+        <div class="om-size-chip" data-size="50" role="radio" onclick="selectOrderSize('50')"><span class="om-size-val">50g</span><span class="om-size-unit">Pack</span></div>
+        <div class="om-size-chip" data-size="100" role="radio" onclick="selectOrderSize('100')"><span class="om-size-val">100g</span><span class="om-size-unit">Pack</span></div>
+        <div class="om-size-chip" data-size="500" role="radio" onclick="selectOrderSize('500')"><span class="om-size-val">500g</span><span class="om-size-unit">Pack</span></div>
+        <div class="om-size-chip" data-size="1000" role="radio" onclick="selectOrderSize('1000')"><span class="om-size-val">1kg</span><span class="om-size-unit">Pack</span></div>
       </div>
-      <div class="field">
-        <label>Quantity</label>
-        <input type="number" id="orderQty" value="1" min="1">
+
+      <div class="grid-2" style="margin-top:14px;">
+        <div class="field" style="margin-bottom:0;">
+          <label>Quantity</label>
+          <div class="om-qty-row">
+            <button type="button" class="om-qty-btn" onclick="stepOrderQty(-1)" aria-label="Decrease quantity"><i class="business-icon" data-lucide="minus" aria-hidden="true"></i></button>
+            <input type="number" id="orderQty" value="1" min="1" step="1" inputmode="numeric" oninput="updateOrderTotal()">
+            <button type="button" class="om-qty-btn" onclick="stepOrderQty(1)" aria-label="Increase quantity"><i class="business-icon" data-lucide="plus" aria-hidden="true"></i></button>
+          </div>
+        </div>
+        <div class="field" style="margin-bottom:0;">
+          <label>Unit Price (Rs.)</label>
+          <div class="input-prefix"><span>Rs.</span><input type="number" id="orderUnitPrice" value="350" min="0" inputmode="decimal" oninput="updateOrderTotal()"></div>
+        </div>
+      </div>
+
+      <div class="om-total-banner" style="margin-top:14px;">
+        <div>
+          <div class="om-total-label">Order Total</div>
+          <div class="om-total-sub" id="orderTotalSub">1 × Rs. 350</div>
+        </div>
+        <div class="om-total-value" id="orderTotalValue">Rs. 350</div>
       </div>
     </div>
-    <div class="field">
-      <label>Unit Price (Rs.)</label>
-      <div class="input-prefix"><span>Rs.</span><input type="number" id="orderUnitPrice" value="350" min="0"></div>
+
+    <div class="om-section">
+      <div class="om-section-title"><i class="business-icon" data-lucide="map-pin" aria-hidden="true"></i> Delivery Address</div>
+      <div class="field" style="margin-bottom:0;">
+        <textarea id="orderAddress" placeholder="House no, street, city..."></textarea>
+      </div>
     </div>
-    <div class="field">
-      <label>Delivery Address</label>
-      <textarea id="orderAddress" placeholder="Delivery address..."></textarea>
+
+    <div class="om-section">
+      <div class="om-section-title"><i class="business-icon" data-lucide="sticky-note" aria-hidden="true"></i> Notes</div>
+      <div class="field" style="margin-bottom:0;">
+        <textarea id="orderNotes" placeholder="Any special instructions..."></textarea>
+      </div>
     </div>
-    <div class="field">
-      <label>Notes</label>
-      <textarea id="orderNotes" placeholder="Any special instructions..."></textarea>
-    </div>
-    <div class="btn-row">
+
+    <div class="om-actions">
       <button class="btn btn-primary" onclick="createOrder()"><i class="business-icon icon-inline" data-lucide="circle-check" aria-hidden="true"></i> Create Order</button>
-      <button class="btn" onclick="closeModal('orderModal')">Cancel</button>
+      <button class="btn btn-cancel-link" onclick="closeModal('orderModal')">Cancel</button>
     </div>
   </div>
 </div>
@@ -6134,6 +6256,54 @@ function updateCustomerSelect() {
   select.innerHTML = customers.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
 }
 
+function syncOrderSizeChips() {
+  const val = String($('orderProduct')?.value || '');
+  document.querySelectorAll('#orderSizeGrid .om-size-chip').forEach(chip => {
+    const active = chip.getAttribute('data-size') === val;
+    chip.classList.toggle('active', active);
+    chip.setAttribute('aria-checked', active ? 'true' : 'false');
+  });
+}
+
+function selectOrderSize(size) {
+  const sel = $('orderProduct');
+  if (sel) sel.value = size;
+  syncOrderSizeChips();
+  updateOrderTotal();
+}
+
+function stepOrderQty(delta) {
+  const input = $('orderQty');
+  if (!input) return;
+  let v = (parseInt(input.value, 10) || 0) + delta;
+  if (v < 1) v = 1;
+  input.value = v;
+  updateOrderTotal();
+}
+
+function updateOrderTotal() {
+  const qty = Math.max(0, Number($('orderQty')?.value) || 0);
+  const price = Math.max(0, Number($('orderUnitPrice')?.value) || 0);
+  const total = qty * price;
+  const totalEl = $('orderTotalValue');
+  const subEl = $('orderTotalSub');
+  if (totalEl) totalEl.textContent = (typeof fmt === 'function') ? fmt(total) : ('Rs. ' + total);
+  if (subEl) subEl.textContent = qty + ' × ' + ((typeof fmt === 'function') ? fmt(price) : ('Rs. ' + price));
+}
+
+// Owner convenience: auto-fill delivery address from the selected customer
+// (only when the address field is still empty, so it never overwrites a manual edit).
+function onOrderCustomerChange() {
+  const addrEl = $('orderAddress');
+  const customerId = $('orderCustomer')?.value;
+  if (addrEl && !addrEl.value.trim() && customerId) {
+    const addr = getCustomerAddress(customerId);
+    if (addr) addrEl.value = addr;
+  }
+  const c = customers.find(x => String(x.id) === String(customerId));
+  if ($('orderReferralStaffSelect') && c?.referralStaffId) $('orderReferralStaffSelect').value = c.referralStaffId;
+}
+
 function openNewOrder() {
   const staffBlock=document.querySelector('[data-staff-order-customer]');
   const ownerBlock=document.querySelector('[data-owner-order-customer]');
@@ -6151,6 +6321,13 @@ function openNewOrder() {
     const f=document.querySelector('[data-owner-order-referral]'); if(f) f.style.display='';
     const c=customers.find(x=>String(x.id)===String($('orderCustomer').value)); if($('orderReferralStaffSelect') && c?.referralStaffId) $('orderReferralStaffSelect').value=c.referralStaffId;
   }
+  $('orderAddress').value = '';
+  $('orderNotes').value = '';
+  $('orderQty').value = 1;
+  $('orderUnitPrice').value = 350;
+  if ($('orderProduct')) $('orderProduct').value = '50';
+  syncOrderSizeChips();
+  updateOrderTotal();
   $('orderModal').classList.add('active');
   if(window.lucide) lucide.createIcons({attrs:{'stroke-width':1.9,'stroke-linecap':'round','stroke-linejoin':'round'}});
 }
@@ -6215,6 +6392,8 @@ async function createOrder() {
       closeModal('orderModal');
       $('staffOrderCustomerName').value=''; $('staffOrderCustomerPhone').value='';
       $('orderQty').value=1; $('orderUnitPrice').value=350; $('orderAddress').value=''; $('orderNotes').value='';
+      if ($('orderProduct')) $('orderProduct').value = '50';
+      syncOrderSizeChips(); updateOrderTotal();
       updateStatus(`🔐 Sale ${row.order_ref_no} created · pending owner verification`);
     } catch (e) {
       console.error('Secure staff sale error:', e);
@@ -6248,6 +6427,8 @@ async function createOrder() {
   orders.unshift({id:row.id,customerId,product,qty,unitPrice,total,address,notes,status:'pending',createdBy:currentUser.id,createdAt:new Date().toISOString(),referralStaffId,referralStaffReference,referralStatus:referralStaffId?'pending_verification':'none',orderRefNo:row.order_ref_no||null});
   saveOrders(); renderOrders(); renderDelivery(); updateOrderStats(); closeModal('orderModal');
   $('orderQty').value=1; $('orderUnitPrice').value=350; $('orderAddress').value=''; $('orderNotes').value='';
+  if ($('orderProduct')) $('orderProduct').value = '50';
+  syncOrderSizeChips(); updateOrderTotal();
   updateStatus(referralStaffId ? '📨 Sale sent to owner for commission verification' : '✅ Order created');
 }
 function renderOrders() {
