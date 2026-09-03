@@ -2490,16 +2490,19 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
 
   <style id="my-drybea-premium-global-nav">
   /* ==========================================================================
-     MY DRYBEA — PREMIUM GLOBAL-APP BOTTOM NAVIGATION (final pass)
+     MY DRYBEA — PREMIUM GLOBAL-APP BOTTOM NAVIGATION (final pass v2)
      Visual + visibility rules only. No auth / Supabase / business logic touched.
-     • Owner bottom nav  → exactly 5 buttons: Home · My Staff · Orders · Income · Profile
-       (Daily Expenses stays one tap away via Home ▸ Owner Quick Actions ▸ Expenses)
+     • Owner bottom nav  → exactly 5 buttons: Home · Orders · Income · Cost · Profile
+       (My Staff and Daily Expenses stay one tap away via Home ▸ Owner Quick Actions)
      • Staff bottom nav  → exactly 5 buttons: Staff Home · Orders · My Salary · Daily Expenses · Profile
      ========================================================================== */
 
-  /* ---- exact 5-button rule per role ---- */
-  body .app-nav:not(.staff-nav) .tab-btn[data-tab="expenses"]{ display:none !important; }
+  /* ---- exact 5-button rule per role (visibility ONLY — never forces display
+     on buttons the role logic in applyRoleUI() has already hidden) ---- */
+  body .app-nav:not(.staff-nav) .tab-btn[data-tab="expenses"],
+  body .app-nav:not(.staff-nav) .tab-btn[data-tab="my-staff"]{ display:none !important; }
   body .app-nav.staff-nav .tab-btn[data-tab="expenses"]{ display:flex !important; }
+  body .app-nav.staff-nav .tab-btn[data-tab="calculator"]{ display:none !important; }
 
   /* ---- floating glass capsule container ---- */
   body .app-nav{
@@ -2523,12 +2526,13 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
     body .app-container{ padding-bottom:104px !important; }
   }
 
-  /* ---- buttons ---- */
+  /* ---- buttons (layout/visuals only — display is left to role logic above) ---- */
   body .app-nav .tab-btn{
     flex:1 1 0 !important; min-width:0 !important;
-    display:flex !important; flex-direction:column !important; align-items:center !important; justify-content:center !important;
+    flex-direction:column !important; align-items:center !important; justify-content:center !important;
     gap:3px !important; padding:9px 2px !important; min-height:54px !important;
-    border-radius:19px !important; border:none !important; background:transparent !important;
+    border-radius:19px !important; border:none !important;
+    background:transparent !important; box-shadow:none !important;
     color:rgba(210,229,220,.55) !important; font-weight:700 !important; font-size:.61rem !important;
     letter-spacing:.01em !important; position:relative !important; overflow:visible !important;
     transition:color .3s cubic-bezier(.4,0,.2,1), transform .18s ease !important;
@@ -2541,7 +2545,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
   }
   body .app-nav .tab-btn:active{ transform:scale(.90) !important; }
 
-  /* pill that glides in behind the active icon */
+  /* pill that glides in behind the active icon — replaces the old solid green box */
   body .app-nav .tab-btn::before{
     content:'' !important; position:absolute !important; top:2px !important; left:50% !important;
     width:38px !important; height:30px !important; border-radius:14px !important;
@@ -2551,7 +2555,8 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
     transition:opacity .3s ease, transform .32s cubic-bezier(.34,1.56,.64,1) !important;
     z-index:0 !important;
   }
-  body .app-nav .tab-btn.active{ color:#eafff2 !important; }
+  /* Neutralise the app's legacy solid-green .tab-btn.active box everywhere inside the nav */
+  body .app-nav .tab-btn.active{ background:transparent !important; box-shadow:none !important; color:#eafff2 !important; font-weight:800 !important; }
   body .app-nav .tab-btn.active::before{ opacity:1 !important; transform:translate(-50%,0) scale(1) !important; }
   body .app-nav .tab-btn.active .business-icon{ color:#5eeca0 !important; transform:translateY(-1px) !important; }
   body .app-nav .tab-btn.active span{ color:#eafff2 !important; opacity:1 !important; font-weight:800 !important; }
@@ -2560,7 +2565,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
     transform:translateX(-50%) !important; width:4px !important; height:4px !important; border-radius:50% !important;
     background:#a3e635 !important; box-shadow:0 0 8px rgba(163,230,53,.9) !important;
   }
-  body .app-nav .tab-btn:hover:not(.active){ color:#bfe9d3 !important; }
+  body .app-nav .tab-btn:hover:not(.active){ color:#bfe9d3 !important; background:transparent !important; }
 
   /* ---- light theme variant ---- */
   html[data-theme="light"] body .app-nav{
@@ -2573,7 +2578,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
     background:linear-gradient(135deg,rgba(8,127,67,.14),rgba(197,161,58,.14)) !important;
     box-shadow:0 6px 16px rgba(8,127,67,.16), inset 0 0 0 1px rgba(8,127,67,.16) !important;
   }
-  html[data-theme="light"] body .app-nav .tab-btn.active{ color:#08512b !important; }
+  html[data-theme="light"] body .app-nav .tab-btn.active{ color:#08512b !important; background:transparent !important; box-shadow:none !important; }
   html[data-theme="light"] body .app-nav .tab-btn.active .business-icon{ color:#0a8f43 !important; }
   html[data-theme="light"] body .app-nav .tab-btn.active span{ color:#08512b !important; }
 
@@ -2593,6 +2598,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
     <button class="tab-btn" data-tab="my-salary" role="tab" aria-label="My Salary" data-staff-only><i class="business-icon" data-lucide="wallet-cards" aria-hidden="true"></i><span>My Salary</span></button>
     <button class="tab-btn" data-tab="orders" role="tab" aria-label="Orders"><i class="business-icon" data-lucide="shopping-bag" aria-hidden="true"></i><span>Orders</span></button>
     <button class="tab-btn" data-tab="income" role="tab" aria-label="Income" data-owner-only><i class="business-icon" data-lucide="trending-up" aria-hidden="true"></i><span>Income</span></button>
+    <button class="tab-btn" data-tab="calculator" role="tab" aria-label="Cost" data-owner-only><i class="business-icon" data-lucide="calculator" aria-hidden="true"></i><span>Cost</span></button>
     <button class="tab-btn" data-tab="expenses" role="tab" aria-label="Daily Expenses"><i class="business-icon" data-lucide="receipt" aria-hidden="true"></i><span>Daily Expenses</span></button>
     <button class="tab-btn" data-tab="daily-pay" role="tab" aria-label="Daily Pay" data-staff-only><i class="business-icon" data-lucide="calendar-days" aria-hidden="true"></i><span>Daily Pay</span></button>
     <button class="tab-btn" data-tab="work-update" role="tab" aria-label="Work Update" data-staff-only><i class="business-icon" data-lucide="notebook-pen" aria-hidden="true"></i><span>Work Update</span></button>
@@ -3468,6 +3474,11 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
           <button class="home-action" data-home-tab="calculator" data-ribbon="true" aria-label="Open Costing">
             <span class="home-icon"><i class="business-icon" data-lucide="calculator" aria-hidden="true"></i></span>
             <span class="home-action-copy"><strong>Costing</strong><small>Calculate price, cost & profit</small></span>
+            <span class="quick-status" aria-hidden="true"></span>
+          </button>
+          <button class="home-action" data-home-tab="my-staff" data-ribbon="true" aria-label="Open My Staff">
+            <span class="home-icon"><i class="business-icon" data-lucide="users-round" aria-hidden="true"></i></span>
+            <span class="home-action-copy"><strong>My Staff</strong><small>Manage staff, tasks & performance</small></span>
             <span class="quick-status" aria-hidden="true"></span>
           </button>
           <button class="home-action" data-home-tab="production" data-ribbon="true" aria-label="Open Production">
