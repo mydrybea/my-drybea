@@ -4770,15 +4770,12 @@ async function submitAdvanceRequest() {
   const amount = Number($('advAmount').value) || 0;
   const reason = $('advReason').value.trim();
   if (amount <= 0) { alert('Enter an amount greater than 0!'); return; }
-  // Open the WhatsApp tab SYNCHRONOUSLY, inside the click handler, before any
-  // "await". Browsers block window.open() once an async gap has passed since
-  // the user's click, so opening it now (and pointing it at the wa.me link
-  // once we have the owner's number) is what actually makes the popup work
-  // instead of silently doing nothing.
-  const waWindow = window.open('', '_blank');
   const btn = document.querySelector('button[onclick="submitAdvanceRequest()"]');
   if (btn) { btn.disabled = true; btn.dataset.originalText = btn.textContent; btn.textContent = 'Sending…'; }
   try {
+    // Saving the request is the priority — nothing here should ever be able
+    // to silently kill this before the insert happens (see notifyOwnerWhatsApp
+    // for why the WhatsApp step is fully separate and non-blocking).
     const { error } = await supabase.from('advance_requests').insert({
       owner_id: businessId,
       staff_id: currentUser.id,
@@ -4790,54 +4787,49 @@ async function submitAdvanceRequest() {
     $('advAmount').value = 0;
     $('advReason').value = '';
     updateStatus('✅ Advance request sent');
-    await notifyOwnerWhatsApp(amount, reason, waWindow);
     await loadMyAdvanceRequests();
+    await notifyOwnerWhatsApp(amount, reason);
   } catch (e) {
     console.error('Advance request error:', e);
-    try { waWindow && waWindow.close(); } catch (_e) {}
     alert('❌ Could not send request: ' + e.message);
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = btn.dataset.originalText || 'Request & Notify Owner'; }
   }
 }
 
-async function notifyOwnerWhatsApp(amount, reason, waWindow) {
+async function notifyOwnerWhatsApp(amount, reason) {
   try {
     const { data, error } = await supabase.from('profiles').select('whatsapp_number,display_name').eq('id', businessId).maybeSingle();
     if (error) throw error;
     if (!data || !data.whatsapp_number) {
-      try { waWindow && waWindow.close(); } catch (_e) {}
-      alert('⚠️ Request saved, but the owner has not set a WhatsApp number yet in their Profile, so no WhatsApp message was sent.');
+      updateStatus('⚠️ Request saved — the owner has not set a WhatsApp number yet in their Profile.');
       return;
     }
     const staffName = (userProfile && userProfile.display_name) || 'A staff member';
     const msg = `💸 Advance Request\nFrom: ${staffName}\nAmount: Rs. ${amount}\nReason: ${reason || '-'}\n\nPlease open the app to approve or reject.`;
     const digits = String(data.whatsapp_number).replace(/[^0-9]/g, '');
     const waLink = 'https://wa.me/' + digits + '?text=' + encodeURIComponent(msg);
-    if (waWindow && !waWindow.closed) {
-      // Reuse the tab we already opened synchronously on click — this is the
-      // one guaranteed not to be blocked by the browser's popup blocker.
-      waWindow.location.href = waLink;
-    } else {
-      // Fallback: the pre-opened tab got closed/blocked for some reason.
-      // Try opening again, and if that also fails, hand the user a manual link.
-      const retry = window.open(waLink, '_blank');
-      if (!retry) {
-        updateStatus('⚠️ Popup blocked — tap to message the owner on WhatsApp');
-        const holder = $('advReason')?.closest('.card') || document.body;
-        const link = document.createElement('a');
-        link.href = waLink; link.target = '_blank'; link.rel = 'noopener';
-        link.className = 'btn btn-primary'; link.style.marginTop = '10px'; link.id = 'advWaFallbackLink';
-        link.innerHTML = '📲 Tap to notify owner on WhatsApp';
-        document.getElementById('advWaFallbackLink')?.remove();
-        holder.appendChild(link);
-      }
-    }
+    // Best-effort auto-open. Wrapped in try/catch because some mobile
+    // in-app browsers (WhatsApp/Instagram/FB webviews) throw instead of
+    // just returning null when popups are blocked — a throw here must
+    // NEVER be able to affect the request that was already saved above.
+    try { window.open(waLink, '_blank'); } catch (_e) { /* ignored, fallback button below always shown */ }
+    showAdvanceWaFallback(waLink);
   } catch (e) {
     console.error('WhatsApp notify error:', e);
-    try { waWindow && waWindow.close(); } catch (_e) {}
-    updateStatus('⚠️ Request saved, but the WhatsApp notification could not be sent');
+    updateStatus('⚠️ Request saved, but the WhatsApp message could not be prepared.');
   }
+}
+
+function showAdvanceWaFallback(waLink) {
+  const holder = $('advReason')?.closest('.card');
+  if (!holder) return;
+  document.getElementById('advWaFallbackLink')?.remove();
+  const link = document.createElement('a');
+  link.href = waLink; link.target = '_blank'; link.rel = 'noopener';
+  link.className = 'btn btn-primary'; link.style.marginTop = '10px'; link.id = 'advWaFallbackLink';
+  link.innerHTML = '📲 Tap to notify owner on WhatsApp';
+  holder.appendChild(link);
 }
 
 async function loadMyAdvanceRequests() {
