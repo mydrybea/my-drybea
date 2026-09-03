@@ -2494,6 +2494,32 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
 .an-detail-row:last-child{border-bottom:0;}
 .an-detail-row .an-k{color:var(--text-muted);flex:0 0 auto;}
 .an-detail-row .an-v{color:var(--text-main);font-weight:700;text-align:right;}
+
+/* ===== NOTIFICATION CENTER (header bell + list) ===== */
+#notifyCenterBtn{position:relative;}
+.notify-badge{
+  position:absolute; top:-3px; right:-3px; min-width:16px; height:16px; padding:0 4px;
+  border-radius:999px; background:var(--bad); color:#fff; font-size:.6rem; font-weight:800;
+  display:none; align-items:center; justify-content:center; line-height:1;
+  box-shadow:0 0 0 2px var(--bg-card);
+}
+.notify-badge.show{display:flex;}
+.nc-list{display:flex;flex-direction:column;gap:8px;max-height:60vh;overflow-y:auto;margin-top:4px;}
+.nc-item{
+  display:flex; gap:10px; align-items:flex-start; text-align:left; width:100%;
+  padding:11px 12px; border-radius:var(--radius-sm); border:1px solid var(--border);
+  background:var(--bg-secondary); cursor:pointer; transition:all var(--transition);
+}
+.nc-item:hover{border-color:var(--border-strong); background:var(--bg-card-hover);}
+.nc-item.unread{border-color:rgba(16,185,129,0.4); background:var(--green-subtle);}
+.nc-item .nc-icon{flex:0 0 auto;width:32px;height:32px;border-radius:9px;display:grid;place-items:center;background:var(--green-subtle);color:var(--green);}
+.nc-item.an-warn .nc-icon{background:var(--warn-bg);color:var(--warn);}
+.nc-item .nc-body{min-width:0;flex:1;}
+.nc-item .nc-title{font-weight:700;font-size:.82rem;color:var(--text-main);}
+.nc-item .nc-msg{font-size:.74rem;color:var(--text-secondary);margin-top:2px;line-height:1.4;}
+.nc-item .nc-time{font-size:.65rem;color:var(--text-muted);margin-top:4px;}
+.nc-empty{text-align:center;padding:30px 10px;color:var(--text-muted);font-size:.85rem;}
+.nc-empty i{display:block;margin:0 auto 10px;width:32px;height:32px;opacity:.5;}
 </style>
 
 <style id="world-class-quick-actions-css">
@@ -2576,6 +2602,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
   </span>
   <button id="syncRefresh" class="sync-refresh" type="button" aria-label="Sync now" title="Sync now">↻</button>
 </div>
+<button class="icon-btn" id="notifyCenterBtn" onclick="openNotifyCenter()" aria-label="Notifications" title="Notifications — check latest updates" data-ribbon="true"><i class="business-icon" data-lucide="bell-ring" aria-hidden="true"></i><span class="notify-badge" id="notifyBadge">0</span></button>
 <button class="icon-btn" id="notifySoundToggle" onclick="toggleNotifySound()" aria-label="Toggle notification sound" title="Notification sound" data-ribbon="true"><i class="business-icon" data-lucide="bell" aria-hidden="true"></i></button>
 <button class="icon-btn" id="themeToggle" onclick="toggleTheme()" aria-label="Toggle theme" data-ribbon="true"><i class="business-icon" data-lucide="moon" aria-hidden="true"></i></button>
       <button class="icon-btn" onclick="openQR()" aria-label="QR Code" data-ribbon="true"><i class="business-icon" data-lucide="qr-code" aria-hidden="true"></i></button>
@@ -3927,6 +3954,18 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
 
 <!-- Invoice Print Area -->
 <div class="invoice-print" id="invoicePrintArea"></div>
+
+<!-- Notification Center Modal -->
+<div class="modal-backdrop" id="notifyCenterModal">
+  <div class="modal">
+    <h3><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="bell-ring" aria-hidden="true"></i></span><span>Notifications</span></h3>
+    <p class="pro-subtitle green">Latest updates for your business, newest first.</p>
+    <div class="nc-list" id="notifyCenterList"></div>
+    <div class="btn-row">
+      <button class="btn" onclick="closeModal('notifyCenterModal')" style="flex:1;">Close</button>
+    </div>
+  </div>
+</div>
 
 <!-- Notification Detail Modal -->
 <div class="modal-backdrop" id="appNotifyDetailModal">
@@ -6448,9 +6487,17 @@ function renderOrders() {
   }
 
   const claims = window.staffCommissionClaims || [];
+  // Precompute lookups once instead of calling orders.indexOf()/claims.find() per row
+  // (that was O(n²) and got noticeably slow once order history grew).
+  const orderIndexById = new Map(orders.map((o, i) => [String(o.id), i]));
+  const claimsByOrderKey = new Map();
+  claims.forEach(c => {
+    if (userRole !== 'owner' && String(c.staff_id) !== String(currentUser?.id)) return;
+    claimsByOrderKey.set(String(c.order_ref_no || '') + '|' + String(c.order_id), c);
+  });
   tbody.innerHTML = visibleOrders.map((order) => {
-    const index = orders.indexOf(order);
-    const claim = claims.find(c => String(c.order_ref_no || '') === String(order.orderRefNo || '') && String(c.order_id) === String(order.id) && (userRole === 'owner' || String(c.staff_id) === String(currentUser?.id)));
+    const index = orderIndexById.get(String(order.id));
+    const claim = claimsByOrderKey.get(String(order.orderRefNo || '') + '|' + String(order.id));
     const commissionCell = claim?.status === 'approved'
       ? `<div style="font-weight:900;color:#087b3e;">+ ${fmt(Number(claim.commission_amount)||0)}</div><small style="color:#087b3e;">12% Verified</small>`
       : (claim?.status === 'pending' ? '<small style="color:#a27b1b;font-weight:800;">Pending verification</small>' : '<small style="opacity:.45;">—</small>');
@@ -6542,8 +6589,9 @@ function renderDelivery() {
     tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;opacity:0.5;padding:20px;">No active deliveries.</td></tr>';
     return;
   }
+  const orderIndexById = new Map(orders.map((o, i) => [String(o.id), i]));
   tbody.innerHTML = activeOrders.map(order => {
-    const realIndex = orders.indexOf(order);
+    const realIndex = orderIndexById.get(String(order.id));
     return `<tr>
       <td><strong>${order.id}</strong></td>
       <td>${getCustomerName(order.customerId)}</td>
@@ -7688,6 +7736,7 @@ function showAppNotification(title, message, type, opts){
   if(!holder) return;
   const nid = 'an' + (++appNotifySeq);
   appNotifyLog[nid] = { title, message, type, details: opts.details || [], tab: opts.tab || null, time: opts.time || new Date() };
+  updateNotifyBadge();
 
   const card = document.createElement('div');
   card.className = 'app-notify' + (type === 'warn' ? ' an-warn' : '');
@@ -7731,6 +7780,54 @@ function openAppNotifyDetail(nid){
   }
   const modal = $('appNotifyDetailModal');
   if(modal) modal.classList.add('active');
+}
+
+// ---- Notification Center: a persistent, always-checkable list of every
+// notification received this session (the toasts above still auto-vanish
+// after 8s, so this is the "did I miss anything?" view behind the bell). ----
+function notifyCenterLastSeenKey(){ return 'mydrybea_notifycenter_lastseen_' + (currentUser?.id || 'anon'); }
+function getNotifyCenterLastSeen(){ try{ return localStorage.getItem(notifyCenterLastSeenKey()); }catch(e){ return null; } }
+function bumpNotifyCenterLastSeen(){ try{ localStorage.setItem(notifyCenterLastSeenKey(), new Date().toISOString()); }catch(e){} }
+
+function updateNotifyBadge(){
+  const badge = $('notifyBadge');
+  if(!badge) return;
+  const lastSeen = getNotifyCenterLastSeen();
+  const entries = Object.values(appNotifyLog);
+  const unread = lastSeen ? entries.filter(e => new Date(e.time).toISOString() > lastSeen).length : entries.length;
+  if(unread > 0){
+    badge.textContent = unread > 99 ? '99+' : String(unread);
+    badge.classList.add('show');
+  } else {
+    badge.classList.remove('show');
+  }
+}
+
+function openNotifyCenter(){
+  const list = $('notifyCenterList');
+  if(!list) return;
+  const lastSeen = getNotifyCenterLastSeen();
+  const entries = Object.entries(appNotifyLog).sort((a,b) => new Date(b[1].time) - new Date(a[1].time));
+  if(entries.length === 0){
+    list.innerHTML = `<div class="nc-empty"><i class="business-icon" data-lucide="bell-off" aria-hidden="true"></i>No notifications yet. New updates will show up here the moment they happen.</div>`;
+  } else {
+    list.innerHTML = entries.map(([nid, entry]) => {
+      const unread = lastSeen ? new Date(entry.time).toISOString() > lastSeen : true;
+      return `<button type="button" class="nc-item${entry.type==='warn'?' an-warn':''}${unread?' unread':''}" onclick="closeModal('notifyCenterModal');openAppNotifyDetail('${nid}')">
+        <span class="nc-icon"><i class="business-icon" data-lucide="${entry.type==='warn'?'alert-circle':'bell-ring'}" aria-hidden="true"></i></span>
+        <span class="nc-body">
+          <span class="nc-title">${escapeHtmlSafe(entry.title)}</span>
+          <span class="nc-msg">${escapeHtmlSafe(entry.message||'')}</span>
+          <span class="nc-time">${new Date(entry.time).toLocaleString()}</span>
+        </span>
+      </button>`;
+    }).join('');
+  }
+  if(window.lucide) lucide.createIcons({attrs:{'stroke-width':1.9,'stroke-linecap':'round','stroke-linejoin':'round'}});
+  $('notifyCenterModal').classList.add('active');
+  // Opening the center counts as "seen" — clear the badge.
+  bumpNotifyCenterLastSeen();
+  updateNotifyBadge();
 }
 
 // ---- Shared notification builders (used by BOTH the live realtime handlers
