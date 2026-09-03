@@ -2403,6 +2403,11 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
 .app-notify .an-msg{font-size:.74rem;color:var(--text-secondary);margin-top:2px;line-height:1.4;}
 .app-notify .an-close{flex:0 0 auto;background:none;border:0;color:var(--text-muted);font-size:1rem;line-height:1;padding:2px 4px;cursor:pointer;}
 #notifySoundToggle.muted{opacity:.5;}
+.an-detail-body{margin-top:10px;display:flex;flex-direction:column;gap:0;}
+.an-detail-row{display:flex;justify-content:space-between;gap:14px;padding:9px 0;border-bottom:1px solid var(--border);font-size:.82rem;}
+.an-detail-row:last-child{border-bottom:0;}
+.an-detail-row .an-k{color:var(--text-muted);flex:0 0 auto;}
+.an-detail-row .an-v{color:var(--text-main);font-weight:700;text-align:right;}
 </style>
 
 <style id="world-class-quick-actions-css">
@@ -3836,6 +3841,19 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
 
 <!-- Invoice Print Area -->
 <div class="invoice-print" id="invoicePrintArea"></div>
+
+<!-- Notification Detail Modal -->
+<div class="modal-backdrop" id="appNotifyDetailModal">
+  <div class="modal">
+    <h3 id="appNotifyDetailTitle"><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="bell-ring" aria-hidden="true"></i></span><span>Notification</span></h3>
+    <p class="pro-subtitle green" id="appNotifyDetailTime"></p>
+    <div id="appNotifyDetailBody" class="an-detail-body"></div>
+    <div style="display:flex;gap:8px;margin-top:14px;">
+      <button class="btn" onclick="closeModal('appNotifyDetailModal')" style="flex:1;">Close</button>
+      <button class="btn btn-primary" id="appNotifyDetailGoBtn" style="flex:1;display:none;">Open</button>
+    </div>
+  </div>
+</div>
 
 <!-- QR Modal -->
 <div class="modal-backdrop" id="qrModal">
@@ -7437,6 +7455,20 @@ function toggleNotifySound(){
 // Short two-tone chime via Web Audio API — no external audio file needed,
 // so it always works offline and inside the installed PWA.
 let notifyAudioCtx = null;
+// Browsers block audio.start() until a real user gesture has happened at
+// least once on the page. A realtime event isn't a gesture, so without this
+// unlock the very first sound (and sometimes every sound) would silently
+// fail. We create/resume the context on the user's first tap anywhere in
+// the app, so by the time a real notification needs to play, it's unlocked.
+function unlockNotifyAudio(){
+  try{
+    notifyAudioCtx = notifyAudioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    if(notifyAudioCtx.state === 'suspended') notifyAudioCtx.resume();
+  }catch(e){}
+}
+document.addEventListener('click', unlockNotifyAudio, { once:true, passive:true });
+document.addEventListener('touchstart', unlockNotifyAudio, { once:true, passive:true });
+
 function playNotifySound(){
   if(!notifySoundOn) return;
   try{
@@ -7456,21 +7488,62 @@ function playNotifySound(){
   }catch(e){ console.warn('Notify sound error:', e); }
 }
 
-// title/message in-app banner. type 'info' | 'warn' controls the icon color.
-function showAppNotification(title, message, type){
+// Each toast keeps its full detail (key/value rows) + an optional tab to jump
+// to, so tapping it can open a proper detail view instead of just dismissing.
+let appNotifyLog = {};
+let appNotifySeq = 0;
+
+// title/message in-app toast. type: 'info' | 'warn'.
+// opts: { details:[{label,value}], tab:'advance', time:Date }
+function showAppNotification(title, message, type, opts){
+  opts = opts || {};
   const holder = $('appNotifyContainer');
   if(!holder) return;
+  const nid = 'an' + (++appNotifySeq);
+  appNotifyLog[nid] = { title, message, type, details: opts.details || [], tab: opts.tab || null, time: opts.time || new Date() };
+
   const card = document.createElement('div');
   card.className = 'app-notify' + (type === 'warn' ? ' an-warn' : '');
+  card.dataset.nid = nid;
   card.innerHTML = `<div class="an-icon"><i class="business-icon" data-lucide="${type==='warn'?'alert-circle':'bell-ring'}" aria-hidden="true"></i></div>
     <div class="an-body"><div class="an-title">${escapeHtmlSafe(title)}</div><div class="an-msg">${escapeHtmlSafe(message||'')}</div></div>
     <button class="an-close" type="button" aria-label="Dismiss">✕</button>`;
   const remove = () => { card.classList.add('leaving'); setTimeout(()=>card.remove(), 220); };
-  card.addEventListener('click', remove);
+  card.querySelector('.an-close').addEventListener('click', (ev)=>{ ev.stopPropagation(); remove(); });
+  // Tapping the body of the card (not the ✕) opens the full detail view —
+  // the card itself stays until it dismisses on its own or via ✕.
+  card.addEventListener('click', () => openAppNotifyDetail(nid));
   holder.appendChild(card);
   if(window.lucide) lucide.createIcons();
   playNotifySound();
-  setTimeout(remove, 6000);
+  const autoTimer = setTimeout(remove, 8000);
+  card.addEventListener('click', () => clearTimeout(autoTimer), { once:true });
+}
+
+function openAppNotifyDetail(nid){
+  const entry = appNotifyLog[nid];
+  if(!entry) return;
+  const titleEl = $('appNotifyDetailTitle');
+  if(titleEl) titleEl.querySelector('span:last-child').textContent = entry.title.replace(/^[^\w]+/, '').trim() || entry.title;
+  const timeEl = $('appNotifyDetailTime');
+  if(timeEl) timeEl.textContent = entry.time.toLocaleString();
+  const body = $('appNotifyDetailBody');
+  if(body){
+    const rows = (entry.details && entry.details.length) ? entry.details : [{label:'Details', value: entry.message || '-'}];
+    body.innerHTML = rows.map(r => `<div class="an-detail-row"><span class="an-k">${escapeHtmlSafe(r.label)}</span><span class="an-v">${escapeHtmlSafe(r.value)}</span></div>`).join('');
+  }
+  const goBtn = $('appNotifyDetailGoBtn');
+  if(goBtn){
+    if(entry.tab){
+      goBtn.style.display = '';
+      goBtn.onclick = () => { closeModal('appNotifyDetailModal'); activateAppTab(entry.tab); };
+    } else {
+      goBtn.style.display = 'none';
+      goBtn.onclick = null;
+    }
+  }
+  const modal = $('appNotifyDetailModal');
+  if(modal) modal.classList.add('active');
 }
 
 let appNotifyChannel = null;
@@ -7484,45 +7557,122 @@ function startAppNotifyRealtime(){
     if(userRole === 'owner'){
       // New advance request from a staff member.
       ch.on('postgres_changes',{event:'INSERT',schema:'public',table:'advance_requests',filter:`owner_id=eq.${currentUser.id}`},(p)=>{
-        const r=p.new||{}; showAppNotification('💸 New advance request', `${r.staff_name||'A staff member'} requested Rs. ${fmt(r.amount)}`, 'warn');
+        const r=p.new||{};
+        showAppNotification('💸 New advance request', `${r.staff_name||'A staff member'} requested Rs. ${fmt(r.amount)}`, 'warn', {
+          tab:'my-staff',
+          details:[
+            {label:'Staff', value: r.staff_name || '-'},
+            {label:'Amount', value: 'Rs. '+fmt(r.amount)},
+            {label:'Reason', value: r.reason || '-'},
+            {label:'Status', value: r.status || 'pending'},
+            {label:'Requested at', value: r.requested_at ? new Date(r.requested_at).toLocaleString() : '-'}
+          ]
+        });
       });
       // Staff attendance: check-in, check-out or work update.
       ch.on('postgres_changes',{event:'INSERT',schema:'public',table:'attendance',filter:`owner_id=eq.${currentUser.id}`},(p)=>{
-        const r=p.new||{}; showAppNotification('🕒 '+(r.staff_name||'A staff member')+' checked in', 'Day started'+(r.work_note?' · left a work update':''));
+        const r=p.new||{};
+        showAppNotification('🕒 '+(r.staff_name||'A staff member')+' checked in', 'Day started'+(r.work_note?' · left a work update':''), 'info', {
+          tab:'my-staff',
+          details:[
+            {label:'Staff', value: r.staff_name || '-'},
+            {label:'Date', value: r.work_date || '-'},
+            {label:'Check-in', value: r.check_in ? new Date(r.check_in).toLocaleTimeString() : '-'},
+            {label:'Work note', value: r.work_note || '-'}
+          ]
+        });
       });
       ch.on('postgres_changes',{event:'UPDATE',schema:'public',table:'attendance',filter:`owner_id=eq.${currentUser.id}`},(p)=>{
         const r=p.new||{}, o=p.old||{};
-        if(r.check_out && !o.check_out) showAppNotification('🕒 '+(r.staff_name||'A staff member')+' checked out', 'Day ended');
-        else if(r.work_note && r.work_note!==o.work_note) showAppNotification('📝 Work update', (r.staff_name||'A staff member')+' posted a work update');
+        const details=[
+          {label:'Staff', value: r.staff_name || '-'},
+          {label:'Date', value: r.work_date || '-'},
+          {label:'Check-in', value: r.check_in ? new Date(r.check_in).toLocaleTimeString() : '-'},
+          {label:'Check-out', value: r.check_out ? new Date(r.check_out).toLocaleTimeString() : '-'},
+          {label:'Work note', value: r.work_note || '-'}
+        ];
+        if(r.check_out && !o.check_out) showAppNotification('🕒 '+(r.staff_name||'A staff member')+' checked out', 'Day ended', 'info', {tab:'my-staff', details});
+        else if(r.work_note && r.work_note!==o.work_note) showAppNotification('📝 Work update', (r.staff_name||'A staff member')+' posted a work update', 'info', {tab:'my-staff', details});
       });
       // Attendance correction requests.
       ch.on('postgres_changes',{event:'INSERT',schema:'public',table:'attendance_corrections',filter:`owner_id=eq.${currentUser.id}`},(p)=>{
-        const r=p.new||{}; showAppNotification('🚩 Correction request', `${r.staff_name||'A staff member'} asked to correct ${r.field==='check_in'?'check-in':'check-out'} time`, 'warn');
+        const r=p.new||{};
+        showAppNotification('🚩 Correction request', `${r.staff_name||'A staff member'} asked to correct ${r.field==='check_in'?'check-in':'check-out'} time`, 'warn', {
+          tab:'my-staff',
+          details:[
+            {label:'Staff', value: r.staff_name || '-'},
+            {label:'Date', value: r.work_date || '-'},
+            {label:'Field', value: r.field==='check_in'?'Check-in':'Check-out'},
+            {label:'Requested time', value: r.requested_time ? new Date(r.requested_time).toLocaleString() : '-'},
+            {label:'Reason', value: r.reason || '-'}
+          ]
+        });
       });
       // New sale pending owner verification (commission claim).
       ch.on('postgres_changes',{event:'INSERT',schema:'public',table:'staff_commission_claims',filter:`owner_id=eq.${currentUser.id}`},(p)=>{
-        const r=p.new||{}; showAppNotification('🧾 New sale to verify', `${r.customer_name||'A sale'} · Rs. ${fmt(Number(r.order_total)||0)} awaiting verification`);
+        const r=p.new||{};
+        showAppNotification('🧾 New sale to verify', `${r.customer_name||'A sale'} · Rs. ${fmt(Number(r.order_total)||0)} awaiting verification`, 'info', {
+          tab:'my-staff',
+          details:[
+            {label:'Staff ref', value: r.staff_reference || '-'},
+            {label:'Order', value: r.order_ref_no || '-'},
+            {label:'Customer', value: r.customer_name || '-'},
+            {label:'Sale total', value: 'Rs. '+fmt(Number(r.order_total)||0)},
+            {label:'Commission (12%)', value: 'Rs. '+fmt(Number(r.order_total)*0.12||0)}
+          ]
+        });
       });
     } else if(userRole === 'staff'){
       // Your advance request was approved/rejected.
       ch.on('postgres_changes',{event:'UPDATE',schema:'public',table:'advance_requests',filter:`staff_id=eq.${currentUser.id}`},(p)=>{
         const r=p.new||{}, o=p.old||{};
-        if(r.status!==o.status && r.status!=='pending') showAppNotification(r.status==='approved'?'✅ Advance approved':'❌ Advance rejected', `Rs. ${fmt(r.amount)} request was ${r.status}`);
+        if(r.status!==o.status && r.status!=='pending') showAppNotification(r.status==='approved'?'✅ Advance approved':'❌ Advance rejected', `Rs. ${fmt(r.amount)} request was ${r.status}`, r.status==='approved'?'info':'warn', {
+          tab:'advance',
+          details:[
+            {label:'Amount', value: 'Rs. '+fmt(r.amount)},
+            {label:'Reason', value: r.reason || '-'},
+            {label:'Status', value: r.status},
+            {label:'Decided at', value: r.decided_at ? new Date(r.decided_at).toLocaleString() : '-'}
+          ]
+        });
       });
       // New task assigned to you.
       ch.on('postgres_changes',{event:'INSERT',schema:'public',table:'staff_tasks',filter:`staff_id=eq.${currentUser.id}`},(p)=>{
-        const r=p.new||{}; showAppNotification('📋 New task assigned', r.title||'Check My Tasks');
+        const r=p.new||{};
+        showAppNotification('📋 New task assigned', r.title||'Check My Tasks', 'info', {
+          tab:'my-tasks',
+          details:[
+            {label:'Task', value: r.title || '-'},
+            {label:'Priority', value: r.priority || 'normal'},
+            {label:'Status', value: r.status || 'pending'}
+          ]
+        });
       });
       // New notice from the owner.
       if(businessId){
         ch.on('postgres_changes',{event:'INSERT',schema:'public',table:'staff_announcements',filter:`owner_id=eq.${businessId}`},(p)=>{
-          const r=p.new||{}; showAppNotification('📣 '+(r.title||'New notice'), r.message||'');
+          const r=p.new||{};
+          showAppNotification('📣 '+(r.title||'New notice'), r.message||'', 'info', {
+            tab:'announcements',
+            details:[
+              {label:'Title', value: r.title || '-'},
+              {label:'Message', value: r.message || '-'}
+            ]
+          });
         });
       }
       // Your attendance correction request was decided.
       ch.on('postgres_changes',{event:'UPDATE',schema:'public',table:'attendance_corrections',filter:`staff_id=eq.${currentUser.id}`},(p)=>{
         const r=p.new||{}, o=p.old||{};
-        if(r.status!==o.status && r.status!=='pending') showAppNotification(r.status==='approved'?'✅ Correction approved':'❌ Correction rejected', (r.field==='check_in'?'Check-in':'Check-out')+' time correction was '+r.status);
+        if(r.status!==o.status && r.status!=='pending') showAppNotification(r.status==='approved'?'✅ Correction approved':'❌ Correction rejected', (r.field==='check_in'?'Check-in':'Check-out')+' time correction was '+r.status, r.status==='approved'?'info':'warn', {
+          tab:'attendance',
+          details:[
+            {label:'Field', value: r.field==='check_in'?'Check-in':'Check-out'},
+            {label:'Requested time', value: r.requested_time ? new Date(r.requested_time).toLocaleString() : '-'},
+            {label:'Status', value: r.status},
+            {label:'Reason', value: r.reason || '-'}
+          ]
+        });
       });
     }
 
