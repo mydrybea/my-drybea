@@ -2494,7 +2494,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
     <button class="tab-btn" data-tab="my-salary" role="tab" aria-label="My Salary" data-staff-only><i class="business-icon" data-lucide="wallet-cards" aria-hidden="true"></i><span>My Salary</span></button>
     <button class="tab-btn" data-tab="orders" role="tab" aria-label="Orders"><i class="business-icon" data-lucide="shopping-bag" aria-hidden="true"></i><span>Orders</span></button>
     <button class="tab-btn" data-tab="income" role="tab" aria-label="Income" data-owner-only><i class="business-icon" data-lucide="trending-up" aria-hidden="true"></i><span>Income</span></button>
-    <button class="tab-btn" data-tab="expenses" role="tab" aria-label="Daily Expenses" data-staff-only><i class="business-icon" data-lucide="receipt" aria-hidden="true"></i><span>Daily Expenses</span></button>
+    <button class="tab-btn" data-tab="expenses" role="tab" aria-label="Daily Expenses"><i class="business-icon" data-lucide="receipt" aria-hidden="true"></i><span>Daily Expenses</span></button>
     <button class="tab-btn" data-tab="daily-pay" role="tab" aria-label="Daily Pay" data-staff-only><i class="business-icon" data-lucide="calendar-days" aria-hidden="true"></i><span>Daily Pay</span></button>
     <button class="tab-btn" data-tab="work-update" role="tab" aria-label="Work Update" data-staff-only><i class="business-icon" data-lucide="notebook-pen" aria-hidden="true"></i><span>Work Update</span></button>
     <button class="tab-btn" data-tab="attendance" role="tab" aria-label="Attendance" data-staff-only><i class="business-icon" data-lucide="clock-3" aria-hidden="true"></i><span>Attendance</span></button>
@@ -3883,7 +3883,7 @@ function applyRoleUI() {
   });
 
   // Staff workspace: operational tabs only; owner-only tabs stay hidden.
-  const staffTabs = ['staff-home','orders','my-salary','profile'];
+  const staffTabs = ['staff-home','orders','my-salary','profile','expenses'];
   document.querySelectorAll('[data-staff-only]').forEach(el => {
     const tab = el.getAttribute('data-tab');
     el.style.display = (isStaff && staffTabs.includes(tab)) ? 'flex' : 'none';
@@ -3891,7 +3891,7 @@ function applyRoleUI() {
   document.querySelectorAll('.tab-btn').forEach(el => {
     const tab = el.getAttribute('data-tab');
     if (isStaff) {
-      const allowed = ['staff-home','orders','my-salary','profile'].includes(tab);
+      const allowed = ['staff-home','orders','my-salary','profile','expenses'].includes(tab);
       el.style.display = allowed ? 'flex' : 'none';
     }
   });
@@ -5387,6 +5387,7 @@ async function saveExpense() {
 }
 
 async function deleteExpense(id) {
+  if (userRole !== 'owner') { alert('Only the owner can delete expenses.'); return; }
   if (!confirm('Delete this expense?')) return;
   if (!currentUser) { alert('Please login first.'); return; }
   try {
@@ -5415,7 +5416,7 @@ function renderExpenses() {
         <td>${e.category}</td>
         <td>${e.description || '-'}</td>
         <td>${fmt(e.amount)}</td>
-        <td><button class="btn btn-sm btn-danger" onclick="deleteExpense('${e.id}')">🗑️</button></td>
+        <td>${userRole === 'owner' ? `<button class="btn btn-sm btn-danger" onclick="deleteExpense('${e.id}')">🗑️</button>` : '<span style="opacity:.4;">—</span>'}</td>
       </tr>
     `).join('');
   }
