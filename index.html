@@ -2765,12 +2765,6 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
       </div>
     </div>
     <div class="notice" style="margin-top:12px;"><i class="business-icon icon-inline" data-lucide="info"></i><strong> Commission rule:</strong> eligible non-cancelled sales attributed to your staff reference generate 12%. Refund/cancelled orders are excluded.</div>
-    <div class="card staff-upload-box" style="margin-top:12px;">
-      <h3 style="margin:0 0 6px;font-size:.95rem;"><i class="business-icon icon-inline" data-lucide="file-up"></i> Upload Referral Sales Data</h3>
-      <p class="staff-section-note">Staff-only upload. CSV/JSON files are stored as your referral-data submission for owner review.</p>
-      <input id="staffReferralUpload" type="file" accept=".csv,.json,text/csv,application/json" onchange="handleStaffReferralUpload(event)">
-      <div id="staffReferralUploadStatus" class="staff-section-note" style="margin-top:8px;">No upload yet.</div>
-    </div>
     <div class="card" style="margin-top:16px;">
       <h2><span class="pro-title-icon green"><i class="business-icon" data-lucide="receipt-text"></i></span><span>Commission History</span></h2>
       <div class="table-wrap" style="margin-top:10px;"><table><thead><tr><th>Date</th><th>Customer</th><th>Sale</th><th>12%</th><th>Status</th></tr></thead><tbody id="commissionHistoryBody"></tbody></table></div>
@@ -3047,12 +3041,6 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
         <div class="field"><label>Message</label><textarea id="ownerNoticeBody" style="width:100%;min-height:90px;resize:vertical;" placeholder="Write an important notice for staff..."></textarea></div>
         <button class="btn btn-primary" onclick="ownerPublishNotice()"><i class="business-icon icon-inline" data-lucide="megaphone"></i> Publish Notice</button>
       </div>
-    </div>
-
-    <div class="card" style="margin-top:16px;">
-      <h2><span class="pro-title-icon blue"><i class="business-icon" data-lucide="file-up"></i></span><span>Staff Referral Data Uploads</span></h2>
-      <p class="staff-section-note">Staff members can upload their referral-sales data; owner can review it here. This does not overwrite live order calculations.</p>
-      <div class="table-wrap"><table class="staff-table-compact"><thead><tr><th>Staff</th><th>Month</th><th>Uploaded Sales</th><th>Records</th><th>Uploaded At</th><th>Action</th></tr></thead><tbody id="ownerStaffUploadBody"><tr><td colspan="6" style="text-align:center;opacity:.5;padding:18px;">No staff uploads yet.</td></tr></tbody></table></div>
     </div>
 
     <div class="card" style="margin-top:16px;">
@@ -7227,18 +7215,10 @@ function refreshMyCommission(){
   const body=$('commissionHistoryBody');if(body)body.innerHTML=eligible.map(c=>`<tr><td>${new Date(c.verified_at||c.submitted_at||Date.now()).toLocaleDateString()}</td><td>${escapeHtmlSafe(c.customer_name||'Customer')}</td><td>${fmt(Number(c.order_total)||0)}</td><td>${fmt(Number(c.commission_amount)||0)}</td><td><span class="status-pill approved">approved</span></td></tr>`).join('')||'<tr><td colspan="5" style="text-align:center;opacity:.5;padding:14px;">No eligible sales this month.</td></tr>';
 }
 
-async function handleStaffReferralUpload(ev){
-  if(!currentUser||userRole!=='staff')return;const file=ev.target.files?.[0];if(!file)return;
-  const r=new FileReader();r.onload=async()=>{try{
-    const records=parseReferralUploadText(r.result,file.name);if(!records.length)throw new Error('No records found.');
-    const sales=records.reduce((sum,x)=>sum+(Number(x.sales??x.amount??x.total??0)||0),0),owner=effectiveOwnerId();
-    const notes=JSON.stringify({month:new Date().toISOString().slice(0,7),staff_name:userProfile?.display_name||currentUser.email||'Staff',record_count:records.length,sales,records});
-    const {data,error}=await supabase.from('staff_referral_uploads').insert({owner_id:owner,staff_id:currentUser.id,file_name:file.name,notes,status:'pending'}).select().single();
-    if(error)throw error;cacheStaffData({referralUploads:[data,...(getMyStaffDataState().referralUploads||[])]});
-    if($('staffReferralUploadStatus'))$('staffReferralUploadStatus').textContent=`Uploaded ${file.name} • ${records.length} records • ${fmt(sales)}`;
-    updateStatus('☁️ Referral data uploaded to Supabase');renderOwnerStaffUploads();
-  }catch(e){alert('❌ Upload failed: '+e.message);}finally{ev.target.value='';}};r.readAsText(file);
-}
+// REMOVED (anti-cheat): this used to let staff insert self-reported sales
+// numbers with zero verification against real orders. Real commission is
+// calculated only from verified orders -> staff_commission_claims -> owner
+// approval (see verifyCommissionClaim()), which cannot be faked this way.
 function parseReferralUploadText(text,name){if(/\.json$/i.test(name)){const x=JSON.parse(text);return Array.isArray(x)?x:(Array.isArray(x.records)?x.records:[]);}const lines=text.split(/\r?\n/).filter(x=>x.trim());if(lines.length<2)return [];const headers=lines[0].split(',').map(x=>x.trim().replace(/^"|"$/g,''));return lines.slice(1).map(line=>{const vals=line.split(',').map(x=>x.trim().replace(/^"|"$/g,''));const o={};headers.forEach((h,i)=>o[h]=vals[i]||'');return o;});}
 function getStaffReferralUploads(){const c=getMyStaffDataState().referralUploads;return Array.isArray(c)?c:[];}
 
@@ -7908,7 +7888,6 @@ window.ownerToggleTask = ownerToggleTask;
 window.ownerDeleteTask = ownerDeleteTask;
 window.ownerDeleteNotice = ownerDeleteNotice;
 window.editOwnerStaffPerformance = editOwnerStaffPerformance;
-window.handleStaffReferralUpload = handleStaffReferralUpload;
 
 })();
 </script>
