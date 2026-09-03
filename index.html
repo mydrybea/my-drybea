@@ -75,6 +75,18 @@ document.addEventListener('DOMContentLoaded', function () {
       }
     });
   }
+  // Reflect the saved notification-sound preference on the bell icon.
+  try {
+    var soundOn = localStorage.getItem('mydrybea_notify_sound_on') !== 'off';
+    var btn = document.getElementById('notifySoundToggle');
+    if (btn) {
+      btn.classList.toggle('muted', !soundOn);
+      btn.title = soundOn ? 'Notification sound: on' : 'Notification sound: off';
+      var icon = btn.querySelector('i');
+      if (icon) icon.setAttribute('data-lucide', soundOn ? 'bell' : 'bell-off');
+      if (window.lucide) lucide.createIcons();
+    }
+  } catch (e) {}
 });
 </script>
 
@@ -2376,6 +2388,21 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
 @media(max-width:800px){.staff-launch-grid{grid-template-columns:1fr 1fr}
 {.staff-suite-grid{grid-template-columns:1fr 1fr}.commission-grid{grid-template-columns:1fr 1fr}}
 @media(max-width:520px){.staff-suite-grid{grid-template-columns:1fr 1fr}.commission-grid{grid-template-columns:1fr}.staff-suite-hero{padding:14px}}
+
+/* ===== APP NOTIFICATIONS (TOAST + SOUND) ===== */
+.app-notify-container{position:fixed;top:calc(12px + env(safe-area-inset-top,0px));right:12px;left:12px;z-index:9999;display:flex;flex-direction:column;align-items:flex-end;gap:10px;pointer-events:none;}
+@media(min-width:600px){.app-notify-container{left:auto;width:360px;}}
+.app-notify{pointer-events:auto;width:100%;max-width:360px;background:linear-gradient(135deg,var(--bg-card) 0%,var(--bg-elevated) 100%);border:1.5px solid var(--border-strong);border-radius:14px;box-shadow:var(--shadow-lg);padding:12px 14px;display:flex;gap:10px;align-items:flex-start;cursor:pointer;animation:appNotifyIn .28s cubic-bezier(0.4,0,0.2,1);}
+.app-notify.leaving{animation:appNotifyOut .22s ease forwards;}
+@keyframes appNotifyIn{from{opacity:0;transform:translateY(-10px) scale(.97);}to{opacity:1;transform:translateY(0) scale(1);}}
+@keyframes appNotifyOut{to{opacity:0;transform:translateX(24px) scale(.96);}}
+.app-notify .an-icon{flex:0 0 auto;width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:var(--green-subtle);color:var(--green);font-size:1.05rem;}
+.app-notify.an-warn .an-icon{background:var(--warn-bg);color:var(--warn);}
+.app-notify .an-body{min-width:0;flex:1;}
+.app-notify .an-title{font-weight:800;font-size:.82rem;color:var(--text-main);}
+.app-notify .an-msg{font-size:.74rem;color:var(--text-secondary);margin-top:2px;line-height:1.4;}
+.app-notify .an-close{flex:0 0 auto;background:none;border:0;color:var(--text-muted);font-size:1rem;line-height:1;padding:2px 4px;cursor:pointer;}
+#notifySoundToggle.muted{opacity:.5;}
 </style>
 
 <style id="world-class-quick-actions-css">
@@ -2434,6 +2461,8 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
 </head>
 <body>
 
+<div id="appNotifyContainer" class="app-notify-container" aria-live="polite" aria-atomic="false"></div>
+
 <div class="app-container">
   <header class="header no-print app-shell-header">
     <div class="brand">
@@ -2456,6 +2485,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
   </span>
   <button id="syncRefresh" class="sync-refresh" type="button" aria-label="Sync now" title="Sync now">↻</button>
 </div>
+<button class="icon-btn" id="notifySoundToggle" onclick="toggleNotifySound()" aria-label="Toggle notification sound" title="Notification sound" data-ribbon="true"><i class="business-icon" data-lucide="bell" aria-hidden="true"></i></button>
 <button class="icon-btn" id="themeToggle" onclick="toggleTheme()" aria-label="Toggle theme" data-ribbon="true"><i class="business-icon" data-lucide="moon" aria-hidden="true"></i></button>
       <button class="icon-btn" onclick="openQR()" aria-label="QR Code" data-ribbon="true"><i class="business-icon" data-lucide="qr-code" aria-hidden="true"></i></button>
       <button class="icon-btn" id="authBtn" onclick="openAuthModal()" aria-label="Login" data-ribbon="true"><i class="business-icon" data-lucide="user-round" aria-hidden="true"></i></button>
@@ -4042,6 +4072,7 @@ async function loadUserProfile() {
   }
   applyRoleUI();
   await loadMyStaffData(false);
+  startAppNotifyRealtime();
 }
 
 function applyRoleUI() {
@@ -6722,6 +6753,7 @@ async function authAction() {
 async function logout() {
   stopCommissionRealtime();
   stopAdvanceRealtime();
+  stopAppNotifyRealtime();
   await supabase.auth.signOut();
   currentUser = null;
   userProfile = null;
@@ -7380,6 +7412,130 @@ function stopAdvanceRealtime(){
   advanceRealtimeChannel=null;
 }
 
+// ==================== APP NOTIFICATIONS (TOAST + SOUND) ====================
+// Fires whenever the OTHER party (owner <-> staff) changes data that concerns
+// you — new advance request, advance decided, attendance in/out, correction
+// requested/decided, new task, new notice, new sale pending verification.
+// Purely additive: never touches auth, Supabase writes, or existing calculations.
+const NOTIFY_SOUND_KEY = 'mydrybea_notify_sound_on';
+let notifySoundOn = true;
+try { notifySoundOn = localStorage.getItem(NOTIFY_SOUND_KEY) !== 'off'; } catch(e){}
+
+function toggleNotifySound(){
+  notifySoundOn = !notifySoundOn;
+  try{ localStorage.setItem(NOTIFY_SOUND_KEY, notifySoundOn ? 'on' : 'off'); }catch(e){}
+  const btn = $('notifySoundToggle');
+  if(btn){
+    btn.classList.toggle('muted', !notifySoundOn);
+    btn.title = notifySoundOn ? 'Notification sound: on' : 'Notification sound: off';
+    const icon = btn.querySelector('i');
+    if(icon){ icon.setAttribute('data-lucide', notifySoundOn ? 'bell' : 'bell-off'); if(window.lucide) lucide.createIcons(); }
+  }
+  if(notifySoundOn) playNotifySound();
+}
+
+// Short two-tone chime via Web Audio API — no external audio file needed,
+// so it always works offline and inside the installed PWA.
+let notifyAudioCtx = null;
+function playNotifySound(){
+  if(!notifySoundOn) return;
+  try{
+    notifyAudioCtx = notifyAudioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    if(notifyAudioCtx.state === 'suspended') notifyAudioCtx.resume();
+    const now = notifyAudioCtx.currentTime;
+    [[880,now,0.14],[1175,now+0.12,0.16]].forEach(([freq,start,dur])=>{
+      const osc = notifyAudioCtx.createOscillator();
+      const gain = notifyAudioCtx.createGain();
+      osc.type = 'sine'; osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(0.22, start + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + dur);
+      osc.connect(gain); gain.connect(notifyAudioCtx.destination);
+      osc.start(start); osc.stop(start + dur + 0.02);
+    });
+  }catch(e){ console.warn('Notify sound error:', e); }
+}
+
+// title/message in-app banner. type 'info' | 'warn' controls the icon color.
+function showAppNotification(title, message, type){
+  const holder = $('appNotifyContainer');
+  if(!holder) return;
+  const card = document.createElement('div');
+  card.className = 'app-notify' + (type === 'warn' ? ' an-warn' : '');
+  card.innerHTML = `<div class="an-icon"><i class="business-icon" data-lucide="${type==='warn'?'alert-circle':'bell-ring'}" aria-hidden="true"></i></div>
+    <div class="an-body"><div class="an-title">${escapeHtmlSafe(title)}</div><div class="an-msg">${escapeHtmlSafe(message||'')}</div></div>
+    <button class="an-close" type="button" aria-label="Dismiss">✕</button>`;
+  const remove = () => { card.classList.add('leaving'); setTimeout(()=>card.remove(), 220); };
+  card.addEventListener('click', remove);
+  holder.appendChild(card);
+  if(window.lucide) lucide.createIcons();
+  playNotifySound();
+  setTimeout(remove, 6000);
+}
+
+let appNotifyChannel = null;
+
+function startAppNotifyRealtime(){
+  if(!currentUser || !window.supabase) return;
+  try{
+    if(appNotifyChannel){ supabase.removeChannel(appNotifyChannel); appNotifyChannel=null; }
+    const ch = supabase.channel('mydrybea-app-notify-'+currentUser.id);
+
+    if(userRole === 'owner'){
+      // New advance request from a staff member.
+      ch.on('postgres_changes',{event:'INSERT',schema:'public',table:'advance_requests',filter:`owner_id=eq.${currentUser.id}`},(p)=>{
+        const r=p.new||{}; showAppNotification('💸 New advance request', `${r.staff_name||'A staff member'} requested Rs. ${fmt(r.amount)}`, 'warn');
+      });
+      // Staff attendance: check-in, check-out or work update.
+      ch.on('postgres_changes',{event:'INSERT',schema:'public',table:'attendance',filter:`owner_id=eq.${currentUser.id}`},(p)=>{
+        const r=p.new||{}; showAppNotification('🕒 '+(r.staff_name||'A staff member')+' checked in', 'Day started'+(r.work_note?' · left a work update':''));
+      });
+      ch.on('postgres_changes',{event:'UPDATE',schema:'public',table:'attendance',filter:`owner_id=eq.${currentUser.id}`},(p)=>{
+        const r=p.new||{}, o=p.old||{};
+        if(r.check_out && !o.check_out) showAppNotification('🕒 '+(r.staff_name||'A staff member')+' checked out', 'Day ended');
+        else if(r.work_note && r.work_note!==o.work_note) showAppNotification('📝 Work update', (r.staff_name||'A staff member')+' posted a work update');
+      });
+      // Attendance correction requests.
+      ch.on('postgres_changes',{event:'INSERT',schema:'public',table:'attendance_corrections',filter:`owner_id=eq.${currentUser.id}`},(p)=>{
+        const r=p.new||{}; showAppNotification('🚩 Correction request', `${r.staff_name||'A staff member'} asked to correct ${r.field==='check_in'?'check-in':'check-out'} time`, 'warn');
+      });
+      // New sale pending owner verification (commission claim).
+      ch.on('postgres_changes',{event:'INSERT',schema:'public',table:'staff_commission_claims',filter:`owner_id=eq.${currentUser.id}`},(p)=>{
+        const r=p.new||{}; showAppNotification('🧾 New sale to verify', `${r.customer_name||'A sale'} · Rs. ${fmt(Number(r.order_total)||0)} awaiting verification`);
+      });
+    } else if(userRole === 'staff'){
+      // Your advance request was approved/rejected.
+      ch.on('postgres_changes',{event:'UPDATE',schema:'public',table:'advance_requests',filter:`staff_id=eq.${currentUser.id}`},(p)=>{
+        const r=p.new||{}, o=p.old||{};
+        if(r.status!==o.status && r.status!=='pending') showAppNotification(r.status==='approved'?'✅ Advance approved':'❌ Advance rejected', `Rs. ${fmt(r.amount)} request was ${r.status}`);
+      });
+      // New task assigned to you.
+      ch.on('postgres_changes',{event:'INSERT',schema:'public',table:'staff_tasks',filter:`staff_id=eq.${currentUser.id}`},(p)=>{
+        const r=p.new||{}; showAppNotification('📋 New task assigned', r.title||'Check My Tasks');
+      });
+      // New notice from the owner.
+      if(businessId){
+        ch.on('postgres_changes',{event:'INSERT',schema:'public',table:'staff_announcements',filter:`owner_id=eq.${businessId}`},(p)=>{
+          const r=p.new||{}; showAppNotification('📣 '+(r.title||'New notice'), r.message||'');
+        });
+      }
+      // Your attendance correction request was decided.
+      ch.on('postgres_changes',{event:'UPDATE',schema:'public',table:'attendance_corrections',filter:`staff_id=eq.${currentUser.id}`},(p)=>{
+        const r=p.new||{}, o=p.old||{};
+        if(r.status!==o.status && r.status!=='pending') showAppNotification(r.status==='approved'?'✅ Correction approved':'❌ Correction rejected', (r.field==='check_in'?'Check-in':'Check-out')+' time correction was '+r.status);
+      });
+    }
+
+    ch.subscribe((status)=>{ if(status==='SUBSCRIBED') console.log('MY DRYBEA app-notify realtime: connected'); });
+    appNotifyChannel = ch;
+  }catch(e){ console.warn('App notify realtime setup:', e); }
+}
+
+function stopAppNotifyRealtime(){
+  try{ if(appNotifyChannel) supabase.removeChannel(appNotifyChannel); }catch(e){}
+  appNotifyChannel = null;
+}
+
 async function verifyCommissionClaim(id,status){
   if(userRole!=='owner') { alert('Only the owner can verify a commission claim.'); return; }
   if(!id || !['approved','rejected'].includes(status)) { alert('Invalid commission action.'); return; }
@@ -7888,6 +8044,10 @@ window.ownerToggleTask = ownerToggleTask;
 window.ownerDeleteTask = ownerDeleteTask;
 window.ownerDeleteNotice = ownerDeleteNotice;
 window.editOwnerStaffPerformance = editOwnerStaffPerformance;
+window.toggleNotifySound = toggleNotifySound;
+window.startAppNotifyRealtime = startAppNotifyRealtime;
+window.stopAppNotifyRealtime = stopAppNotifyRealtime;
+window.showAppNotification = showAppNotification;
 
 })();
 </script>
