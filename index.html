@@ -78,7 +78,7 @@ document.addEventListener('DOMContentLoaded', function () {
   // Reflect the saved notification-sound preference on the bell icon.
   try {
     var soundOn = localStorage.getItem('mydrybea_notify_sound_on') !== 'off';
-    var btn = document.getElementById('notifySoundToggle');
+    var btn = document.getElementById('notifyCenterSoundToggle');
     if (btn) {
       btn.classList.toggle('muted', !soundOn);
       btn.title = soundOn ? 'Notification sound: on' : 'Notification sound: off';
@@ -2488,7 +2488,6 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
 .app-notify .an-title{font-weight:800;font-size:.82rem;color:var(--text-main);}
 .app-notify .an-msg{font-size:.74rem;color:var(--text-secondary);margin-top:2px;line-height:1.4;}
 .app-notify .an-close{flex:0 0 auto;background:none;border:0;color:var(--text-muted);font-size:1rem;line-height:1;padding:2px 4px;cursor:pointer;}
-#notifySoundToggle.muted{opacity:.5;}
 .an-detail-body{margin-top:10px;display:flex;flex-direction:column;gap:0;}
 .an-detail-row{display:flex;justify-content:space-between;gap:14px;padding:9px 0;border-bottom:1px solid var(--border);font-size:.82rem;}
 .an-detail-row:last-child{border-bottom:0;}
@@ -2503,7 +2502,24 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
   display:none; align-items:center; justify-content:center; line-height:1;
   box-shadow:0 0 0 2px var(--bg-card);
 }
-.notify-badge.show{display:flex;}
+.notify-badge.show{display:flex;animation:notifyBadgePulse 1.8s ease-in-out infinite;}
+@keyframes notifyBadgePulse{0%,100%{box-shadow:0 0 0 2px var(--bg-card),0 0 0 0 rgba(248,113,113,0.55);}50%{box-shadow:0 0 0 2px var(--bg-card),0 0 0 5px rgba(248,113,113,0);}}
+
+/* ---- Notification Center header: title + sound toggle live together, one control ---- */
+.nc-header-row{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;}
+.nc-sound-toggle{
+  display:flex;align-items:center;gap:6px;flex:0 0 auto;
+  padding:7px 12px 7px 10px;border-radius:999px;
+  border:1.5px solid var(--border-strong);
+  background:var(--green-subtle);color:var(--green);
+  font-family:var(--font);font-size:.72rem;font-weight:700;letter-spacing:.02em;
+  cursor:pointer;transition:all var(--transition);
+}
+.nc-sound-toggle i{width:15px;height:15px;}
+.nc-sound-toggle:hover{background:var(--green-glow);border-color:var(--green);}
+.nc-sound-toggle.muted{background:transparent;color:var(--text-muted);border-color:var(--border);}
+.nc-sound-toggle.muted:hover{border-color:var(--border-strong);}
+@media(max-width:420px){.nc-sound-label{display:none;}.nc-sound-toggle{padding:7px 9px;}}
 .nc-list{display:flex;flex-direction:column;gap:8px;max-height:60vh;overflow-y:auto;margin-top:4px;}
 .nc-item{
   display:flex; gap:10px; align-items:flex-start; text-align:left; width:100%;
@@ -2603,7 +2619,6 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
   <button id="syncRefresh" class="sync-refresh" type="button" aria-label="Sync now" title="Sync now">↻</button>
 </div>
 <button class="icon-btn" id="notifyCenterBtn" onclick="openNotifyCenter()" aria-label="Notifications" title="Notifications — check latest updates" data-ribbon="true"><i class="business-icon" data-lucide="bell-ring" aria-hidden="true"></i><span class="notify-badge" id="notifyBadge">0</span></button>
-<button class="icon-btn" id="notifySoundToggle" onclick="toggleNotifySound()" aria-label="Toggle notification sound" title="Notification sound" data-ribbon="true"><i class="business-icon" data-lucide="bell" aria-hidden="true"></i></button>
 <button class="icon-btn" id="themeToggle" onclick="toggleTheme()" aria-label="Toggle theme" data-ribbon="true"><i class="business-icon" data-lucide="moon" aria-hidden="true"></i></button>
       <button class="icon-btn" onclick="openQR()" aria-label="QR Code" data-ribbon="true"><i class="business-icon" data-lucide="qr-code" aria-hidden="true"></i></button>
       <button class="icon-btn" id="authBtn" onclick="openAuthModal()" aria-label="Login" data-ribbon="true"><i class="business-icon" data-lucide="user-round" aria-hidden="true"></i></button>
@@ -3958,7 +3973,13 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
 <!-- Notification Center Modal -->
 <div class="modal-backdrop" id="notifyCenterModal">
   <div class="modal">
-    <h3><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="bell-ring" aria-hidden="true"></i></span><span>Notifications</span></h3>
+    <div class="nc-header-row">
+      <h3 style="margin:0;"><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="bell-ring" aria-hidden="true"></i></span><span>Notifications</span></h3>
+      <button type="button" class="nc-sound-toggle" id="notifyCenterSoundToggle" onclick="toggleNotifySound()" aria-label="Toggle notification sound" title="Notification sound">
+        <i class="business-icon" data-lucide="bell" aria-hidden="true"></i>
+        <span class="nc-sound-label">Sound</span>
+      </button>
+    </div>
     <p class="pro-subtitle green">Latest updates for your business, newest first.</p>
     <div class="nc-list" id="notifyCenterList"></div>
     <div class="btn-row">
@@ -7677,10 +7698,12 @@ try { notifySoundOn = localStorage.getItem(NOTIFY_SOUND_KEY) !== 'off'; } catch(
 function toggleNotifySound(){
   notifySoundOn = !notifySoundOn;
   try{ localStorage.setItem(NOTIFY_SOUND_KEY, notifySoundOn ? 'on' : 'off'); }catch(e){}
-  const btn = $('notifySoundToggle');
+  const btn = $('notifyCenterSoundToggle');
   if(btn){
     btn.classList.toggle('muted', !notifySoundOn);
     btn.title = notifySoundOn ? 'Notification sound: on' : 'Notification sound: off';
+    const label = btn.querySelector('.nc-sound-label');
+    if(label) label.textContent = notifySoundOn ? 'Sound' : 'Muted';
     const icon = btn.querySelector('i');
     if(icon){ icon.setAttribute('data-lucide', notifySoundOn ? 'bell' : 'bell-off'); if(window.lucide) lucide.createIcons(); }
   }
@@ -7806,6 +7829,18 @@ function updateNotifyBadge(){
 function openNotifyCenter(){
   const list = $('notifyCenterList');
   if(!list) return;
+  // Keep the sound toggle inside the panel in sync with the stored
+  // preference every time the panel opens (it may have changed in
+  // another tab/session since we last rendered it).
+  const soundBtn = $('notifyCenterSoundToggle');
+  if(soundBtn){
+    soundBtn.classList.toggle('muted', !notifySoundOn);
+    soundBtn.title = notifySoundOn ? 'Notification sound: on' : 'Notification sound: off';
+    const label = soundBtn.querySelector('.nc-sound-label');
+    if(label) label.textContent = notifySoundOn ? 'Sound' : 'Muted';
+    const icon = soundBtn.querySelector('i');
+    if(icon) icon.setAttribute('data-lucide', notifySoundOn ? 'bell' : 'bell-off');
+  }
   const lastSeen = getNotifyCenterLastSeen();
   const entries = Object.entries(appNotifyLog).sort((a,b) => new Date(b[1].time) - new Date(a[1].time));
   if(entries.length === 0){
