@@ -1614,7 +1614,7 @@ body::before{
 .home-action:nth-child(2) .home-action-copy::after{content:"PROFIT";color:#4775c7;background:#eef4ff;border-color:#d8e4fa;}
 .home-action:nth-child(3) .home-action-copy::after{content:"PLAN";color:#bd7414;background:#fff5e7;border-color:#f2dfc0;}
 .home-action:nth-child(4) .home-action-copy::after{content:"TRACK";color:#7653c7;background:#f3efff;border-color:#e2d9fa;}
-.home-action:nth-child(5) .home-action-copy::after{content:"CASH";color:#9a7622;background:#fff9e9;border-color:#eee1bb;}
+.home-action:nth-child(5) .home-action-copy::after{content:"TEAM";color:#9a7622;background:#fff9e9;border-color:#eee1bb;}
 .home-action:nth-child(6) .home-action-copy::after{content:"LOG";color:#58717a;background:#f0f4f5;border-color:#dfe7e9;}
 .home-action:nth-child(7) .home-action-copy::after{content:"SETUP";color:#168c83;background:#eaf8f6;border-color:#d0ece8;}
 .home-action:nth-child(8) .home-action-copy::after{content:"REPORT";color:#087d3e;background:#e9f8ef;border-color:#ccebd7;}
@@ -2689,17 +2689,14 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
     <div class="card" style="margin-top:16px;">
       <h2><span class="pro-title-icon gold"><i class="business-icon" data-lucide="zap"></i></span><span>Quick Actions</span></h2>
       <div class="staff-launch-grid world-staff-actions">
-        <button type="button" class="staff-launch primary" data-staff-action="sale" onclick="safeStaffQuickAction('orders')"><span class="launch-icon"><i class="business-icon" data-lucide="shopping-bag"></i></span><span><b>New Sale</b><small>Create / manage orders</small></span><em>SALE</em></button>
-        <button type="button" class="staff-launch" data-staff-action="expense" onclick="safeStaffQuickAction('expenses')"><span class="launch-icon"><i class="business-icon" data-lucide="receipt"></i></span><span><b>Daily Expenses</b><small>Record today's business cost</small></span><em>DAILY</em></button>
-        <button type="button" class="staff-launch gold" data-staff-action="salary" onclick="safeStaffQuickAction('my-salary')"><span class="launch-icon"><i class="business-icon" data-lucide="wallet-cards"></i></span><span><b>My Salary</b><small>Daily + monthly pay</small></span><em>PAYROLL</em></button>
-        <button type="button" class="staff-launch" onclick="safeStaffQuickAction('daily-pay')"><span class="launch-icon"><i class="business-icon" data-lucide="calendar-days"></i></span><span><b>Daily Pay</b><small>Day-by-day salary</small></span><em>DAILY</em></button>
+        <button type="button" class="staff-launch primary" onclick="safeStaffQuickAction('orders')"><span class="launch-icon"><i class="business-icon" data-lucide="plus-circle"></i></span><span><b>New Sale</b><small>Start a new order in one tap</small></span><em>CREATE</em></button>
+        <button type="button" class="staff-launch gold" onclick="safeStaffQuickAction('daily-pay')"><span class="launch-icon"><i class="business-icon" data-lucide="calendar-days"></i></span><span><b>Daily Pay</b><small>Day-by-day salary</small></span><em>DAILY</em></button>
         <button type="button" class="staff-launch" onclick="safeStaffQuickAction('advance')"><span class="launch-icon"><i class="business-icon" data-lucide="hand-coins"></i></span><span><b>Advance</b><small>Request salary advance</small></span><em>CASH</em></button>
+        <button type="button" class="staff-launch" onclick="safeStaffQuickAction('attendance')"><span class="launch-icon"><i class="business-icon" data-lucide="clock-3"></i></span><span><b>Attendance</b><small>Clock & work log</small></span><em>TIME</em></button>
         <button type="button" class="staff-launch" onclick="safeStaffQuickAction('my-tasks')"><span class="launch-icon"><i class="business-icon" data-lucide="list-checks"></i></span><span><b>My Tasks</b><small>Complete assigned work</small></span><em>TASKS</em></button>
         <button type="button" class="staff-launch" onclick="safeStaffQuickAction('work-update')"><span class="launch-icon"><i class="business-icon" data-lucide="notebook-pen"></i></span><span><b>Work Update</b><small>Send today's update</small></span><em>UPDATE</em></button>
         <button type="button" class="staff-launch" onclick="safeStaffQuickAction('my-commission')"><span class="launch-icon"><i class="business-icon" data-lucide="badge-percent"></i></span><span><b>Commission</b><small>Verified earnings only</small></span><em>VERIFY</em></button>
         <button type="button" class="staff-launch" onclick="safeStaffQuickAction('announcements')"><span class="launch-icon"><i class="business-icon" data-lucide="megaphone"></i></span><span><b>Notices</b><small>Read team updates</small></span><em>TEAM</em></button>
-        <button type="button" class="staff-launch" onclick="safeStaffQuickAction('attendance')"><span class="launch-icon"><i class="business-icon" data-lucide="clock-3"></i></span><span><b>Attendance</b><small>Clock & work log</small></span><em>TIME</em></button>
-        <button type="button" class="staff-launch" onclick="safeStaffQuickAction('profile')"><span class="launch-icon"><i class="business-icon" data-lucide="user-round"></i></span><span><b>Profile</b><small>Account & security</small></span><em>ACCOUNT</em></button>
       </div>
     </div>
     <div class="grid-2" style="margin-top:16px;">
@@ -3476,24 +3473,19 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
             <span class="home-action-copy"><strong>Costing</strong><small>Calculate price, cost & profit</small></span>
             <span class="quick-status" aria-hidden="true"></span>
           </button>
-          <button class="home-action" data-home-tab="my-staff" data-ribbon="true" aria-label="Open My Staff">
-            <span class="home-icon"><i class="business-icon" data-lucide="users-round" aria-hidden="true"></i></span>
-            <span class="home-action-copy"><strong>My Staff</strong><small>Manage staff, tasks & performance</small></span>
-            <span class="quick-status" aria-hidden="true"></span>
-          </button>
           <button class="home-action" data-home-tab="production" data-ribbon="true" aria-label="Open Production">
             <span class="home-icon"><i class="business-icon" data-lucide="factory" aria-hidden="true"></i></span>
             <span class="home-action-copy"><strong>Production</strong><small>Plan batches & production cost</small></span>
             <span class="quick-status" aria-hidden="true"></span>
           </button>
-          <button class="home-action" data-home-tab="orders" data-ribbon="true" aria-label="Open Orders">
-            <span class="home-icon"><i class="business-icon" data-lucide="shopping-bag" aria-hidden="true"></i></span>
-            <span class="home-action-copy"><strong>Orders</strong><small>Customers, delivery & order status</small></span>
-            <span class="quick-status" aria-hidden="true"></span>
-          </button>
           <button class="home-action gold" data-home-tab="expenses" data-ribbon="true" aria-label="Open Expenses">
             <span class="home-icon"><i class="business-icon" data-lucide="receipt" aria-hidden="true"></i></span>
             <span class="home-action-copy"><strong>Expenses</strong><small>Track monthly business costs</small></span>
+            <span class="quick-status" aria-hidden="true"></span>
+          </button>
+          <button class="home-action" data-home-tab="my-staff" data-ribbon="true" aria-label="Open My Staff">
+            <span class="home-icon"><i class="business-icon" data-lucide="users-round" aria-hidden="true"></i></span>
+            <span class="home-action-copy"><strong>My Staff</strong><small>Manage staff, tasks & performance</small></span>
             <span class="quick-status" aria-hidden="true"></span>
           </button>
           <button class="home-action" data-home-tab="history" data-ribbon="true" aria-label="Open History">
