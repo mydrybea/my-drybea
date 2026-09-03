@@ -2461,6 +2461,15 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
       .smart-salary-card .grid-3{grid-template-columns:1fr 1fr}
       #smartSalaryMonth{width:100%!important}
     }
+    /* ---- Advance request pending badge on MY STAFF nav tab ---- */
+    .tab-btn{ position:relative; }
+    .nav-badge{
+      position:absolute; top:2px; right:10px; min-width:16px; height:16px; padding:0 4px;
+      border-radius:999px; background:#ff4d4f; color:#fff; font-size:10px; font-weight:800;
+      line-height:16px; text-align:center; box-shadow:0 0 0 2px rgba(0,0,0,.35);
+      animation:navBadgePulse 1.6s ease-in-out infinite;
+    }
+    @keyframes navBadgePulse{ 0%,100%{ transform:scale(1);} 50%{ transform:scale(1.15);} }
     /* ---- Staff dashboard tabs: scrollable bottom nav when many tabs are visible ---- */
     .app-nav.staff-nav{ overflow-x:auto; flex-wrap:nowrap; -webkit-overflow-scrolling:touch; scrollbar-width:none; }
     .app-nav.staff-nav::-webkit-scrollbar{ display:none; }
@@ -2593,7 +2602,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
 
   <nav class="tabs no-print app-nav" role="tablist" aria-label="Main navigation">
     <button class="tab-btn active" data-tab="dashboard" role="tab" aria-label="Home" data-owner-only><i class="business-icon" data-lucide="house" aria-hidden="true"></i><span>Home</span></button>
-    <button class="tab-btn" data-tab="my-staff" role="tab" aria-label="My Staff" data-owner-only><i class="business-icon" data-lucide="users-round" aria-hidden="true"></i><span>My Staff</span></button>
+    <button class="tab-btn" data-tab="my-staff" role="tab" aria-label="My Staff" data-owner-only><i class="business-icon" data-lucide="users-round" aria-hidden="true"></i><span>My Staff</span><span id="myStaffAdvanceBadge" class="nav-badge" style="display:none;">0</span></button>
     <button class="tab-btn" data-tab="staff-home" role="tab" aria-label="Staff Home" data-staff-only><i class="business-icon" data-lucide="layout-dashboard" aria-hidden="true"></i><span>Staff Home</span></button>
     <button class="tab-btn" data-tab="my-salary" role="tab" aria-label="My Salary" data-staff-only><i class="business-icon" data-lucide="wallet-cards" aria-hidden="true"></i><span>My Salary</span></button>
     <button class="tab-btn" data-tab="orders" role="tab" aria-label="Orders"><i class="business-icon" data-lucide="shopping-bag" aria-hidden="true"></i><span>Orders</span></button>
@@ -4761,39 +4770,73 @@ async function submitAdvanceRequest() {
   const amount = Number($('advAmount').value) || 0;
   const reason = $('advReason').value.trim();
   if (amount <= 0) { alert('Enter an amount greater than 0!'); return; }
+  // Open the WhatsApp tab SYNCHRONOUSLY, inside the click handler, before any
+  // "await". Browsers block window.open() once an async gap has passed since
+  // the user's click, so opening it now (and pointing it at the wa.me link
+  // once we have the owner's number) is what actually makes the popup work
+  // instead of silently doing nothing.
+  const waWindow = window.open('', '_blank');
+  const btn = document.querySelector('button[onclick="submitAdvanceRequest()"]');
+  if (btn) { btn.disabled = true; btn.dataset.originalText = btn.textContent; btn.textContent = 'Sending…'; }
   try {
     const { error } = await supabase.from('advance_requests').insert({
       owner_id: businessId,
       staff_id: currentUser.id,
       staff_name: (userProfile && userProfile.display_name) || null,
-      amount, reason: reason || null, status: 'pending'
+      amount, reason: reason || null, status: 'pending',
+      requested_at: new Date().toISOString()
     });
     if (error) throw error;
     $('advAmount').value = 0;
     $('advReason').value = '';
     updateStatus('✅ Advance request sent');
-    await notifyOwnerWhatsApp(amount, reason);
+    await notifyOwnerWhatsApp(amount, reason, waWindow);
     await loadMyAdvanceRequests();
   } catch (e) {
     console.error('Advance request error:', e);
+    try { waWindow && waWindow.close(); } catch (_e) {}
     alert('❌ Could not send request: ' + e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = btn.dataset.originalText || 'Request & Notify Owner'; }
   }
 }
 
-async function notifyOwnerWhatsApp(amount, reason) {
+async function notifyOwnerWhatsApp(amount, reason, waWindow) {
   try {
     const { data, error } = await supabase.from('profiles').select('whatsapp_number,display_name').eq('id', businessId).maybeSingle();
     if (error) throw error;
     if (!data || !data.whatsapp_number) {
+      try { waWindow && waWindow.close(); } catch (_e) {}
       alert('⚠️ Request saved, but the owner has not set a WhatsApp number yet in their Profile, so no WhatsApp message was sent.');
       return;
     }
     const staffName = (userProfile && userProfile.display_name) || 'A staff member';
     const msg = `💸 Advance Request\nFrom: ${staffName}\nAmount: Rs. ${amount}\nReason: ${reason || '-'}\n\nPlease open the app to approve or reject.`;
     const digits = String(data.whatsapp_number).replace(/[^0-9]/g, '');
-    window.open('https://wa.me/' + digits + '?text=' + encodeURIComponent(msg), '_blank');
+    const waLink = 'https://wa.me/' + digits + '?text=' + encodeURIComponent(msg);
+    if (waWindow && !waWindow.closed) {
+      // Reuse the tab we already opened synchronously on click — this is the
+      // one guaranteed not to be blocked by the browser's popup blocker.
+      waWindow.location.href = waLink;
+    } else {
+      // Fallback: the pre-opened tab got closed/blocked for some reason.
+      // Try opening again, and if that also fails, hand the user a manual link.
+      const retry = window.open(waLink, '_blank');
+      if (!retry) {
+        updateStatus('⚠️ Popup blocked — tap to message the owner on WhatsApp');
+        const holder = $('advReason')?.closest('.card') || document.body;
+        const link = document.createElement('a');
+        link.href = waLink; link.target = '_blank'; link.rel = 'noopener';
+        link.className = 'btn btn-primary'; link.style.marginTop = '10px'; link.id = 'advWaFallbackLink';
+        link.innerHTML = '📲 Tap to notify owner on WhatsApp';
+        document.getElementById('advWaFallbackLink')?.remove();
+        holder.appendChild(link);
+      }
+    }
   } catch (e) {
     console.error('WhatsApp notify error:', e);
+    try { waWindow && waWindow.close(); } catch (_e) {}
+    updateStatus('⚠️ Request saved, but the WhatsApp notification could not be sent');
   }
 }
 
@@ -4837,6 +4880,7 @@ async function saveOwnerWhatsapp() {
 
 async function loadOwnerAdvanceRequests() {
   if (!currentUser || userRole !== 'owner') return;
+  if (!advanceRealtimeChannel) startAdvanceRealtime();
   try {
     const { data, error } = await supabase
       .from('advance_requests')
@@ -4852,20 +4896,37 @@ async function loadOwnerAdvanceRequests() {
 
 function renderOwnerAdvanceRequests(list) {
   const tbody = $('advOwnerBody');
-  if (!tbody) return;
-  tbody.innerHTML = list.length ? list.map(r => `
-    <tr>
-      <td>${r.staff_name || '(no name)'}</td>
-      <td>${(r.requested_at || '').slice(0, 10)}</td>
-      <td>${fmt(r.amount)}</td>
-      <td>${r.reason || '-'}</td>
-      <td><span class="status-pill ${r.status}">${r.status}</span></td>
-      <td>${r.status === 'pending' ? `
-        <button class="btn btn-sm btn-primary" onclick="decideAdvance('${r.id}','approved')">✅</button>
-        <button class="btn btn-sm btn-danger" onclick="decideAdvance('${r.id}','rejected')">❌</button>
-      ` : '-'}</td>
-    </tr>
-  `).join('') : '<tr><td colspan="6" style="text-align:center;opacity:.5;padding:14px;">No advance requests yet.</td></tr>';
+  if (tbody) {
+    tbody.innerHTML = list.length ? list.map(r => `
+      <tr>
+        <td>${r.staff_name || '(no name)'}</td>
+        <td>${(r.requested_at || '').slice(0, 10)}</td>
+        <td>${fmt(r.amount)}</td>
+        <td>${r.reason || '-'}</td>
+        <td><span class="status-pill ${r.status}">${r.status}</span></td>
+        <td>${r.status === 'pending' ? `
+          <button class="btn btn-sm btn-primary" onclick="decideAdvance('${r.id}','approved')">✅</button>
+          <button class="btn btn-sm btn-danger" onclick="decideAdvance('${r.id}','rejected')">❌</button>
+        ` : '-'}</td>
+      </tr>
+    `).join('') : '<tr><td colspan="6" style="text-align:center;opacity:.5;padding:14px;">No advance requests yet.</td></tr>';
+  }
+  // Mirror the same rows into the MY STAFF tab's table so both places
+  // always agree, regardless of which tab was opened first.
+  const tbody2 = $('ownerStaffAdvanceBody');
+  if (tbody2 && tbody) tbody2.innerHTML = tbody.innerHTML;
+  const pending = list.filter(r => r.status === 'pending').length;
+  updateAdvancePendingBadge(pending);
+}
+
+function updateAdvancePendingBadge(pending) {
+  const mini = $('ownerPendingAdvances');
+  if (mini) mini.textContent = pending;
+  const badge = $('myStaffAdvanceBadge');
+  if (badge) {
+    if (pending > 0) { badge.textContent = pending > 99 ? '99+' : String(pending); badge.style.display = 'inline-block'; }
+    else { badge.style.display = 'none'; }
+  }
 }
 
 async function decideAdvance(id, status) {
@@ -6305,6 +6366,13 @@ async function cloudLoad() {
     await loadRecurringExpenses();
     await generateDueRecurringExpenses();
     renderRecurringExpenses();
+    if (userRole === 'owner') {
+      // Load pending advance requests right away and start live sync so the
+      // owner sees new staff requests (and the nav badge) immediately after
+      // login — not only after manually opening MY STAFF / Profile.
+      try { await loadMyStaffOwnerData(); } catch (e) { console.warn('Advance init load:', e); }
+      startAdvanceRealtime();
+    }
     updateStatus('☁️ Cloud data loaded');
   } catch (e) {
     console.error('Cloud load error:', e);
@@ -6363,6 +6431,8 @@ async function authAction() {
 }
 
 async function logout() {
+  stopCommissionRealtime();
+  stopAdvanceRealtime();
   await supabase.auth.signOut();
   currentUser = null;
   userProfile = null;
@@ -7004,6 +7074,31 @@ function stopCommissionRealtime(){
   commissionRealtimeChannel=null;
 }
 
+// ==================== ADVANCE REQUESTS: LIVE SYNC FOR OWNER ====================
+// The moment staff submit/edit an advance request, the owner sees it instantly
+// (table + pending badge) without needing to open MY STAFF or click Refresh.
+let advanceRealtimeChannel = null;
+let advanceRealtimeTimer = null;
+
+function startAdvanceRealtime(){
+  if(!currentUser || userRole!=='owner' || !window.supabase) return;
+  try{
+    if(advanceRealtimeChannel){ supabase.removeChannel(advanceRealtimeChannel); advanceRealtimeChannel=null; }
+    advanceRealtimeChannel = supabase.channel('mydrybea-advance-live')
+      .on('postgres_changes',{event:'*',schema:'public',table:'advance_requests',filter:`owner_id=eq.${currentUser.id}`},()=>loadOwnerAdvanceRequests())
+      .subscribe((status)=>{ if(status==='SUBSCRIBED') console.log('MY DRYBEA advance realtime: connected'); });
+    if(advanceRealtimeTimer) clearInterval(advanceRealtimeTimer);
+    advanceRealtimeTimer=setInterval(()=>loadOwnerAdvanceRequests(),5000);
+  }catch(e){ console.warn('Advance realtime setup:',e); }
+}
+
+function stopAdvanceRealtime(){
+  try{ if(advanceRealtimeTimer) clearInterval(advanceRealtimeTimer); }catch(e){}
+  advanceRealtimeTimer=null;
+  try{ if(advanceRealtimeChannel) supabase.removeChannel(advanceRealtimeChannel); }catch(e){}
+  advanceRealtimeChannel=null;
+}
+
 async function verifyCommissionClaim(id,status){
   if(userRole!=='owner') { alert('Only the owner can verify a commission claim.'); return; }
   if(!id || !['approved','rejected'].includes(status)) { alert('Invalid commission action.'); return; }
@@ -7036,9 +7131,10 @@ window.verifyCommissionClaim = verifyCommissionClaim;
 
 async function loadMyStaffOwnerData(){
   if(!currentUser||userRole!=='owner')return;
+  // renderOwnerAdvanceRequests() (called inside loadOwnerAdvanceRequests) already
+  // fills BOTH the Profile tab table (#advOwnerBody) and the MY STAFF tab table
+  // (#ownerStaffAdvanceBody) directly from Supabase, and updates the pending badge.
   try{await loadOwnerAdvanceRequests();}catch(e){console.error('MY STAFF advance load:',e);}
-  const src=$('advOwnerBody')?.innerHTML||'';if($('ownerStaffAdvanceBody'))$('ownerStaffAdvanceBody').innerHTML=src||'<tr><td colspan="6" style="text-align:center;opacity:.5;padding:14px;">No advance requests yet.</td></tr>';
-  const pending=Array.from(document.querySelectorAll('#ownerStaffAdvanceBody .status-pill')).filter(x=>String(x.textContent).toLowerCase()==='pending').length;if($('ownerPendingAdvances'))$('ownerPendingAdvances').textContent=pending;
 }
 
 async function refreshMyStaffPage(){if(!currentUser||userRole!=='owner')return;await loadStaffList();await populateStaffReferralSelectors();await loadMyStaffData(false);await loadCommissionClaims();renderOwnerStaffPerformance();renderOwnerStaffManagement();renderOwnerStaffUploads();await loadMyStaffOwnerData();}
@@ -7354,6 +7450,9 @@ window.exportMyStaffData = exportMyStaffData;
 window.importMyStaffData = importMyStaffData;
 window.loadMyStaffOwnerData = loadMyStaffOwnerData;
 window.refreshMyStaffPage = refreshMyStaffPage;
+window.loadOwnerAdvanceRequests = loadOwnerAdvanceRequests;
+window.startAdvanceRealtime = startAdvanceRealtime;
+window.stopAdvanceRealtime = stopAdvanceRealtime;
 window.ownerAssignStaffTask = ownerAssignStaffTask;
 window.ownerPublishNotice = ownerPublishNotice;
 window.ownerToggleTask = ownerToggleTask;
