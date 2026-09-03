@@ -2518,8 +2518,16 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
     .status-pill.pending{ background:var(--warn-bg); color:var(--warn); }
     .status-pill.approved{ background:var(--green-subtle); color:var(--green); }
     .status-pill.rejected{ background:var(--bad-bg); color:var(--bad); }
-    .attend-btn-row{ display:flex; gap:10px; flex-wrap:wrap; }
+    .attend-btn-row{ display:flex; gap:14px; flex-wrap:wrap; align-items:stretch; }
     .attend-btn-row .btn{ flex:1; min-width:140px; min-height:52px; font-size:.9rem; }
+    .attend-time-col{ flex:1; min-width:150px; display:flex; flex-direction:column; gap:7px; }
+    .attend-time-label{ font-size:.66rem; font-weight:800; letter-spacing:.05em; color:var(--text-muted); text-transform:uppercase; }
+    .attend-time-input-wrap{ display:flex; gap:6px; align-items:center; }
+    .attend-time-input{ flex:1; min-width:0; min-height:42px; border-radius:10px; border:1px solid var(--border); background:var(--bg-elevated); color:var(--text-main); padding:6px 10px; font-size:.85rem; font-family:inherit; }
+    .attend-time-input:focus{ outline:none; border-color:var(--border-strong); }
+    .attend-time-save-btn{ width:42px; height:42px; flex-shrink:0; border-radius:10px; border:1px solid var(--border-strong); background:transparent; color:var(--green); display:grid; place-items:center; cursor:pointer; transition:var(--transition); }
+    .attend-time-save-btn:hover:not(:disabled){ background:var(--green-subtle); }
+    .attend-time-save-btn:disabled{ opacity:.3; cursor:not-allowed; color:var(--text-muted); }
     .work-note-box textarea{ width:100%; min-height:90px; resize:vertical; font-family:var(--font); background:#07110d; color:var(--text-main); border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px 12px; }
   </style>
 
@@ -2903,9 +2911,24 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
     <div class="card">
       <div id="attendTodayStatus" class="notice" style="margin-bottom:12px;">Loading today's status...</div>
       <div class="attend-btn-row">
-        <button class="btn btn-primary" id="attendStartBtn" onclick="startDay()"><i class="business-icon icon-inline" data-lucide="play" aria-hidden="true"></i> Start Day</button>
-        <button class="btn btn-danger" id="attendEndBtn" onclick="endDay()" disabled><i class="business-icon icon-inline" data-lucide="square" aria-hidden="true"></i> End Day</button>
+        <div class="attend-time-col">
+          <label class="attend-time-label" for="attendStartTime">ON TIME</label>
+          <div class="attend-time-input-wrap">
+            <input type="time" id="attendStartTime" class="attend-time-input">
+            <button type="button" class="attend-time-save-btn" id="attendStartTimeSave" onclick="updateAttendanceTime('in')" disabled title="Save corrected ON time"><i class="business-icon" data-lucide="check" aria-hidden="true"></i></button>
+          </div>
+          <button class="btn btn-primary" id="attendStartBtn" onclick="startDay()"><i class="business-icon icon-inline" data-lucide="play" aria-hidden="true"></i> Start Day</button>
+        </div>
+        <div class="attend-time-col">
+          <label class="attend-time-label" for="attendEndTime">OFF TIME</label>
+          <div class="attend-time-input-wrap">
+            <input type="time" id="attendEndTime" class="attend-time-input">
+            <button type="button" class="attend-time-save-btn" id="attendEndTimeSave" onclick="updateAttendanceTime('out')" disabled title="Save corrected OFF time"><i class="business-icon" data-lucide="check" aria-hidden="true"></i></button>
+          </div>
+          <button class="btn btn-danger" id="attendEndBtn" onclick="endDay()" disabled><i class="business-icon icon-inline" data-lucide="square" aria-hidden="true"></i> End Day</button>
+        </div>
       </div>
+      <p class="staff-section-note" style="margin-top:10px;">Times default to now — adjust ON/OFF TIME before tapping Start/End Day, or use the ✓ button to correct a time after it's logged.</p>
     </div>
     <div class="card" style="margin-top:16px;">
       <h2><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="calendar-range" aria-hidden="true"></i></span><span>This Month's Log</span></h2>
@@ -4717,6 +4740,28 @@ function formatDuration(ms) {
   return h + 'h ' + m + 'm';
 }
 
+// Manual ON/OFF time helpers — staff can pick a time other than "right now"
+// (e.g. logging a check-in they forgot to tap earlier) or correct a saved one.
+function nowHHMM() {
+  const d = new Date();
+  return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+}
+function isoToHHMM(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+}
+// Builds today's date (local) at the chosen HH:MM, then returns it as an ISO
+// timestamp — same storage format startDay/endDay already used for "now".
+function timeInputToISO(timeStr) {
+  const d = new Date();
+  if (timeStr) {
+    const [hh, mm] = timeStr.split(':').map(Number);
+    if (!Number.isNaN(hh) && !Number.isNaN(mm)) d.setHours(hh, mm, 0, 0);
+  }
+  return d.toISOString();
+}
+
 // Button visual states: 'active' (tappable), 'loading' (mid-request), 'done'
 // (already completed — check icon, muted), 'locked' (not available yet — muted).
 // 'done'/'locked' use dedicated CSS classes (see <style>) so they always look
@@ -4769,6 +4814,10 @@ function renderTodayAttendanceStatus() {
   const box = $('attendTodayStatus');
   const startBtn = $('attendStartBtn');
   const endBtn = $('attendEndBtn');
+  const startTimeInput = $('attendStartTime');
+  const endTimeInput = $('attendEndTime');
+  const startTimeSave = $('attendStartTimeSave');
+  const endTimeSave = $('attendEndTimeSave');
   if (!box) return;
   stopAttendanceTicker();
   if (attendanceBusy) return; // an action is mid-flight; its own code owns the UI right now
@@ -4778,6 +4827,10 @@ function renderTodayAttendanceStatus() {
     box.className = 'notice warn';
     setAttendBtnState(startBtn, 'active', 'play', 'Start Day');
     setAttendBtnState(endBtn, 'locked', 'square', 'End Day');
+    if (startTimeInput && !startTimeInput.value) startTimeInput.value = nowHHMM();
+    if (endTimeInput && !endTimeInput.value) endTimeInput.value = nowHHMM();
+    if (startTimeSave) startTimeSave.disabled = true;
+    if (endTimeSave) endTimeSave.disabled = true;
   } else if (!todayAttendanceRow.check_out) {
     const inTime = new Date(todayAttendanceRow.check_in);
     const tick = () => { box.textContent = '🟢 Checked in at ' + inTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' — ' + formatDuration(Date.now() - inTime.getTime()) + ' so far.'; };
@@ -4786,12 +4839,20 @@ function renderTodayAttendanceStatus() {
     box.className = 'notice';
     setAttendBtnState(startBtn, 'done', 'play', 'Started');
     setAttendBtnState(endBtn, 'active', 'square', 'End Day');
+    if (startTimeInput) startTimeInput.value = isoToHHMM(todayAttendanceRow.check_in);
+    if (endTimeInput && !endTimeInput.value) endTimeInput.value = nowHHMM();
+    if (startTimeSave) startTimeSave.disabled = false;
+    if (endTimeSave) endTimeSave.disabled = true;
   } else {
     const hrs = formatDuration(new Date(todayAttendanceRow.check_out) - new Date(todayAttendanceRow.check_in));
     box.textContent = '✅ Day complete — ' + new Date(todayAttendanceRow.check_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' to ' + new Date(todayAttendanceRow.check_out).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' (' + hrs + ').';
     box.className = 'notice';
     setAttendBtnState(startBtn, 'done', 'play', 'Started');
     setAttendBtnState(endBtn, 'done', 'square', 'Ended');
+    if (startTimeInput) startTimeInput.value = isoToHHMM(todayAttendanceRow.check_in);
+    if (endTimeInput) endTimeInput.value = isoToHHMM(todayAttendanceRow.check_out);
+    if (startTimeSave) startTimeSave.disabled = false;
+    if (endTimeSave) endTimeSave.disabled = false;
   }
 }
 
@@ -4801,6 +4862,7 @@ async function startDay() {
   attendanceBusy = true;
   stopAttendanceTicker();
   const startBtn = $('attendStartBtn'), endBtn = $('attendEndBtn'), box = $('attendTodayStatus');
+  const chosenIso = timeInputToISO($('attendStartTime')?.value);
   // Give instant feedback the moment the user taps — don't wait on the network.
   setAttendBtnState(startBtn, 'loading', 'play', 'Starting…');
   setAttendBtnState(endBtn, 'locked', 'square', 'End Day');
@@ -4812,7 +4874,7 @@ async function startDay() {
         staff_id: currentUser.id,
         staff_name: (userProfile && userProfile.display_name) || null,
         work_date: todayStr(),
-        check_in: new Date().toISOString()
+        check_in: chosenIso
       }, { onConflict: 'staff_id,work_date' }).select().single(),
       15000, 'Starting your day'
     );
@@ -4833,6 +4895,11 @@ async function startDay() {
 async function endDay() {
   if (!currentUser) return;
   if (attendanceBusy) return;
+  const chosenIso = timeInputToISO($('attendEndTime')?.value);
+  if (todayAttendanceRow && todayAttendanceRow.check_in && new Date(chosenIso) < new Date(todayAttendanceRow.check_in)) {
+    alert("⚠️ OFF TIME can't be earlier than your ON TIME (" + isoToHHMM(todayAttendanceRow.check_in) + '). Adjust it and try again.');
+    return;
+  }
   attendanceBusy = true;
   stopAttendanceTicker();
   const startBtn = $('attendStartBtn'), endBtn = $('attendEndBtn'), box = $('attendTodayStatus');
@@ -4846,7 +4913,7 @@ async function endDay() {
         staff_id: currentUser.id,
         staff_name: (userProfile && userProfile.display_name) || null,
         work_date: todayStr(),
-        check_out: new Date().toISOString()
+        check_out: chosenIso
       }, { onConflict: 'staff_id,work_date' }).select().single(),
       15000, 'Ending your day'
     );
@@ -4860,6 +4927,48 @@ async function endDay() {
     alert('❌ Could not end day: ' + e.message + '\nTap End Day to try again.');
   } finally {
     attendanceBusy = false;
+    renderTodayAttendanceStatus();
+  }
+}
+
+// Corrects an ON or OFF time that was already saved (e.g. staff forgot to tap
+// Start/End Day on time and logs the real time afterwards). which: 'in' | 'out'.
+async function updateAttendanceTime(which) {
+  if (!currentUser || !todayAttendanceRow) return;
+  if (attendanceBusy) return;
+  const input = which === 'in' ? $('attendStartTime') : $('attendEndTime');
+  const saveBtn = which === 'in' ? $('attendStartTimeSave') : $('attendEndTimeSave');
+  const timeVal = input?.value;
+  if (!timeVal) { alert('Pick a time first.'); return; }
+  const iso = timeInputToISO(timeVal);
+  if (which === 'in' && todayAttendanceRow.check_out && new Date(iso) > new Date(todayAttendanceRow.check_out)) {
+    alert("⚠️ ON TIME can't be later than your OFF TIME (" + isoToHHMM(todayAttendanceRow.check_out) + ').');
+    return;
+  }
+  if (which === 'out' && todayAttendanceRow.check_in && new Date(iso) < new Date(todayAttendanceRow.check_in)) {
+    alert("⚠️ OFF TIME can't be earlier than your ON TIME (" + isoToHHMM(todayAttendanceRow.check_in) + ').');
+    return;
+  }
+  attendanceBusy = true;
+  stopAttendanceTicker();
+  const originalHtml = saveBtn ? saveBtn.innerHTML : '';
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.innerHTML = '<span class="mini-spin" aria-hidden="true"></span>'; }
+  try {
+    const patch = which === 'in' ? { check_in: iso } : { check_out: iso };
+    const { data, error } = await withTimeout(
+      supabase.from('attendance').update(patch).eq('staff_id', currentUser.id).eq('work_date', todayStr()).select().single(),
+      12000, 'Updating time'
+    );
+    if (error) throw error;
+    todayAttendanceRow = data;
+    updateStatus('✅ ' + (which === 'in' ? 'ON' : 'OFF') + ' time corrected');
+    loadAttendanceLog();
+  } catch (e) {
+    console.error('Update attendance time error:', e);
+    alert('❌ Could not update time: ' + e.message);
+  } finally {
+    attendanceBusy = false;
+    if (saveBtn) saveBtn.innerHTML = originalHtml;
     renderTodayAttendanceStatus();
   }
 }
