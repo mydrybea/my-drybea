@@ -2915,7 +2915,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
           <label class="attend-time-label" for="attendStartTime">ON TIME</label>
           <div class="attend-time-input-wrap">
             <input type="time" id="attendStartTime" class="attend-time-input">
-            <button type="button" class="attend-time-save-btn" id="attendStartTimeSave" onclick="updateAttendanceTime('in')" disabled title="Save corrected ON time"><i class="business-icon" data-lucide="check" aria-hidden="true"></i></button>
+            <button type="button" class="attend-time-save-btn" id="attendStartTimeSave" onclick="requestAttendanceCorrection('in')" disabled title="Request a correction to your ON time (needs owner approval)"><i class="business-icon" data-lucide="flag" aria-hidden="true"></i></button>
           </div>
           <button class="btn btn-primary" id="attendStartBtn" onclick="startDay()"><i class="business-icon icon-inline" data-lucide="play" aria-hidden="true"></i> Start Day</button>
         </div>
@@ -2923,12 +2923,13 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
           <label class="attend-time-label" for="attendEndTime">OFF TIME</label>
           <div class="attend-time-input-wrap">
             <input type="time" id="attendEndTime" class="attend-time-input">
-            <button type="button" class="attend-time-save-btn" id="attendEndTimeSave" onclick="updateAttendanceTime('out')" disabled title="Save corrected OFF time"><i class="business-icon" data-lucide="check" aria-hidden="true"></i></button>
+            <button type="button" class="attend-time-save-btn" id="attendEndTimeSave" onclick="requestAttendanceCorrection('out')" disabled title="Request a correction to your OFF time (needs owner approval)"><i class="business-icon" data-lucide="flag" aria-hidden="true"></i></button>
           </div>
           <button class="btn btn-danger" id="attendEndBtn" onclick="endDay()" disabled><i class="business-icon icon-inline" data-lucide="square" aria-hidden="true"></i> End Day</button>
         </div>
       </div>
-      <p class="staff-section-note" style="margin-top:10px;">Times default to now — adjust ON/OFF TIME before tapping Start/End Day, or use the ✓ button to correct a time after it's logged.</p>
+      <p class="staff-section-note" style="margin-top:10px;">ON/OFF is locked to the server clock the instant you tap Start/End Day — it can never be pre-set or backdated. Logged the wrong time by mistake? Pick the correct time and tap 🚩 to send your owner a correction request for approval.</p>
+      <div id="attendCorrectionNote" class="staff-section-note" style="margin-top:6px;display:none;"></div>
     </div>
     <div class="card" style="margin-top:16px;">
       <h2><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="calendar-range" aria-hidden="true"></i></span><span>This Month's Log</span></h2>
@@ -2998,6 +2999,16 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
       </div>
       <div class="table-wrap" style="margin-top:10px;">
         <table class="staff-table-compact"><thead><tr><th>Staff</th><th>Status</th><th>Check-in</th><th>Check-out</th><th>Hours Today</th></tr></thead><tbody id="ownerAttendanceTodayBody"><tr><td colspan="5" style="text-align:center;opacity:.5;padding:18px;">Loading today's attendance...</td></tr></tbody></table>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px;">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;">
+        <div><h2><span class="pro-title-icon gold"><i class="business-icon" data-lucide="flag"></i></span><span>Time Correction Requests</span></h2><p class="pro-subtitle green">Staff can no longer edit a logged ON/OFF time themselves — review and approve or reject their requests here.</p></div>
+        <button class="btn btn-sm" onclick="loadOwnerPendingCorrections()"><i class="business-icon icon-inline" data-lucide="refresh-cw"></i> Refresh</button>
+      </div>
+      <div class="table-wrap" style="margin-top:10px;">
+        <table class="staff-table-compact"><thead><tr><th>Staff</th><th>Date</th><th>Field</th><th>Requested Time</th><th>Reason</th><th>Action</th></tr></thead><tbody id="ownerCorrectionsBody"><tr><td colspan="6" style="text-align:center;opacity:.5;padding:18px;">Loading correction requests...</td></tr></tbody></table>
       </div>
     </div>
 
@@ -4854,6 +4865,21 @@ function renderTodayAttendanceStatus() {
     if (startTimeSave) startTimeSave.disabled = false;
     if (endTimeSave) endTimeSave.disabled = false;
   }
+
+  // Reflect any correction request(s) awaiting the owner's decision, and block
+  // filing a duplicate request for the same field while one is still pending.
+  const pending = myPendingCorrections.filter(c => c.status === 'pending');
+  const note = $('attendCorrectionNote');
+  if (note) {
+    if (pending.length) {
+      note.style.display = 'block';
+      note.textContent = '🚩 ' + pending.length + ' correction request' + (pending.length > 1 ? 's' : '') + ' awaiting your owner\'s approval.';
+    } else {
+      note.style.display = 'none';
+    }
+  }
+  if (startTimeSave && pending.some(c => c.field === 'check_in')) startTimeSave.disabled = true;
+  if (endTimeSave && pending.some(c => c.field === 'check_out')) endTimeSave.disabled = true;
 }
 
 async function startDay() {
@@ -4862,26 +4888,26 @@ async function startDay() {
   attendanceBusy = true;
   stopAttendanceTicker();
   const startBtn = $('attendStartBtn'), endBtn = $('attendEndBtn'), box = $('attendTodayStatus');
-  const chosenIso = timeInputToISO($('attendStartTime')?.value);
-  // Give instant feedback the moment the user taps — don't wait on the network.
+  // ANTI-CHEAT: ON time is NOT taken from the time input or the device clock —
+  // it is stamped by the database server (see attendance_clock_in() in the
+  // Supabase migration) the instant this request lands, so a staff member can't
+  // fake an earlier/later start by editing the time picker or their phone's clock.
   setAttendBtnState(startBtn, 'loading', 'play', 'Starting…');
   setAttendBtnState(endBtn, 'locked', 'square', 'End Day');
   if (box) { box.textContent = '⏳ Starting your day…'; box.className = 'notice'; }
   try {
     const { data, error } = await withTimeout(
-      supabase.from('attendance').upsert({
-        owner_id: businessId,
-        staff_id: currentUser.id,
-        staff_name: (userProfile && userProfile.display_name) || null,
-        work_date: todayStr(),
-        check_in: chosenIso
-      }, { onConflict: 'staff_id,work_date' }).select().single(),
+      supabase.rpc('attendance_clock_in', {
+        p_owner_id: businessId,
+        p_staff_name: (userProfile && userProfile.display_name) || null
+      }),
       15000, 'Starting your day'
     );
     if (error) throw error;
     todayAttendanceRow = data;
     updateStatus('✅ Day started');
     loadAttendanceLog();
+    loadMyPendingCorrections();
     notifyOwnerAttendance('in', data.check_in);
   } catch (e) {
     console.error('Start day error:', e);
@@ -4895,11 +4921,6 @@ async function startDay() {
 async function endDay() {
   if (!currentUser) return;
   if (attendanceBusy) return;
-  const chosenIso = timeInputToISO($('attendEndTime')?.value);
-  if (todayAttendanceRow && todayAttendanceRow.check_in && new Date(chosenIso) < new Date(todayAttendanceRow.check_in)) {
-    alert("⚠️ OFF TIME can't be earlier than your ON TIME (" + isoToHHMM(todayAttendanceRow.check_in) + '). Adjust it and try again.');
-    return;
-  }
   attendanceBusy = true;
   stopAttendanceTicker();
   const startBtn = $('attendStartBtn'), endBtn = $('attendEndBtn'), box = $('attendTodayStatus');
@@ -4907,20 +4928,19 @@ async function endDay() {
   setAttendBtnState(endBtn, 'loading', 'square', 'Ending…');
   if (box) { box.textContent = '⏳ Ending your day…'; box.className = 'notice'; }
   try {
+    // ANTI-CHEAT: OFF time is stamped server-side too (attendance_clock_out()),
+    // same reasoning as startDay() — the server clock can never be behind or
+    // ahead of the real check-in, so a "2 minute shift" like the one in the
+    // screenshot simply can't be logged as a fake full day any more.
     const { data, error } = await withTimeout(
-      supabase.from('attendance').upsert({
-        owner_id: businessId,
-        staff_id: currentUser.id,
-        staff_name: (userProfile && userProfile.display_name) || null,
-        work_date: todayStr(),
-        check_out: chosenIso
-      }, { onConflict: 'staff_id,work_date' }).select().single(),
+      supabase.rpc('attendance_clock_out'),
       15000, 'Ending your day'
     );
     if (error) throw error;
     todayAttendanceRow = data;
     updateStatus('✅ Day ended');
     loadAttendanceLog();
+    loadMyPendingCorrections();
     notifyOwnerAttendance('out', data.check_out);
   } catch (e) {
     console.error('End day error:', e);
@@ -4931,44 +4951,64 @@ async function endDay() {
   }
 }
 
-// Corrects an ON or OFF time that was already saved (e.g. staff forgot to tap
-// Start/End Day on time and logs the real time afterwards). which: 'in' | 'out'.
-async function updateAttendanceTime(which) {
+// ANTI-CHEAT: staff can no longer edit a logged ON/OFF time directly — that
+// was exactly the hole that let anyone rewrite their own hours. Instead this
+// files a request; only the owner's decideAttendanceCorrection() (via the
+// decide_attendance_correction() RPC, which checks auth.uid() = owner_id
+// server-side) can actually change a stored time. which: 'in' | 'out'.
+let myPendingCorrections = [];
+
+async function requestAttendanceCorrection(which) {
   if (!currentUser || !todayAttendanceRow) return;
   if (attendanceBusy) return;
+  const field = which === 'in' ? 'check_in' : 'check_out';
+  if (myPendingCorrections.some(c => c.field === field && c.status === 'pending')) {
+    alert('You already have a pending correction request for this time — wait for your owner to review it first.');
+    return;
+  }
   const input = which === 'in' ? $('attendStartTime') : $('attendEndTime');
   const saveBtn = which === 'in' ? $('attendStartTimeSave') : $('attendEndTimeSave');
   const timeVal = input?.value;
-  if (!timeVal) { alert('Pick a time first.'); return; }
+  if (!timeVal) { alert('Pick the correct time first.'); return; }
+  const reason = prompt('Why does this time need correcting? (your owner will see this)');
+  if (reason === null) return; // cancelled
+  if (!reason.trim()) { alert('Please add a short reason.'); return; }
   const iso = timeInputToISO(timeVal);
-  if (which === 'in' && todayAttendanceRow.check_out && new Date(iso) > new Date(todayAttendanceRow.check_out)) {
-    alert("⚠️ ON TIME can't be later than your OFF TIME (" + isoToHHMM(todayAttendanceRow.check_out) + ').');
-    return;
-  }
-  if (which === 'out' && todayAttendanceRow.check_in && new Date(iso) < new Date(todayAttendanceRow.check_in)) {
-    alert("⚠️ OFF TIME can't be earlier than your ON TIME (" + isoToHHMM(todayAttendanceRow.check_in) + ').');
-    return;
-  }
   attendanceBusy = true;
-  stopAttendanceTicker();
   const originalHtml = saveBtn ? saveBtn.innerHTML : '';
   if (saveBtn) { saveBtn.disabled = true; saveBtn.innerHTML = '<span class="mini-spin" aria-hidden="true"></span>'; }
   try {
-    const patch = which === 'in' ? { check_in: iso } : { check_out: iso };
-    const { data, error } = await withTimeout(
-      supabase.from('attendance').update(patch).eq('staff_id', currentUser.id).eq('work_date', todayStr()).select().single(),
-      12000, 'Updating time'
+    const { error } = await withTimeout(
+      supabase.rpc('request_attendance_correction', {
+        p_field: field,
+        p_requested_time: iso,
+        p_reason: reason.trim()
+      }),
+      12000, 'Sending correction request'
     );
     if (error) throw error;
-    todayAttendanceRow = data;
-    updateStatus('✅ ' + (which === 'in' ? 'ON' : 'OFF') + ' time corrected');
-    loadAttendanceLog();
+    updateStatus('📨 Correction request sent to owner');
+    await loadMyPendingCorrections();
   } catch (e) {
-    console.error('Update attendance time error:', e);
-    alert('❌ Could not update time: ' + e.message);
+    console.error('Request attendance correction error:', e);
+    alert('❌ Could not send correction request: ' + e.message);
   } finally {
     attendanceBusy = false;
     if (saveBtn) saveBtn.innerHTML = originalHtml;
+    renderTodayAttendanceStatus();
+  }
+}
+
+async function loadMyPendingCorrections() {
+  if (!currentUser) return;
+  try {
+    const { data, error } = await supabase.from('attendance_corrections').select('*')
+      .eq('staff_id', currentUser.id).eq('work_date', todayStr()).order('requested_at', { ascending: false });
+    if (error) throw error;
+    myPendingCorrections = data || [];
+  } catch (e) {
+    console.error('Load my corrections error:', e);
+  } finally {
     renderTodayAttendanceStatus();
   }
 }
@@ -7397,6 +7437,7 @@ async function loadMyStaffOwnerData(){
   // (#ownerStaffAdvanceBody) directly from Supabase, and updates the pending badge.
   try{await loadOwnerAdvanceRequests();}catch(e){console.error('MY STAFF advance load:',e);}
   try{await loadOwnerAttendanceToday();}catch(e){console.error('MY STAFF attendance load:',e);}
+  try{await loadOwnerPendingCorrections();}catch(e){console.error('MY STAFF corrections load:',e);}
 }
 
 // ==================== OWNER: LIVE STAFF ATTENDANCE (today) ====================
@@ -7456,6 +7497,66 @@ function renderOwnerAttendanceToday() {
   // Keep "hours so far" ticking for anyone still checked in, without refetching from the network.
   if (ownerAttendanceToday.some(a => a.check_in && !a.check_out)) {
     ownerAttendanceTickTimer = setInterval(renderOwnerAttendanceToday, 30000);
+  }
+}
+
+// ==================== OWNER: ATTENDANCE CORRECTION APPROVALS ====================
+// Staff can only *request* a change to a logged ON/OFF time (requestAttendanceCorrection,
+// above) — the owner is the only one who can actually approve it, via
+// decide_attendance_correction() which checks auth.uid() = owner_id server-side.
+let ownerPendingCorrections = [];
+
+async function loadOwnerPendingCorrections() {
+  if (!currentUser || userRole !== 'owner') return;
+  const tbody = $('ownerCorrectionsBody');
+  try {
+    const { data, error } = await withTimeout(
+      supabase.from('attendance_corrections').select('*').eq('owner_id', currentUser.id).eq('status', 'pending').order('requested_at', { ascending: false }),
+      12000, 'Loading correction requests'
+    );
+    if (error) throw error;
+    ownerPendingCorrections = data || [];
+    renderOwnerPendingCorrections();
+  } catch (e) {
+    console.error('Load owner corrections error:', e);
+    if (tbody) tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;opacity:.5;padding:14px;">Couldn\'t load correction requests — tap Refresh to try again.</td></tr>';
+  }
+}
+
+function renderOwnerPendingCorrections() {
+  const tbody = $('ownerCorrectionsBody');
+  if (!tbody) return;
+  if (!ownerPendingCorrections.length) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;opacity:.5;padding:14px;">No pending requests.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = ownerPendingCorrections.map(c => {
+    const name = escapeHtmlSafe(c.staff_name || '(unknown)');
+    const fieldLabel = c.field === 'check_in' ? 'ON time' : 'OFF time';
+    const reqTime = new Date(c.requested_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const reason = escapeHtmlSafe(c.reason || '-');
+    return `<tr><td><strong>${name}</strong></td><td>${c.work_date}</td><td>${fieldLabel}</td><td>${reqTime}</td><td>${reason}</td>
+      <td style="white-space:nowrap;">
+        <button class="btn btn-sm btn-primary" onclick="decideAttendanceCorrection('${c.id}', true)"><i class="business-icon icon-inline" data-lucide="check"></i> Approve</button>
+        <button class="btn btn-sm btn-danger" onclick="decideAttendanceCorrection('${c.id}', false)"><i class="business-icon icon-inline" data-lucide="x"></i> Reject</button>
+      </td></tr>`;
+  }).join('');
+  if (window.lucide) lucide.createIcons({ attrs: { 'stroke-width': 1.9, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' } });
+}
+
+async function decideAttendanceCorrection(id, approve) {
+  try {
+    const { error } = await withTimeout(
+      supabase.rpc('decide_attendance_correction', { p_id: id, p_approve: approve }),
+      12000, 'Updating request'
+    );
+    if (error) throw error;
+    updateStatus(approve ? '✅ Correction approved' : '🚫 Correction rejected');
+    await loadOwnerPendingCorrections();
+    await loadOwnerAttendanceToday();
+  } catch (e) {
+    console.error('Decide correction error:', e);
+    alert('❌ Could not update request: ' + e.message);
   }
 }
 
@@ -7557,7 +7658,7 @@ function activateAppTab(tabId){
   }
   if (tabId === 'daily-pay') { loadMySalary().then(renderDailyPay); }
   if (tabId === 'work-update') { updateWorkUpdateStats(); loadWorkUpdateHistory(); $('wuNoteText').value = ''; }
-  if (tabId === 'attendance') { loadTodayAttendance(); loadAttendanceLog(); }
+  if (tabId === 'attendance') { loadTodayAttendance(); loadAttendanceLog(); loadMyPendingCorrections(); }
   else if (typeof stopAttendanceTicker === 'function') { stopAttendanceTicker(); }
   if (tabId !== 'my-staff' && typeof stopOwnerAttendanceTicker === 'function') { stopOwnerAttendanceTicker(); }
   if (tabId === 'advance') loadMyAdvanceRequests();
@@ -7792,6 +7893,10 @@ window.renderOwnerAdvanceRequests = renderOwnerAdvanceRequests;
 // so they threw the exact same silent ReferenceError as the advance button.
 window.startDay = startDay;
 window.endDay = endDay;
+window.requestAttendanceCorrection = requestAttendanceCorrection;
+window.loadMyPendingCorrections = loadMyPendingCorrections;
+window.loadOwnerPendingCorrections = loadOwnerPendingCorrections;
+window.decideAttendanceCorrection = decideAttendanceCorrection;
 window.printMySmartPayslip = printMySmartPayslip;
 window.printSmartPayslip = printSmartPayslip;
 window.refreshSmartSalary = refreshSmartSalary;
