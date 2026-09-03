@@ -2257,6 +2257,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
 @keyframes syncPulse{50%{opacity:.45;transform:scale(.8)}}
 @keyframes syncRing{0%{transform:scale(.7);opacity:.8}100%{transform:scale(1.7);opacity:0}}
 @keyframes spin{to{transform:rotate(360deg)}}
+.mini-spin{display:inline-block;width:13px;height:13px;border:2px solid currentColor;border-top-color:transparent;border-radius:50%;vertical-align:-2px;margin-right:5px;opacity:.85;animation:spin .7s linear infinite}
 @media(max-width:680px){
   .sync-indicator{min-height:32px;padding:5px 8px;font-size:9px}
   .sync-time{font-size:8px}
@@ -4657,21 +4658,58 @@ async function loadWorkUpdateHistory() {
 
 // ==================== ATTENDANCE (staff-only) ====================
 let todayAttendanceRow = null;
+let attendanceBusy = false;      // guards against double-tap firing two requests
+let attendanceTickTimer = null;  // live "time so far" ticker while a day is in progress
+
+// Wrap any Supabase call so a flaky connection can never leave the UI stuck forever.
+function withTimeout(promise, ms, label) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error((label || 'This') + ' is taking too long. Check your connection and try again.')), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
+// "5m" / "2h" / "2h 15m" instead of a misleading "0.0 hrs" on short days.
+function formatDuration(ms) {
+  if (!ms || ms < 0) return '-';
+  const totalMin = Math.round(ms / 60000);
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  if (h <= 0) return m + 'm';
+  if (m === 0) return h + 'h';
+  return h + 'h ' + m + 'm';
+}
+
+function setAttendBtnLoading(btn, loading, icon, label) {
+  if (!btn) return;
+  if (loading) {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="mini-spin" aria-hidden="true"></span>' + label;
+  } else {
+    btn.innerHTML = '<i class="business-icon icon-inline" data-lucide="' + icon + '" aria-hidden="true"></i> ' + label;
+    if (window.lucide) lucide.createIcons({ attrs: { 'stroke-width': 1.9, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' } });
+  }
+}
+
+function stopAttendanceTicker() {
+  if (attendanceTickTimer) { clearInterval(attendanceTickTimer); attendanceTickTimer = null; }
+}
 
 async function loadTodayAttendance() {
   if (!currentUser) return;
   try {
-    const { data, error } = await supabase
-      .from('attendance')
-      .select('*')
-      .eq('staff_id', currentUser.id)
-      .eq('work_date', todayStr())
-      .maybeSingle();
+    const { data, error } = await withTimeout(
+      supabase.from('attendance').select('*').eq('staff_id', currentUser.id).eq('work_date', todayStr()).maybeSingle(),
+      12000, "Loading today's status"
+    );
     if (error) throw error;
     todayAttendanceRow = data || null;
     renderTodayAttendanceStatus();
   } catch (e) {
     console.error('Load today attendance error:', e);
+    const box = $('attendTodayStatus');
+    if (box) { box.textContent = "⚠️ Couldn't load today's status — pull to refresh or tap the tab again."; box.className = 'notice warn'; }
   }
 }
 
@@ -4680,87 +4718,119 @@ function renderTodayAttendanceStatus() {
   const startBtn = $('attendStartBtn');
   const endBtn = $('attendEndBtn');
   if (!box) return;
+  stopAttendanceTicker();
+  if (attendanceBusy) return; // an action is mid-flight; its own code owns the UI right now
+
   if (!todayAttendanceRow || !todayAttendanceRow.check_in) {
     box.textContent = "You haven't started today yet.";
     box.className = 'notice warn';
+    if (startBtn) setAttendBtnLoading(startBtn, false, 'play', 'Start Day');
     if (startBtn) startBtn.disabled = false;
-    if (endBtn) endBtn.disabled = true;
+    if (endBtn) { setAttendBtnLoading(endBtn, false, 'square', 'End Day'); endBtn.disabled = true; }
   } else if (!todayAttendanceRow.check_out) {
-    box.textContent = '🟢 Checked in at ' + new Date(todayAttendanceRow.check_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + '. Day in progress.';
+    const inTime = new Date(todayAttendanceRow.check_in);
+    const tick = () => { box.textContent = '🟢 Checked in at ' + inTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' — ' + formatDuration(Date.now() - inTime.getTime()) + ' so far.'; };
+    tick();
+    attendanceTickTimer = setInterval(tick, 30000);
     box.className = 'notice';
-    if (startBtn) startBtn.disabled = true;
-    if (endBtn) endBtn.disabled = false;
+    if (startBtn) { setAttendBtnLoading(startBtn, false, 'play', 'Start Day'); startBtn.disabled = true; }
+    if (endBtn) { setAttendBtnLoading(endBtn, false, 'square', 'End Day'); endBtn.disabled = false; }
   } else {
-    box.textContent = '✅ Day complete — ' + new Date(todayAttendanceRow.check_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' to ' + new Date(todayAttendanceRow.check_out).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + '.';
+    const hrs = formatDuration(new Date(todayAttendanceRow.check_out) - new Date(todayAttendanceRow.check_in));
+    box.textContent = '✅ Day complete — ' + new Date(todayAttendanceRow.check_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' to ' + new Date(todayAttendanceRow.check_out).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' (' + hrs + ').';
     box.className = 'notice';
-    if (startBtn) startBtn.disabled = true;
-    if (endBtn) endBtn.disabled = true;
+    if (startBtn) { setAttendBtnLoading(startBtn, false, 'play', 'Start Day'); startBtn.disabled = true; }
+    if (endBtn) { setAttendBtnLoading(endBtn, false, 'square', 'End Day'); endBtn.disabled = true; }
   }
 }
 
 async function startDay() {
   if (!currentUser) { alert('Please login first.'); return; }
+  if (attendanceBusy) return; // ignore extra taps while one is already in flight
+  attendanceBusy = true;
+  stopAttendanceTicker();
+  const startBtn = $('attendStartBtn'), endBtn = $('attendEndBtn'), box = $('attendTodayStatus');
+  // Give instant feedback the moment the user taps — don't wait on the network.
+  setAttendBtnLoading(startBtn, true, 'play', 'Starting…');
+  if (endBtn) endBtn.disabled = true;
+  if (box) { box.textContent = '⏳ Starting your day…'; box.className = 'notice'; }
   try {
-    const { data, error } = await supabase.from('attendance').upsert({
-      owner_id: businessId,
-      staff_id: currentUser.id,
-      staff_name: (userProfile && userProfile.display_name) || null,
-      work_date: todayStr(),
-      check_in: new Date().toISOString()
-    }, { onConflict: 'staff_id,work_date' }).select().single();
+    const { data, error } = await withTimeout(
+      supabase.from('attendance').upsert({
+        owner_id: businessId,
+        staff_id: currentUser.id,
+        staff_name: (userProfile && userProfile.display_name) || null,
+        work_date: todayStr(),
+        check_in: new Date().toISOString()
+      }, { onConflict: 'staff_id,work_date' }).select().single(),
+      15000, 'Starting your day'
+    );
     if (error) throw error;
     todayAttendanceRow = data;
-    renderTodayAttendanceStatus();
     updateStatus('✅ Day started');
-    await loadAttendanceLog();
+    loadAttendanceLog();
   } catch (e) {
     console.error('Start day error:', e);
-    alert('❌ Could not start day: ' + e.message);
+    alert('❌ Could not start day: ' + e.message + '\nTap Start Day to try again.');
+  } finally {
+    attendanceBusy = false;
+    renderTodayAttendanceStatus();
   }
 }
 
 async function endDay() {
   if (!currentUser) return;
+  if (attendanceBusy) return;
+  attendanceBusy = true;
+  stopAttendanceTicker();
+  const startBtn = $('attendStartBtn'), endBtn = $('attendEndBtn'), box = $('attendTodayStatus');
+  setAttendBtnLoading(endBtn, true, 'square', 'Ending…');
+  if (startBtn) startBtn.disabled = true;
+  if (box) { box.textContent = '⏳ Ending your day…'; box.className = 'notice'; }
   try {
-    const { data, error } = await supabase.from('attendance').upsert({
-      owner_id: businessId,
-      staff_id: currentUser.id,
-      staff_name: (userProfile && userProfile.display_name) || null,
-      work_date: todayStr(),
-      check_out: new Date().toISOString()
-    }, { onConflict: 'staff_id,work_date' }).select().single();
+    const { data, error } = await withTimeout(
+      supabase.from('attendance').upsert({
+        owner_id: businessId,
+        staff_id: currentUser.id,
+        staff_name: (userProfile && userProfile.display_name) || null,
+        work_date: todayStr(),
+        check_out: new Date().toISOString()
+      }, { onConflict: 'staff_id,work_date' }).select().single(),
+      15000, 'Ending your day'
+    );
     if (error) throw error;
     todayAttendanceRow = data;
-    renderTodayAttendanceStatus();
     updateStatus('✅ Day ended');
-    await loadAttendanceLog();
+    loadAttendanceLog();
   } catch (e) {
     console.error('End day error:', e);
-    alert('❌ Could not end day: ' + e.message);
+    alert('❌ Could not end day: ' + e.message + '\nTap End Day to try again.');
+  } finally {
+    attendanceBusy = false;
+    renderTodayAttendanceStatus();
   }
 }
 
 async function loadAttendanceLog() {
   if (!currentUser) return;
+  const tbody = $('attendLogBody');
   try {
     const ym = todayStr().slice(0, 7);
-    const { data, error } = await supabase
-      .from('attendance')
-      .select('*')
-      .eq('staff_id', currentUser.id)
-      .gte('work_date', ym + '-01')
-      .order('work_date', { ascending: false });
+    const { data, error } = await withTimeout(
+      supabase.from('attendance').select('*').eq('staff_id', currentUser.id).gte('work_date', ym + '-01').order('work_date', { ascending: false }),
+      12000, "Loading this month's log"
+    );
     if (error) throw error;
-    const tbody = $('attendLogBody');
     if (!tbody) return;
     tbody.innerHTML = (data && data.length) ? data.map(r => {
-      const hrs = (r.check_in && r.check_out) ? (((new Date(r.check_out) - new Date(r.check_in)) / 3600000).toFixed(1) + ' hrs') : '-';
+      const hrs = (r.check_in && r.check_out) ? formatDuration(new Date(r.check_out) - new Date(r.check_in)) : '-';
       const inT = r.check_in ? new Date(r.check_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-';
       const outT = r.check_out ? new Date(r.check_out).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-';
       return `<tr><td>${r.work_date}</td><td>${inT}</td><td>${outT}</td><td>${hrs}</td></tr>`;
     }).join('') : '<tr><td colspan="4" style="text-align:center;opacity:.5;padding:14px;">No attendance logged this month yet.</td></tr>';
   } catch (e) {
     console.error('Load attendance log error:', e);
+    if (tbody) tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;opacity:.5;padding:14px;">Couldn\'t load this month\'s log — try again.</td></tr>';
   }
 }
 
@@ -7228,6 +7298,7 @@ function activateAppTab(tabId){
   if (tabId === 'daily-pay') { loadMySalary().then(renderDailyPay); }
   if (tabId === 'work-update') { updateWorkUpdateStats(); loadWorkUpdateHistory(); $('wuNoteText').value = ''; }
   if (tabId === 'attendance') { loadTodayAttendance(); loadAttendanceLog(); }
+  else if (typeof stopAttendanceTicker === 'function') { stopAttendanceTicker(); }
   if (tabId === 'advance') loadMyAdvanceRequests();
    if (tabId === 'staff-home') refreshStaffHome();
    if (tabId === 'my-commission') refreshMyCommission();
