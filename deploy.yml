@@ -1,0 +1,53 @@
+name: Deploy MY DRYBEA to GitHub Pages
+
+on:
+  push:
+    branches: [main]        # change if your default branch has a different name
+  workflow_dispatch:        # lets you trigger a deploy manually from the Actions tab
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Ensure Jekyll doesn't touch this
+        run: touch .nojekyll
+        # Prevents GitHub Pages' default Jekyll build from ignoring files/folders
+        # that start with an underscore or otherwise interfering with a plain
+        # static app. Harmless if you never hit that, but free insurance.
+
+      - name: Bump service worker cache version
+        run: |
+          NEW_VERSION="v${{ github.run_number }}"
+          sed -i "s/const CACHE_VERSION = '.*';/const CACHE_VERSION = '${NEW_VERSION}';/" sw.js
+          echo "Set CACHE_VERSION to ${NEW_VERSION}"
+        # Automates the manual step your sw.js comments call out: every deploy
+        # gets a unique cache version so returning users' phones don't get
+        # stuck on stale cached JS/CSS. Remove this step if you'd rather bump
+        # CACHE_VERSION by hand.
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: '.'   # deploys the whole repo root — change to './dist' etc. if your files live in a subfolder
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
