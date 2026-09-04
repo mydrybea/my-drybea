@@ -1,37 +1,52 @@
 // MY DRYBEA — real caching service worker.
 //
 // Strategy (deliberately different per resource type, not one blanket rule):
-//   1. App shell (index.html / login.html)  -> network-first, falling back to cache.
-//      Reason: you are actively updating this app. Network-first means people
-//      always get your latest version when they have signal, but the app still
-//      opens if they're offline or on a bad connection.
-//   2. Static assets (logo, fonts, Chart.js, Supabase JS, Lucide icons)
-//                                            -> cache-first, falling back to network.
-//      Reason: these barely ever change, so serving them instantly from cache
-//      is a big speed win and saves the user's mobile data.
-//   3. Supabase API calls (auth/data)        -> never cached, always network.
-//      Reason: this is live business data (orders, expenses, stock). Serving a
-//      cached/stale copy would be actively wrong, not just slow.
+//   1. App shell (index.html / login.html / manifest.json) -> network-first,
+//      falling back to cache.
+//      Reason: you are actively updating these. Network-first means people
+//      always get your latest version when they have signal, but the app
+//      still opens if they're offline or on a bad connection.
+//   2. Everything else same-origin (style.css, app.js, login.css, login.js,
+//      logo/icons, fonts) plus third-party libs (Chart.js, Supabase JS,
+//      Lucide)                              -> cache-first, falling back to
+//      network (and quietly refreshing the cache in the background).
+//      Reason: near-instant repeat loads and real offline support — this is
+//      the actual PWA payoff. Trade-off: right after you deploy, a returning
+//      user can run the *previous* build's CSS/JS for one load (the
+//      background refresh updates the cache for next time) even though
+//      index.html itself updates immediately. Bump CACHE_VERSION below for
+//      any change you need everyone on immediately.
+//   3. Supabase API reads (GET)              -> network-first, falling back
+//      to a cache of that exact request (query string included — different
+//      filters are different data, so we never collapse them together).
+//      Reason: real offline support for live business data (orders,
+//      expenses, stock) — the app can show the last-known data when
+//      offline instead of failing outright. It's a stale snapshot in that
+//      case, not a live read; the app's own sync indicator already
+//      communicates "local data active" for this situation.
+//      Supabase writes (POST/PATCH/DELETE) never hit this worker at all —
+//      see the GET-only check below — so they always go straight to the
+//      network, never cached, never replayed from cache.
 //
 // ---- IMPORTANT: bump this version string every time you deploy a change ----
-// Since index.html/login.html don't have hashed filenames, this version bump
-// is what tells returning users' phones "throw away the old cached copy and
-// fetch the new one." Forgetting to bump it means users can get stuck on an
-// old cached version even though you've updated the live site.
-const CACHE_VERSION = 'v3';
+// Since none of these filenames are hashed, this version bump is what tells
+// returning users' phones "throw away every old cached copy and fetch
+// fresh." Forgetting to bump it means users can get stuck on an old cached
+// version even though you've updated the live site.
+const CACHE_VERSION = 'v4';
 const CACHE_NAME = `mydrybea-${CACHE_VERSION}`;
 
-// Files that make up the installable "app shell."
-// style.css/app.js/login.css/login.js are here (not in the cache-first
-// bucket below) because they're app code you edit right alongside
-// index.html/login.html, not slow-changing third-party libs — they need
-// the same "always try network first" treatment or a deploy could leave
-// a user on a fresh index.html paired with a stale, mismatched app.js.
+// Files that make up the installable "app shell" — network-first.
 const APP_SHELL = [
   './index.html',
   './login.html',
-  './logo.jpg',
   './manifest.json',
+];
+
+// Same-origin static assets — cache-first. Pre-cached at install so the
+// very first offline visit already has them.
+const STATIC_ASSETS = [
+  './logo.jpg',
   './icon-192.png',
   './icon-512.png',
   './icon-192-maskable.png',
@@ -51,18 +66,19 @@ const STATIC_LIBS = [
   'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Noto+Sans+Sinhala:wght@300;400;500;600;700&family=Playfair+Display:wght@400;500;600;700;800;900&display=swap',
 ];
 
-// Any request whose URL includes this is live business data — never cache it.
-const NEVER_CACHE_HOSTNAME = 'dztuyfiiyxllnvciunjv.supabase.co';
+// Any request whose URL includes this is live Supabase business data.
+const SUPABASE_HOSTNAME = 'dztuyfiiyxllnvciunjv.supabase.co';
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       // addAll fails the whole install if even one request fails, so we cache
-      // the app shell (must succeed) and the third-party libs (best-effort)
-      // separately — a slow/blocked CDN shouldn't stop the app from installing.
+      // the app shell (must succeed) separately from the static assets and
+      // third-party libs (best-effort) — a slow/blocked CDN shouldn't stop
+      // the app from installing.
       return cache.addAll(APP_SHELL).then(() =>
         Promise.allSettled(
-          STATIC_LIBS.map((url) =>
+          [...STATIC_ASSETS, ...STATIC_LIBS].map((url) =>
             cache.add(new Request(url, { mode: 'cors' })).catch(() => {})
           )
         )
@@ -96,17 +112,19 @@ self.addEventListener('message', (event) => {
 self.addEventListener('fetch', (event) => {
   const { request } = event;
 
-  // Only GET requests are ever cacheable. POST/PUT/etc. (logins, saves,
-  // uploads) must always go straight to the network untouched.
+  // Only GET requests are ever cacheable. POST/PUT/PATCH/DELETE (logins,
+  // saves, uploads, Supabase writes) must always go straight to the network
+  // untouched — they never reach the logic below.
   if (request.method !== 'GET') {
     return;
   }
 
   const url = new URL(request.url);
 
-  // Rule 3: live Supabase data — always network, never touch the cache.
-  if (url.hostname === NEVER_CACHE_HOSTNAME) {
-    event.respondWith(fetch(request));
+  // Rule 3: live Supabase reads — network-first, falling back to a cache of
+  // this *exact* request (query string and all) when offline.
+  if (url.hostname === SUPABASE_HOSTNAME) {
+    event.respondWith(networkFirst(request, { matchExact: true }));
     return;
   }
 
@@ -116,7 +134,7 @@ self.addEventListener('fetch', (event) => {
     APP_SHELL.some((path) => url.pathname.endsWith(path.replace('./', '/')));
 
   if (isAppShellRequest) {
-    event.respondWith(networkFirst(request));
+    event.respondWith(networkFirst(request, { shellFallback: true }));
     return;
   }
 
@@ -125,7 +143,7 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(cacheFirst(request));
 });
 
-async function networkFirst(request) {
+async function networkFirst(request, { shellFallback = false, matchExact = false } = {}) {
   const cache = await caches.open(CACHE_NAME);
   try {
     const fresh = await fetch(request);
@@ -134,11 +152,15 @@ async function networkFirst(request) {
     }
     return fresh;
   } catch (err) {
-    const cached = await cache.match(request, { ignoreSearch: true });
+    // Supabase reads must match the exact URL (query string included) —
+    // ignoring it could serve cached data for a different filter/query.
+    const cached = await cache.match(request, { ignoreSearch: !matchExact });
     if (cached) return cached;
-    // Last resort so a fully-offline first visit doesn't hard-fail.
-    const shellFallback = await cache.match('./index.html');
-    if (shellFallback) return shellFallback;
+    if (shellFallback) {
+      // Last resort so a fully-offline first visit doesn't hard-fail.
+      const shell = await cache.match('./index.html');
+      if (shell) return shell;
+    }
     throw err;
   }
 }
