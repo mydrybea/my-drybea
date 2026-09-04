@@ -2686,26 +2686,17 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
 .security-label{ font-size:.72rem; font-weight:750; letter-spacing:.01em; }
 @media (max-width: 340px){ .security-label{ display:none; } .icon-btn.security-control{ width:38px; padding:0; } }
 
-/* ---- Status strip: save-state + cloud sync, unified into one console readout ---- */
+/* ---- Status strip: minimal single-line status readout ---- */
 .status-strip{
-  display:flex; align-items:center; flex-wrap:wrap; gap:10px;
-  margin-top: 12px; padding: 4px 4px 4px 6px;
-  border-top: 1px solid var(--console-hairline-soft);
+  display:flex; align-items:center; flex-wrap:wrap; gap:8px;
+  margin-top: 8px; padding: 0 2px;
 }
 .status-strip .data-status{
-  background:none; border:none; padding:2px 0; font-size:.72rem; font-weight:650; color: var(--app-muted);
+  background:none; border:none; padding:0; font-size:.7rem; font-weight:650; color: var(--app-muted);
 }
-.status-divider{
-  width:1px; height:16px; background: var(--console-hairline); flex:0 0 auto;
-}
+.status-divider,
 .status-strip .sync-indicator{
-  border:none; background:none; box-shadow:none; padding: 2px 0; min-height:0;
-}
-.status-strip .sync-indicator:hover{ transform:none; box-shadow:none; }
-@media (max-width: 480px){
-  .status-strip{ gap:8px; }
-  .status-divider{ display:none; }
-  .status-strip .data-status{ width:100%; }
+  display:none;
 }
 </style>
 </head>
