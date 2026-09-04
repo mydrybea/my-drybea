@@ -1942,7 +1942,7 @@ body::before{
 }
 .header::before{height:2px!important;background:linear-gradient(90deg,transparent,#1ebd70,#b99b49,#1ebd70,transparent)!important;opacity:.8;}
 .brand-logo{box-shadow:0 0 0 1px rgba(72,213,139,.25),0 10px 28px rgba(0,0,0,.35)!important;}
-.brand-text h1{color:#f4f8f5!important;}
+.brand-text h1{color:#f4f8f5!important;-webkit-text-fill-color:#f4f8f5!important;}
 .brand-text p{color:#708078!important;}
 .header-actions .status-pill{background:rgba(40,196,119,.07)!important;border-color:rgba(72,213,139,.20)!important;color:#77dda6!important;}
 .header-actions button,.header-actions .icon-btn{background:rgba(255,255,255,.025)!important;border-color:rgba(255,255,255,.10)!important;color:#a9b8b0!important;box-shadow:none!important;}
@@ -2591,6 +2591,123 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
 [data-staff-order-customer] .field{margin-bottom:10px}
 .staff-sale-ref{font-weight:950;letter-spacing:.08em}
 </style>
+
+<!-- ============================================================
+     OWNER CONSOLE HEADER — visual redesign of the top app bar.
+     Design-only layer: no ids, onclick handlers or JS-facing
+     classes were removed, so all existing logic keeps working.
+     ============================================================ -->
+<style id="header-command-console">
+:root{
+  --console-parchment: #fbf7ee;
+  --console-hairline: rgba(16,23,20,.09);
+  --console-hairline-soft: rgba(16,23,20,.06);
+}
+
+.app-shell-header{
+  padding: 16px 18px 14px;
+  border-radius: 24px;
+  display: block;
+}
+.header-top{
+  display:flex; align-items:flex-start; justify-content:space-between;
+  gap: 14px; flex-wrap: wrap;
+}
+
+/* ---- Brand ---- */
+.brand{ gap: 13px; }
+.brand-logo-wrap{ width:46px; height:46px; }
+.brand-logo{
+  border-radius: 13px;
+  border: 1px solid rgba(10,143,67,.2);
+  box-shadow: inset 0 0 0 3px rgba(255,255,255,.9), 0 3px 10px rgba(16,23,20,.14);
+}
+.brand-text h1{
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.22rem;
+  letter-spacing: -.01em;
+  line-height: 1.15;
+}
+.brand-text p{
+  display:flex; align-items:center; gap:7px;
+  font-family: var(--font);
+  font-size: .72rem;
+  font-weight: 650;
+  letter-spacing: .01em;
+  text-transform: none;
+  color: var(--app-muted);
+  margin-top: 3px;
+}
+.brand-text p::before{
+  content:""; width:4px; height:4px; border-radius:50%; flex:0 0 auto;
+  background: var(--app-gold);
+  box-shadow: 0 0 0 3px rgba(215,173,61,.16);
+}
+
+/* ---- Header actions: grouped toolbar + separated security control ---- */
+.header-actions{
+  gap: 9px;
+  align-items: center;
+}
+.action-toolbar{
+  display:flex; align-items:center;
+  background:#fff;
+  border: 1px solid var(--console-hairline);
+  border-radius: 15px;
+  padding: 3px;
+  box-shadow: 0 6px 18px rgba(16,23,20,.06);
+}
+.action-toolbar .icon-btn{
+  width: 38px; height: 38px; border: none; border-radius: 12px;
+  box-shadow: none; background: transparent;
+}
+.action-toolbar .icon-btn:hover{
+  background: var(--app-green-soft);
+  box-shadow: none;
+  transform: none;
+}
+.action-toolbar .icon-btn:active{ background: rgba(10,143,67,.14); }
+.toolbar-divider{
+  width:1px; height:20px; background: var(--console-hairline); flex:0 0 auto; margin: 0 1px;
+}
+
+.icon-btn.security-control{
+  width: auto; height: 38px; padding: 0 13px 0 11px; border-radius: 12px;
+  display:inline-flex; align-items:center; gap: 6px;
+  background: #fff8e8 !important; border: 1px solid rgba(215,173,61,.4) !important; color: #96700f !important;
+  box-shadow: none !important;
+}
+.icon-btn.security-control:hover{
+  background: #fff2d1 !important; border-color: rgba(215,173,61,.6) !important; color:#7d5c0c !important;
+  box-shadow: 0 6px 16px rgba(215,173,61,.18) !important;
+}
+.icon-btn.security-control .business-icon{ width:17px; height:17px; }
+.security-label{ font-size:.72rem; font-weight:750; letter-spacing:.01em; }
+@media (max-width: 340px){ .security-label{ display:none; } .icon-btn.security-control{ width:38px; padding:0; } }
+
+/* ---- Status strip: save-state + cloud sync, unified into one console readout ---- */
+.status-strip{
+  display:flex; align-items:center; flex-wrap:wrap; gap:10px;
+  margin-top: 12px; padding: 4px 4px 4px 6px;
+  border-top: 1px solid var(--console-hairline-soft);
+}
+.status-strip .data-status{
+  background:none; border:none; padding:2px 0; font-size:.72rem; font-weight:650; color: var(--app-muted);
+}
+.status-divider{
+  width:1px; height:16px; background: var(--console-hairline); flex:0 0 auto;
+}
+.status-strip .sync-indicator{
+  border:none; background:none; box-shadow:none; padding: 2px 0; min-height:0;
+}
+.status-strip .sync-indicator:hover{ transform:none; box-shadow:none; }
+@media (max-width: 480px){
+  .status-strip{ gap:8px; }
+  .status-divider{ display:none; }
+  .status-strip .data-status{ width:100%; }
+}
+</style>
 </head>
 <body>
 
@@ -2598,31 +2715,40 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
 
 <div class="app-container">
   <header class="header no-print app-shell-header">
-    <div class="brand">
-      <div class="brand-logo-wrap">
-        <img src="logo.jpg" alt="MY DRYBEA" class="brand-logo">
+    <div class="header-top">
+      <div class="brand">
+        <div class="brand-logo-wrap">
+          <img src="logo.jpg" alt="MY DRYBEA" class="brand-logo">
+        </div>
+        <div class="brand-text">
+          <h1>My Drybea</h1>
+          <p>Owner console</p>
+        </div>
       </div>
-      <div class="brand-text">
-        <h1>MY DRYBEA</h1>
-        <p>BUSINESS AT A GLANCE</p>
+      <div class="header-actions">
+        <div class="action-toolbar">
+          <button class="icon-btn" id="notifyCenterBtn" onclick="openNotifyCenter()" aria-label="Notifications" title="Notifications — check latest updates" data-ribbon="true"><i class="business-icon" data-lucide="bell-ring" aria-hidden="true"></i><span class="notify-badge" id="notifyBadge">0</span></button>
+          <span class="toolbar-divider" aria-hidden="true"></span>
+          <button class="icon-btn" id="themeToggle" onclick="toggleTheme()" aria-label="Toggle theme" data-ribbon="true"><i class="business-icon" data-lucide="moon" aria-hidden="true"></i></button>
+          <span class="toolbar-divider" aria-hidden="true"></span>
+          <button class="icon-btn" onclick="openQR()" aria-label="QR Code" data-ribbon="true"><i class="business-icon" data-lucide="qr-code" aria-hidden="true"></i></button>
+          <span class="toolbar-divider" aria-hidden="true"></span>
+          <button class="icon-btn" id="authBtn" onclick="openAuthModal()" aria-label="Login" data-ribbon="true"><i class="business-icon" data-lucide="user-round" aria-hidden="true"></i></button>
+        </div>
+        <button class="icon-btn lock-btn security-control" id="lockAppBtn" onclick="lockApp()" title="Lock App" aria-label="Lock App" data-ribbon="true"><i class="business-icon" data-lucide="lock-keyhole" aria-hidden="true"></i><span class="security-label">Lock</span></button>
       </div>
     </div>
-    <div class="header-actions">
+    <div class="status-strip">
       <span class="data-status" id="dataStatus"><span class="dot green"></span> Ready</span>
-      
-<div id="syncIndicator" class="sync-indicator syncing" title="Cloud synchronization status">
-  <span class="sync-dot" aria-hidden="true"></span>
-  <span class="sync-copy">
-    <span class="sync-state">Syncing…</span>
-    <span class="sync-time">Connecting to cloud</span>
-  </span>
-  <button id="syncRefresh" class="sync-refresh" type="button" aria-label="Sync now" title="Sync now">↻</button>
-</div>
-<button class="icon-btn" id="notifyCenterBtn" onclick="openNotifyCenter()" aria-label="Notifications" title="Notifications — check latest updates" data-ribbon="true"><i class="business-icon" data-lucide="bell-ring" aria-hidden="true"></i><span class="notify-badge" id="notifyBadge">0</span></button>
-<button class="icon-btn" id="themeToggle" onclick="toggleTheme()" aria-label="Toggle theme" data-ribbon="true"><i class="business-icon" data-lucide="moon" aria-hidden="true"></i></button>
-      <button class="icon-btn" onclick="openQR()" aria-label="QR Code" data-ribbon="true"><i class="business-icon" data-lucide="qr-code" aria-hidden="true"></i></button>
-      <button class="icon-btn" id="authBtn" onclick="openAuthModal()" aria-label="Login" data-ribbon="true"><i class="business-icon" data-lucide="user-round" aria-hidden="true"></i></button>
-      <button class="icon-btn lock-btn" id="lockAppBtn" onclick="lockApp()" title="Lock App" aria-label="Lock App" data-ribbon="true"><i class="business-icon" data-lucide="lock-keyhole" aria-hidden="true"></i></button>
+      <span class="status-divider" aria-hidden="true"></span>
+      <div id="syncIndicator" class="sync-indicator syncing" title="Cloud synchronization status">
+        <span class="sync-dot" aria-hidden="true"></span>
+        <span class="sync-copy">
+          <span class="sync-state">Syncing…</span>
+          <span class="sync-time">Connecting to cloud</span>
+        </span>
+        <button id="syncRefresh" class="sync-refresh" type="button" aria-label="Sync now" title="Sync now">↻</button>
+      </div>
     </div>
   </header>
 
