@@ -2686,6 +2686,10 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
 .security-label{ font-size:.72rem; font-weight:750; letter-spacing:.01em; }
 @media (max-width: 340px){ .security-label{ display:none; } .icon-btn.security-control{ width:38px; padding:0; } }
 
+/* ---- Ultra-minimal toolbar: Notifications, Theme, Login only ---- */
+.toolbar-item-hidden{ display:none !important; }
+.header-actions{ gap:0; }
+
 /* ---- Status strip: minimal single-line status readout ---- */
 .status-strip{
   display:flex; align-items:center; flex-wrap:wrap; gap:8px;
@@ -2721,12 +2725,12 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
           <button class="icon-btn" id="notifyCenterBtn" onclick="openNotifyCenter()" aria-label="Notifications" title="Notifications — check latest updates" data-ribbon="true"><i class="business-icon" data-lucide="bell-ring" aria-hidden="true"></i><span class="notify-badge" id="notifyBadge">0</span></button>
           <span class="toolbar-divider" aria-hidden="true"></span>
           <button class="icon-btn" id="themeToggle" onclick="toggleTheme()" aria-label="Toggle theme" data-ribbon="true"><i class="business-icon" data-lucide="moon" aria-hidden="true"></i></button>
-          <span class="toolbar-divider" aria-hidden="true"></span>
-          <button class="icon-btn" onclick="openQR()" aria-label="QR Code" data-ribbon="true"><i class="business-icon" data-lucide="qr-code" aria-hidden="true"></i></button>
+          <span class="toolbar-divider toolbar-item-hidden" aria-hidden="true"></span>
+          <button class="icon-btn toolbar-item-hidden" onclick="openQR()" aria-label="QR Code" data-ribbon="true"><i class="business-icon" data-lucide="qr-code" aria-hidden="true"></i></button>
           <span class="toolbar-divider" aria-hidden="true"></span>
           <button class="icon-btn" id="authBtn" onclick="openAuthModal()" aria-label="Login" data-ribbon="true"><i class="business-icon" data-lucide="user-round" aria-hidden="true"></i></button>
         </div>
-        <button class="icon-btn lock-btn security-control" id="lockAppBtn" onclick="lockApp()" title="Lock App" aria-label="Lock App" data-ribbon="true"><i class="business-icon" data-lucide="lock-keyhole" aria-hidden="true"></i><span class="security-label">Lock</span></button>
+        <button class="icon-btn lock-btn security-control toolbar-item-hidden" id="lockAppBtn" onclick="lockApp()" title="Lock App" aria-label="Lock App" data-ribbon="true"><i class="business-icon" data-lucide="lock-keyhole" aria-hidden="true"></i><span class="security-label">Lock</span></button>
       </div>
     </div>
     <div class="status-strip">
