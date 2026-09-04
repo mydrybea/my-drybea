@@ -1,0 +1,1556 @@
+<!DOCTYPE html>
+<html lang="si">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>MY DRYBEA</title>
+<meta name="description" content="MY DRYBEA business management app.">
+<meta name="theme-color" content="#10b981">
+
+<!-- ============================================================
+     APP LOCK GUARD — FIXED: uses proper Supabase session validation
+     instead of brittle localStorage + hardcoded email check.
+     ============================================================ -->
+<script>
+(function(){
+  // Store the redirect target so we can bail out cleanly
+  var REDIRECT_TARGET = 'login.html';
+
+  // Quick check: if there's no Supabase session token at all, redirect immediately.
+  // This is a fast pre-flight check; the authoritative check runs after the page loads.
+  var STORAGE_KEY = 'sb-dztuyfiiyxllnvciunjv-auth-token';
+  var raw = null;
+  try { raw = localStorage.getItem(STORAGE_KEY); } catch(e) {}
+  if (!raw) {
+    window.location.replace(REDIRECT_TARGET);
+    throw new Error('MYDRYBEA_LOCKED_REDIRECTING');
+  }
+
+  // Try to parse the session — if it's obviously invalid, redirect.
+  // We don't do any email validation here; that's handled by the async auth check.
+  // This just prevents the "flash" of content for users who are clearly not logged in.
+  var session = null;
+  try { session = JSON.parse(raw); } catch(e) {}
+  if (!session || !session.user) {
+    try { localStorage.removeItem(STORAGE_KEY); } catch(e) {}
+    window.location.replace(REDIRECT_TARGET);
+    throw new Error('MYDRYBEA_LOCKED_REDIRECTING');
+  }
+
+  // If we get here, there's at least a token in localStorage.
+  // The authoritative session validation (including token refresh) happens
+  // inside the DOMContentLoaded handler using supabase.auth.getSession().
+  // If that fails, the user will be redirected to login.html.
+})();
+</script>
+
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.json">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="MY DRYBEA">
+
+<!-- App Icon & Favicon -->
+<link rel="icon" type="image/jpeg" href="logo.jpg">
+<link rel="apple-touch-icon" href="logo.jpg">
+<link rel="shortcut icon" href="logo.jpg">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Noto+Sans+Sinhala:wght@300;400;500;600;700&family=Playfair+Display:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://unpkg.com/lucide@latest"></script>
+
+
+<link rel="stylesheet" href="style.css">
+
+
+
+
+
+
+
+
+
+
+
+
+<!-- ============================================================
+     OWNER CONSOLE HEADER — visual redesign of the top app bar.
+     Design-only layer: no ids, onclick handlers or JS-facing
+     classes were removed, so all existing logic keeps working.
+     ============================================================ -->
+</head>
+<body>
+
+<div id="appNotifyContainer" class="app-notify-container" aria-live="polite" aria-atomic="false"></div>
+
+<div class="app-container">
+  <header class="header no-print app-shell-header">
+    <div class="header-top">
+      <div class="brand">
+        <div class="brand-logo-wrap">
+          <img src="logo.jpg" alt="MY DRYBEA" class="brand-logo">
+        </div>
+        <div class="brand-text">
+          <h1>My Drybea</h1>
+          <p>Owner console</p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <div class="action-toolbar">
+          <button class="icon-btn" id="notifyCenterBtn" onclick="openNotifyCenter()" aria-label="Notifications" title="Notifications — check latest updates" data-ribbon="true"><i class="business-icon" data-lucide="bell-ring" aria-hidden="true"></i><span class="notify-badge" id="notifyBadge">0</span></button>
+          <span class="toolbar-divider" aria-hidden="true"></span>
+          <button class="icon-btn" id="themeToggle" onclick="toggleTheme()" aria-label="Toggle theme" data-ribbon="true"><i class="business-icon" data-lucide="moon" aria-hidden="true"></i></button>
+          <span class="toolbar-divider toolbar-item-hidden" aria-hidden="true"></span>
+          <button class="icon-btn toolbar-item-hidden" onclick="openQR()" aria-label="QR Code" data-ribbon="true"><i class="business-icon" data-lucide="qr-code" aria-hidden="true"></i></button>
+          <span class="toolbar-divider" aria-hidden="true"></span>
+          <button class="icon-btn" id="authBtn" onclick="openAuthModal()" aria-label="Login" data-ribbon="true"><i class="business-icon" data-lucide="user-round" aria-hidden="true"></i></button>
+        </div>
+        <button class="icon-btn lock-btn security-control toolbar-item-hidden" id="lockAppBtn" onclick="lockApp()" title="Lock App" aria-label="Lock App" data-ribbon="true"><i class="business-icon" data-lucide="lock-keyhole" aria-hidden="true"></i><span class="security-label">Lock</span></button>
+      </div>
+    </div>
+    <div class="status-strip">
+      <span class="data-status" id="dataStatus"><span class="dot green"></span> Ready</span>
+      <span class="status-divider" aria-hidden="true"></span>
+      <div id="syncIndicator" class="sync-indicator syncing" title="Cloud synchronization status">
+        <span class="sync-dot" aria-hidden="true"></span>
+        <span class="sync-copy">
+          <span class="sync-state">Syncing…</span>
+          <span class="sync-time">Connecting to cloud</span>
+        </span>
+        <button id="syncRefresh" class="sync-refresh" type="button" aria-label="Sync now" title="Sync now">↻</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="mobile-greeting no-print">
+    <div>
+      <span class="eyebrow">MY DRYBEA</span>
+      <h2>Hello, <span id="mobileUserName">Business Owner</span> <span class="wave"><i class="business-icon icon-inline" data-lucide="hand" aria-hidden="true"></i></span></h2>
+      <p>Here’s your business at a glance.</p>
+    </div>
+    <div class="profile-dot"><i class="business-icon" data-lucide="user-round" aria-hidden="true"></i></div>
+  </div>
+
+  <div class="print-header">
+    <h2><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="calculator" aria-hidden="true"></i></span><span>Cost Sheet</span></h2><p class="pro-subtitle green">Fast pricing intelligence for every pack.</p>
+    <p id="printDate"></p>
+    <hr>
+  </div>
+
+
+
+  <nav class="tabs no-print app-nav" role="tablist" aria-label="Main navigation">
+    <button class="tab-btn active" data-tab="dashboard" role="tab" aria-label="Home" data-owner-only><i class="business-icon" data-lucide="house" aria-hidden="true"></i><span>Home</span></button>
+    <button class="tab-btn" data-tab="my-staff" role="tab" aria-label="My Staff" data-owner-only><i class="business-icon" data-lucide="users-round" aria-hidden="true"></i><span>My Staff</span><span id="myStaffAdvanceBadge" class="nav-badge" style="display:none;">0</span></button>
+    <button class="tab-btn" data-tab="staff-home" role="tab" aria-label="Staff Home" data-staff-only><i class="business-icon" data-lucide="layout-dashboard" aria-hidden="true"></i><span>Staff Home</span></button>
+    <button class="tab-btn" data-tab="my-salary" role="tab" aria-label="My Salary" data-staff-only><i class="business-icon" data-lucide="wallet-cards" aria-hidden="true"></i><span>My Salary</span></button>
+    <button class="tab-btn" data-tab="orders" role="tab" aria-label="Orders"><i class="business-icon" data-lucide="shopping-bag" aria-hidden="true"></i><span>Orders</span></button>
+    <button class="tab-btn" data-tab="income" role="tab" aria-label="Income" data-owner-only><i class="business-icon" data-lucide="trending-up" aria-hidden="true"></i><span>Income</span></button>
+    <button class="tab-btn" data-tab="calculator" role="tab" aria-label="Cost" data-owner-only><i class="business-icon" data-lucide="calculator" aria-hidden="true"></i><span>Cost</span></button>
+    <button class="tab-btn" data-tab="expenses" role="tab" aria-label="Daily Expenses"><i class="business-icon" data-lucide="receipt" aria-hidden="true"></i><span>Daily Expenses</span></button>
+    <button class="tab-btn" data-tab="daily-pay" role="tab" aria-label="Daily Pay" data-staff-only><i class="business-icon" data-lucide="calendar-days" aria-hidden="true"></i><span>Daily Pay</span></button>
+    <button class="tab-btn" data-tab="work-update" role="tab" aria-label="Work Update" data-staff-only><i class="business-icon" data-lucide="notebook-pen" aria-hidden="true"></i><span>Work Update</span></button>
+    <button class="tab-btn" data-tab="attendance" role="tab" aria-label="Attendance" data-staff-only><i class="business-icon" data-lucide="clock-3" aria-hidden="true"></i><span>Attendance</span></button>
+    <button class="tab-btn" data-tab="advance" role="tab" aria-label="Advance" data-staff-only><i class="business-icon" data-lucide="hand-coins" aria-hidden="true"></i><span>Advance</span></button>
+    <button class="tab-btn" data-tab="my-commission" role="tab" aria-label="My Commission" data-staff-only><i class="business-icon" data-lucide="badge-percent" aria-hidden="true"></i><span>Commission</span></button>
+    <button class="tab-btn" data-tab="my-tasks" role="tab" aria-label="My Tasks" data-staff-only><i class="business-icon" data-lucide="list-checks" aria-hidden="true"></i><span>Tasks</span></button>
+    <button class="tab-btn" data-tab="announcements" role="tab" aria-label="Announcements" data-staff-only><i class="business-icon" data-lucide="megaphone" aria-hidden="true"></i><span>Notices</span></button>
+    <button class="tab-btn" data-tab="profile" role="tab" aria-label="Profile"><i class="business-icon" data-lucide="user-round" aria-hidden="true"></i><span>Profile</span></button>
+  </nav>
+
+  <!-- ============ INCOME TAB ============ -->
+  <section id="income" class="tab-panel" role="tabpanel" style="display:none;">
+    <div class="mobile-greeting no-print" style="padding:0 0 8px;"><div class="salary-access-banner" data-owner-only>
+      <div><strong><i class="business-icon icon-inline" data-lucide="crown"></i> OWNER SALARY CONTROL</strong><span>Daily payroll, monthly payroll, bonuses, advances, deductions and commission verification are controlled from the secure Salary Manager.</span></div>
+      <button class="btn btn-primary btn-sm" type="button" onclick="activateAppTab('profile');setTimeout(()=>document.getElementById('salaryStaffSelect')?.scrollIntoView({behavior:'smooth',block:'center'}),120)"><i class="business-icon icon-inline" data-lucide="settings-2"></i> Manage Staff Salary</button>
+    </div>
+    
+      <div><span class="eyebrow">FINANCIAL OVERVIEW</span><h2><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="trending-up" aria-hidden="true"></i></span><span>Income</span></h2><p class="pro-subtitle green">See what the business is earning at a glance.</p><p>Revenue, profit and fixed-cost position at a glance.</p></div>
+      <div class="profile-dot"><i class="business-icon" data-lucide="trending-up" aria-hidden="true"></i></div>
+    </div>
+    <div class="income-grid">
+      <div class="card income-card"><span>Monthly Revenue</span><strong id="incomeRevenue">Rs. 0</strong><small>Total planned sales</small></div>
+      <div class="card income-card"><span>Gross Profit</span><strong id="incomeGrossProfit">Rs. 0</strong><small>Before fixed costs</small></div>
+      <div class="card income-card"><span>Fixed Costs</span><strong id="incomeFixed">Rs. 0</strong><small>Monthly overhead</small></div>
+      <div class="card income-card income-highlight"><span>Net Profit</span><strong id="incomeNet">Rs. 0</strong><small>After fixed costs</small></div>
+    </div>
+    <div class="card">
+      <h2><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="chart-no-axes-combined" aria-hidden="true"></i></span><span>Profit</span></h2><p class="pro-subtitle gold">Margin, contribution and momentum in one view.</p>
+      <div class="income-summary"><div><span>Net Margin</span><strong id="incomeMargin">0%</strong></div><button class="btn btn-primary" data-open-tab="calculator" data-ribbon="true">Open Costing</button></div>
+    </div>
+  </section>
+
+  <!-- ============ MONTHLY SUMMARY TAB ============ -->
+  <section id="monthly-summary" class="tab-panel" role="tabpanel" style="display:none;">
+    <div class="mobile-greeting no-print" style="padding:0 0 8px;">
+      <div><span class="eyebrow">BUSINESS REPORT</span><h2><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="chart-no-axes-combined" aria-hidden="true"></i></span><span>Month Pulse</span></h2><p class="pro-subtitle green">Live month-to-date performance as data moves.</p><p>Live summary of this month's recorded business activity.</p></div>
+      <div class="profile-dot"><i class="business-icon" data-lucide="chart-no-axes-combined" aria-hidden="true"></i></div>
+    </div>
+
+    <div class="monthly-summary-hero">
+      <div class="monthly-summary-period">
+        <span class="eyebrow">CURRENT MONTH</span>
+        <h2 id="summaryMonthName">—</h2>
+        <p id="summaryDateRange">01 — —</p>
+        <div class="monthly-summary-live"><span class="live-dot"></span><span id="summaryLiveText">Updating from recorded data</span></div>
+      </div>
+      <div class="monthly-summary-mini">
+        <span>Net Recorded Cash</span>
+        <strong id="summaryNetCash">Rs. 0</strong>
+        <span id="summaryNetLabel" style="margin-top:5px;text-transform:none;letter-spacing:0;font-size:.62rem;font-weight:600;">Orders revenue − recorded expenses</span>
+      </div>
+    </div>
+
+    <div class="monthly-summary-grid">
+      <div class="monthly-stat"><div class="ms-icon"><i class="business-icon" data-lucide="trending-up" aria-hidden="true"></i></div><div class="ms-label">Order Revenue</div><div class="ms-value" id="summaryRevenue">Rs. 0</div><div class="ms-sub">Non-cancelled orders</div></div>
+      <div class="monthly-stat gold"><div class="ms-icon"><i class="business-icon" data-lucide="receipt" aria-hidden="true"></i></div><div class="ms-label">Recorded Expenses</div><div class="ms-value" id="summaryExpenses">Rs. 0</div><div class="ms-sub">Expenses dated this month</div></div>
+      <div class="monthly-stat blue"><div class="ms-icon"><i class="business-icon" data-lucide="shopping-bag" aria-hidden="true"></i></div><div class="ms-label">Orders</div><div class="ms-value" id="summaryOrders">0</div><div class="ms-sub" id="summaryOrdersSub">0 delivered • 0 pending</div></div>
+      <div class="monthly-stat red"><div class="ms-icon"><i class="business-icon" data-lucide="layout-dashboard" aria-hidden="true"></i></div><div class="ms-label">Units Sold</div><div class="ms-value" id="summaryUnits">0</div><div class="ms-sub">Across recorded orders</div></div>
+    </div>
+
+    <div class="card">
+      <h2>Month at a Glance</h2>
+      <table class="monthly-summary-table">
+        <tr><td>Average order value</td><td id="summaryAvgOrder">Rs. 0</td></tr>
+        <tr><td>Delivered revenue</td><td id="summaryDeliveredRevenue">Rs. 0</td></tr>
+        <tr><td>Pending revenue</td><td id="summaryPendingRevenue">Rs. 0</td></tr>
+        <tr><td>Cancelled orders</td><td id="summaryCancelled">0</td></tr>
+        <tr><td>Days elapsed</td><td id="summaryDaysElapsed">0 / 0</td></tr>
+      </table>
+      <div class="monthly-summary-note" id="summaryNote">This report automatically refreshes whenever the app receives or records new order and expense data.</div>
+    </div>
+  </section>
+
+  <!-- ============ STAFF HOME TAB (staff-only) ============ -->
+  <section id="staff-home" class="tab-panel" role="tabpanel" style="display:none;">
+    <div class="staff-suite-hero">
+      <span class="eyebrow">STAFF OPERATIONS</span>
+      <h2 style="margin:4px 0 4px;">Welcome, <span id="staffHomeName">Staff Member</span></h2>
+      <p style="margin:0;color:var(--text-muted);">Your work, sales, attendance and earnings in one place.</p>
+      <div class="staff-suite-grid">
+        <div class="staff-mini"><div class="mini-icon"><i class="business-icon" data-lucide="shopping-bag"></i></div><strong id="staffHomeOrders">0</strong><span>Orders this month</span></div>
+        <div class="staff-mini"><div class="mini-icon"><i class="business-icon" data-lucide="badge-percent"></i></div><strong id="staffHomeCommission">Rs. 0</strong><span>Commission earned</span></div>
+        <div class="staff-mini"><div class="mini-icon"><i class="business-icon" data-lucide="clock-3"></i></div><strong id="staffHomeHours">0.0h</strong><span>Worked hours</span></div>
+        <div class="staff-mini"><div class="mini-icon"><i class="business-icon" data-lucide="list-checks"></i></div><strong id="staffHomeTasks">0</strong><span>Open tasks</span></div>
+      </div>
+    </div>
+    <div class="card" style="margin-top:16px;">
+      <h2><span class="pro-title-icon gold"><i class="business-icon" data-lucide="zap"></i></span><span>Quick Actions</span></h2>
+      <div class="staff-launch-grid world-staff-actions">
+        <button type="button" class="staff-launch primary" onclick="safeStaffQuickAction('orders')"><span class="launch-icon"><i class="business-icon" data-lucide="plus-circle"></i></span><span><b>New Sale</b><small>Start a new order in one tap</small></span><em>CREATE</em></button>
+        <button type="button" class="staff-launch gold" onclick="safeStaffQuickAction('daily-pay')"><span class="launch-icon"><i class="business-icon" data-lucide="calendar-days"></i></span><span><b>Daily Pay</b><small>Day-by-day salary</small></span><em>DAILY</em></button>
+        <button type="button" class="staff-launch" onclick="safeStaffQuickAction('advance')"><span class="launch-icon"><i class="business-icon" data-lucide="hand-coins"></i></span><span><b>Advance</b><small>Request salary advance</small></span><em>CASH</em></button>
+        <button type="button" class="staff-launch" onclick="safeStaffQuickAction('attendance')"><span class="launch-icon"><i class="business-icon" data-lucide="clock-3"></i></span><span><b>Attendance</b><small>Clock & work log</small></span><em>TIME</em></button>
+        <button type="button" class="staff-launch" onclick="safeStaffQuickAction('my-tasks')"><span class="launch-icon"><i class="business-icon" data-lucide="list-checks"></i></span><span><b>My Tasks</b><small>Complete assigned work</small></span><em>TASKS</em></button>
+        <button type="button" class="staff-launch" onclick="safeStaffQuickAction('work-update')"><span class="launch-icon"><i class="business-icon" data-lucide="notebook-pen"></i></span><span><b>Work Update</b><small>Send today's update</small></span><em>UPDATE</em></button>
+        <button type="button" class="staff-launch" onclick="safeStaffQuickAction('my-commission')"><span class="launch-icon"><i class="business-icon" data-lucide="badge-percent"></i></span><span><b>Commission</b><small>Verified earnings only</small></span><em>VERIFY</em></button>
+        <button type="button" class="staff-launch" onclick="safeStaffQuickAction('announcements')"><span class="launch-icon"><i class="business-icon" data-lucide="megaphone"></i></span><span><b>Notices</b><small>Read team updates</small></span><em>TEAM</em></button>
+      </div>
+    </div>
+    <div class="grid-2" style="margin-top:16px;">
+      <div class="card"><h2><span class="pro-title-icon green"><i class="business-icon" data-lucide="megaphone"></i></span><span>Latest Notices</span></h2><div id="staffHomeNotices"><div class="notice">No notices yet.</div></div></div>
+      <div class="card"><h2><span class="pro-title-icon orange"><i class="business-icon" data-lucide="list-checks"></i></span><span>My Tasks</span></h2><div id="staffHomeTasksList"><div class="notice">No open tasks.</div></div></div>
+    </div>
+  </section>
+
+  <!-- ============ MY COMMISSION TAB (staff-only) ============ -->
+  <section id="my-commission" class="tab-panel" role="tabpanel" style="display:none;">
+    <div class="mobile-greeting no-print" style="padding:0 0 8px;">
+      <div><span class="eyebrow">STAFF EARNINGS</span><h2><span class="pro-title-icon gold"><i class="business-icon" data-lucide="badge-percent"></i></span><span>My Commission</span></h2><p class="pro-subtitle gold">Earn 12% commission on eligible sales made through your customer reference.</p></div>
+      <div class="profile-dot"><i class="business-icon" data-lucide="badge-percent"></i></div>
+    </div>
+    <div class="commission-hero">
+      <span class="eyebrow">THIS MONTH</span>
+      <div class="commission-value" id="commissionMonthTotal">Rs. 0</div>
+      <div style="opacity:.78;font-size:.75rem;">12% referral commission</div>
+      <div class="commission-grid">
+        <div class="stat"><div class="k">Eligible Sales</div><div class="v" id="commissionSalesTotal">Rs. 0</div></div>
+        <div class="stat"><div class="k">Sales Count</div><div class="v" id="commissionSalesCount">0</div></div>
+        <div class="stat"><div class="k">Rate</div><div class="v">12%</div></div>
+      </div>
+    </div>
+    <div class="notice" style="margin-top:12px;"><i class="business-icon icon-inline" data-lucide="info"></i><strong> Commission rule:</strong> eligible non-cancelled sales attributed to your staff reference generate 12%. Refund/cancelled orders are excluded.</div>
+    <div class="card" style="margin-top:16px;">
+      <h2><span class="pro-title-icon green"><i class="business-icon" data-lucide="receipt-text"></i></span><span>Commission History</span></h2>
+      <div class="table-wrap" style="margin-top:10px;"><table><thead><tr><th>Date</th><th>Customer</th><th>Sale</th><th>12%</th><th>Status</th></tr></thead><tbody id="commissionHistoryBody"></tbody></table></div>
+    </div>
+  </section>
+
+  <!-- ============ MY TASKS TAB (staff-only) ============ -->
+  <section id="my-tasks" class="tab-panel" role="tabpanel" style="display:none;">
+    <div class="mobile-greeting no-print" style="padding:0 0 8px;"><div><span class="eyebrow">WORK QUEUE</span><h2><span class="pro-title-icon orange"><i class="business-icon" data-lucide="list-checks"></i></span><span>My Tasks</span></h2><p class="pro-subtitle orange">Keep today's work clear and accountable.</p></div></div>
+    <div class="notice staff-task-info"><i class="business-icon icon-inline" data-lucide="info"></i><strong> Your work queue is owner-assigned.</strong> Open a task, complete it when finished, and the owner will see the update instantly.</div>
+    <div class="card" style="margin-top:16px;"><h2><span class="pro-title-icon green"><i class="business-icon" data-lucide="list-checks"></i></span><span>Task List</span></h2><div id="staffTaskList"><div class="notice">No tasks yet.</div></div></div>
+  </section>
+
+  <!-- ============ ANNOUNCEMENTS TAB (staff-only) ============ -->
+  <section id="announcements" class="tab-panel" role="tabpanel" style="display:none;">
+    <div class="mobile-greeting no-print" style="padding:0 0 8px;"><div><span class="eyebrow">TEAM COMMUNICATION</span><h2><span class="pro-title-icon blue"><i class="business-icon" data-lucide="megaphone"></i></span><span>Announcements</span></h2><p class="pro-subtitle blue">Important business notices for staff.</p></div></div>
+    <div class="card"><div id="staffNoticeList"><div class="notice">No announcements yet.</div></div></div>
+  </section>
+
+  <!-- ============ MY SALARY TAB (shared: staff self-view + owner control) ============ -->
+  <section id="my-salary" class="tab-panel" role="tabpanel" style="display:none;">
+    <div class="mobile-greeting no-print" style="padding:0 0 8px;">
+      <div><span class="eyebrow">MY PAY</span><h2><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="wallet-cards" aria-hidden="true"></i></span><span>My Salary</span></h2><p class="pro-subtitle green">Daily + monthly salary view with secure owner control.</p></div>
+      <div class="profile-dot"><i class="business-icon" data-lucide="wallet-cards" aria-hidden="true"></i></div>
+    </div>
+    <div class="card smart-salary-card" style="margin-bottom:16px;">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;">
+        <div>
+          <h2 style="margin:0;display:flex;align-items:center;gap:8px;"><i class="business-icon" data-lucide="chart-no-axes-combined" aria-hidden="true"></i><span>Smart Payroll</span></h2>
+          <p class="pro-subtitle green" style="margin-bottom:0;">Read-only salary, attendance & overtime summary for your account.</p>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <label style="font-size:12px;font-weight:800;">Month
+            <input type="month" id="mySmartSalaryMonth" onchange="refreshMySmartSalary()" style="margin-left:6px;padding:8px 10px;border-radius:10px;border:1px solid var(--border);background:var(--bg-card);color:var(--text-main);">
+          </label>
+          <button class="btn btn-sm" type="button" onclick="printMySmartPayslip()"><i class="business-icon icon-inline" data-lucide="printer" aria-hidden="true"></i> Print</button>
+        </div>
+      </div>
+
+      <div class="stat-grid" style="margin-top:14px;">
+        <div class="stat accent"><div class="k">Payroll Target</div><div class="v" id="mySmartTarget">Rs. 0</div></div>
+        <div class="stat"><div class="k">Paid / Recorded</div><div class="v" id="mySmartPaid">Rs. 0</div></div>
+        <div class="stat"><div class="k">Balance</div><div class="v" id="mySmartBalance">Rs. 0</div></div>
+        <div class="stat"><div class="k">Attendance Days</div><div class="v" id="mySmartDays">0</div></div>
+        <div class="stat"><div class="k">Worked Hours</div><div class="v" id="mySmartHours">0.0</div></div>
+        <div class="stat"><div class="k">Overtime Hours</div><div class="v" id="mySmartOtHours">0.0</div></div>
+        <div class="stat"><div class="k">Bonus</div><div class="v" id="mySmartBonus">Rs. 0</div></div>
+        <div class="stat accent"><div class="k">Referral Commission</div><div class="v" id="mySmartCommission">Rs. 0</div></div>
+        <div class="stat"><div class="k">Advance / Deductions</div><div class="v" id="mySmartMinus">Rs. 0</div></div>
+        <div class="stat"><div class="k">Estimated OT Value</div><div class="v" id="mySmartOtValue">Rs. 0</div></div>
+      </div>
+
+      <div class="notice" style="margin-top:12px;">
+        <strong><i class="business-icon icon-inline" data-lucide="lock-keyhole" aria-hidden="true"></i> STAFF READ-ONLY</strong>
+        <span id="mySmartSalaryInsight">Only the owner can create, edit or delete salary records.</span>
+      </div>
+    </div>
+
+    <div class="stat-grid">
+      <div class="stat"><div class="k">Base Monthly</div><div class="v" id="mySalBase">Rs. 0</div></div>
+      <div class="stat"><div class="k">Standard Daily Rate</div><div class="v" id="mySalDailyRate">Rs. 0</div></div>
+    </div>
+    <div class="stat-grid" style="margin-top:10px;">
+      <div class="stat accent"><div class="k">This Month Daily Pay</div><div class="v" id="mySalSumDaily">Rs. 0</div></div>
+      <div class="stat"><div class="k">Bonuses</div><div class="v" id="mySalSumBonus">Rs. 0</div></div>
+      <div class="stat accent"><div class="k">12% Commission</div><div class="v" id="mySalSumCommission">Rs. 0</div></div>
+      <div class="stat"><div class="k">Advances / Deductions</div><div class="v" id="mySalSumMinus">Rs. 0</div></div>
+      <div class="stat accent"><div class="k">Net Payable (Month)</div><div class="v" id="mySalSumNet">Rs. 0</div></div>
+    </div>
+    <div class="card" style="margin-top:16px;">
+      <h2><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="receipt-text" aria-hidden="true"></i></span><span>Payslip History</span></h2>
+      <p class="pro-subtitle gold">Every salary entry the owner has recorded for you.</p>
+      <div class="table-wrap" style="margin-top:10px;">
+        <table>
+          <thead><tr><th>Date</th><th>Type</th><th>Amount</th><th>Note</th></tr></thead>
+          <tbody id="mySalaryHistoryBody"><tr><td colspan="4" style="text-align:center;opacity:.5;padding:14px;">No entries yet.</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ DAILY PAY TAB (staff-only) ============ -->
+  <section id="daily-pay" class="tab-panel" role="tabpanel" style="display:none;">
+    <div class="mobile-greeting no-print" style="padding:0 0 8px;">
+      <div><span class="eyebrow">DAILY RATE</span><h2><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="calendar-days" aria-hidden="true"></i></span><span>Daily Pay</span></h2><p class="pro-subtitle green">Days worked and daily pay logged this month.</p></div>
+      <div class="profile-dot"><i class="business-icon" data-lucide="calendar-days" aria-hidden="true"></i></div>
+    </div>
+    <div class="stat-grid">
+      <div class="stat accent"><div class="k">Days Paid This Month</div><div class="v" id="dpDaysCount">0</div></div>
+      <div class="stat accent"><div class="k">Month Total</div><div class="v" id="dpMonthTotal">Rs. 0</div></div>
+    </div>
+    <div class="card" style="margin-top:16px;">
+      <h2><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="clipboard-list" aria-hidden="true"></i></span><span>Day-by-Day</span></h2>
+      <div class="table-wrap" style="margin-top:10px;">
+        <table>
+          <thead><tr><th>Date</th><th>Amount</th><th>Note</th></tr></thead>
+          <tbody id="dpListBody"><tr><td colspan="3" style="text-align:center;opacity:.5;padding:14px;">No daily pay logged this month yet.</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ MY WORK UPDATE TAB (staff-only) ============ -->
+  <section id="work-update" class="tab-panel" role="tabpanel" style="display:none;">
+    <div class="mobile-greeting no-print" style="padding:0 0 8px;">
+      <div><span class="eyebrow">DAILY SUMMARY</span><h2><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="notebook-pen" aria-hidden="true"></i></span><span>My Work Update</span></h2><p class="pro-subtitle green">What you did today, in one place.</p></div>
+      <div class="profile-dot"><i class="business-icon" data-lucide="notebook-pen" aria-hidden="true"></i></div>
+    </div>
+    <div class="stat-grid">
+      <div class="stat accent"><div class="k">Orders Today</div><div class="v" id="wuOrdersToday">0</div></div>
+      <div class="stat"><div class="k">Orders This Month</div><div class="v" id="wuOrdersMonth">0</div></div>
+    </div>
+    <div class="card work-note-box" style="margin-top:16px;">
+      <h2><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="pen-line" aria-hidden="true"></i></span><span>Today's Note</span></h2>
+      <p class="pro-subtitle gold">Add anything the auto-count doesn't capture — production, deliveries, tasks.</p>
+      <textarea id="wuNoteText" placeholder="e.g. Packed 40 balaya bags, delivered 3 orders in Kandy area..."></textarea>
+      <div class="btn-row" style="margin-top:10px;">
+        <button class="btn btn-primary" onclick="saveWorkNote()"><i class="business-icon icon-inline" data-lucide="save" aria-hidden="true"></i> Save Today's Note</button>
+      </div>
+    </div>
+    <div class="card" style="margin-top:16px;">
+      <h2><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="folder-kanban" aria-hidden="true"></i></span><span>Recent Updates</span></h2>
+      <div class="table-wrap" style="margin-top:10px;">
+        <table>
+          <thead><tr><th>Date</th><th>Orders</th><th>Note</th></tr></thead>
+          <tbody id="wuHistoryBody"><tr><td colspan="3" style="text-align:center;opacity:.5;padding:14px;">No updates yet.</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ ATTENDANCE TAB (staff-only) ============ -->
+  <section id="attendance" class="tab-panel" role="tabpanel" style="display:none;">
+    <div class="mobile-greeting no-print" style="padding:0 0 8px;">
+      <div><span class="eyebrow">CHECK IN / OUT</span><h2><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="clock-3" aria-hidden="true"></i></span><span>Attendance</span></h2><p class="pro-subtitle green">Log your work day with one tap.</p></div>
+      <div class="profile-dot"><i class="business-icon" data-lucide="clock-3" aria-hidden="true"></i></div>
+    </div>
+    <div class="card">
+      <div id="attendTodayStatus" class="notice" style="margin-bottom:12px;">Loading today's status...</div>
+      <div class="attend-btn-row">
+        <div class="attend-time-col">
+          <label class="attend-time-label" for="attendStartTime">ON TIME</label>
+          <div class="attend-time-input-wrap">
+            <input type="time" id="attendStartTime" class="attend-time-input">
+            <button type="button" class="attend-time-save-btn" id="attendStartTimeSave" onclick="requestAttendanceCorrection('in')" disabled title="Request a correction to your ON time (needs owner approval)"><i class="business-icon" data-lucide="flag" aria-hidden="true"></i></button>
+          </div>
+          <button class="btn btn-primary" id="attendStartBtn" onclick="startDay()"><i class="business-icon icon-inline" data-lucide="play" aria-hidden="true"></i> Start Day</button>
+        </div>
+        <div class="attend-time-col">
+          <label class="attend-time-label" for="attendEndTime">OFF TIME</label>
+          <div class="attend-time-input-wrap">
+            <input type="time" id="attendEndTime" class="attend-time-input">
+            <button type="button" class="attend-time-save-btn" id="attendEndTimeSave" onclick="requestAttendanceCorrection('out')" disabled title="Request a correction to your OFF time (needs owner approval)"><i class="business-icon" data-lucide="flag" aria-hidden="true"></i></button>
+          </div>
+          <button class="btn btn-danger" id="attendEndBtn" onclick="endDay()" disabled><i class="business-icon icon-inline" data-lucide="square" aria-hidden="true"></i> End Day</button>
+        </div>
+      </div>
+      <p class="staff-section-note" style="margin-top:10px;">ON/OFF is locked to the server clock the instant you tap Start/End Day — it can never be pre-set or backdated. Logged the wrong time by mistake? Pick the correct time and tap 🚩 to send your owner a correction request for approval.</p>
+      <div id="attendCorrectionNote" class="staff-section-note" style="margin-top:6px;display:none;"></div>
+    </div>
+    <div class="card" style="margin-top:16px;">
+      <h2><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="calendar-range" aria-hidden="true"></i></span><span>This Month's Log</span></h2>
+      <div class="table-wrap" style="margin-top:10px;">
+        <table>
+          <thead><tr><th>Date</th><th>Start</th><th>End</th><th>Hours</th></tr></thead>
+          <tbody id="attendLogBody"><tr><td colspan="4" style="text-align:center;opacity:.5;padding:14px;">No attendance logged this month yet.</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ ADVANCE REQUEST TAB (staff-only) ============ -->
+  <section id="advance" class="tab-panel" role="tabpanel" style="display:none;">
+    <div class="mobile-greeting no-print" style="padding:0 0 8px;">
+      <div><span class="eyebrow">SALARY ADVANCE</span><h2><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="hand-coins" aria-hidden="true"></i></span><span>Advance Request</span></h2><p class="pro-subtitle green">Request an advance — the owner gets notified instantly.</p></div>
+      <div class="profile-dot"><i class="business-icon" data-lucide="hand-coins" aria-hidden="true"></i></div>
+    </div>
+    <div class="card">
+      <div class="field">
+        <label>Amount Requested (Rs.)</label>
+        <div class="input-prefix"><span>Rs.</span><input type="number" id="advAmount" value="0" min="0"></div>
+      </div>
+      <div class="field">
+        <label>Reason</label>
+        <input type="text" id="advReason" placeholder="e.g. Medical expense, family need...">
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="submitAdvanceRequest()"><i class="business-icon icon-inline" data-lucide="send" aria-hidden="true"></i> Request &amp; Notify Owner</button>
+      </div>
+    </div>
+    <div class="card" style="margin-top:16px;">
+      <h2><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="scroll-text" aria-hidden="true"></i></span><span>My Requests</span></h2>
+      <div class="table-wrap" style="margin-top:10px;">
+        <table>
+          <thead><tr><th>Date</th><th>Amount</th><th>Reason</th><th>Status</th></tr></thead>
+          <tbody id="advMyHistoryBody"><tr><td colspan="4" style="text-align:center;opacity:.5;padding:14px;">No requests yet.</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ MY STAFF TAB (owner-only) ============ -->
+  <section id="my-staff" class="tab-panel" role="tabpanel" style="display:none;">
+    <div class="staff-suite-hero owner-staff-hero">
+      <div style="display:flex;justify-content:space-between;gap:14px;align-items:flex-start;flex-wrap:wrap;">
+        <div>
+          <span class="eyebrow">TEAM MANAGEMENT</span>
+          <h2 style="margin:4px 0 4px;display:flex;align-items:center;gap:8px;"><i class="business-icon" data-lucide="users-round"></i> MY STAFF</h2>
+          <p class="pro-subtitle green" style="margin-bottom:0;">Manage staff performance, referral commission, tasks, notices, advances and salary from one owner workspace.</p>
+        </div>
+        <button class="btn btn-primary" onclick="document.getElementById('staffUid')?.scrollIntoView({behavior:'smooth',block:'center'});activateAppTab('profile');"><i class="business-icon icon-inline" data-lucide="user-plus"></i> Add / Manage Staff</button>
+      </div>
+      <div class="staff-suite-grid">
+        <div class="staff-mini"><div class="mini-icon"><i class="business-icon" data-lucide="users-round"></i></div><strong id="ownerStaffCount">0</strong><span>Active staff</span></div>
+        <div class="staff-mini"><div class="mini-icon"><i class="business-icon" data-lucide="clock-3"></i></div><strong id="ownerStaffWorkingNow">0</strong><span>Working now</span></div>
+        <div class="staff-mini"><div class="mini-icon"><i class="business-icon" data-lucide="shopping-bag"></i></div><strong id="ownerStaffSales">Rs. 0</strong><span>Referral sales this month</span></div>
+        <div class="staff-mini"><div class="mini-icon"><i class="business-icon" data-lucide="badge-percent"></i></div><strong id="ownerStaffCommission">Rs. 0</strong><span>12% commission this month</span></div>
+        <div class="staff-mini"><div class="mini-icon"><i class="business-icon" data-lucide="hand-coins"></i></div><strong id="ownerPendingAdvances">0</strong><span>Pending advances</span></div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px;">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;">
+        <div><h2><span class="pro-title-icon green"><i class="business-icon" data-lucide="clock-3"></i></span><span>Today's Attendance</span></h2><p class="pro-subtitle green">Live check-in / check-out and hours worked so far, per staff member.</p></div>
+        <button class="btn btn-sm" onclick="loadOwnerAttendanceToday()"><i class="business-icon icon-inline" data-lucide="refresh-cw"></i> Refresh</button>
+      </div>
+      <div class="table-wrap" style="margin-top:10px;">
+        <table class="staff-table-compact"><thead><tr><th>Staff</th><th>Status</th><th>Check-in</th><th>Check-out</th><th>Hours Today</th></tr></thead><tbody id="ownerAttendanceTodayBody"><tr><td colspan="5" style="text-align:center;opacity:.5;padding:18px;">Loading today's attendance...</td></tr></tbody></table>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px;">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;">
+        <div><h2><span class="pro-title-icon gold"><i class="business-icon" data-lucide="flag"></i></span><span>Time Correction Requests</span></h2><p class="pro-subtitle green">Staff can no longer edit a logged ON/OFF time themselves — review and approve or reject their requests here.</p></div>
+        <button class="btn btn-sm" onclick="loadOwnerPendingCorrections()"><i class="business-icon icon-inline" data-lucide="refresh-cw"></i> Refresh</button>
+      </div>
+      <div class="table-wrap" style="margin-top:10px;">
+        <table class="staff-table-compact"><thead><tr><th>Staff</th><th>Date</th><th>Field</th><th>Requested Time</th><th>Reason</th><th>Action</th></tr></thead><tbody id="ownerCorrectionsBody"><tr><td colspan="6" style="text-align:center;opacity:.5;padding:18px;">Loading correction requests...</td></tr></tbody></table>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px;">
+      <div class="my-staff-toolbar">
+        <button class="btn btn-primary" onclick="saveMyStaffData()"><i class="business-icon icon-inline" data-lucide="save"></i> Save MY STAFF Data</button>
+        <button class="btn" onclick="loadMyStaffData(true)"><i class="business-icon icon-inline" data-lucide="database"></i> Load Saved Data</button>
+        <button class="btn" onclick="exportMyStaffData()"><i class="business-icon icon-inline" data-lucide="download"></i> Export Backup</button>
+        <label class="btn" style="cursor:pointer;"><i class="business-icon icon-inline" data-lucide="upload"></i> Import Backup<input id="myStaffImportFile" type="file" accept="application/json" style="display:none" onchange="importMyStaffData(event)"></label>
+        <span class="staff-data-status" id="myStaffDataStatus">Auto-save ready</span>
+      </div>
+      <div class="staff-section-note">Owner-only data control. Settings, task assignments, notices and owner performance edits are saved locally in this browser. Live orders, profiles, salaries and advances continue to load from Supabase.</div>
+    </div>
+
+    <div class="card" style="margin-top:16px;">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;">
+        <div><h2><span class="pro-title-icon green"><i class="business-icon" data-lucide="users-round"></i></span><span>Staff Performance</span></h2><p class="pro-subtitle green">Referral sales are attributed to the customer reference and earn 12%.</p></div>
+        <button class="btn btn-sm" onclick="refreshMyStaffPage()"><i class="business-icon icon-inline" data-lucide="refresh-cw"></i> Refresh</button>
+      </div>
+      <div class="table-wrap" style="margin-top:10px;">
+        <table class="staff-table-compact"><thead><tr><th>Staff</th><th>Status</th><th>Orders</th><th>Referral Sales</th><th>Rate</th><th>Commission</th><th>Open Tasks</th><th>Target</th><th>Owner Note</th><th>Save</th></tr></thead><tbody id="ownerStaffPerformanceBody"><tr><td colspan="10" style="text-align:center;opacity:.5;padding:18px;">Loading staff performance...</td></tr></tbody></table>
+      </div>
+    </div>
+
+    <div class="grid-2" style="margin-top:16px;">
+      <div class="card">
+        <h2><span class="pro-title-icon orange"><i class="business-icon" data-lucide="list-plus"></i></span><span>Assign Staff Task</span></h2>
+        <div class="field"><label>Staff Member</label><select id="ownerTaskStaff"><option value="">-- Select staff --</option></select></div>
+        <div class="field"><label>Task</label><input id="ownerTaskTitle" placeholder="e.g. Call customer / prepare delivery"></div>
+        <div class="field"><label>Priority</label><select id="ownerTaskPriority"><option value="normal">Normal</option><option value="high">High</option></select></div>
+        <button class="btn btn-primary" onclick="ownerAssignStaffTask()"><i class="business-icon icon-inline" data-lucide="send"></i> Assign Task</button>
+      </div>
+      <div class="card">
+        <h2><span class="pro-title-icon green"><i class="business-icon" data-lucide="megaphone"></i></span><span>Team Announcement</span></h2>
+        <div class="field"><label>Title</label><input id="ownerNoticeTitle" placeholder="e.g. New working hours"></div>
+        <div class="field"><label>Message</label><textarea id="ownerNoticeBody" style="width:100%;min-height:90px;resize:vertical;" placeholder="Write an important notice for staff..."></textarea></div>
+        <button class="btn btn-primary" onclick="ownerPublishNotice()"><i class="business-icon icon-inline" data-lucide="megaphone"></i> Publish Notice</button>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px;">
+      <h2><span class="pro-title-icon gold"><i class="business-icon" data-lucide="badge-percent"></i></span><span>Referral Commission Control</span></h2>
+      <div class="stat-grid"><div class="stat accent"><div class="k">Commission Rate</div><div class="v">12%</div></div><div class="stat"><div class="k">Eligible Rule</div><div class="v" style="font-size:.9rem;">Customer Reference × Sale</div></div><div class="stat"><div class="k">This Month</div><div class="v" id="ownerCommissionTotal2">Rs. 0</div></div></div>
+      <div class="card" style="margin-top:14px;border-color:rgba(201,164,77,.28);">
+        <h3><span class="pro-title-icon gold"><i class="business-icon" data-lucide="shield-check"></i></span><span>Commission Verification Queue</span></h3>
+        <p class="staff-section-note">Staff sends the staff reference + customer + order details here. Commission is <strong>not added</strong> until the owner verifies the sale.</p>
+        <div class="table-wrap" style="margin-top:10px;"><table><thead><tr><th>Staff Ref</th><th>Order</th><th>Customer</th><th>Sale</th><th>12%</th><th>Status</th><th>Owner</th></tr></thead><tbody id="ownerCommissionClaimsBody"><tr><td colspan="7" style="text-align:center;opacity:.5;padding:18px;">No pending commission claims.</td></tr></tbody></table></div>
+      </div>
+      <div class="table-wrap" style="margin-top:10px;"><table><thead><tr><th>Staff</th><th>Referral Sales</th><th>Commission</th></tr></thead><tbody id="ownerCommissionBody"><tr><td colspan="3" style="text-align:center;opacity:.5;padding:18px;">No referral sales this month.</td></tr></tbody></table></div>
+    </div>
+
+    <div class="card" style="margin-top:16px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+        <div><h2><span class="pro-title-icon gold"><i class="business-icon" data-lucide="hand-coins"></i></span><span>Advance Requests</span></h2><p class="pro-subtitle gold">Approve or reject staff salary advances directly from MY STAFF.</p></div>
+        <button class="btn btn-sm" onclick="loadMyStaffOwnerData()"><i class="business-icon icon-inline" data-lucide="refresh-cw"></i> Refresh</button>
+      </div>
+      <div class="table-wrap" style="margin-top:10px;"><table><thead><tr><th>Staff</th><th>Date</th><th>Amount</th><th>Reason</th><th>Status</th><th>Action</th></tr></thead><tbody id="ownerStaffAdvanceBody"><tr><td colspan="6" style="text-align:center;opacity:.5;padding:18px;">No advance requests.</td></tr></tbody></table></div>
+    </div>
+
+    <div class="grid-2" style="margin-top:16px;">
+      <div class="card">
+        <h2><span class="pro-title-icon orange"><i class="business-icon" data-lucide="list-checks"></i></span><span>Task Management</span></h2>
+        <div id="ownerStaffTaskManagement"><div class="notice">No assigned tasks.</div></div>
+      </div>
+      <div class="card">
+        <h2><span class="pro-title-icon green"><i class="business-icon" data-lucide="megaphone"></i></span><span>Published Notices</span></h2>
+        <div id="ownerStaffNoticeManagement"><div class="notice">No notices published.</div></div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px;">
+      <h2><span class="pro-title-icon green"><i class="business-icon" data-lucide="wallet-cards"></i></span><span>Salary Management</span></h2>
+      <p class="pro-subtitle green">Use the existing owner salary editor for base pay, daily pay, bonuses, advances, deductions and the 12% referral commission.</p>
+      <button class="btn btn-primary" onclick="activateAppTab('profile');setTimeout(()=>document.getElementById('salaryStaffSelect')?.scrollIntoView({behavior:'smooth',block:'center'}),120)"><i class="business-icon icon-inline" data-lucide="wallet-cards"></i> Open Salary Manager</button>
+    </div>
+  </section>
+
+  <!-- ============ PROFILE TAB ============ -->
+  <section id="profile" class="tab-panel" role="tabpanel" style="display:none;">
+    <div class="profile-panel card">
+      <div class="profile-large"><i class="business-icon" data-lucide="user-round" aria-hidden="true"></i></div>
+      <span class="eyebrow">MY DRYBEA ACCOUNT</span>
+      <h2 id="profileName">Business Owner</h2>
+      <p id="profileEmail">Not signed in</p>
+      <p id="roleBadge" style="margin-top:6px;font-size:12px;font-weight:800;color:var(--gold2, #d6b45a);"><i class="business-icon icon-inline" data-lucide="crown" aria-hidden="true"></i> Owner</p>
+      <div class="profile-actions">
+        <button class="btn btn-primary" id="profileAuthAction" data-ribbon="true" onclick="openAuthModal()">Login</button>
+        <button class="btn lock-btn" data-ribbon="true" onclick="lockApp()"><i class="business-icon" data-lucide="lock-keyhole" aria-hidden="true"></i> Lock App</button>
+      </div>
+    </div>
+
+    <div class="card" data-owner-only style="margin-top:16px;">
+      <h2><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="smartphone" aria-hidden="true"></i></span><span>Business WhatsApp Number</span></h2>
+      <p class="pro-subtitle gold">Advance requests from staff open a pre-filled WhatsApp message to this number.</p>
+      <div class="field">
+        <label>WhatsApp Number <span class="hint">(with country code, e.g. 94771234567)</span></label>
+        <input type="text" id="ownerWhatsapp" placeholder="94762432963">
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="saveOwnerWhatsapp()"><i class="business-icon icon-inline" data-lucide="save" aria-hidden="true"></i> Save Number</button>
+      </div>
+    </div>
+
+    <div class="card" data-owner-only style="margin-top:16px;">
+      <h2><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="hand-coins" aria-hidden="true"></i></span><span>Pending Advance Requests</span></h2>
+      <p class="pro-subtitle gold">Approve or reject advance requests from your staff.</p>
+      <div class="table-wrap" style="margin-top:10px;">
+        <table>
+          <thead><tr><th>Staff</th><th>Date</th><th>Amount</th><th>Reason</th><th>Status</th><th>Actions</th></tr></thead>
+          <tbody id="advOwnerBody"><tr><td colspan="6" style="text-align:center;opacity:.5;padding:14px;">No advance requests yet.</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card" data-owner-only style="margin-top:16px;">
+      <h2><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="user-round" aria-hidden="true"></i></span><span>Manage Staff</span></h2>
+      <p class="pro-subtitle gold">Give trusted staff shared access to Orders, Customers &amp; Expenses. They won't see Costing, Production or History.</p>
+      <div class="field">
+        <label>Staff User ID <span class="hint">(copy from Supabase → Authentication → Users)</span></label>
+        <input type="text" id="staffUid" placeholder="e.g. 7ac97394-148c-45df-b33c-61bf385b55b4">
+      </div>
+      <div class="field">
+        <label>Display Name</label>
+        <input type="text" id="staffName" placeholder="e.g. Kamal (Delivery)">
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="addStaffMember()"><i class="business-icon icon-inline" data-lucide="user-plus" aria-hidden="true"></i> Add Staff</button>
+      </div>
+      <div class="table-wrap" style="margin-top:14px;">
+        <table>
+          <thead><tr><th>Name</th><th>Staff Reference</th><th>User ID</th><th data-owner-only>Actions</th></tr></thead>
+          <tbody id="staffBody"><tr><td colspan="4" style="text-align:center;opacity:.5;padding:14px;">No staff added yet.</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card" data-owner-only style="margin-top:16px;">
+      <h2><span class="pro-title-icon gold"><i class="business-icon" data-lucide="badge-percent"></i></span><span>Staff Referral Commission</span></h2>
+      <p class="pro-subtitle gold">Global staff referral rate is fixed at <strong>12%</strong>. Staff sales are attributed from their account and shown in My Commission.</p>
+      <div class="stat-grid"><div class="stat accent"><div class="k">Commission Rate</div><div class="v">12%</div></div><div class="stat"><div class="k">Rule</div><div class="v" style="font-size:.95rem;">Sale × 12%</div></div></div>
+      <div class="notice" style="margin-bottom:0;"><i class="business-icon icon-inline" data-lucide="shield-check"></i> Cancelled/refunded orders are excluded. Commission is an additional earning and can be included in final salary approval.</div>
+    </div>
+
+    <div class="card" data-owner-only style="margin-top:16px;">
+      <h2><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="receipt" aria-hidden="true"></i></span><span>Staff Salary</span></h2>
+      <p class="pro-subtitle gold">Only you can update salaries — staff members never see or edit this.</p>
+
+      <div class="field">
+        <label>Staff Member</label>
+        <select id="salaryStaffSelect" onchange="onSalaryStaffChange()">
+          <option value="">-- Select staff --</option>
+        </select>
+      </div>
+      <div id="salaryNoStaffNotice" class="notice warn" style="display:none;">Add a staff member above first.</div>
+
+      <div id="salaryPanel" style="display:none;">
+
+        <!-- SMART PAYROLL DASHBOARD -->
+        <div class="card smart-salary-card" style="margin-bottom:16px;">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">
+            <div>
+              <h2><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="brain" aria-hidden="true"></i></span><span>Smart Payroll</span></h2>
+              <p class="pro-subtitle green">Attendance + salary entries combined into a quick payroll control center.</p>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <input type="month" id="smartSalaryMonth" style="width:auto;min-width:150px;" onchange="refreshSmartSalary()">
+              <button class="btn btn-sm" type="button" onclick="printSmartPayslip()"><i class="business-icon icon-inline" data-lucide="printer" aria-hidden="true"></i> Print Payslip</button>
+            </div>
+          </div>
+
+          <div class="stat-grid" style="margin-top:12px;">
+            <div class="stat"><div class="k">Base Target</div><div class="v" id="smartBaseTarget">Rs. 0</div></div>
+            <div class="stat"><div class="k">Paid So Far</div><div class="v" id="smartPaid">Rs. 0</div></div>
+            <div class="stat good"><div class="k">Balance</div><div class="v" id="smartBalance">Rs. 0</div></div>
+            <div class="stat accent"><div class="k">Attendance Days</div><div class="v" id="smartDays">0</div></div>
+            <div class="stat"><div class="k">Worked Hours</div><div class="v" id="smartHours">0.0</div></div>
+            <div class="stat"><div class="k">OT Hours</div><div class="v" id="smartOtHours">0.0</div></div>
+          </div>
+
+          <div class="grid-3" style="margin-top:12px;">
+            <div class="notice" style="margin:0;"><strong>Bonus</strong><br><span id="smartBonus">Rs. 0</span></div>
+            <div class="notice warn" style="margin:0;"><strong>Advance + Deduction</strong><br><span id="smartMinus">Rs. 0</span></div>
+            <div class="notice" style="margin:0;"><strong>Estimated OT Value</strong><br><span id="smartOtValue">Rs. 0</span></div>
+          </div>
+
+          <div class="btn-row">
+            <button class="btn btn-primary" type="button" onclick="addEstimatedOTToPayroll()">➕ Add Estimated OT as Bonus</button>
+            <button class="btn" type="button" onclick="refreshSmartSalary()">↻ Recalculate</button>
+          </div>
+
+          <div id="smartSalaryInsight" class="notice" style="margin-top:12px;margin-bottom:0;">Select a staff member to calculate payroll insights.</div>
+        </div>
+
+        <div class="mode-toggle">
+          <button class="btn active" data-smode="daily" onclick="setSalaryMode('daily')">⚡ Daily Update</button>
+          <button class="btn" data-smode="advanced" onclick="setSalaryMode('advanced')">🧮 Advanced</button>
+        </div>
+
+        <!-- DAILY MODE: quick one-tap log of what was paid today -->
+        <div id="salaryModeDaily">
+          <div class="field">
+            <label>Date</label>
+            <input type="date" id="salDailyDate">
+          </div>
+          <div class="field">
+            <label>Amount Paid Today (Rs.)</label>
+            <div class="input-prefix"><span>Rs.</span><input type="number" id="salDailyAmount" value="0" min="0"></div>
+          </div>
+          <div class="field">
+            <label>Note</label>
+            <input type="text" id="salDailyNote" placeholder="Optional note">
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-primary" onclick="saveDailySalary()"><i class="business-icon icon-inline" data-lucide="save" aria-hidden="true"></i> Log Daily Salary</button>
+          </div>
+        </div>
+
+        <!-- ADVANCED MODE: base salary / daily rate reference + bonus/advance/deduction entries -->
+        <div id="salaryModeAdvanced" style="display:none;">
+          <div class="grid-2">
+            <div class="field">
+              <label>Base Monthly Salary (Rs.)</label>
+              <div class="input-prefix"><span>Rs.</span><input type="number" id="salBaseMonthly" value="0" min="0"></div>
+            </div>
+            <div class="field">
+              <label>Standard Daily Rate (Rs.)</label>
+              <div class="input-prefix"><span>Rs.</span><input type="number" id="salDailyRate" value="0" min="0"></div>
+            </div>
+          </div>
+          <div class="btn-row">
+            <button class="btn" onclick="saveSalarySettings()"><i class="business-icon icon-inline" data-lucide="save" aria-hidden="true"></i> Save Salary Settings</button>
+          </div>
+          <hr style="border-color:var(--border);margin:16px 0;">
+          <p class="sub">Add a bonus, advance, or deduction entry:</p>
+          <div class="grid-2">
+            <div class="field">
+              <label>Entry Type</label>
+              <select id="salEntryType">
+                <option value="bonus">➕ Bonus</option>
+                <option value="advance">💸 Advance</option>
+                <option value="deduction">➖ Deduction</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Date</label>
+              <input type="date" id="salEntryDate">
+            </div>
+          </div>
+          <div class="field">
+            <label>Amount (Rs.)</label>
+            <div class="input-prefix"><span>Rs.</span><input type="number" id="salEntryAmount" value="0" min="0"></div>
+          </div>
+          <div class="field">
+            <label>Note</label>
+            <input type="text" id="salEntryNote" placeholder="Optional note">
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-primary" onclick="addSalaryEntry()">➕ Add Entry</button>
+          </div>
+        </div>
+
+        <div class="stat-grid" style="margin-top:16px;">
+          <div class="stat accent"><div class="k">This Month Daily Pay</div><div class="v" id="salSumDaily">Rs. 0</div></div>
+          <div class="stat"><div class="k">Bonuses</div><div class="v" id="salSumBonus">Rs. 0</div></div>
+          <div class="stat"><div class="k">Advances / Deductions</div><div class="v" id="salSumMinus">Rs. 0</div></div>
+          <div class="stat accent"><div class="k">Net Payable (Month)</div><div class="v" id="salSumNet">Rs. 0</div></div>
+        </div>
+
+        <div class="table-wrap" style="margin-top:14px;">
+          <table>
+            <thead><tr><th>Date</th><th>Type</th><th>Amount</th><th>Note</th><th>Actions</th></tr></thead>
+            <tbody id="salaryHistoryBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CALCULATOR TAB ============ -->
+  <section id="calculator" class="tab-panel" role="tabpanel" style="display:none;">
+    <div class="grid-2">
+      <div class="card">
+        <h2><span class="pro-title-icon blue" aria-hidden="true"><i class="business-icon" data-lucide="factory" aria-hidden="true"></i></span><span>Raw Materials</span></h2><p class="pro-subtitle blue">Control the input costs behind every result.</p>
+        <div class="grid-3">
+          <div class="field">
+            <label>Linna <span class="hint">(Rs./kg)</span></label>
+            <div class="input-prefix"><span>Rs.</span><input type="number" id="linnaPrice" value="1750" min="0" oninput="onDataChange()"></div>
+          </div>
+          <div class="field">
+            <label>Balaya <span class="hint">(Rs./kg)</span></label>
+            <div class="input-prefix"><span>Rs.</span><input type="number" id="balayaPrice" value="2200" min="0" oninput="onDataChange()"></div>
+          </div>
+          <div class="field">
+            <label>Premium Mix <span class="hint">(Rs./kg)</span></label>
+            <div class="input-prefix"><span>Rs.</span><input type="number" id="kawalamPrice" value="1000" min="0" oninput="onDataChange()"></div>
+          </div>
+        </div>
+
+        <h2 style="margin-top:16px;"><span class="pro-title-icon teal" aria-hidden="true"><i class="business-icon" data-lucide="sliders-horizontal" aria-hidden="true"></i></span><span>Product Setup</span></h2><p class="pro-subtitle teal">Define pack sizes, yields and production assumptions.</p>
+        <div class="field">
+          <label>Pack Size</label>
+          <select id="packSize" onchange="onDataChange()">
+            <option value="50">50g</option>
+            <option value="100" selected>100g</option>
+            <option value="500">500g</option>
+            <option value="1000">1kg</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Fish Mix Ratio</label>
+          <select id="mixRatio" onchange="toggleCustomMix(); onDataChange();">
+            <option value="40/0/60">40% Linna / 0% Balaya / 60% Premium</option>
+            <option value="60/0/40">60% Linna / 0% Balaya / 40% Premium</option>
+            <option value="35/20/45">35% Linna / 20% Balaya / 45% Premium</option>
+            <option value="25/15/60">25% Linna / 15% Balaya / 60% Premium</option>
+            <option value="20/40/40">20% Linna / 40% Balaya / 40% Premium</option>
+            <option value="custom">Custom 3-Way Mix</option>
+          </select>
+        </div>
+        <div class="notice warn" id="mixWarning" style="display:none;">⚠️ Mix percentages must total 100%. Current: <span id="mixTotal">0</span>%</div>
+        <div id="customMixWrap" style="display:none;">
+          <div class="grid-3">
+            <div class="field">
+              <label>Linna %</label>
+              <input type="number" id="customLinna" value="40" min="0" max="100" oninput="syncCustomMix(); onDataChange();">
+            </div>
+            <div class="field">
+              <label>Balaya %</label>
+              <input type="number" id="customBalaya" value="20" min="0" max="100" oninput="syncCustomMix(); onDataChange();">
+            </div>
+            <div class="field">
+              <label>Premium %</label>
+              <input type="number" id="customKawalam" value="40" min="0" max="100" readonly>
+            </div>
+          </div>
+        </div>
+
+        <h2 style="margin-top:16px;"><span class="pro-title-icon purple" aria-hidden="true"><i class="business-icon" data-lucide="calculator" aria-hidden="true"></i></span><span>Pricing</span></h2><p class="pro-subtitle purple">Choose the commercial lens behind your selling price.</p>
+        <div class="mode-toggle">
+          <button class="btn active" data-mode="mrp" onclick="setMode('mrp')">MRP</button>
+          <button class="btn" data-mode="profit" onclick="setMode('profit')">Target Profit</button>
+          <button class="btn" data-mode="sp" onclick="setMode('sp')">Custom SP</button>
+        </div>
+        <div class="field" id="targetProfitField" style="display:none;">
+          <label>Target Profit <span class="hint">(Rs./pack)</span></label>
+          <div class="input-prefix"><span>Rs.</span><input type="number" id="targetProfit" value="30" min="0" oninput="onDataChange()"></div>
+        </div>
+        <div class="field" id="customSpField" style="display:none;">
+          <label>Custom Selling Price <span class="hint">(Rs./pack)</span></label>
+          <div class="input-prefix"><span>Rs.</span><input type="number" id="customSp" value="350" min="0" oninput="onDataChange()"></div>
+        </div>
+        <div class="field">
+          <label>Monthly Quantity</label>
+          <input type="number" id="monthlyQty" value="500" min="0" oninput="onDataChange()">
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-primary" onclick="saveOrder()"><i class="business-icon icon-inline" data-lucide="save" aria-hidden="true"></i> Save Order</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="trending-up" aria-hidden="true"></i></span><span>Pack Result</span></h2><p class="pro-subtitle green">Unit economics, margin and selling power.</p>
+        <div class="stat-grid">
+          <div class="stat accent"><div class="k">Selling Price</div><div class="v" id="outSp">Rs. 0</div></div>
+          <div class="stat" id="profitStat"><div class="k">Profit/Pack</div><div class="v" id="outProfit">Rs. 0</div></div>
+          <div class="stat"><div class="k">Margin</div><div class="v" id="outMargin">0%</div></div>
+          <div class="stat"><div class="k">Total Cost</div><div class="v" id="outCost">Rs. 0</div></div>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Cost Item</th><th class="num">Amount</th></tr></thead>
+            <tbody id="breakdownBody"></tbody>
+          </table>
+        </div>
+
+        <div class="chart-wrap"><canvas id="costChart"></canvas></div>
+
+        <h2 style="margin-top:16px;"><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="chart-no-axes-combined" aria-hidden="true"></i></span><span>Monthly Plan</span></h2><p class="pro-subtitle gold">Turn unit economics into a practical target.</p>
+        <div class="table-wrap">
+          <table><tbody id="monthlyBody"></tbody></table>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2><span class="pro-title-icon purple" aria-hidden="true"><i class="business-icon" data-lucide="chart-no-axes-combined" aria-hidden="true"></i></span><span>Scenarios</span></h2><p class="pro-subtitle purple">Compare pricing paths before you commit.</p>
+      <div class="grid-2">
+        <div class="field">
+          <label>Scenario A Mix</label>
+          <select id="scA" onchange="calcScenario()">
+            <option value="40/0/60">40/0/60</option>
+            <option value="60/0/40">60/0/40</option>
+            <option value="35/20/45">35/20/45</option>
+            <option value="25/15/60">25/15/60</option>
+            <option value="20/40/40">20/40/40</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Scenario A SP (Rs.)</label>
+          <input type="number" id="scASp" value="350" oninput="calcScenario()">
+        </div>
+        <div class="field">
+          <label>Scenario B Mix</label>
+          <select id="scB" onchange="calcScenario()">
+            <option value="40/0/60">40/0/60</option>
+            <option value="60/0/40">60/0/40</option>
+            <option value="35/20/45">35/20/45</option>
+            <option value="25/15/60">25/15/60</option>
+            <option value="20/40/40">20/40/40</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Scenario B SP (Rs.)</label>
+          <input type="number" id="scBSp" value="375" oninput="calcScenario()">
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Metric</th><th class="num">A</th><th class="num">B</th><th class="num">Best</th></tr></thead>
+          <tbody id="scenarioBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ PRODUCTION TAB ============ -->
+  <section id="production" class="tab-panel" style="display:none;" role="tabpanel">
+    <div class="card">
+      <h2><span class="pro-title-icon orange" aria-hidden="true"><i class="business-icon" data-lucide="factory" aria-hidden="true"></i></span><span>Production Model</span></h2><p class="pro-subtitle orange">Translate raw fish yield into finished output.</p>
+      <p class="sub">Compare buying finished Umbalakada vs producing from raw fish. Analyze yield, cost per kg, and profitability.</p>
+
+      <div class="grid-2">
+        <div>
+          <h3 style="color:var(--green);margin-bottom:8px;">🐟 Raw Fish Prices (Rs./kg)</h3>
+          <div class="grid-3">
+            <div class="field">
+              <label>Linna Raw</label>
+              <div class="input-prefix"><span>Rs.</span><input type="number" id="rawLinna" value="180" min="0" oninput="onDataChange()"></div>
+            </div>
+            <div class="field">
+              <label>Balaya Raw</label>
+              <div class="input-prefix"><span>Rs.</span><input type="number" id="rawBalaya" value="250" min="0" oninput="onDataChange()"></div>
+            </div>
+            <div class="field">
+              <label>Premium Mix Raw</label>
+              <div class="input-prefix"><span>Rs.</span><input type="number" id="rawKawalam" value="60" min="0" oninput="onDataChange()"></div>
+            </div>
+          </div>
+
+          <h3 style="color:var(--green);margin:16px 0 8px;">📈 Yield Factors (kg raw → 1kg finished)</h3>
+          <div class="grid-3">
+            <div class="field">
+              <label>Linna Yield</label>
+              <input type="number" id="yieldLinna" value="6" min="1" step="0.1" oninput="onDataChange()">
+            </div>
+            <div class="field">
+              <label>Balaya Yield</label>
+              <input type="number" id="yieldBalaya" value="6" min="1" step="0.1" oninput="onDataChange()">
+            </div>
+            <div class="field">
+              <label>Premium Mix Yield</label>
+              <input type="number" id="yieldKawalam" value="7" min="1" step="0.1" oninput="onDataChange()">
+            </div>
+          </div>
+
+          <h3 style="color:var(--green);margin:16px 0 8px;">📦 Production Volume</h3>
+          <div class="grid-2">
+            <div class="field">
+              <label>Daily Raw Fish (kg)</label>
+              <input type="number" id="dailyRawKg" value="500" min="0" oninput="onDataChange()">
+            </div>
+            <div class="field">
+              <label>Working Days/Month</label>
+              <input type="number" id="workDays" value="22" min="1" oninput="onDataChange()">
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <h3 style="color:var(--green);margin-bottom:8px;">💰 Production Costs</h3>
+          <div class="grid-2">
+            <div class="field"><label>Transport</label><input type="number" id="prodTransport" value="110000" oninput="onDataChange()"></div>
+            <div class="field"><label>Firewood</label><input type="number" id="prodFirewood" value="30000" oninput="onDataChange()"></div>
+            <div class="field"><label>Workers</label><input type="number" id="prodWorkers" value="220000" oninput="onDataChange()"></div>
+            <div class="field"><label>Other</label><input type="number" id="prodOther" value="220000" oninput="onDataChange()"></div>
+          </div>
+
+          <h3 style="color:var(--green);margin:16px 0 8px;">Finished Umbalakada Market Prices (Rs./kg)</h3>
+          <div class="grid-3">
+            <div class="field"><label>Linna</label><input type="number" id="finLinna" value="1750" oninput="onDataChange()"></div>
+            <div class="field"><label>Balaya</label><input type="number" id="finBalaya" value="2200" oninput="onDataChange()"></div>
+            <div class="field"><label>Premium Mix</label><input type="number" id="finKawalam" value="1000" oninput="onDataChange()"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="stat-grid">
+        <div class="stat"><div class="k">Monthly Raw Fish</div><div class="v" id="prodMonthlyRaw">0 kg</div></div>
+        <div class="stat"><div class="k">Monthly Finished Output</div><div class="v" id="prodMonthlyFinished">0 kg</div></div>
+        <div class="stat"><div class="k">Fixed Cost per kg</div><div class="v" id="prodFixedPerKg">Rs. 0</div></div>
+        <div class="stat accent"><div class="k">Avg Production Cost/kg</div><div class="v" id="prodAvgCost">Rs. 0</div></div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Fish Type</th><th>Raw Cost/kg</th><th>Fixed/kg</th><th>Total Cost/kg</th><th>Market Price/kg</th><th class="num">Profit/kg</th><th class="num">Margin</th><th>Verdict</th></tr>
+          </thead>
+          <tbody id="prodBody"></tbody>
+        </table>
+      </div>
+
+      <div class="chart-wrap" style="height:300px;"><canvas id="prodChart"></canvas></div>
+
+      <div class="notice" style="margin-top:12px;">
+        💡 <strong>Break-even volume:</strong> Produce at least <span id="breakEvenKg" style="font-weight:800;">0 kg</span> per month to cover fixed costs.
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ DASHBOARD TAB ============ -->
+  <section id="dashboard" class="tab-panel active" role="tabpanel" style="display:block;">
+
+    <div class="home-actions-wrap no-print">
+      <div class="home-actions-title">Owner Quick Actions <span class="owner-qahint">CONTROL CENTRE</span></div>
+      <div class="quick-access-card">
+        <div class="home-actions">
+          <button class="home-action primary" data-home-tab="dashboard" data-ribbon="true" aria-label="Open Dashboard">
+            <span class="home-icon"><i class="business-icon" data-lucide="layout-dashboard" aria-hidden="true"></i></span>
+            <span class="home-action-copy"><strong>Dashboard</strong><small>Business at a glance</small></span>
+            <span class="quick-status" aria-hidden="true"></span>
+          </button>
+          <button class="home-action" data-home-tab="calculator" data-ribbon="true" aria-label="Open Costing">
+            <span class="home-icon"><i class="business-icon" data-lucide="calculator" aria-hidden="true"></i></span>
+            <span class="home-action-copy"><strong>Costing</strong><small>Calculate price, cost & profit</small></span>
+            <span class="quick-status" aria-hidden="true"></span>
+          </button>
+          <button class="home-action" data-home-tab="production" data-ribbon="true" aria-label="Open Production">
+            <span class="home-icon"><i class="business-icon" data-lucide="factory" aria-hidden="true"></i></span>
+            <span class="home-action-copy"><strong>Production</strong><small>Plan batches & production cost</small></span>
+            <span class="quick-status" aria-hidden="true"></span>
+          </button>
+          <button class="home-action gold" data-home-tab="expenses" data-ribbon="true" aria-label="Open Expenses">
+            <span class="home-icon"><i class="business-icon" data-lucide="receipt" aria-hidden="true"></i></span>
+            <span class="home-action-copy"><strong>Expenses</strong><small>Track monthly business costs</small></span>
+            <span class="quick-status" aria-hidden="true"></span>
+          </button>
+          <button class="home-action" data-home-tab="my-staff" data-ribbon="true" aria-label="Open My Staff">
+            <span class="home-icon"><i class="business-icon" data-lucide="users-round" aria-hidden="true"></i></span>
+            <span class="home-action-copy"><strong>My Staff</strong><small>Manage staff, tasks & performance</small></span>
+            <span class="quick-status" aria-hidden="true"></span>
+          </button>
+          <button class="home-action" data-home-tab="history" data-ribbon="true" aria-label="Open History">
+            <span class="home-icon"><i class="business-icon" data-lucide="history" aria-hidden="true"></i></span>
+            <span class="home-action-copy"><strong>History</strong><small>Saved calculations & past records</small></span>
+            <span class="quick-status" aria-hidden="true"></span>
+          </button>
+          <button class="home-action" data-home-tab="data" data-ribbon="true" aria-label="Open Options">
+            <span class="home-icon"><i class="business-icon" data-lucide="sliders-horizontal" aria-hidden="true"></i></span>
+            <span class="home-action-copy"><strong>Options</strong><small>Base data & business settings</small></span>
+            <span class="quick-status" aria-hidden="true"></span>
+          </button>
+          <button class="home-action summary-action" data-home-tab="monthly-summary" data-ribbon="true" aria-label="Open Monthly Summary">
+            <span class="home-icon"><i class="business-icon" data-lucide="chart-no-axes-combined" aria-hidden="true"></i></span>
+            <span class="home-action-copy"><strong>Monthly Summary</strong><small>Live month-to-date business summary</small></span>
+            <span class="quick-status" aria-hidden="true"></span>
+          </button>
+        </div>
+      </div>
+    </div>
+    <div class="home-section-head no-print"><h3>Business overview</h3><span>Live dashboard</span></div>
+    <div class="net-banner">
+      <div class="k">NET MONTHLY PROFIT (after fixed cost)</div>
+      <div class="v" id="netProfitOut">Rs. 0</div>
+    </div>
+
+    <div class="card">
+      <h2><span class="pro-title-icon orange" aria-hidden="true"><i class="business-icon" data-lucide="factory" aria-hidden="true"></i></span><span>Bulk Plan</span></h2><p class="pro-subtitle orange">Plan output, yield and break-even volume.</p>
+      <div class="grid-2">
+        <div class="field">
+          <label>Monthly Target (kg)</label>
+          <input type="number" id="bulkTarget" value="175" min="0" oninput="calcBulk()">
+        </div>
+        <div class="field">
+          <label>Dust % in Product</label>
+          <input type="number" id="bulkDustPct" value="5" min="0" max="20" step="0.5" oninput="calcBulk()">
+        </div>
+      </div>
+      <div class="stat-grid">
+        <div class="stat"><div class="k">Linna Whole</div><div class="v" id="bulkLinna">0 kg</div></div>
+        <div class="stat"><div class="k">Balaya Whole</div><div class="v" id="bulkBalaya">0 kg</div></div>
+        <div class="stat"><div class="k">Premium Whole</div><div class="v" id="bulkKawalam">0 kg</div></div>
+        <div class="stat accent"><div class="k">Fish Cost</div><div class="v" id="bulkCost">Rs.0</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="chart-no-axes-combined" aria-hidden="true"></i></span><span>Monthly Mix</span></h2><p class="pro-subtitle green">Plan production across every SKU.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Size</th><th>Qty/mo</th><th>SP</th><th class="num">Cost/Pack</th><th class="num">Profit/Pack</th><th class="num">Monthly Profit</th></tr></thead>
+          <tbody id="dashBody"></tbody>
+        </table>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-sm" onclick="resetDash()">↺ Reset</button>
+        <button class="btn btn-sm btn-primary" onclick="exportDashCSV()">📊 CSV</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2><span class="pro-title-icon purple" aria-hidden="true"><i class="business-icon" data-lucide="calculator" aria-hidden="true"></i></span><span>Price Sensitivity</span></h2><p class="pro-subtitle purple">Test price moves before you sell.</p>
+      <div class="field" style="max-width:220px;">
+        <label>Pack Size</label>
+        <select id="sensSize" onchange="calcSensitivity()">
+          <option value="50">50g</option>
+          <option value="100" selected>100g</option>
+          <option value="500">500g</option>
+          <option value="1000">1kg</option>
+        </select>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Linna Price</th><th>Fish Cost</th><th class="num">Total Cost</th><th class="num">Profit</th><th class="num">Margin</th></tr></thead>
+          <tbody id="sensBody"></tbody>
+        </table>
+      </div>
+      <div class="chart-wrap"><canvas id="sensChart"></canvas></div>
+    </div>
+  </section>
+
+  <!-- ============ ORDERS TAB ============ -->
+  <section id="orders" class="tab-panel" style="display:none;" role="tabpanel">
+    <div class="stat-grid">
+      <div class="stat accent"><div class="k">Total Orders</div><div class="v" id="statTotalOrders">0</div></div>
+      <div class="stat good"><div class="k">Delivered</div><div class="v" id="statDelivered">0</div></div>
+      <div class="stat"><div class="k">Pending</div><div class="v" id="statPending">0</div></div>
+      <div class="stat bad"><div class="k">Cancelled</div><div class="v" id="statCancelled">0</div></div>
+    </div>
+
+    <div class="card">
+      <h2><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="shopping-bag" aria-hidden="true"></i></span><span>Orders</span></h2><p class="pro-subtitle green">Track every customer sale from one command view.</p>
+      <div class="btn-row" style="margin-bottom:14px;">
+        <button class="btn btn-primary btn-sm" onclick="openNewOrder()"><i class="business-icon icon-inline" data-lucide="plus" aria-hidden="true"></i> New Order</button>
+        <button class="btn btn-sm" onclick="openNewCustomer()"><i class="business-icon icon-inline" data-lucide="user-plus" aria-hidden="true"></i> Add Customer</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Order ID</th><th>Date</th><th>Customer</th><th>Items</th><th>Total</th><th>Status</th><th>Actions</th></tr>
+          </thead>
+          <tbody id="ordersBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2><span class="pro-title-icon blue" aria-hidden="true"><i class="business-icon" data-lucide="user-round" aria-hidden="true"></i></span><span>Customers</span></h2><p class="pro-subtitle blue">Keep customer relationships organised.</p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>ID</th><th>Name</th><th data-owner-only>Phone</th><th>Address</th><th>Actions</th></tr>
+          </thead>
+          <tbody id="customersBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2><span class="pro-title-icon orange" aria-hidden="true"><i class="business-icon" data-lucide="shopping-bag" aria-hidden="true"></i></span><span>Delivery</span></h2><p class="pro-subtitle orange">Follow fulfilment without losing the sale.</p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Order ID</th><th>Customer</th><th>Address</th><th>Status</th><th>Update</th></tr>
+          </thead>
+          <tbody id="deliveryBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ EXPENSES TAB ============ -->
+  <section id="expenses" class="tab-panel" style="display:none;" role="tabpanel">
+    <div class="stat-grid">
+      <div class="stat accent"><div class="k">This Month</div><div class="v" id="statExpThisMonth">Rs. 0</div></div>
+      <div class="stat"><div class="k">Total (all time)</div><div class="v" id="statExpTotal">Rs. 0</div></div>
+      <div class="stat"><div class="k">Entries</div><div class="v" id="statExpCount">0</div></div>
+    </div>
+
+    <div class="card">
+      <h2><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="receipt" aria-hidden="true"></i></span><span>Expenses</span></h2><p class="pro-subtitle gold">Capture costs and protect your margin.</p>
+      <div class="btn-row" style="margin-bottom:14px;">
+        <button class="btn btn-primary btn-sm" onclick="openNewExpense()"><i class="business-icon icon-inline" data-lucide="plus" aria-hidden="true"></i> Add Expense</button>
+        <button class="btn btn-sm" onclick="exportExpensesCSV()">📊 Export CSV</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Date</th><th>Category</th><th>Description</th><th>Amount</th><th>Actions</th></tr>
+          </thead>
+          <tbody id="expensesBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="receipt" aria-hidden="true"></i></span><span>Recurring Daily Expenses</span></h2><p class="pro-subtitle gold">These auto-add themselves once a day the first time you log in.</p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Category</th><th>Description</th><th>Amount</th><th>Status</th><th>Actions</th></tr>
+          </thead>
+          <tbody id="recurringExpensesBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ HISTORY TAB ============ -->
+  <section id="history" class="tab-panel" style="display:none;" role="tabpanel">
+    <div class="card">
+      <h2><span class="pro-title-icon slate" aria-hidden="true"><i class="business-icon" data-lucide="history" aria-hidden="true"></i></span><span>History</span></h2><p class="pro-subtitle slate">Review saved calculations and past decisions.</p>
+      <p class="sub">Saved order calculations (net profit includes allocated fixed cost).</p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Date</th><th>Pack</th><th>Mix (L/B/P)</th><th>SP</th><th>Cost</th><th>Profit</th><th>Net Profit</th><th>Action</th></tr>
+          </thead>
+          <tbody id="historyBody"></tbody>
+        </table>
+      </div>
+      <div class="btn-row">
+        <button class="btn" onclick="clearHistory()">🗑️ Clear All</button>
+        <button class="btn btn-primary" onclick="exportHistoryCSV()">📊 Export History</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ DATA TAB ============ -->
+  <section id="data" class="tab-panel" style="display:none;" role="tabpanel">
+    <div class="card">
+      <h2><span class="pro-title-icon slate" aria-hidden="true"><i class="business-icon" data-lucide="lock-keyhole" aria-hidden="true"></i></span><span>Base Data</span></h2><p class="pro-subtitle slate">Protected assumptions used by the system.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Param</th><th>50g</th><th>100g</th><th>500g</th><th>1kg</th></tr></thead>
+          <tbody>
+            <tr><td>Fish Weight</td><td>45g</td><td>90g</td><td>475g</td><td>950g</td></tr>
+            <tr><td>Dust Weight</td><td>5g</td><td>10g</td><td>25g</td><td>50g</td></tr>
+            <tr><td>Grinding Labour</td><td>Rs.2</td><td>Rs.4</td><td>Rs.20</td><td>Rs.40</td></tr>
+            <tr><td>Packaging</td><td>Rs.13.5</td><td>Rs.43</td><td>Rs.130</td><td>Rs.140</td></tr>
+            <tr><td>MRP</td><td>Rs.170</td><td>Rs.350</td><td>Rs.1750</td><td>Rs.3500</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="notice" style="margin-top:12px;">
+        <strong>Grinding Loss:</strong><br>
+        Linna: 20% loss → 80% usable<br>
+        Balaya: 10% loss → 90% usable<br>
+        Premium Mix: 35% loss → 65% usable
+      </div>
+    </div>
+
+    <div class="card">
+      <h2><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="receipt" aria-hidden="true"></i></span><span>Overheads</span></h2><p class="pro-subtitle gold">Keep recurring monthly costs visible and controlled.</p>
+      <div class="accordion" id="overheadAcc">
+        <div class="accordion-header" onclick="toggleAcc()">Edit Overheads ▼</div>
+        <div class="accordion-body">
+          <div class="field"><label>Transport</label><input type="number" id="ohTransport" value="110000" oninput="onDataChange()"></div>
+          <div class="field"><label>Firewood</label><input type="number" id="ohFirewood" value="30000" oninput="onDataChange()"></div>
+          <div class="field"><label>Workers</label><input type="number" id="ohWorkers" value="220000" oninput="onDataChange()"></div>
+          <div class="field"><label>Other</label><input type="number" id="ohOther" value="220000" oninput="onDataChange()"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2><span class="pro-title-icon slate" aria-hidden="true"><i class="business-icon" data-lucide="lock-keyhole" aria-hidden="true"></i></span><span>Data Vault</span></h2><p class="pro-subtitle slate">Backup, restore and protect business records.</p>
+      <div class="btn-row">
+        <button class="btn" onclick="backupJSON()">⬇️ Backup</button>
+        <button class="btn" onclick="document.getElementById('restoreFile').click()">⬆️ Restore</button>
+        <input type="file" id="restoreFile" accept=".json" style="display:none" onchange="restoreJSON(event)">
+        <button class="btn btn-danger" onclick="resetAll()">🗑️ Reset</button>
+        <button class="btn btn-primary" onclick="cloudSave()">☁️ Cloud Save</button>
+        <button class="btn" onclick="cloudLoad()">☁️ Cloud Load</button>
+      </div>
+      <div class="notice" style="margin-top:12px;">
+        <strong>Safety Snapshots:</strong> Last 5 versions are automatically saved. On restore, a snapshot is taken automatically.
+      </div>
+    </div>
+  </section>
+
+  <footer class="footer no-print">
+    <div style="display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;">
+      <img src="logo.jpg" alt="Logo Icon" style="width:24px;height:24px;border-radius:6px;object-fit:cover;border:1px solid var(--gold);" onerror="this.style.display='none'">
+      <span>MY DRYBEA — Seafood Market Enterprise System · © <span id="year"></span></span>
+      <span class="data-status" id="footerStatus"><span class="dot green"></span> Local</span>
+    </div>
+  </footer>
+</div>
+
+<!-- Invoice Print Area -->
+<div class="invoice-print" id="invoicePrintArea"></div>
+
+<!-- Notification Center Modal -->
+<div class="modal-backdrop" id="notifyCenterModal">
+  <div class="modal">
+    <div class="nc-header-row">
+      <h3 style="margin:0;"><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="bell-ring" aria-hidden="true"></i></span><span>Notifications</span></h3>
+      <button type="button" class="nc-sound-toggle" id="notifyCenterSoundToggle" onclick="toggleNotifySound()" aria-label="Toggle notification sound" title="Notification sound">
+        <i class="business-icon" data-lucide="bell" aria-hidden="true"></i>
+        <span class="nc-sound-label">Sound</span>
+      </button>
+    </div>
+    <p class="pro-subtitle green">Latest updates for your business, newest first.</p>
+    <div class="nc-list" id="notifyCenterList"></div>
+    <div class="btn-row">
+      <button class="btn" onclick="closeModal('notifyCenterModal')" style="flex:1;">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Notification Detail Modal -->
+<div class="modal-backdrop" id="appNotifyDetailModal">
+  <div class="modal">
+    <h3 id="appNotifyDetailTitle"><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="bell-ring" aria-hidden="true"></i></span><span>Notification</span></h3>
+    <p class="pro-subtitle green" id="appNotifyDetailTime"></p>
+    <div id="appNotifyDetailBody" class="an-detail-body"></div>
+    <div style="display:flex;gap:8px;margin-top:14px;">
+      <button class="btn" onclick="closeModal('appNotifyDetailModal')" style="flex:1;">Close</button>
+      <button class="btn btn-primary" id="appNotifyDetailGoBtn" style="flex:1;display:none;">Open</button>
+    </div>
+  </div>
+</div>
+
+<!-- QR Modal -->
+<div class="modal-backdrop" id="qrModal">
+  <div class="modal">
+    <h3><span class="pro-title-icon teal" aria-hidden="true"><i class="business-icon" data-lucide="qr-code" aria-hidden="true"></i></span><span>Share QR</span></h3><p class="pro-subtitle teal">Load current business parameters instantly.</p>
+    <p style="font-size:0.85rem;color:var(--text-muted);">Scan to load current parameters</p>
+    <div id="qrcode" style="display:flex;justify-content:center;margin:16px 0;"></div>
+    <button class="btn btn-primary" onclick="closeQR()" style="width:100%;">Close</button>
+  </div>
+</div>
+
+<!-- New Order Modal -->
+<div class="modal-backdrop" id="orderModal">
+  <div class="modal">
+    <h3><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="shopping-bag" aria-hidden="true"></i></span><span>New Order</span></h3><p class="pro-subtitle green">Capture the sale cleanly from the first field.</p>
+
+    <div class="om-section" data-owner-order-customer>
+      <div class="om-section-title"><i class="business-icon" data-lucide="user-round" aria-hidden="true"></i> Customer</div>
+      <div class="field" style="margin-bottom:0;">
+        <select id="orderCustomer" onchange="onOrderCustomerChange()"></select>
+      </div>
+    </div>
+
+    <div class="om-section" data-staff-order-customer style="display:none;">
+      <div class="om-section-title"><i class="business-icon" data-lucide="user-round" aria-hidden="true"></i> Customer</div>
+      <div class="notice" style="margin-bottom:10px;padding:10px 12px;font-size:.72rem;"><i class="business-icon icon-inline" data-lucide="shield-check"></i> Staff orders do not use the customer master list. Customer details are stored only inside this sale record for owner verification.</div>
+      <div class="grid-2">
+        <div class="field"><label>Customer Name</label><input id="staffOrderCustomerName" type="text" placeholder="Customer name" autocomplete="off"></div>
+        <div class="field"><label>Customer Phone</label><input id="staffOrderCustomerPhone" type="text" placeholder="07XXXXXXXX" autocomplete="off" inputmode="tel"></div>
+      </div>
+    </div>
+
+    <div class="om-section" data-owner-order-referral style="display:none;">
+      <div class="field" style="margin-bottom:8px;">
+        <label>Staff Reference for this Order</label>
+        <select id="orderReferralStaffSelect"><option value="">Auto from customer / No referral</option></select>
+      </div>
+      <small style="display:block;margin-bottom:8px;color:var(--text-muted);font-size:.72rem;">Owner verification control. The selected reference is attached to this order before commission review.</small>
+      <div class="notice" style="margin:0;padding:9px 12px;font-size:.72rem;"><i class="business-icon icon-inline" data-lucide="badge-percent"></i> If you create the sale as a staff user, it is automatically attributed to your 12% commission.</div>
+    </div>
+
+    <div class="om-section">
+      <div class="om-section-title"><i class="business-icon" data-lucide="package" aria-hidden="true"></i> Product &amp; Quantity</div>
+
+      <select id="orderProduct" class="sr-only" aria-hidden="true" tabindex="-1">
+        <option value="50">50g Pack</option>
+        <option value="100">100g Pack</option>
+        <option value="500">500g Pack</option>
+        <option value="1000">1kg Pack</option>
+      </select>
+
+      <div class="om-size-grid" id="orderSizeGrid" role="radiogroup" aria-label="Product size">
+        <div class="om-size-chip" data-size="50" role="radio" onclick="selectOrderSize('50')"><span class="om-size-val">50g</span><span class="om-size-unit">Pack</span></div>
+        <div class="om-size-chip" data-size="100" role="radio" onclick="selectOrderSize('100')"><span class="om-size-val">100g</span><span class="om-size-unit">Pack</span></div>
+        <div class="om-size-chip" data-size="500" role="radio" onclick="selectOrderSize('500')"><span class="om-size-val">500g</span><span class="om-size-unit">Pack</span></div>
+        <div class="om-size-chip" data-size="1000" role="radio" onclick="selectOrderSize('1000')"><span class="om-size-val">1kg</span><span class="om-size-unit">Pack</span></div>
+      </div>
+
+      <div class="grid-2" style="margin-top:14px;">
+        <div class="field" style="margin-bottom:0;">
+          <label>Quantity</label>
+          <div class="om-qty-row">
+            <button type="button" class="om-qty-btn" onclick="stepOrderQty(-1)" aria-label="Decrease quantity"><i class="business-icon" data-lucide="minus" aria-hidden="true"></i></button>
+            <input type="number" id="orderQty" value="1" min="1" step="1" inputmode="numeric" oninput="updateOrderTotal()">
+            <button type="button" class="om-qty-btn" onclick="stepOrderQty(1)" aria-label="Increase quantity"><i class="business-icon" data-lucide="plus" aria-hidden="true"></i></button>
+          </div>
+        </div>
+        <div class="field" style="margin-bottom:0;">
+          <label>Unit Price (Rs.)</label>
+          <div class="input-prefix"><span>Rs.</span><input type="number" id="orderUnitPrice" value="350" min="0" inputmode="decimal" oninput="updateOrderTotal()"></div>
+        </div>
+      </div>
+
+      <div class="om-total-banner" style="margin-top:14px;">
+        <div>
+          <div class="om-total-label">Order Total</div>
+          <div class="om-total-sub" id="orderTotalSub">1 × Rs. 350</div>
+        </div>
+        <div class="om-total-value" id="orderTotalValue">Rs. 350</div>
+      </div>
+    </div>
+
+    <div class="om-section">
+      <div class="om-section-title"><i class="business-icon" data-lucide="map-pin" aria-hidden="true"></i> Delivery Address</div>
+      <div class="field" style="margin-bottom:0;">
+        <textarea id="orderAddress" placeholder="House no, street, city..."></textarea>
+      </div>
+    </div>
+
+    <div class="om-section">
+      <div class="om-section-title"><i class="business-icon" data-lucide="sticky-note" aria-hidden="true"></i> Notes</div>
+      <div class="field" style="margin-bottom:0;">
+        <textarea id="orderNotes" placeholder="Any special instructions..."></textarea>
+      </div>
+    </div>
+
+    <div class="om-actions">
+      <button class="btn btn-primary" onclick="createOrder()"><i class="business-icon icon-inline" data-lucide="circle-check" aria-hidden="true"></i> Create Order</button>
+      <button class="btn btn-cancel-link" onclick="closeModal('orderModal')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- New Customer Modal -->
+<div class="modal-backdrop" id="customerModal">
+  <div class="modal">
+    <h3><span class="pro-title-icon blue" aria-hidden="true"><i class="business-icon" data-lucide="user-round" aria-hidden="true"></i></span><span>New Customer</span></h3><p class="pro-subtitle blue">Create a clean customer record.</p>
+    <div class="field">
+      <label>Customer Name</label>
+      <input type="text" id="custName" placeholder="Customer name">
+    </div>
+    <div class="field" data-owner-only>
+      <label>Phone</label>
+      <input type="text" id="custPhone" placeholder="Phone number">
+    </div>
+    <div class="field" data-owner-referral-field style="display:none;">
+      <label>Staff Reference</label>
+      <select id="custReferralStaffSelect"><option value="">No referral</option></select>
+      <small style="display:block;margin-top:6px;color:var(--text-muted);">Owner can assign the customer to a staff reference. This reference is copied to the order and sent for commission verification.</small>
+    </div>
+    <div class="field">
+      <label>Address</label>
+      <textarea id="custAddress" placeholder="Customer address"></textarea>
+    </div>
+    <div class="field" data-staff-referral-field style="display:none;">
+      <label>Customer Reference</label>
+      <div class="notice" style="margin:0;padding:9px 12px;font-size:.72rem;"><i class="business-icon icon-inline" data-lucide="badge-percent"></i> This customer will be registered under <strong id="custReferralStaffName">your staff reference</strong>. Eligible sales earn 12% commission.</div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="saveCustomer()"><i class="business-icon icon-inline" data-lucide="save" aria-hidden="true"></i> Save Customer</button>
+      <button class="btn" onclick="closeModal('customerModal')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- New Expense Modal -->
+<div class="modal-backdrop" id="expenseModal">
+  <div class="modal">
+    <h3><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="receipt" aria-hidden="true"></i></span><span>New Expense</span></h3><p class="pro-subtitle gold">Record the cost while the transaction is fresh.</p>
+    <div class="field">
+      <label>Date</label>
+      <input type="date" id="expDate">
+    </div>
+    <div class="field">
+      <label>Category</label>
+      <select id="expCategory">
+        <option value="Transport">Transport</option>
+        <option value="Firewood">Firewood</option>
+        <option value="Workers Salary">Workers Salary</option>
+        <option value="Packing Materials">Packing Materials</option>
+        <option value="Raw Fish">Raw Fish</option>
+        <option value="Rent">Rent</option>
+        <option value="Utilities">Utilities</option>
+        <option value="Bill Payment">Bill Payment</option>
+        <option value="Staff Dining">Staff Dining</option>
+        <option value="Other">Other</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Description</label>
+      <textarea id="expDescription" placeholder="Optional notes..."></textarea>
+    </div>
+    <div class="field">
+      <label>Amount (Rs.)</label>
+      <div class="input-prefix"><span>Rs.</span><input type="number" id="expAmount" value="0" min="0"></div>
+    </div>
+    <div class="field">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+        <input type="checkbox" id="expRecurring" style="width:auto;">
+        <span>🔁 Repeat this every day</span>
+      </label>
+      <p style="font-size:0.78rem;opacity:0.65;margin-top:4px;">Auto-adds this same expense (same category, description &amp; amount) each day you're logged in. You can pause or remove it anytime below.</p>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="saveExpense()">✅ Save Expense</button>
+      <button class="btn" onclick="closeModal('expenseModal')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Auth Modal -->
+<div class="modal-backdrop" id="authModal">
+  <div class="modal">
+    <h3 id="authTitle"><span class="pro-title-icon slate" aria-hidden="true"><i class="business-icon" data-lucide="lock-keyhole" aria-hidden="true"></i></span><span>Secure Login</span></h3><p class="pro-subtitle slate">Authorised access to the MY DRYBEA workspace.</p>
+    <div class="field">
+      <label>Email</label>
+      <input type="email" id="authEmail" placeholder="you@example.com">
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <input type="password" id="authPassword" placeholder="••••••••">
+    </div>
+    <div class="btn-row" style="justify-content:center;">
+      <button class="btn btn-primary" id="authActionBtn" onclick="authAction()">Login</button>
+      <button class="btn" onclick="toggleAuthMode()">Create Account</button>
+      <button class="btn" onclick="closeModal('authModal')">Cancel</button>
+    </div>
+    <div id="authError" class="notice warn" style="display:none;"></div>
+  </div>
+</div>
+
+
+
+
+<script src="app.js"></script>
+
+</body>
+</html>
