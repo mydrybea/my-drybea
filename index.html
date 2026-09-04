@@ -7053,6 +7053,7 @@ function updateAuthUI() {
       const emailName = (currentUser.email || 'Business Owner').split('@')[0].replace(/[._-]+/g, ' ').trim();
       nameEl.textContent = emailName ? emailName.replace(/\b\w/g, c => c.toUpperCase()) : 'Business Owner';
     }
+    if (window.lucide) lucide.createIcons();
   } else {
     const profileEmail = $('profileEmail');
     const profileName = $('profileName');
@@ -7064,6 +7065,7 @@ function updateAuthUI() {
     btn.title = 'Login';
     btn.setAttribute('aria-label', 'Login');
     btn.onclick = openAuthModal;
+    if (window.lucide) lucide.createIcons();
   }
 }
 
@@ -7160,6 +7162,7 @@ function toggleTheme() {
   state.theme = state.theme === 'dark' ? 'light' : 'dark';
   document.documentElement.setAttribute('data-theme', state.theme);
   $('themeToggle').innerHTML = '<i class="business-icon" data-lucide="moon" aria-hidden="true"></i>';
+  if (window.lucide) lucide.createIcons();
   if (costChart) { costChart.destroy(); costChart = null; }
   if (sensChart) { sensChart.destroy(); sensChart = null; }
   if (prodChart) { prodChart.destroy(); prodChart = null; }
@@ -7281,6 +7284,7 @@ function syncUI() {
     document.documentElement.setAttribute('data-theme','light');
     $('themeToggle').innerHTML = '<i class="business-icon" data-lucide="moon" aria-hidden="true"></i>';
   }
+  if (window.lucide) lucide.createIcons();
 }
 
 // ==================== MONTHLY SUMMARY ====================
