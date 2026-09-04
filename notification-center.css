@@ -1,0 +1,198 @@
+/* ============================================================
+   NOTIFICATION CENTER — v2 ("next level" redesign)
+   Drop this in PLACE OF the old block in style.css:
+   lines ~2394–2435, from
+     "/* ===== NOTIFICATION CENTER (header bell + list) ===== */"
+   down to
+     ".nc-empty i{...}"
+   Everything below reuses your existing design tokens
+   (--bg-card, --green, --gold, --border-strong, etc.) — no new
+   variables needed, so it inherits dark/light theme automatically.
+   ============================================================ */
+
+#notifyCenterBtn{position:relative;}
+.notify-badge{
+  position:absolute; top:-3px; right:-3px; min-width:16px; height:16px; padding:0 4px;
+  border-radius:999px; background:var(--bad); color:#fff; font-size:.6rem; font-weight:800;
+  display:none; align-items:center; justify-content:center; line-height:1;
+  box-shadow:0 0 0 2px var(--bg-card);
+}
+.notify-badge.show{display:flex; animation:notifyBadgePulse 1.8s ease-in-out infinite;}
+@keyframes notifyBadgePulse{0%,100%{box-shadow:0 0 0 2px var(--bg-card),0 0 0 0 rgba(248,113,113,0.55);}50%{box-shadow:0 0 0 2px var(--bg-card),0 0 0 5px rgba(248,113,113,0);}}
+
+/* ---- panel shell (goes inside your existing .modal / .modal-backdrop) ---- */
+.nc-panel{
+  width:100%; max-width:400px; max-height:88vh;
+  background:linear-gradient(165deg, var(--bg-card) 0%, var(--bg-primary) 100%);
+  border:1px solid var(--border-strong);
+  border-radius:22px;
+  box-shadow:var(--shadow-lg), 0 0 0 1px rgba(255,255,255,.02) inset;
+  overflow:hidden;
+  display:flex; flex-direction:column;
+  position:relative;
+  animation:panelIn .38s cubic-bezier(.22,1,.36,1);
+}
+@keyframes panelIn{from{opacity:0;transform:translateY(14px) scale(.97)}to{opacity:1;transform:translateY(0) scale(1)}}
+
+.nc-panel::before{
+  content:''; position:absolute; top:0; left:0; right:0; height:2px;
+  background:linear-gradient(90deg,transparent, var(--gold), var(--lime-accent), var(--gold), transparent);
+  background-size:200% 100%; animation:seam 5s linear infinite; opacity:.8;
+}
+@keyframes seam{0%{background-position:0% 0}100%{background-position:200% 0}}
+
+/* ---- header ---- */
+.nc-head{
+  padding:20px 20px 16px;
+  border-bottom:1px solid var(--border);
+  background:radial-gradient(ellipse at 20% 0%, var(--green-subtle), transparent 60%);
+}
+.nc-head-top{display:flex; align-items:center; gap:12px;}
+.nc-bell{
+  flex:0 0 auto; width:40px; height:40px; border-radius:13px;
+  display:grid; place-items:center;
+  background:linear-gradient(145deg, var(--green-subtle), rgba(163,230,53,.06));
+  border:1px solid var(--border-strong);
+  color:var(--green); position:relative;
+}
+.nc-bell svg{width:19px; height:19px;}
+.nc-bell .ring-dot{
+  position:absolute; top:-3px; right:-3px; width:9px; height:9px; border-radius:50%;
+  background:var(--bad); box-shadow:0 0 0 3px var(--bg-card);
+  animation:ringPulse 1.8s ease-in-out infinite;
+}
+@keyframes ringPulse{0%,100%{box-shadow:0 0 0 3px var(--bg-card),0 0 0 3px rgba(248,113,113,.5)}50%{box-shadow:0 0 0 3px var(--bg-card),0 0 0 7px rgba(248,113,113,0)}}
+.nc-head-title{flex:1; min-width:0;}
+.nc-head-title h2{
+  font-family:var(--font-display); font-weight:700; font-style:italic;
+  font-size:1.22rem; color:var(--text-main); letter-spacing:.01em; line-height:1.1;
+}
+.nc-head-title p{font-size:.72rem; color:var(--text-muted); margin-top:3px; font-weight:500;}
+.nc-close-x{
+  flex:0 0 auto; width:30px; height:30px; border-radius:10px; border:1px solid var(--border);
+  background:transparent; color:var(--text-muted); display:grid; place-items:center; cursor:pointer;
+  transition:var(--transition);
+}
+.nc-close-x:hover{background:var(--bg-card-hover); color:var(--text-main); border-color:var(--border-strong);}
+
+.nc-head-bottom{display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:14px;}
+.nc-sound{
+  display:flex; align-items:center; gap:7px;
+  padding:6px 12px 6px 10px; border-radius:999px;
+  border:1px solid var(--border-strong); background:var(--green-subtle); color:var(--green);
+  font-size:.7rem; font-weight:700; cursor:pointer; transition:var(--transition);
+  font-family:var(--font);
+}
+.nc-sound:hover{background:var(--green-glow); border-color:var(--green);}
+.nc-sound svg{width:13px; height:13px;}
+.nc-sound.muted{background:transparent; color:var(--text-muted); border-color:var(--border);}
+.nc-mark-all{
+  font-size:.68rem; font-weight:700; color:var(--text-muted); background:none; border:none; cursor:pointer;
+  text-decoration:underline; text-underline-offset:3px; text-decoration-color:var(--border-strong);
+  transition:var(--transition); font-family:var(--font);
+}
+.nc-mark-all:hover{color:var(--lime-accent);}
+
+/* ---- list ---- */
+.nc-body{overflow-y:auto; padding:14px; display:flex; flex-direction:column; gap:10px; flex:1;}
+.nc-body::-webkit-scrollbar{width:5px;}
+.nc-body::-webkit-scrollbar-thumb{background:var(--border-strong); border-radius:10px;}
+
+.nc-day-label{
+  font-size:.63rem; font-weight:700; color:var(--text-dim); text-transform:uppercase;
+  letter-spacing:.08em; padding:2px 2px 2px; opacity:.75;
+}
+
+/* ---- card ---- */
+.nc-card{
+  border-radius:16px; border:1px solid var(--border); background:var(--bg-secondary);
+  padding:13px 14px; position:relative; transition:var(--transition);
+  animation:itemIn .3s ease backwards; cursor:pointer;
+}
+.nc-card:hover{border-color:var(--border-strong); background:var(--bg-card-hover);}
+.nc-card.unread{border-color:rgba(16,185,129,.35); background:linear-gradient(145deg, var(--green-subtle), var(--bg-secondary) 60%);}
+.nc-card.unread::after{
+  content:''; position:absolute; top:14px; left:-1px; width:3px; height:calc(100% - 28px);
+  background:linear-gradient(var(--lime-accent), var(--green)); border-radius:0 3px 3px 0;
+}
+@keyframes itemIn{from{opacity:0; transform:translateY(6px)}to{opacity:1; transform:translateY(0)}}
+
+.nc-card-top{display:flex; align-items:flex-start; gap:10px;}
+.nc-icon{
+  flex:0 0 auto; width:34px; height:34px; border-radius:10px; display:grid; place-items:center;
+  background:var(--green-subtle); color:var(--green); font-size:1rem;
+}
+.nc-card.type-order .nc-icon{background:linear-gradient(145deg, rgba(212,175,55,.16), rgba(212,175,55,.05)); color:var(--gold);}
+.nc-card.type-info .nc-icon{background:rgba(110,231,183,.10); color:var(--text-muted);}
+.nc-card.an-warn .nc-icon{background:var(--warn-bg); color:var(--warn);}
+
+.nc-card-head{flex:1; min-width:0; display:flex; align-items:flex-start; justify-content:space-between; gap:8px;}
+.nc-card-head-text{min-width:0;}
+.nc-title{font-weight:700; font-size:.84rem; color:var(--text-main); line-height:1.3;}
+.nc-sub{font-size:.68rem; color:var(--text-muted); margin-top:2px;}
+.nc-time{font-size:.63rem; color:var(--text-dim); white-space:nowrap; flex:0 0 auto; padding-top:1px;}
+
+.nc-status{
+  display:inline-flex; align-items:center; gap:5px; padding:3px 9px; border-radius:999px;
+  font-size:.6rem; font-weight:800; letter-spacing:.03em; text-transform:uppercase;
+  flex:0 0 auto;
+}
+.nc-status::before{content:''; width:5px; height:5px; border-radius:50%; background:currentColor;}
+.nc-status.pending{background:var(--warn-bg); color:var(--warn);}
+.nc-status.confirmed{background:var(--green-subtle); color:var(--green);}
+.nc-status.cancelled{background:var(--bad-bg); color:var(--bad);}
+
+/* ---- order detail breakdown ---- */
+.nc-order-body{margin-top:11px; padding-top:11px; border-top:1px dashed var(--border);}
+.nc-order-item{display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:9px;}
+.nc-order-item .name{font-size:.78rem; color:var(--text-secondary); font-weight:600;}
+.nc-order-item .qty{font-size:.66rem; color:var(--text-muted); margin-top:1px;}
+.nc-order-item .price{font-size:.84rem; font-weight:800; color:var(--text-main); white-space:nowrap;}
+
+.nc-meta-grid{display:grid; grid-template-columns:1fr 1fr; gap:8px 12px; margin-top:2px;}
+.nc-meta{min-width:0;}
+.nc-meta .k{font-size:.6rem; font-weight:700; color:var(--text-dim); text-transform:uppercase; letter-spacing:.05em;}
+.nc-meta .v{font-size:.75rem; color:var(--text-secondary); font-weight:600; margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+
+.nc-total-row{
+  display:flex; align-items:center; justify-content:space-between; margin-top:11px; padding-top:11px;
+  border-top:1px solid var(--border);
+}
+.nc-total-row .label{font-size:.68rem; color:var(--text-muted); font-weight:700;}
+.nc-total-row .amount{font-family:var(--font-display); font-size:1.15rem; font-weight:700; color:var(--gold-light); font-style:italic;}
+
+.nc-note{
+  margin-top:10px; font-size:.68rem; color:var(--text-dim); font-style:italic;
+  display:flex; align-items:center; gap:6px;
+}
+
+.nc-card.type-info .nc-msg{font-size:.76rem; color:var(--text-secondary); margin-top:3px; line-height:1.45;}
+
+/* ---- footer ---- */
+.nc-foot{padding:14px 16px; border-top:1px solid var(--border); background:var(--bg-secondary);}
+.nc-close-btn{
+  width:100%; padding:12px; border-radius:13px; border:1px solid var(--border-strong);
+  background:transparent; color:var(--text-secondary); font-weight:700; font-size:.84rem;
+  font-family:var(--font); cursor:pointer; transition:var(--transition);
+}
+.nc-close-btn:hover{background:var(--bg-card-hover); border-color:var(--green); color:var(--text-main);}
+
+/* ---- empty state ---- */
+.nc-empty{display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; padding:50px 20px; color:var(--text-muted);}
+.nc-empty svg{width:38px; height:38px; opacity:.4;}
+.nc-empty p{font-size:.78rem;}
+
+/* ---- mobile: bottom sheet instead of centered modal ---- */
+@media (max-width:480px){
+  .nc-panel{
+    max-width:100%; max-height:80vh;
+    border-radius:22px 22px 0 0;
+    position:fixed; left:0; right:0; bottom:0;
+    animation:sheetUp .32s cubic-bezier(.22,1,.36,1);
+  }
+  @keyframes sheetUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+}
+
+/* ---- light theme ---- */
+[data-theme="light"] .nc-panel{background:linear-gradient(165deg,#fff 0%, var(--bg-secondary) 100%);}
+[data-theme="light"] .nc-total-row .amount{color:var(--gold-dark);}
