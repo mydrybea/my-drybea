@@ -1847,7 +1847,8 @@ function dbOrderToLocal(o) {
     referralStaffId: o.referral_staff_id || null,
     referralStaffReference: o.referral_staff_reference || null,
     referralStatus: o.referral_status || 'none',
-    assignedDriverId: o.assigned_driver_id || null
+    assignedDriverId: o.assigned_driver_id || null,
+    deliveryKm: (o.delivery_km !== undefined && o.delivery_km !== null) ? Number(o.delivery_km) : null
   };
 }
 
@@ -2520,12 +2521,110 @@ function updateOrderStats() {
   $('statCancelled').textContent = orders.filter(o => o.status === 'cancelled').length;
 }
 
+// ==================== DRIVER PAY (distance-based, tiered discount) ====================
+// Rs. 50 per km base rate. Trips over 20km get a 7% discount off the gross, trips over
+// 35km get a 10% discount off the gross (the higher tier replaces the lower one; they
+// don't stack).
+const DRIVER_PAY_RATE_PER_KM = 50;
+
+function calculateDriverPay(km) {
+  const distance = Number(km) || 0;
+  if (!(distance > 0)) return { distance: 0, rate: DRIVER_PAY_RATE_PER_KM, discountPct: 0, gross: 0, discount: 0, pay: 0 };
+  const discountPct = distance > 35 ? 10 : (distance > 20 ? 7 : 0);
+  const gross = distance * DRIVER_PAY_RATE_PER_KM;
+  const discount = gross * (discountPct / 100);
+  const pay = gross - discount;
+  return { distance, rate: DRIVER_PAY_RATE_PER_KM, discountPct, gross, discount, pay };
+}
+window.calculateDriverPay = calculateDriverPay;
+
+function renderDelPayPreview() {
+  const el = $('delPayCalcResult');
+  const input = $('delPayCalcKm');
+  if (!el || !input) return;
+  const km = Number(input.value) || 0;
+  if (km <= 0) { el.textContent = "Enter a distance to see the driver's pay."; return; }
+  const r = calculateDriverPay(km);
+  el.innerHTML = `<strong>${km} km</strong> → Rs. ${r.gross.toLocaleString()} gross` +
+    (r.discountPct ? ` − ${r.discountPct}% (Rs. ${Math.round(r.discount).toLocaleString()}) = ` : ' = ') +
+    `<strong>Rs. ${Math.round(r.pay).toLocaleString()}</strong> driver pay.`;
+}
+window.renderDelPayPreview = renderDelPayPreview;
+
+function renderDeliveryStats() {
+  const pendingEl = $('delStatPending');
+  const deliveredTodayEl = $('delStatDeliveredToday');
+  const kmMonthEl = $('delStatKmMonth');
+  const payMonthEl = $('delStatPayMonth');
+  if (!pendingEl && !deliveredTodayEl && !kmMonthEl && !payMonthEl) return;
+  const today = todayStr();
+  const monthPrefix = today.slice(0, 7);
+  let pending = 0, deliveredToday = 0, kmMonth = 0, payMonth = 0;
+  orders.forEach(o => {
+    if (o.status === 'cancelled') return;
+    if (o.status === 'pending' || o.status === 'shipped') pending++;
+    const created = (o.createdAt || '').slice(0, 10);
+    if (o.status === 'delivered' && created === today) deliveredToday++;
+    if ((o.createdAt || '').slice(0, 7) === monthPrefix && o.deliveryKm) {
+      kmMonth += Number(o.deliveryKm) || 0;
+      payMonth += calculateDriverPay(o.deliveryKm).pay;
+    }
+  });
+  if (pendingEl) pendingEl.textContent = pending;
+  if (deliveredTodayEl) deliveredTodayEl.textContent = deliveredToday;
+  if (kmMonthEl) kmMonthEl.textContent = `${kmMonth.toFixed(1)} km`;
+  if (payMonthEl) payMonthEl.textContent = `Rs. ${Math.round(payMonth).toLocaleString()}`;
+}
+window.renderDeliveryStats = renderDeliveryStats;
+
+function renderDeliveryDriverStats() {
+  const tbody = $('deliveryDriverStatsBody');
+  const onlineCountEl = $('delStatDrivers');
+  if (!tbody) return;
+  if (!driverListCache.length) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;opacity:.5;padding:18px;">No drivers added yet. Use "Add Driver" above.</td></tr>';
+    if (onlineCountEl) onlineCountEl.textContent = '0';
+    return;
+  }
+  const today = todayStr();
+  const monthPrefix = today.slice(0, 7);
+  let onlineCount = 0;
+  tbody.innerHTML = driverListCache.map(d => {
+    const mine = orders.filter(o => String(o.assignedDriverId || '') === String(d.id) && o.status !== 'cancelled');
+    const todayOrders = mine.filter(o => (o.createdAt || '').slice(0, 10) === today);
+    const todayKm = todayOrders.reduce((s, o) => s + (Number(o.deliveryKm) || 0), 0);
+    const todayPay = todayOrders.reduce((s, o) => s + calculateDriverPay(o.deliveryKm).pay, 0);
+    const monthPay = mine.filter(o => (o.createdAt || '').slice(0, 7) === monthPrefix)
+      .reduce((s, o) => s + calculateDriverPay(o.deliveryKm).pay, 0);
+    const lastSeen = driverLocationFreshness[String(d.id)];
+    const isOnline = lastSeen && (Date.now() - lastSeen) < DRIVER_ONLINE_THRESHOLD_MS;
+    if (isOnline) onlineCount++;
+    const statusBadge = isOnline
+      ? '<span style="color:#1a7f37;font-weight:600;">🟢 Online</span>'
+      : (lastSeen ? `<span style="opacity:.6;">⚪ Last seen ${Math.max(1, Math.round((Date.now() - lastSeen) / 60000))}m ago</span>` : '<span style="opacity:.5;">⚪ Not sharing</span>');
+    return `<tr>
+      <td>${escapeHtmlSafe(d.display_name || d.id.slice(0, 8))}</td>
+      <td>${statusBadge}</td>
+      <td>${todayOrders.length}</td>
+      <td>${todayKm ? todayKm.toFixed(1) : '-'}</td>
+      <td>Rs. ${Math.round(todayPay).toLocaleString()}</td>
+      <td>Rs. ${Math.round(monthPay).toLocaleString()}</td>
+      <td><button class="btn btn-sm btn-danger" onclick="removeStaffMember('${d.id}')" aria-label="Remove driver"><i class="business-icon icon-inline" data-lucide="trash-2" aria-hidden="true"></i></button></td>
+    </tr>`;
+  }).join('');
+  if (onlineCountEl) onlineCountEl.textContent = String(onlineCount);
+  if (window.lucide) lucide.createIcons({ attrs: { 'stroke-width': 1.9, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' } });
+}
+window.renderDeliveryDriverStats = renderDeliveryDriverStats;
+
 function renderDelivery() {
   const tbody = $('deliveryBody');
-  if (!tbody) return;
+  if (!tbody) { renderDeliveryStats(); return; }
   const activeOrders = orders.filter(o => o.status !== 'cancelled');
   if (activeOrders.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;opacity:0.5;padding:20px;">No active deliveries.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;opacity:0.5;padding:20px;">No active deliveries.</td></tr>';
+    renderDeliveryStats();
+    renderDeliveryDriverStats();
     return;
   }
   const orderIndexById = new Map(orders.map((o, i) => [String(o.id), i]));
@@ -2537,15 +2636,27 @@ function renderDelivery() {
         <option value="">— Unassigned —</option>
         ${driverListCache.map(d => `<option value="${d.id}" ${String(order.assignedDriverId||'')===String(d.id)?'selected':''}>${d.display_name || d.id.slice(0,8)}</option>`).join('')}
       </select>` : '<span style="opacity:.4;">No drivers added</span>');
+    const kmCell = userRole === 'owner'
+      ? `<input type="number" min="0" step="0.1" value="${order.deliveryKm != null ? order.deliveryKm : ''}" placeholder="km" style="width:70px;padding:4px 6px;font-size:12px;border-radius:6px;" onchange="updateDeliveryKm('${order.id}', this.value)">`
+      : (order.deliveryKm ? `${order.deliveryKm} km` : '-');
+    const pay = calculateDriverPay(order.deliveryKm);
+    const payCell = pay.distance > 0
+      ? `Rs. ${Math.round(pay.pay).toLocaleString()}${pay.discountPct ? ` <span style="opacity:.55;font-size:11px;">(-${pay.discountPct}%)</span>` : ''}`
+      : '-';
     return `<tr>
       <td><strong>${order.id}</strong></td>
       <td>${getCustomerName(order.customerId)}</td>
       <td>${order.address || '-'}</td>
       <td>${getStatusBadge(order.status)}</td>
-      <td data-owner-only>${driverCell}</td>
+      <td>${driverCell}</td>
+      <td>${kmCell}</td>
+      <td>${payCell}</td>
       <td><button class="btn btn-sm" onclick="cycleStatus(${realIndex})"><i class="business-icon icon-inline" data-lucide="refresh-cw" aria-hidden="true"></i> Update</button></td>
     </tr>`;
   }).join('');
+  if (window.lucide) lucide.createIcons({ attrs: { 'stroke-width': 1.9, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' } });
+  renderDeliveryStats();
+  renderDeliveryDriverStats();
 }
 
 async function assignDriver(orderId, driverId) {
@@ -2558,13 +2669,34 @@ async function assignDriver(orderId, driverId) {
     const o = orders.find(x => String(x.id) === String(orderId));
     if (o) o.assignedDriverId = driverId || null;
     saveOrders();
+    renderDeliveryDriverStats();
     updateStatus(driverId ? '🚚 Driver assigned' : '🚚 Driver unassigned');
   } catch (e) {
     console.error('Assign driver error:', e);
-    alert('❌ Could not assign driver: ' + e.message + '\n\nMake sure the "assigned_driver_id" column exists on the orders table in Supabase.');
+    alert('❌ Could not assign driver: ' + e.message + '\n\nMake sure the "assigned_driver_id" column exists on the orders table in Supabase (see the setup notes for this feature).');
   }
 }
 window.assignDriver = assignDriver;
+
+async function updateDeliveryKm(orderId, kmValue) {
+  if (userRole !== 'owner') return;
+  const km = kmValue === '' ? null : Math.max(0, Number(kmValue) || 0);
+  try {
+    const { error } = await supabase.from('orders')
+      .update({ delivery_km: km })
+      .eq('id', orderId).eq('user_id', businessId);
+    if (error) throw error;
+    const o = orders.find(x => String(x.id) === String(orderId));
+    if (o) o.deliveryKm = km;
+    saveOrders();
+    renderDelivery();
+    updateStatus(km != null ? `📏 Distance saved: ${km} km` : '📏 Distance cleared');
+  } catch (e) {
+    console.error('Update delivery km error:', e);
+    alert('❌ Could not save distance: ' + e.message + '\n\nMake sure the "delivery_km" column exists on the orders table in Supabase (numeric type).');
+  }
+}
+window.updateDeliveryKm = updateDeliveryKm;
 
 // ==================== DRIVER: MY DELIVERIES ====================
 let myDeliveries = [];
@@ -2605,10 +2737,13 @@ function renderMyDeliveries() {
       : (o.status === 'shipped'
         ? `<button class="btn btn-sm btn-primary" onclick="driverMarkStatus('${o.id}','delivered')"><i class="business-icon icon-inline" data-lucide="circle-check" aria-hidden="true"></i> Mark Delivered</button>`
         : '');
+    const payHint = o.delivery_km
+      ? `<br><small style="opacity:.55;">${o.delivery_km} km • Rs. ${Math.round(calculateDriverPay(o.delivery_km).pay).toLocaleString()} pay</small>`
+      : '';
     return `<tr>
       <td><strong>${o.order_ref_no || String(o.id).slice(0,8)}</strong></td>
       <td>${escapeHtmlSafe(o.customer_name_snapshot || o.customer_address_snapshot || '-')}</td>
-      <td>${escapeHtmlSafe(addr || '-')}</td>
+      <td>${escapeHtmlSafe(addr || '-')}${payHint}</td>
       <td>${getStatusBadge(o.status)}</td>
       <td>
         ${addr ? `<a href="${mapsUrl}" target="_blank" rel="noopener" class="btn btn-sm" style="margin-right:6px;"><i class="business-icon icon-inline" data-lucide="map-pin" aria-hidden="true"></i> Navigate</a>` : ''}
@@ -2649,24 +2784,45 @@ function startDriverDeliveriesRealtime() {
 }
 
 // ==================== LIVE DRIVER LOCATION TRACKING ====================
-// Free stack: OpenStreetMap tiles + Leaflet.js (no API key), Supabase Realtime for live pins.
+// Free stack: OpenStreetMap tiles + Leaflet.js (no API key), Supabase Realtime for live pins,
+// with a polling fallback in case Realtime replication isn't enabled for driver_locations.
 
 // ---- Owner side: live map of all sharing drivers ----
 let ownerDriverMap = null;
 let ownerDriverMarkers = {};
 let ownerDriverLocationsChannel = null;
+let driverLocationPollTimer = null;
+let driverLocationFreshness = {}; // driver_id -> last-updated timestamp (ms)
+const DRIVER_ONLINE_THRESHOLD_MS = 90 * 1000; // no ping in 90s = treated as offline/stale on the map
 
 function initOwnerDriverMap() {
-  if (ownerDriverMap || userRole !== 'owner') return;
+  if (userRole !== 'owner') return;
   const el = document.getElementById('ownerDriverMap');
   if (!el || typeof L === 'undefined') return;
-  ownerDriverMap = L.map(el).setView([7.8731, 80.7718], 8); // default: Sri Lanka
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19,
-    attribution: '&copy; OpenStreetMap contributors'
-  }).addTo(ownerDriverMap);
-  setTimeout(() => ownerDriverMap && ownerDriverMap.invalidateSize(), 200);
-  startOwnerDriverLocationsRealtime();
+  if (!ownerDriverMap) {
+    ownerDriverMap = L.map(el).setView([7.8731, 80.7718], 8); // default: Sri Lanka
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(ownerDriverMap);
+    startOwnerDriverLocationsRealtime();
+  }
+  // FIX: the map container sits inside a tab-panel that's display:none whenever this tab
+  // isn't active. Leaflet measures the container's size at creation time, so if that size
+  // was 0 (hidden), the map renders grey/broken tiles until told to recompute. Previously
+  // this recompute only ran once, on first init — so returning to this tab later (after the
+  // very first paint) could leave the map stuck broken. Now it re-runs every time the tab
+  // opens, not just the first time.
+  setTimeout(() => ownerDriverMap && ownerDriverMap.invalidateSize(), 150);
+}
+
+function startDriverLocationPolling() {
+  if (driverLocationPollTimer || userRole !== 'owner') return;
+  // FIX: don't rely on Supabase Realtime alone — if replication isn't turned on for the
+  // driver_locations table (a common setup step people forget), the realtime channel
+  // subscribes successfully but never actually fires, and the map silently goes stale.
+  // Polling every 15s guarantees the map keeps updating either way.
+  driverLocationPollTimer = setInterval(loadDriverLocations, 15000);
 }
 
 async function loadDriverLocations() {
@@ -2677,34 +2833,52 @@ async function loadDriverLocations() {
     renderOwnerDriverMarkers(data || []);
   } catch (e) {
     console.error('Load driver locations error:', e);
+    const countEl = $('liveMapDriverCount');
+    if (countEl) countEl.textContent = '⚠️ Could not load driver locations: ' + e.message;
   }
 }
+window.loadDriverLocations = loadDriverLocations;
 
 function renderOwnerDriverMarkers(rows) {
   if (!ownerDriverMap) return;
-  const seen = new Set();
+  const seenAny = new Set();
+  const seenOnline = new Set();
+  const now = Date.now();
   (rows || []).forEach(r => {
     if (r.latitude == null || r.longitude == null) return;
-    seen.add(String(r.driver_id));
-    const driver = driverListCache.find(d => String(d.id) === String(r.driver_id));
+    const id = String(r.driver_id);
+    seenAny.add(id);
+    const updatedMs = r.updated_at ? new Date(r.updated_at).getTime() : 0;
+    driverLocationFreshness[id] = updatedMs;
+    const isFresh = (now - updatedMs) < DRIVER_ONLINE_THRESHOLD_MS;
+    if (isFresh) seenOnline.add(id);
+    const driver = driverListCache.find(d => String(d.id) === id);
     const label = (driver && driver.display_name) || 'Driver';
-    const popupHtml = `${escapeHtmlSafe(label)}<br><small>Updated ${new Date(r.updated_at).toLocaleTimeString()}</small>`;
-    if (ownerDriverMarkers[r.driver_id]) {
-      ownerDriverMarkers[r.driver_id].setLatLng([r.latitude, r.longitude]).setPopupContent(popupHtml);
+    const ago = updatedMs ? Math.max(0, Math.round((now - updatedMs) / 1000)) : null;
+    const agoTxt = ago == null ? 'unknown' : (ago < 60 ? `${ago}s ago` : `${Math.round(ago / 60)}m ago`);
+    const popupHtml = `<strong>${escapeHtmlSafe(label)}</strong><br><small>${isFresh ? '🟢 Live' : '⚪ Stale'} — updated ${agoTxt}</small>`;
+    if (ownerDriverMarkers[id]) {
+      ownerDriverMarkers[id].setLatLng([r.latitude, r.longitude]).setPopupContent(popupHtml);
+      ownerDriverMarkers[id].setOpacity(isFresh ? 1 : 0.45);
     } else {
-      ownerDriverMarkers[r.driver_id] = L.marker([r.latitude, r.longitude]).addTo(ownerDriverMap).bindPopup(popupHtml);
+      ownerDriverMarkers[id] = L.marker([r.latitude, r.longitude], { opacity: isFresh ? 1 : 0.45 }).addTo(ownerDriverMap).bindPopup(popupHtml);
     }
   });
   Object.keys(ownerDriverMarkers).forEach(id => {
-    if (!seen.has(id)) { ownerDriverMap.removeLayer(ownerDriverMarkers[id]); delete ownerDriverMarkers[id]; }
+    if (!seenAny.has(id)) { ownerDriverMap.removeLayer(ownerDriverMarkers[id]); delete ownerDriverMarkers[id]; delete driverLocationFreshness[id]; }
   });
   const countEl = $('liveMapDriverCount');
-  if (countEl) countEl.textContent = seen.size ? `(${seen.size} online)` : '(no drivers sharing right now)';
+  if (countEl) {
+    countEl.textContent = seenOnline.size
+      ? `🟢 ${seenOnline.size} online now`
+      : (seenAny.size ? `⚪ ${seenAny.size} driver(s) sharing, but no fresh signal right now` : 'No drivers sharing location right now');
+  }
   const markers = Object.values(ownerDriverMarkers);
   if (markers.length) {
     const group = L.featureGroup(markers);
     try { ownerDriverMap.fitBounds(group.getBounds().pad(0.3), { maxZoom: 14 }); } catch (e) {}
   }
+  renderDeliveryDriverStats();
 }
 
 function startOwnerDriverLocationsRealtime() {
@@ -2721,6 +2895,8 @@ function startOwnerDriverLocationsRealtime() {
 let driverLocationWatchId = null;
 let driverLocationSharing = false;
 let driverLocationLastSent = 0;
+let driverLastCoords = null;
+let driverLocationHeartbeat = null;
 
 function toggleDriverLocationSharing() {
   if (userRole !== 'driver') return;
@@ -2731,21 +2907,38 @@ window.toggleDriverLocationSharing = toggleDriverLocationSharing;
 
 function startDriverLocationSharing() {
   if (!navigator.geolocation) { alert('Location is not supported on this device/browser.'); return; }
+  // FIX: send an immediate fix right away instead of waiting for the first watchPosition
+  // callback (which can take a while, or never fire if the device isn't moving) — this is
+  // why the owner used to see "sharing on" but no pin appear for a long time.
+  navigator.geolocation.getCurrentPosition(
+    (pos) => { driverSendLocation(pos.coords.latitude, pos.coords.longitude, true); },
+    (err) => console.warn('Initial location fix failed:', err.message),
+    { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
+  );
   driverLocationWatchId = navigator.geolocation.watchPosition(
     (pos) => { driverSendLocation(pos.coords.latitude, pos.coords.longitude); },
     (err) => {
       console.error('Geolocation error:', err);
-      alert('⚠️ Could not get your location: ' + err.message);
+      const status = $('driverLocationStatus');
+      if (status) status.textContent = '⚠️ Location error: ' + err.message + ' — sharing stopped.';
       stopDriverLocationSharing();
     },
     { enableHighAccuracy: true, maximumAge: 10000, timeout: 20000 }
   );
+  // FIX: some phones pause/throttle watchPosition callbacks once the driver stops moving or
+  // the screen dims, so the owner's map would freeze at the last spot and look "broken" even
+  // though the driver hadn't gone anywhere. A heartbeat resends the last known fix every 20s
+  // regardless, so the "updated Xs ago" freshness on the owner's map stays accurate.
+  driverLocationHeartbeat = setInterval(() => {
+    if (driverLastCoords) driverSendLocation(driverLastCoords.lat, driverLastCoords.lng, true);
+  }, 20000);
   driverLocationSharing = true;
   updateDriverLocationUI();
 }
 
 function stopDriverLocationSharing() {
   if (driverLocationWatchId != null) { navigator.geolocation.clearWatch(driverLocationWatchId); driverLocationWatchId = null; }
+  if (driverLocationHeartbeat != null) { clearInterval(driverLocationHeartbeat); driverLocationHeartbeat = null; }
   driverLocationSharing = false;
   updateDriverLocationUI();
 }
@@ -2765,9 +2958,10 @@ function updateDriverLocationUI() {
   if (window.lucide) lucide.createIcons({ attrs: { 'stroke-width': 1.9, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' } });
 }
 
-async function driverSendLocation(lat, lng) {
+async function driverSendLocation(lat, lng, force) {
+  driverLastCoords = { lat, lng };
   const now = Date.now();
-  if (now - driverLocationLastSent < 8000) return; // throttle: ~once per 8s, saves battery & bandwidth
+  if (!force && now - driverLocationLastSent < 8000) return; // throttle: ~once per 8s, saves battery & bandwidth
   driverLocationLastSent = now;
   try {
     const { error } = await supabase.from('driver_locations').upsert({
@@ -2778,8 +2972,16 @@ async function driverSendLocation(lat, lng) {
       updated_at: new Date().toISOString()
     }, { onConflict: 'driver_id' });
     if (error) throw error;
+    // FIX: surface success/failure on-screen. Previously a failed upsert (e.g. a missing
+    // RLS policy or unique constraint on driver_id) only logged to the browser console —
+    // the driver would see "Sharing: On" and have no idea the owner's map was never
+    // actually receiving anything.
+    const status = $('driverLocationStatus');
+    if (status && driverLocationSharing) status.textContent = 'On — last sent ' + nowHHMM() + ' • the owner can see you on the map';
   } catch (e) {
     console.error('Send location error:', e);
+    const status = $('driverLocationStatus');
+    if (status) status.textContent = '⚠️ Could not send location: ' + e.message;
   }
 }
 
@@ -4668,7 +4870,7 @@ document.querySelectorAll('[data-ribbon="true"]').forEach(btn => {
   });
 });
 
-const OWNER_ONLY_TABS = ['dashboard', 'my-staff', 'calculator', 'production', 'history', 'data', 'monthly-summary', 'income', 'analytics'];
+const OWNER_ONLY_TABS = ['dashboard', 'my-staff', 'delivery', 'calculator', 'production', 'history', 'data', 'monthly-summary', 'income', 'analytics'];
 const STAFF_ONLY_TABS = ['staff-home', 'daily-pay', 'work-update', 'attendance', 'advance', 'my-commission', 'my-tasks', 'announcements'];
 const DRIVER_ONLY_TABS = ['my-deliveries'];
 
@@ -4734,7 +4936,16 @@ function activateAppTab(tabId){
   if (tabId === 'analytics') { renderAnalytics(); }
   if (tabId === 'history') renderHistory();
   if (tabId === 'production') calcProduction();
-  if (tabId === 'orders') { loadCommissionClaims().finally(() => { renderOrders(); renderCustomers(); renderDelivery(); updateOrderStats(); }); if (userRole === 'owner') { loadStaffList(); initOwnerDriverMap(); loadDriverLocations(); } }
+  if (tabId === 'orders') { loadCommissionClaims().finally(() => { renderOrders(); renderCustomers(); updateOrderStats(); }); if (userRole === 'owner') { loadStaffList(); } }
+  if (tabId === 'delivery') {
+    loadOrdersFromCloud().then(() => { renderDelivery(); updateOrderStats(); });
+    loadStaffList();
+    initOwnerDriverMap();
+    loadDriverLocations();
+    startDriverLocationPolling();
+    renderDelPayPreview();
+  }
+  if (tabId !== 'delivery' && driverLocationPollTimer) { clearInterval(driverLocationPollTimer); driverLocationPollTimer = null; }
   if (tabId === 'my-deliveries') { loadMyDeliveries(); }
   if (tabId === 'my-staff') { refreshMyStaffPage(); loadMyStaffOwnerData(); }
   if (tabId === 'expenses') { renderExpenses(); renderRecurringExpenses(); }

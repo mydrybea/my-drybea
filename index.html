@@ -148,6 +148,7 @@
   <nav class="tabs no-print app-nav" role="tablist" aria-label="Main navigation">
     <button class="tab-btn active" data-tab="dashboard" role="tab" aria-label="Home" data-owner-only><i class="business-icon" data-lucide="house" aria-hidden="true"></i><span>Home</span></button>
     <button class="tab-btn" data-tab="my-staff" role="tab" aria-label="My Staff" data-owner-only><i class="business-icon" data-lucide="users-round" aria-hidden="true"></i><span>My Staff</span><span id="myStaffAdvanceBadge" class="nav-badge" style="display:none;">0</span></button>
+    <button class="tab-btn" data-tab="delivery" role="tab" aria-label="Delivery" data-owner-only><i class="business-icon" data-lucide="truck" aria-hidden="true"></i><span>Delivery</span></button>
     <button class="tab-btn" data-tab="staff-home" role="tab" aria-label="Staff Home" data-staff-only><i class="business-icon" data-lucide="layout-dashboard" aria-hidden="true"></i><span>Staff Home</span></button>
     <button class="tab-btn" data-tab="my-deliveries" role="tab" aria-label="My Deliveries" data-driver-only><i class="business-icon" data-lucide="truck" aria-hidden="true"></i><span>My Deliveries</span></button>
     <button class="tab-btn" data-tab="my-salary" role="tab" aria-label="My Salary" data-staff-only><i class="business-icon" data-lucide="wallet-cards" aria-hidden="true"></i><span>My Salary</span></button>
@@ -655,6 +656,73 @@
       <h2><span class="pro-title-icon green"><i class="business-icon" data-lucide="wallet-cards"></i></span><span>Salary Management</span></h2>
       <p class="pro-subtitle green">Use the existing owner salary editor for base pay, daily pay, bonuses, advances, deductions and the 12% referral commission.</p>
       <button class="btn btn-primary" onclick="activateAppTab('profile');setTimeout(()=>document.getElementById('salaryStaffSelect')?.scrollIntoView({behavior:'smooth',block:'center'}),120)"><i class="business-icon icon-inline" data-lucide="wallet-cards"></i> Open Salary Manager</button>
+    </div>
+  </section>
+
+  <!-- ============ DELIVERY TAB (owner-only, advanced) ============ -->
+  <section id="delivery" class="tab-panel" role="tabpanel" style="display:none;">
+    <div class="staff-suite-hero owner-staff-hero">
+      <div style="display:flex;justify-content:space-between;gap:14px;align-items:flex-start;flex-wrap:wrap;">
+        <div>
+          <span class="eyebrow">FLEET &amp; FULFILMENT</span>
+          <h2 style="margin:4px 0 4px;display:flex;align-items:center;gap:8px;"><i class="business-icon" data-lucide="truck"></i> DELIVERY</h2>
+          <p class="pro-subtitle orange" style="margin-bottom:0;">Live driver tracking, delivery assignment and distance-based driver pay — all in one place.</p>
+        </div>
+        <button class="btn btn-primary" onclick="document.getElementById('staffUid')?.scrollIntoView({behavior:'smooth',block:'center'});activateAppTab('profile');if(document.getElementById('staffRoleSelect'))document.getElementById('staffRoleSelect').value='driver';"><i class="business-icon icon-inline" data-lucide="user-plus"></i> Add Driver</button>
+      </div>
+      <div class="staff-suite-grid">
+        <div class="staff-mini"><div class="mini-icon"><i class="business-icon" data-lucide="truck"></i></div><strong id="delStatDrivers">0</strong><span>Drivers online</span></div>
+        <div class="staff-mini"><div class="mini-icon"><i class="business-icon" data-lucide="package"></i></div><strong id="delStatPending">0</strong><span>Awaiting delivery</span></div>
+        <div class="staff-mini"><div class="mini-icon"><i class="business-icon" data-lucide="circle-check"></i></div><strong id="delStatDeliveredToday">0</strong><span>Delivered today</span></div>
+        <div class="staff-mini"><div class="mini-icon"><i class="business-icon" data-lucide="route"></i></div><strong id="delStatKmMonth">0 km</strong><span>Distance this month</span></div>
+        <div class="staff-mini"><div class="mini-icon"><i class="business-icon" data-lucide="wallet-cards"></i></div><strong id="delStatPayMonth">Rs. 0</strong><span>Driver payout this month</span></div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px;">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;">
+        <div><h2><span class="pro-title-icon orange"><i class="business-icon" data-lucide="map"></i></span><span>Live Driver Map</span></h2><p class="pro-subtitle orange">Updates in real time, and refreshes itself every 15 seconds as a backup.</p></div>
+        <button class="btn btn-sm" onclick="loadDriverLocations()"><i class="business-icon icon-inline" data-lucide="refresh-cw"></i> Refresh</button>
+      </div>
+      <div id="ownerDriverMap" style="height:360px;border-radius:12px;overflow:hidden;background:#eef1f5;margin-top:10px;"></div>
+      <div style="margin-top:8px;font-size:12px;opacity:.65;" id="liveMapDriverCount">Loading driver locations…</div>
+    </div>
+
+    <div class="card" style="margin-top:16px;">
+      <h2><span class="pro-title-icon gold"><i class="business-icon" data-lucide="badge-percent"></i></span><span>Driver Pay Rate</span></h2>
+      <p class="pro-subtitle gold">Distance-based pay, applied automatically to every delivery below.</p>
+      <div class="stat-grid">
+        <div class="stat accent"><div class="k">Base Rate</div><div class="v">Rs. 50 / km</div></div>
+        <div class="stat"><div class="k">Over 20 km</div><div class="v">7% discount</div></div>
+        <div class="stat"><div class="k">Over 35 km</div><div class="v">10% discount</div></div>
+      </div>
+      <div class="field" style="max-width:260px;margin-top:12px;"><label>Try a distance (km)</label><input type="number" id="delPayCalcKm" min="0" step="0.1" placeholder="e.g. 25" oninput="renderDelPayPreview()"></div>
+      <div class="notice" id="delPayCalcResult" style="margin-top:8px;">Enter a distance to see the driver's pay.</div>
+    </div>
+
+    <div class="card" style="margin-top:16px;">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;">
+        <div><h2><span class="pro-title-icon green"><i class="business-icon" data-lucide="users-round"></i></span><span>Drivers &amp; Earnings</span></h2><p class="pro-subtitle green">Distance driven and pay earned, per driver.</p></div>
+        <button class="btn btn-sm" onclick="loadStaffList()"><i class="business-icon icon-inline" data-lucide="refresh-cw"></i> Refresh</button>
+      </div>
+      <div class="table-wrap" style="margin-top:10px;">
+        <table class="staff-table-compact">
+          <thead><tr><th>Driver</th><th>Status</th><th>Deliveries Today</th><th>Today km</th><th>Today Pay</th><th>This Month Pay</th><th></th></tr></thead>
+          <tbody id="deliveryDriverStatsBody"><tr><td colspan="7" style="text-align:center;opacity:.5;padding:18px;">Loading drivers…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px;">
+      <h2><span class="pro-title-icon orange"><i class="business-icon" data-lucide="shopping-bag"></i></span><span>Deliveries</span></h2><p class="pro-subtitle orange">Assign a driver, log the trip distance, and pay is calculated automatically.</p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Order ID</th><th>Customer</th><th>Address</th><th>Status</th><th>Driver</th><th>Distance (km)</th><th>Driver Pay</th><th>Update</th></tr>
+          </thead>
+          <tbody id="deliveryBody"></tbody>
+        </table>
+      </div>
     </div>
   </section>
 
@@ -1298,20 +1366,9 @@
       </div>
     </div>
 
-    <div class="card">
-      <h2><span class="pro-title-icon orange" aria-hidden="true"><i class="business-icon" data-lucide="shopping-bag" aria-hidden="true"></i></span><span>Delivery</span></h2><p class="pro-subtitle orange">Follow fulfilment without losing the sale.</p>
-      <div data-owner-only style="margin-bottom:16px;">
-        <h3 style="font-size:14px;margin:0 0 8px;display:flex;align-items:center;gap:6px;"><i class="business-icon icon-inline" data-lucide="map" aria-hidden="true"></i> Live Driver Map <span id="liveMapDriverCount" style="font-weight:400;opacity:.55;font-size:12px;"></span></h3>
-        <div id="ownerDriverMap" style="height:320px;border-radius:12px;overflow:hidden;background:#eef1f5;"></div>
-      </div>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr><th>Order ID</th><th>Customer</th><th>Address</th><th>Status</th><th data-owner-only>Driver</th><th>Update</th></tr>
-          </thead>
-          <tbody id="deliveryBody"></tbody>
-        </table>
-      </div>
+    <div class="card" data-owner-only>
+      <h2><span class="pro-title-icon orange" aria-hidden="true"><i class="business-icon" data-lucide="truck" aria-hidden="true"></i></span><span>Delivery</span></h2><p class="pro-subtitle orange">Live driver map, driver assignment and distance-based driver pay have moved to their own dedicated page.</p>
+      <button class="btn btn-primary btn-sm" onclick="activateAppTab('delivery')"><i class="business-icon icon-inline" data-lucide="truck" aria-hidden="true"></i> Open Delivery</button>
     </div>
   </section>
 
