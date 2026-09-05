@@ -225,6 +225,55 @@
     </div>
   </section>
 
+  <!-- ============ ANALYTICS TAB (owner-only) ============ -->
+  <section id="analytics" class="tab-panel" role="tabpanel" style="display:none;">
+    <div class="mobile-greeting no-print" style="padding:0 0 8px;">
+      <div><span class="eyebrow">BUSINESS ANALYTICS</span><h2><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="bar-chart-3" aria-hidden="true"></i></span><span>Analytics</span></h2><p class="pro-subtitle gold">Trends across orders, revenue and expenses.</p><p>Visual breakdown of business performance over time.</p></div>
+      <div class="profile-dot"><i class="business-icon" data-lucide="bar-chart-3" aria-hidden="true"></i></div>
+    </div>
+
+    <div class="monthly-summary-grid">
+      <div class="monthly-stat"><div class="ms-icon"><i class="business-icon" data-lucide="trending-up" aria-hidden="true"></i></div><div class="ms-label">6-Month Revenue</div><div class="ms-value" id="anRevenue6m">Rs. 0</div><div class="ms-sub">Non-cancelled orders</div></div>
+      <div class="monthly-stat gold"><div class="ms-icon"><i class="business-icon" data-lucide="receipt" aria-hidden="true"></i></div><div class="ms-label">6-Month Expenses</div><div class="ms-value" id="anExpenses6m">Rs. 0</div><div class="ms-sub">All recorded expenses</div></div>
+      <div class="monthly-stat blue"><div class="ms-icon"><i class="business-icon" data-lucide="chart-no-axes-combined" aria-hidden="true"></i></div><div class="ms-label">6-Month Profit</div><div class="ms-value" id="anProfit6m">Rs. 0</div><div class="ms-sub">Revenue minus expenses</div></div>
+      <div class="monthly-stat red"><div class="ms-icon"><i class="business-icon" data-lucide="star" aria-hidden="true"></i></div><div class="ms-label">Best Month</div><div class="ms-value" id="anBestMonth">—</div><div class="ms-sub" id="anBestMonthSub">—</div></div>
+    </div>
+
+    <div class="card">
+      <h2><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="trending-up" aria-hidden="true"></i></span><span>Revenue vs Expenses vs Profit</span></h2>
+      <p class="pro-subtitle green">Last 6 months, month by month.</p>
+      <div class="chart-wrap"><canvas id="trendChart"></canvas></div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <h2><span class="pro-title-icon blue" aria-hidden="true"><i class="business-icon" data-lucide="shopping-bag" aria-hidden="true"></i></span><span>Order Status Mix</span></h2>
+        <p class="pro-subtitle blue">All recorded orders, all-time.</p>
+        <div class="chart-wrap" style="height:220px;"><canvas id="orderStatusChart"></canvas></div>
+      </div>
+      <div class="card">
+        <h2><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="package" aria-hidden="true"></i></span><span>Product Mix</span></h2>
+        <p class="pro-subtitle gold">Units sold by pack size, all-time.</p>
+        <div class="chart-wrap" style="height:220px;"><canvas id="productMixChart"></canvas></div>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <h2><span class="pro-title-icon orange" aria-hidden="true"><i class="business-icon" data-lucide="receipt" aria-hidden="true"></i></span><span>Expenses by Category</span></h2>
+        <p class="pro-subtitle orange">Where the money is going, all-time.</p>
+        <div class="chart-wrap" style="height:220px;"><canvas id="expenseCatChart"></canvas></div>
+      </div>
+      <div class="card">
+        <h2><span class="pro-title-icon teal" aria-hidden="true"><i class="business-icon" data-lucide="users-round" aria-hidden="true"></i></span><span>Top Customers</span></h2>
+        <p class="pro-subtitle teal">By total order value, all-time.</p>
+        <table class="monthly-summary-table" id="topCustomersTable">
+          <tr><td colspan="2" style="text-align:center;opacity:.5;">Loading…</td></tr>
+        </table>
+      </div>
+    </div>
+  </section>
+
   <!-- ============ STAFF HOME TAB (staff-only) ============ -->
   <section id="staff-home" class="tab-panel" role="tabpanel" style="display:none;">
     <div class="staff-suite-hero">
@@ -1078,6 +1127,11 @@
           <button class="home-action summary-action" data-home-tab="monthly-summary" data-ribbon="true" aria-label="Open Monthly Summary">
             <span class="home-icon"><i class="business-icon" data-lucide="chart-no-axes-combined" aria-hidden="true"></i></span>
             <span class="home-action-copy"><strong>Monthly Summary</strong><small>Live month-to-date business summary</small></span>
+            <span class="quick-status" aria-hidden="true"></span>
+          </button>
+          <button class="home-action" data-home-tab="analytics" data-ribbon="true" aria-label="Open Analytics">
+            <span class="home-icon"><i class="business-icon" data-lucide="bar-chart-3" aria-hidden="true"></i></span>
+            <span class="home-action-copy"><strong>Analytics</strong><small>Trends, top customers & product mix</small></span>
             <span class="quick-status" aria-hidden="true"></span>
           </button>
         </div>

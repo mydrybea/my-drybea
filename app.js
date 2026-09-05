@@ -2988,6 +2988,10 @@ function toggleTheme() {
   if (costChart) { costChart.destroy(); costChart = null; }
   if (sensChart) { sensChart.destroy(); sensChart = null; }
   if (prodChart) { prodChart.destroy(); prodChart = null; }
+  if (trendChart) { trendChart.destroy(); trendChart = null; }
+  if (orderStatusChart) { orderStatusChart.destroy(); orderStatusChart = null; }
+  if (productMixChart) { productMixChart.destroy(); productMixChart = null; }
+  if (expenseCatChart) { expenseCatChart.destroy(); expenseCatChart = null; }
   onDataChange();
 }
 
@@ -3168,6 +3172,161 @@ function updateMonthlySummary() {
     note.textContent = `Reporting period: 01–${String(day).padStart(2,'0')} ${monthName}. Revenue comes from recorded non-cancelled orders; expenses come from expense records dated in the current month. The figures refresh automatically as new data is loaded or saved.`;
   }
 }
+
+// ==================== ANALYTICS ====================
+let trendChart = null, orderStatusChart = null, productMixChart = null, expenseCatChart = null;
+
+function analyticsMonthKey(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); }
+function analyticsMonthLabel(d) { return d.toLocaleDateString(undefined, { month: 'short', year: '2-digit' }); }
+
+function renderAnalytics() {
+  const colors = getChartColors();
+  const now = new Date();
+
+  // ---- Build the last 6 calendar months (oldest first) ----
+  const months = [];
+  for (let i = 5; i >= 0; i--) months.push(new Date(now.getFullYear(), now.getMonth() - i, 1));
+  const monthMap = {};
+  months.forEach(d => { monthMap[analyticsMonthKey(d)] = { revenue: 0, expenses: 0 }; });
+
+  (orders || []).forEach(o => {
+    const d = parseSummaryDate(o.createdAt);
+    if (!d || o.status === 'cancelled') return;
+    const bucket = monthMap[analyticsMonthKey(d)];
+    if (bucket) bucket.revenue += Number(o.total) || 0;
+  });
+  (expenses || []).forEach(e => {
+    const d = parseSummaryDate(e.date || e.createdAt);
+    if (!d) return;
+    const bucket = monthMap[analyticsMonthKey(d)];
+    if (bucket) bucket.expenses += Number(e.amount) || 0;
+  });
+
+  const labels = months.map(analyticsMonthLabel);
+  const revenueData = months.map(d => monthMap[analyticsMonthKey(d)].revenue);
+  const expenseData = months.map(d => monthMap[analyticsMonthKey(d)].expenses);
+  const profitData = revenueData.map((r, i) => r - expenseData[i]);
+
+  const totalRevenue = revenueData.reduce((a, b) => a + b, 0);
+  const totalExpenses = expenseData.reduce((a, b) => a + b, 0);
+  const totalProfit = totalRevenue - totalExpenses;
+  let bestIdx = 0;
+  profitData.forEach((p, i) => { if (p > profitData[bestIdx]) bestIdx = i; });
+
+  const set = (id, val) => { const el = $(id); if (el) el.textContent = val; };
+  set('anRevenue6m', fmt(totalRevenue));
+  set('anExpenses6m', fmt(totalExpenses));
+  set('anProfit6m', fmt(totalProfit));
+  set('anBestMonth', labels[bestIdx] || '—');
+  set('anBestMonthSub', profitData.some(p => p !== 0) ? `Profit ${fmt(profitData[bestIdx])}` : 'No data yet');
+
+  // ---- Revenue vs Expenses vs Profit trend (line) ----
+  const trendCanvas = $('trendChart');
+  if (trendCanvas) {
+    const data = {
+      labels,
+      datasets: [
+        { label: 'Revenue', data: revenueData, borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,.12)', tension: .35, fill: true },
+        { label: 'Expenses', data: expenseData, borderColor: '#f87171', backgroundColor: 'rgba(248,113,113,.10)', tension: .35, fill: true },
+        { label: 'Profit', data: profitData, borderColor: '#d4af37', backgroundColor: 'rgba(212,175,55,.10)', tension: .35, fill: true }
+      ]
+    };
+    const opts = {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: colors.text } } },
+      scales: {
+        x: { ticks: { color: colors.text }, grid: { color: colors.grid } },
+        y: { ticks: { color: colors.text }, grid: { color: colors.grid } }
+      }
+    };
+    if (trendChart) { trendChart.data = data; trendChart.options = opts; trendChart.update(); }
+    else trendChart = new Chart(trendCanvas.getContext('2d'), { type: 'line', data, options: opts });
+  }
+
+  // ---- Order status mix (all-time, doughnut) ----
+  const statusCounts = { pending: 0, delivered: 0, cancelled: 0, other: 0 };
+  (orders || []).forEach(o => {
+    const s = (o.status || 'pending').toLowerCase();
+    if (s === 'pending') statusCounts.pending++;
+    else if (s === 'delivered') statusCounts.delivered++;
+    else if (s === 'cancelled') statusCounts.cancelled++;
+    else statusCounts.other++;
+  });
+  const statusCanvas = $('orderStatusChart');
+  if (statusCanvas) {
+    const data = {
+      labels: ['Pending', 'Delivered', 'Cancelled', 'Other'],
+      datasets: [{
+        data: [statusCounts.pending, statusCounts.delivered, statusCounts.cancelled, statusCounts.other],
+        backgroundColor: ['#fbbf24', '#10b981', '#f87171', '#818cf8'], borderWidth: 0, hoverOffset: 6
+      }]
+    };
+    const opts = { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: colors.text, boxWidth: 12 } } } };
+    if (orderStatusChart) { orderStatusChart.data = data; orderStatusChart.update(); }
+    else orderStatusChart = new Chart(statusCanvas.getContext('2d'), { type: 'doughnut', data, options: opts });
+  }
+
+  // ---- Product mix: units sold per pack size (all-time, bar) ----
+  const packTotals = {};
+  Object.keys(PACKS).forEach(k => packTotals[k] = 0);
+  (orders || []).forEach(o => {
+    if (o.status === 'cancelled') return;
+    const key = String(o.product);
+    if (packTotals.hasOwnProperty(key)) packTotals[key] += Number(o.qty) || 0;
+  });
+  const mixCanvas = $('productMixChart');
+  if (mixCanvas) {
+    const data = {
+      labels: Object.keys(PACKS).map(k => PACKS[k].label),
+      datasets: [{ label: 'Units sold', data: Object.keys(PACKS).map(k => packTotals[k]), backgroundColor: '#4b9cff', borderRadius: 6 }]
+    };
+    const opts = {
+      responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+      scales: { x: { ticks: { color: colors.text }, grid: { display: false } }, y: { ticks: { color: colors.text }, grid: { color: colors.grid } } }
+    };
+    if (productMixChart) { productMixChart.data = data; productMixChart.update(); }
+    else productMixChart = new Chart(mixCanvas.getContext('2d'), { type: 'bar', data, options: opts });
+  }
+
+  // ---- Expenses by category (all-time, doughnut) ----
+  const catTotals = {};
+  (expenses || []).forEach(e => {
+    const cat = e.category || 'Other';
+    catTotals[cat] = (catTotals[cat] || 0) + (Number(e.amount) || 0);
+  });
+  const catLabels = Object.keys(catTotals);
+  const catColors = ['#f87171', '#fbbf24', '#10b981', '#4b9cff', '#9a72ff', '#ee9a3d', '#27b9b1', '#8fa3ad'];
+  const expCanvas = $('expenseCatChart');
+  if (expCanvas) {
+    const data = {
+      labels: catLabels.length ? catLabels : ['No expenses yet'],
+      datasets: [{
+        data: catLabels.length ? catLabels.map(c => catTotals[c]) : [1],
+        backgroundColor: catLabels.length ? catLabels.map((_, i) => catColors[i % catColors.length]) : ['#e5e7eb'],
+        borderWidth: 0, hoverOffset: 6
+      }]
+    };
+    const opts = { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: colors.text, boxWidth: 12 } } } };
+    if (expenseCatChart) { expenseCatChart.data = data; expenseCatChart.update(); }
+    else expenseCatChart = new Chart(expCanvas.getContext('2d'), { type: 'doughnut', data, options: opts });
+  }
+
+  // ---- Top 5 customers by revenue (all-time, table) ----
+  const customerTotals = {};
+  (orders || []).forEach(o => {
+    if (o.status === 'cancelled') return;
+    const name = o.customerName || 'Unknown';
+    customerTotals[name] = (customerTotals[name] || 0) + (Number(o.total) || 0);
+  });
+  const topCustomers = Object.entries(customerTotals).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const tbl = $('topCustomersTable');
+  if (tbl) {
+    tbl.innerHTML = topCustomers.length
+      ? topCustomers.map(([name, total]) => `<tr><td>${escapeHtmlSafe(name)}</td><td>${fmt(total)}</td></tr>`).join('')
+      : '<tr><td colspan="2" style="text-align:center;opacity:.5;padding:14px;">No orders recorded yet.</td></tr>';
+  }
+}
+window.renderAnalytics = renderAnalytics;
 
 // ==================== STAFF BUSINESS SUITE ====================
 const STAFF_COMMISSION_RATE = 0.12;
@@ -4061,7 +4220,7 @@ document.querySelectorAll('[data-ribbon="true"]').forEach(btn => {
   });
 });
 
-const OWNER_ONLY_TABS = ['dashboard', 'my-staff', 'calculator', 'production', 'history', 'data', 'monthly-summary', 'income'];
+const OWNER_ONLY_TABS = ['dashboard', 'my-staff', 'calculator', 'production', 'history', 'data', 'monthly-summary', 'income', 'analytics'];
 const STAFF_ONLY_TABS = ['staff-home', 'daily-pay', 'work-update', 'attendance', 'advance', 'my-commission', 'my-tasks', 'announcements'];
 
 let staffWorkspaceLoadSeq = 0;
@@ -4115,6 +4274,7 @@ function activateAppTab(tabId){
   if (tabId === 'dashboard') { calcDashboard(); calcSensitivity(); calcBulk(); }
   if (tabId === 'income') { calcDashboard(); }
   if (tabId === 'monthly-summary') { updateMonthlySummary(); }
+  if (tabId === 'analytics') { renderAnalytics(); }
   if (tabId === 'history') renderHistory();
   if (tabId === 'production') calcProduction();
   if (tabId === 'orders') { loadCommissionClaims().finally(() => { renderOrders(); renderCustomers(); renderDelivery(); updateOrderStats(); }); }
