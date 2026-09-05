@@ -45,11 +45,21 @@ const ORDERS_KEY = 'mydrybea_v34_orders';
 const CUSTOMERS_KEY = 'mydrybea_v34_customers';
 const SNAPSHOTS_KEY = 'mydrybea_v34_snapshots';
 const MAX_SNAPSHOTS = 5;
-// Fixed pickup point for every delivery — the business's own shop/warehouse
-// (Drybea Market), taken from the owner's Google Maps pin. Used to anchor the
-// Delivery page's live map and to draw the pickup → drop-off direction line
-// for each driver's current route.
-const PICKUP_LOCATION = { lat: 5.984411, lng: 80.7312384, name: 'Drybea Market (Pickup)' };
+// Default pickup point (Drybea Market), used until the owner sets their own via
+// "Change Pickup Location" on the Delivery page. Once set, the owner's choice
+// (stored on their profile as pickup_lat/pickup_lng/pickup_label) always wins,
+// and feeds the Delivery page's live map + each driver's direction line.
+const DEFAULT_PICKUP_LOCATION = { lat: 5.984411, lng: 80.7312384, name: 'Drybea Market (Pickup)' };
+function getPickupLocation() {
+  if (userProfile && userProfile.pickup_lat != null && userProfile.pickup_lng != null) {
+    return {
+      lat: Number(userProfile.pickup_lat),
+      lng: Number(userProfile.pickup_lng),
+      name: userProfile.pickup_label || 'Pickup Point'
+    };
+  }
+  return DEFAULT_PICKUP_LOCATION;
+}
 const USER_KEY = 'mydrybea_v34_user';
 const SUPABASE_URL = 'https://dztuyfiiyxllnvciunjv.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR6dHV5ZmlpeXhsbG52Y2l1bmp2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgwMDg3NjUsImV4cCI6MjEwMzU4NDc2NX0.NT5_fvlwZZr_MQMgerYaIZYHeeJ9l9SrConqcN50M84';
@@ -3456,16 +3466,19 @@ function initOwnerDriverMap() {
   if (userRole !== 'owner') return;
   const el = document.getElementById('ownerDriverMap');
   if (!el || typeof L === 'undefined') return;
+  const pickup = getPickupLocation();
   if (!ownerDriverMap) {
-    ownerDriverMap = L.map(el).setView([PICKUP_LOCATION.lat, PICKUP_LOCATION.lng], 11); // default: centered on the pickup point
+    ownerDriverMap = L.map(el).setView([pickup.lat, pickup.lng], 11); // default: centered on the pickup point
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
       attribution: '&copy; OpenStreetMap contributors'
     }).addTo(ownerDriverMap);
-    // Fixed pickup marker — always shown, doesn't move, doesn't depend on any driver being online.
-    ownerPickupMarker = L.circleMarker([PICKUP_LOCATION.lat, PICKUP_LOCATION.lng], {
+    // Pickup marker — always shown, doesn't depend on any driver being online.
+    // Position/label refresh automatically if the owner changes it later (see
+    // updateOwnerPickupMarker), no need to recreate the map.
+    ownerPickupMarker = L.circleMarker([pickup.lat, pickup.lng], {
       radius: 9, color: '#b45309', weight: 3, fillColor: '#f59e0b', fillOpacity: 0.9
-    }).addTo(ownerDriverMap).bindPopup(`<strong>🏭 ${escapeHtmlSafe(PICKUP_LOCATION.name)}</strong><br><small>Pickup point for every delivery</small>`);
+    }).addTo(ownerDriverMap).bindPopup(`<strong>🏭 ${escapeHtmlSafe(pickup.name)}</strong><br><small>Pickup point for every delivery</small>`);
     startOwnerDriverLocationsRealtime();
   }
   // FIX: the map container sits inside a tab-panel that's display:none whenever this tab
@@ -3567,7 +3580,8 @@ function renderOwnerDriverRoutes(onlineDriverIds) {
       if (b.routeSequence != null) return 1;
       return new Date(a.createdAt) - new Date(b.createdAt);
     });
-    const latlngs = [[PICKUP_LOCATION.lat, PICKUP_LOCATION.lng], ...sorted.map(o => [o.deliveryLat, o.deliveryLng])];
+    const pickup = getPickupLocation();
+    const latlngs = [[pickup.lat, pickup.lng], ...sorted.map(o => [o.deliveryLat, o.deliveryLng])];
     const color = colorForDriver(id);
     if (ownerDriverRoutePolylines[id]) {
       ownerDriverRoutePolylines[id].setLatLngs(latlngs).setStyle({ color });
@@ -3579,6 +3593,108 @@ function renderOwnerDriverRoutes(onlineDriverIds) {
     if (!idsSet.has(id)) { ownerDriverMap.removeLayer(ownerDriverRoutePolylines[id]); delete ownerDriverRoutePolylines[id]; }
   });
 }
+
+// Moves the pickup marker/popup on the already-built map to match whatever
+// getPickupLocation() currently returns — called right after the owner saves
+// a new pickup location, so the map updates instantly without a full rebuild.
+function updateOwnerPickupMarker() {
+  if (!ownerDriverMap || !ownerPickupMarker) return;
+  const pickup = getPickupLocation();
+  ownerPickupMarker.setLatLng([pickup.lat, pickup.lng])
+    .setPopupContent(`<strong>🏭 ${escapeHtmlSafe(pickup.name)}</strong><br><small>Pickup point for every delivery</small>`);
+  ownerDriverMap.panTo([pickup.lat, pickup.lng]);
+}
+
+// ==================== OWNER: CHANGE PICKUP LOCATION ====================
+// Lets the owner set/move their own shop/warehouse pickup point (instead of it
+// being fixed in code) — saved on their profile so it's theirs to control and
+// persists across logins/devices.
+let ownerPickupMap = null;
+let ownerPickupMarkerEdit = null;
+
+function openOwnerPickupModal() {
+  if (userRole !== 'owner') return;
+  const pickup = getPickupLocation();
+  $('ownerPickupLabel').value = (userProfile && userProfile.pickup_label) || '';
+  $('ownerPickupModal').classList.add('active');
+  setTimeout(() => initOwnerPickupMap(pickup), 50);
+}
+window.openOwnerPickupModal = openOwnerPickupModal;
+
+function initOwnerPickupMap(pickup) {
+  const el = document.getElementById('ownerPickupMap');
+  if (!el || typeof L === 'undefined') return;
+  if (!ownerPickupMap) {
+    ownerPickupMap = L.map(el).setView([pickup.lat, pickup.lng], 15);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(ownerPickupMap);
+    ownerPickupMap.on('click', (e) => placeOwnerPickupMarker(e.latlng.lat, e.latlng.lng));
+  } else {
+    ownerPickupMap.setView([pickup.lat, pickup.lng], 15);
+  }
+  setTimeout(() => ownerPickupMap && ownerPickupMap.invalidateSize(), 60);
+  placeOwnerPickupMarker(pickup.lat, pickup.lng);
+}
+
+function placeOwnerPickupMarker(lat, lng) {
+  if (!ownerPickupMap) return;
+  if (ownerPickupMarkerEdit) {
+    ownerPickupMarkerEdit.setLatLng([lat, lng]);
+  } else {
+    ownerPickupMarkerEdit = L.marker([lat, lng], { draggable: true }).addTo(ownerPickupMap);
+    ownerPickupMarkerEdit.on('dragend', () => {
+      const p = ownerPickupMarkerEdit.getLatLng();
+      updateOwnerPickupCoordsLabel(p);
+    });
+  }
+  updateOwnerPickupCoordsLabel({ lat, lng });
+}
+
+function updateOwnerPickupCoordsLabel(latlng) {
+  const label = $('ownerPickupCoordsLabel');
+  if (!label) return;
+  label.textContent = latlng ? `📍 ${latlng.lat.toFixed(5)}, ${latlng.lng.toFixed(5)}` : 'Tap the map to move the pin';
+}
+
+function useOwnerPickupMyLocation() {
+  if (!navigator.geolocation) { alert('Location is not supported on this device/browser.'); return; }
+  const label = $('ownerPickupCoordsLabel');
+  if (label) label.textContent = '📍 Getting your current location…';
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      const { latitude, longitude } = pos.coords;
+      if (ownerPickupMap) ownerPickupMap.setView([latitude, longitude], 16);
+      placeOwnerPickupMarker(latitude, longitude);
+    },
+    (err) => { if (label) label.textContent = '⚠️ Could not get your location: ' + err.message; },
+    { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
+  );
+}
+window.useOwnerPickupMyLocation = useOwnerPickupMyLocation;
+
+async function saveOwnerPickupLocation() {
+  if (userRole !== 'owner' || !currentUser) return;
+  if (!ownerPickupMarkerEdit) { alert('📍 Tap the map (or use "Use My Current Location") to place the pin first.'); return; }
+  const { lat, lng } = ownerPickupMarkerEdit.getLatLng();
+  const label = $('ownerPickupLabel').value.trim();
+  try {
+    const { error } = await supabase.from('profiles')
+      .update({ pickup_lat: lat, pickup_lng: lng, pickup_label: label || null })
+      .eq('id', currentUser.id);
+    if (error) throw error;
+    if (userProfile) { userProfile.pickup_lat = lat; userProfile.pickup_lng = lng; userProfile.pickup_label = label || null; }
+    closeModal('ownerPickupModal');
+    updateOwnerPickupMarker();
+    loadDriverLocations(); // redraw route lines from the new pickup point immediately
+    updateStatus('✅ Pickup location saved');
+  } catch (e) {
+    console.error('Save pickup location error:', e);
+    alert('❌ Could not save the pickup location: ' + e.message + '\n\nMake sure the pickup_lat/pickup_lng/pickup_label columns exist on the profiles table.');
+  }
+}
+window.saveOwnerPickupLocation = saveOwnerPickupLocation;
 
 function startOwnerDriverLocationsRealtime() {
   if (!currentUser || userRole !== 'owner' || ownerDriverLocationsChannel) return;
