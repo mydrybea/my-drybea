@@ -2832,14 +2832,24 @@ function renderMyDeliveries() {
     const payHint = o.delivery_km
       ? `<br><small style="opacity:.55;">${o.delivery_km} km • Rs. ${Math.round(calculateDriverPay(o.delivery_km).pay).toLocaleString()} pay</small>`
       : '';
+    const hasPin = o.delivery_lat != null && o.delivery_lng != null;
+    const pinHint = isActiveRow
+      ? (hasPin
+          ? '<br><small style="color:#1a7f4b;">📍 Pin set</small>'
+          : '<br><small style="opacity:.5;">📍 No exact pin yet</small>')
+      : '';
+    const setPinBtn = isActiveRow
+      ? `<button class="btn btn-sm" onclick="openSetPinModal('${o.id}')" style="margin-right:6px;" title="Drop an exact map pin for this address"><i class="business-icon icon-inline" data-lucide="map-pinned" aria-hidden="true"></i> ${hasPin ? 'Edit Pin' : 'Set Pin'}</button>`
+      : '';
     return `<tr>
       <td>${stopBadge}</td>
       <td><strong>${o.order_ref_no || String(o.id).slice(0,8)}</strong></td>
       <td>${escapeHtmlSafe(o.customer_name_snapshot || o.customer_address_snapshot || '-')}</td>
-      <td>${escapeHtmlSafe(addr || '-')}${codLabel}${payHint}</td>
+      <td>${escapeHtmlSafe(addr || '-')}${codLabel}${payHint}${pinHint}</td>
       <td>${getStatusBadge(o.status)}${failedHint}</td>
       <td>
         ${addr ? `<a href="${mapsUrl}" target="_blank" rel="noopener" class="btn btn-sm" style="margin-right:6px;"><i class="business-icon icon-inline" data-lucide="map-pin" aria-hidden="true"></i> Navigate</a>` : ''}
+        ${setPinBtn}
         ${nextBtn}
       </td>
     </tr>`;
@@ -3005,6 +3015,116 @@ async function optimizeDeliveryRoute() {
   updateStatus('🗺️ Delivery route optimized');
 }
 window.optimizeDeliveryRoute = optimizeDeliveryRoute;
+
+// ==================== ADDRESS PIN-DROP ON MAP ====================
+// Backup/override for geocoded coordinates: the driver, standing at the real
+// address, drops (or drags) a pin on a Leaflet map to lock in the exact
+// delivery_lat/delivery_lng. This is more reliable than text-address geocoding
+// (which can miss rural/informal addresses entirely) and feeds straight into
+// the Route Optimizer distances and the delivery geofence alert.
+let setPinOrderId = null;
+let setPinMap = null;
+let setPinMarker = null;
+
+function openSetPinModal(orderId) {
+  if (userRole !== 'driver') return;
+  const o = myDeliveries.find(x => String(x.id) === String(orderId));
+  if (!o) return;
+  setPinOrderId = orderId;
+  $('setPinOrderLabel').textContent = (o.order_ref_no || String(o.id).slice(0, 8)) + ' — ' + (o.address || 'No address text on file');
+  $('setPinModal').classList.add('active');
+  // Leaflet needs the container visible before it can measure it correctly, so
+  // build/refresh the map on the next tick, once the modal has actually shown.
+  setTimeout(() => initSetPinMap(o), 50);
+}
+window.openSetPinModal = openSetPinModal;
+
+function initSetPinMap(order) {
+  const el = document.getElementById('setPinMap');
+  if (!el || typeof L === 'undefined') return;
+  const startLat = order.delivery_lat != null ? order.delivery_lat : (driverLastCoords ? driverLastCoords.lat : 7.8731);
+  const startLng = order.delivery_lng != null ? order.delivery_lng : (driverLastCoords ? driverLastCoords.lng : 80.7718);
+  const startZoom = order.delivery_lat != null ? 16 : (driverLastCoords ? 15 : 8);
+  if (!setPinMap) {
+    setPinMap = L.map(el).setView([startLat, startLng], startZoom);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(setPinMap);
+    setPinMap.on('click', (e) => placeSetPinMarker(e.latlng.lat, e.latlng.lng));
+  } else {
+    setPinMap.setView([startLat, startLng], startZoom);
+  }
+  setTimeout(() => setPinMap && setPinMap.invalidateSize(), 60);
+  if (order.delivery_lat != null && order.delivery_lng != null) {
+    placeSetPinMarker(order.delivery_lat, order.delivery_lng);
+  } else if (setPinMarker) {
+    setPinMap.removeLayer(setPinMarker);
+    setPinMarker = null;
+    updateSetPinCoordsLabel(null);
+  } else {
+    updateSetPinCoordsLabel(null);
+  }
+}
+
+function placeSetPinMarker(lat, lng) {
+  if (!setPinMap) return;
+  if (setPinMarker) {
+    setPinMarker.setLatLng([lat, lng]);
+  } else {
+    setPinMarker = L.marker([lat, lng], { draggable: true }).addTo(setPinMap);
+    setPinMarker.on('dragend', () => {
+      const p = setPinMarker.getLatLng();
+      updateSetPinCoordsLabel(p);
+    });
+  }
+  updateSetPinCoordsLabel({ lat, lng });
+}
+
+function updateSetPinCoordsLabel(latlng) {
+  const label = $('setPinCoordsLabel');
+  if (!label) return;
+  label.textContent = latlng ? `📍 ${latlng.lat.toFixed(5)}, ${latlng.lng.toFixed(5)}` : 'Tap the map to drop a pin';
+}
+
+function usePinMyLocation() {
+  if (!navigator.geolocation) { alert('Location is not supported on this device/browser.'); return; }
+  const label = $('setPinCoordsLabel');
+  if (label) label.textContent = '📍 Getting your current location…';
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      const { latitude, longitude } = pos.coords;
+      if (setPinMap) setPinMap.setView([latitude, longitude], 17);
+      placeSetPinMarker(latitude, longitude);
+    },
+    (err) => { if (label) label.textContent = '⚠️ Could not get your location: ' + err.message; },
+    { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
+  );
+}
+window.usePinMyLocation = usePinMyLocation;
+
+async function saveSetPinLocation() {
+  if (!setPinOrderId || !setPinMarker) { alert('📍 Tap the map (or use "Use My Current Location") to drop a pin first.'); return; }
+  const { lat, lng } = setPinMarker.getLatLng();
+  try {
+    const { error } = await supabase.from('orders')
+      .update({ delivery_lat: lat, delivery_lng: lng })
+      .eq('id', setPinOrderId).eq('assigned_driver_id', currentUser.id);
+    if (error) throw error;
+    const o = myDeliveries.find(x => String(x.id) === String(setPinOrderId));
+    if (o) { o.delivery_lat = lat; o.delivery_lng = lng; }
+    // An exact pin overrides any earlier optimizer ordering built on a rougher
+    // geocode — clear the saved sequence so the driver knows to re-optimize.
+    if (o) o.route_sequence = null;
+    closeModal('setPinModal');
+    renderMyDeliveries();
+    updateStatus('📍 Delivery pin saved');
+  } catch (e) {
+    console.error('Save pin error:', e);
+    alert('❌ Could not save the pin: ' + e.message + '\n\nMake sure the delivery_lat/delivery_lng columns exist on the orders table.');
+  }
+}
+window.saveSetPinLocation = saveSetPinLocation;
 
 function updateLiveTripKmUI() {
   const el = $('liveTripKm');

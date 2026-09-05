@@ -1797,6 +1797,24 @@
   </div>
 </div>
 
+<!-- Set Delivery Pin Modal (driver: drop an exact map pin for this delivery address) -->
+<div class="modal-backdrop" id="setPinModal">
+  <div class="modal">
+    <h3><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="map-pinned" aria-hidden="true"></i></span><span>Set Delivery Pin</span></h3>
+    <p class="pro-subtitle green" id="setPinOrderLabel">Order</p>
+    <p style="font-size:.8rem;opacity:.7;margin:-6px 0 10px;">Tap the map (or drag the pin) to mark the exact spot. This overrides the auto-located address and is used for Route Optimizer distances and the delivery geofence alert.</p>
+    <div id="setPinMap" style="width:100%;height:280px;border-radius:10px;border:1px solid #ddd;background:#eef1f4;"></div>
+    <div class="btn-row" style="margin-top:10px;">
+      <button type="button" class="btn btn-sm" onclick="usePinMyLocation()"><i class="business-icon icon-inline" data-lucide="locate-fixed" aria-hidden="true"></i> Use My Current Location</button>
+      <span id="setPinCoordsLabel" style="font-size:12px;opacity:.6;align-self:center;"></span>
+    </div>
+    <div class="om-actions">
+      <button class="btn btn-primary" onclick="saveSetPinLocation()"><i class="business-icon icon-inline" data-lucide="circle-check" aria-hidden="true"></i> Save Pin</button>
+      <button class="btn btn-cancel-link" onclick="closeModal('setPinModal')">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <!-- Delivery Proof Modal (owner: view photo/signature/COD for a delivered or failed order) -->
 <div class="modal-backdrop" id="deliveryProofModal">
   <div class="modal">
