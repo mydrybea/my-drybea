@@ -1848,7 +1848,15 @@ function dbOrderToLocal(o) {
     referralStaffReference: o.referral_staff_reference || null,
     referralStatus: o.referral_status || 'none',
     assignedDriverId: o.assigned_driver_id || null,
-    deliveryKm: (o.delivery_km !== undefined && o.delivery_km !== null) ? Number(o.delivery_km) : null
+    deliveryKm: (o.delivery_km !== undefined && o.delivery_km !== null) ? Number(o.delivery_km) : null,
+    paymentMethod: o.payment_method || 'cod',
+    codCollected: (o.cod_collected !== undefined && o.cod_collected !== null) ? Number(o.cod_collected) : null,
+    deliveryPhotoUrl: o.delivery_photo_url || null,
+    deliverySignature: o.delivery_signature || null,
+    deliveredAt: o.delivered_at || null,
+    failedReason: o.failed_reason || null,
+    failedNotes: o.failed_notes || null,
+    failedAt: o.failed_at || null
   };
 }
 
@@ -2286,15 +2294,18 @@ function onOrderCustomerChange() {
 function openNewOrder() {
   const staffBlock=document.querySelector('[data-staff-order-customer]');
   const ownerBlock=document.querySelector('[data-owner-order-customer]');
+  const paymentBlock=document.querySelector('[data-owner-order-payment]');
   if(userRole==='staff'){
     if(staffBlock) staffBlock.style.display='';
     if(ownerBlock) ownerBlock.style.display='none';
+    if(paymentBlock) paymentBlock.style.display='none';
     const ref=document.querySelector('[data-owner-order-referral]'); if(ref) ref.style.display='none';
     if($('staffOrderCustomerName')) $('staffOrderCustomerName').value='';
     if($('staffOrderCustomerPhone')) $('staffOrderCustomerPhone').value='';
   } else {
     if(staffBlock) staffBlock.style.display='none';
     if(ownerBlock) ownerBlock.style.display='';
+    if(paymentBlock) paymentBlock.style.display='';
     updateCustomerSelect();
     populateStaffReferralSelectors();
     const f=document.querySelector('[data-owner-order-referral]'); if(f) f.style.display='';
@@ -2304,6 +2315,7 @@ function openNewOrder() {
   $('orderNotes').value = '';
   $('orderQty').value = 1;
   $('orderUnitPrice').value = 350;
+  if ($('orderPaymentMethod')) $('orderPaymentMethod').value = 'cod';
   if ($('orderProduct')) $('orderProduct').value = '50';
   syncOrderSizeChips();
   updateOrderTotal();
@@ -2393,7 +2405,8 @@ async function createOrder() {
     referralStaffReference = (staffListCache||[]).find(s=>String(s.id)===String(referralStaffId))?.staff_reference || null;
   }
   const total = qty * unitPrice;
-  const row = { id: generateOrderId(), user_id: businessId, customer_id: customerId, product_size_g: Number(product)||0, qty, unit_price:unitPrice, total, address, notes, status:'pending', created_by:currentUser.id, referral_staff_id:referralStaffId, referral_staff_reference:referralStaffReference, referral_status:referralStaffId?'pending_verification':'none' };
+  const paymentMethod = $('orderPaymentMethod')?.value === 'prepaid' ? 'prepaid' : 'cod';
+  const row = { id: generateOrderId(), user_id: businessId, customer_id: customerId, product_size_g: Number(product)||0, qty, unit_price:unitPrice, total, address, notes, status:'pending', created_by:currentUser.id, referral_staff_id:referralStaffId, referral_staff_reference:referralStaffReference, referral_status:referralStaffId?'pending_verification':'none', payment_method:paymentMethod };
   try {
     const { data, error } = await supabase.from('orders').insert(row).select().single();
     if (error) throw error;
@@ -2403,9 +2416,10 @@ async function createOrder() {
       if (ce) console.error('Owner referral claim create failed:',ce);
     }
   } catch (e) { console.error('Create order error:',e); alert('❌ Could not save order: '+e.message); return; }
-  orders.unshift({id:row.id,customerId,product,qty,unitPrice,total,address,notes,status:'pending',createdBy:currentUser.id,createdAt:new Date().toISOString(),referralStaffId,referralStaffReference,referralStatus:referralStaffId?'pending_verification':'none',orderRefNo:row.order_ref_no||null});
+  orders.unshift({id:row.id,customerId,product,qty,unitPrice,total,address,notes,status:'pending',createdBy:currentUser.id,createdAt:new Date().toISOString(),referralStaffId,referralStaffReference,referralStatus:referralStaffId?'pending_verification':'none',orderRefNo:row.order_ref_no||null,paymentMethod});
   saveOrders(); renderOrders(); renderDelivery(); updateOrderStats(); closeModal('orderModal');
   $('orderQty').value=1; $('orderUnitPrice').value=350; $('orderAddress').value=''; $('orderNotes').value='';
+  if ($('orderPaymentMethod')) $('orderPaymentMethod').value = 'cod';
   if ($('orderProduct')) $('orderProduct').value = '50';
   syncOrderSizeChips(); updateOrderTotal();
   updateStatus(referralStaffId ? '📨 Sale sent to owner for commission verification' : '✅ Order created');
@@ -2440,9 +2454,12 @@ function renderOrders() {
     const commissionCell = claim?.status === 'approved'
       ? `<div style="font-weight:900;color:#087b3e;">+ ${fmt(Number(claim.commission_amount)||0)}</div><small style="color:#087b3e;">12% Verified</small>`
       : (claim?.status === 'pending' ? '<small style="color:#a27b1b;font-weight:800;">Pending verification</small>' : '<small style="opacity:.45;">—</small>');
+    const proofBtn = order.deliveryPhotoUrl ? `<button class="btn btn-sm" onclick="viewDeliveryProof(${index})" title="View delivery proof"><i class="business-icon" data-lucide="shield-check" aria-hidden="true"></i></button>` : '';
+    const rescheduleBtn = order.status === 'failed' ? `<button class="btn btn-sm" onclick="rescheduleFailedOrder(${index})" title="Reschedule"><i class="business-icon" data-lucide="rotate-ccw" aria-hidden="true"></i></button>` : '';
     const actions = userRole === 'owner'
       ? `<button class="btn btn-sm" onclick="viewInvoice(${index})"><i class="business-icon" data-lucide="receipt-text" aria-hidden="true"></i></button>
          <button class="btn btn-sm" onclick="cycleStatus(${index})"><i class="business-icon" data-lucide="refresh-cw" aria-hidden="true"></i></button>
+         ${proofBtn}${rescheduleBtn}
          <button class="btn btn-sm btn-danger" onclick="deleteOrder(${index})"><i class="business-icon" data-lucide="trash-2" aria-hidden="true"></i></button>`
       : '<span style="font-size:.68rem;font-weight:800;opacity:.55;">VIEW ONLY</span>';
     return `<tr>
@@ -2465,6 +2482,7 @@ function getStatusBadge(status) {
     case 'shipped': return '<span class="badge badge-shipped"><i class="business-icon icon-inline" data-lucide="truck" aria-hidden="true"></i> Shipped</span>';
     case 'delivered': return '<span class="badge badge-delivered"><i class="business-icon icon-inline" data-lucide="circle-check" aria-hidden="true"></i> Delivered</span>';
     case 'cancelled': return '<span class="badge badge-cancelled"><i class="business-icon icon-inline" data-lucide="circle-x" aria-hidden="true"></i> Cancelled</span>';
+    case 'failed': return '<span class="badge badge-cancelled"><i class="business-icon icon-inline" data-lucide="circle-alert" aria-hidden="true"></i> Delivery Failed</span>';
     default: return status;
   }
 }
@@ -2519,6 +2537,22 @@ function updateOrderStats() {
   $('statDelivered').textContent = orders.filter(o => o.status === 'delivered').length;
   $('statPending').textContent = orders.filter(o => o.status === 'pending').length;
   $('statCancelled').textContent = orders.filter(o => o.status === 'cancelled').length;
+
+  // COD reconcile: cash the driver has actually collected (delivered COD orders) vs
+  // cash still expected because the COD order hasn't been delivered yet.
+  const codCollectedEl = $('statCodCollected');
+  const codOutstandingEl = $('statCodOutstanding');
+  if (codCollectedEl || codOutstandingEl) {
+    let collected = 0, outstanding = 0;
+    (orders || []).forEach(o => {
+      const isCod = (o.paymentMethod || 'cod') === 'cod';
+      if (!isCod) return;
+      if (o.status === 'delivered') collected += Number(o.codCollected != null ? o.codCollected : o.total) || 0;
+      else if (o.status === 'pending' || o.status === 'shipped') outstanding += Number(o.total) || 0;
+    });
+    if (codCollectedEl) codCollectedEl.textContent = fmt(collected);
+    if (codOutstandingEl) codOutstandingEl.textContent = fmt(outstanding);
+  }
 }
 
 // ==================== DRIVER PAY (distance-based, tiered discount) ====================
@@ -2732,19 +2766,29 @@ function renderMyDeliveries() {
   tbody.innerHTML = rows.map(o => {
     const addr = o.address || '';
     const mapsUrl = addr ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(addr)}` : '';
-    const nextBtn = o.status === 'pending'
-      ? `<button class="btn btn-sm btn-primary" onclick="driverMarkStatus('${o.id}','shipped')"><i class="business-icon icon-inline" data-lucide="truck" aria-hidden="true"></i> Start Delivery</button>`
-      : (o.status === 'shipped'
-        ? `<button class="btn btn-sm btn-primary" onclick="driverMarkStatus('${o.id}','delivered')"><i class="business-icon icon-inline" data-lucide="circle-check" aria-hidden="true"></i> Mark Delivered</button>`
-        : '');
+    let nextBtn = '';
+    if (o.status === 'pending') {
+      nextBtn = `<button class="btn btn-sm btn-primary" onclick="driverMarkStatus('${o.id}','shipped')"><i class="business-icon icon-inline" data-lucide="truck" aria-hidden="true"></i> Start Delivery</button>`;
+    } else if (o.status === 'shipped') {
+      nextBtn = `<button class="btn btn-sm btn-primary" onclick="openDeliverModal('${o.id}')" style="margin-right:6px;"><i class="business-icon icon-inline" data-lucide="circle-check" aria-hidden="true"></i> Mark Delivered</button>
+        <button class="btn btn-sm" onclick="openFailedModal('${o.id}')"><i class="business-icon icon-inline" data-lucide="circle-alert" aria-hidden="true"></i> Report Issue</button>`;
+    } else if (o.status === 'failed') {
+      nextBtn = `<button class="btn btn-sm btn-primary" onclick="driverMarkStatus('${o.id}','shipped')"><i class="business-icon icon-inline" data-lucide="rotate-ccw" aria-hidden="true"></i> Retry Delivery</button>`;
+    }
+    const codLabel = (o.payment_method || 'cod') === 'cod'
+      ? `<br><small style="opacity:.7;font-weight:700;">💵 COD Rs. ${Number(o.total || 0).toLocaleString()}${o.status==='delivered' && o.cod_collected!=null ? ' • collected Rs. '+Number(o.cod_collected).toLocaleString() : ''}</small>`
+      : '';
+    const failedHint = o.status === 'failed' && o.failed_reason
+      ? `<br><small style="color:#c0392b;">⚠️ ${escapeHtmlSafe(o.failed_reason)}${o.failed_notes ? ' — '+escapeHtmlSafe(o.failed_notes) : ''}</small>`
+      : '';
     const payHint = o.delivery_km
       ? `<br><small style="opacity:.55;">${o.delivery_km} km • Rs. ${Math.round(calculateDriverPay(o.delivery_km).pay).toLocaleString()} pay</small>`
       : '';
     return `<tr>
       <td><strong>${o.order_ref_no || String(o.id).slice(0,8)}</strong></td>
       <td>${escapeHtmlSafe(o.customer_name_snapshot || o.customer_address_snapshot || '-')}</td>
-      <td>${escapeHtmlSafe(addr || '-')}${payHint}</td>
-      <td>${getStatusBadge(o.status)}</td>
+      <td>${escapeHtmlSafe(addr || '-')}${codLabel}${payHint}</td>
+      <td>${getStatusBadge(o.status)}${failedHint}</td>
       <td>
         ${addr ? `<a href="${mapsUrl}" target="_blank" rel="noopener" class="btn btn-sm" style="margin-right:6px;"><i class="business-icon icon-inline" data-lucide="map-pin" aria-hidden="true"></i> Navigate</a>` : ''}
         ${nextBtn}
@@ -2771,6 +2815,189 @@ async function driverMarkStatus(orderId, newStatus) {
   }
 }
 window.driverMarkStatus = driverMarkStatus;
+
+// ==================== DRIVER: PROOF OF DELIVERY / COD / FAILED DELIVERY ====================
+let deliverModalOrderId = null;
+let deliverPhotoFile = null;
+let sigCtx = null, sigDrawing = false, sigHasStroke = false;
+
+function initSignaturePad() {
+  const canvas = $('deliverSignaturePad');
+  if (!canvas || canvas.__wired) return;
+  canvas.__wired = true;
+  sigCtx = canvas.getContext('2d');
+  sigCtx.lineWidth = 2.2;
+  sigCtx.lineCap = 'round';
+  sigCtx.strokeStyle = '#1a1a1a';
+  const posFromEvent = (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width, scaleY = canvas.height / rect.height;
+    const point = e.touches ? e.touches[0] : e;
+    return { x: (point.clientX - rect.left) * scaleX, y: (point.clientY - rect.top) * scaleY };
+  };
+  const start = (e) => { sigDrawing = true; sigHasStroke = true; const p = posFromEvent(e); sigCtx.beginPath(); sigCtx.moveTo(p.x, p.y); e.preventDefault(); };
+  const move = (e) => { if (!sigDrawing) return; const p = posFromEvent(e); sigCtx.lineTo(p.x, p.y); sigCtx.stroke(); e.preventDefault(); };
+  const end = () => { sigDrawing = false; };
+  canvas.addEventListener('mousedown', start); canvas.addEventListener('mousemove', move);
+  window.addEventListener('mouseup', end);
+  canvas.addEventListener('touchstart', start, { passive: false }); canvas.addEventListener('touchmove', move, { passive: false });
+  canvas.addEventListener('touchend', end);
+}
+
+function clearSignaturePad() {
+  const canvas = $('deliverSignaturePad');
+  if (!canvas || !sigCtx) return;
+  sigCtx.clearRect(0, 0, canvas.width, canvas.height);
+  sigHasStroke = false;
+}
+window.clearSignaturePad = clearSignaturePad;
+
+function handleDeliveryPhotoChange(e) {
+  const file = e.target.files && e.target.files[0];
+  const preview = $('deliverPhotoPreview');
+  if (!file) { deliverPhotoFile = null; if (preview) preview.style.display = 'none'; return; }
+  deliverPhotoFile = file;
+  if (preview) {
+    preview.src = URL.createObjectURL(file);
+    preview.style.display = 'block';
+  }
+}
+window.handleDeliveryPhotoChange = handleDeliveryPhotoChange;
+
+function openDeliverModal(orderId) {
+  const o = myDeliveries.find(x => String(x.id) === String(orderId));
+  if (!o) return;
+  deliverModalOrderId = orderId;
+  deliverPhotoFile = null;
+  $('deliverPhotoInput').value = '';
+  $('deliverPhotoPreview').style.display = 'none';
+  $('deliverConfirmOrderLabel').textContent = `Order ${o.order_ref_no || String(o.id).slice(0,8)} — ${o.customer_name_snapshot || 'Customer'}`;
+  const isCod = (o.payment_method || 'cod') === 'cod';
+  $('deliverCodSection').style.display = isCod ? '' : 'none';
+  if (isCod) $('deliverCodAmount').value = Number(o.total || 0);
+  $('deliverConfirmModal').classList.add('active');
+  setTimeout(() => { initSignaturePad(); clearSignaturePad(); }, 50);
+  if (window.lucide) lucide.createIcons({ attrs: { 'stroke-width': 1.9, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' } });
+}
+window.openDeliverModal = openDeliverModal;
+
+async function confirmDelivery() {
+  if (userRole !== 'driver' || !deliverModalOrderId) return;
+  if (!deliverPhotoFile) { alert('📷 A delivery photo is required before you can confirm.'); return; }
+  const o = myDeliveries.find(x => String(x.id) === String(deliverModalOrderId));
+  if (!o) return;
+  const btn = $('deliverConfirmBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Uploading...'; }
+  try {
+    const ext = (deliverPhotoFile.name && deliverPhotoFile.name.includes('.')) ? deliverPhotoFile.name.split('.').pop() : 'jpg';
+    const path = `${businessId}/${o.id}-${Date.now()}.${ext}`;
+    const { error: upErr } = await supabase.storage.from('delivery-proofs').upload(path, deliverPhotoFile, { upsert: true, contentType: deliverPhotoFile.type || 'image/jpeg' });
+    if (upErr) throw upErr;
+    const { data: pub } = supabase.storage.from('delivery-proofs').getPublicUrl(path);
+    const photoUrl = pub?.publicUrl || null;
+
+    const signatureCanvas = $('deliverSignaturePad');
+    const signatureData = (sigHasStroke && signatureCanvas) ? signatureCanvas.toDataURL('image/png') : null;
+
+    const isCod = (o.payment_method || 'cod') === 'cod';
+    const codCollected = isCod ? (Number($('deliverCodAmount').value) || 0) : null;
+
+    const update = {
+      status: 'delivered',
+      delivery_photo_url: photoUrl,
+      delivery_signature: signatureData,
+      cod_collected: codCollected,
+      delivered_at: new Date().toISOString()
+    };
+    const { error } = await supabase.from('orders').update(update).eq('id', o.id).eq('assigned_driver_id', currentUser.id);
+    if (error) throw error;
+
+    Object.assign(o, update);
+    closeModal('deliverConfirmModal');
+    renderMyDeliveries();
+    updateStatus('✅ Delivery confirmed with proof' + (isCod ? ` • Rs. ${codCollected.toLocaleString()} collected` : ''));
+  } catch (e) {
+    console.error('Confirm delivery error:', e);
+    alert('❌ Could not confirm delivery: ' + e.message + '\n\nMake sure the delivery-proofs storage bucket and the delivery_photo_url / delivery_signature / cod_collected / delivered_at columns exist (see setup notes).');
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="business-icon icon-inline" data-lucide="circle-check" aria-hidden="true"></i> Confirm Delivered'; if (window.lucide) lucide.createIcons({ attrs: { 'stroke-width': 1.9, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' } }); }
+  }
+}
+window.confirmDelivery = confirmDelivery;
+
+function openFailedModal(orderId) {
+  const o = myDeliveries.find(x => String(x.id) === String(orderId));
+  if (!o) return;
+  deliverModalOrderId = orderId;
+  $('deliverFailedReason').value = '';
+  $('deliverFailedNotes').value = '';
+  $('deliverFailedOrderLabel').textContent = `Order ${o.order_ref_no || String(o.id).slice(0,8)} — ${o.customer_name_snapshot || 'Customer'}`;
+  $('deliverFailedModal').classList.add('active');
+}
+window.openFailedModal = openFailedModal;
+
+async function confirmFailedDelivery() {
+  if (userRole !== 'driver' || !deliverModalOrderId) return;
+  const reason = $('deliverFailedReason').value;
+  if (!reason) { alert('Please select a reason.'); return; }
+  const notes = $('deliverFailedNotes').value.trim();
+  const o = myDeliveries.find(x => String(x.id) === String(deliverModalOrderId));
+  if (!o) return;
+  try {
+    const update = { status: 'failed', failed_reason: reason, failed_notes: notes, failed_at: new Date().toISOString() };
+    const { error } = await supabase.from('orders').update(update).eq('id', o.id).eq('assigned_driver_id', currentUser.id);
+    if (error) throw error;
+    Object.assign(o, update);
+    closeModal('deliverFailedModal');
+    renderMyDeliveries();
+    updateStatus('⚠️ Delivery issue reported');
+  } catch (e) {
+    console.error('Report failed delivery error:', e);
+    alert('❌ Could not report the issue: ' + e.message + '\n\nMake sure the failed_reason / failed_notes / failed_at columns exist on the orders table (see setup notes).');
+  }
+}
+window.confirmFailedDelivery = confirmFailedDelivery;
+
+// ==================== OWNER: VIEW PROOF / RESCHEDULE ====================
+function viewDeliveryProof(index) {
+  const order = orders[index];
+  if (!order) return;
+  $('proofOrderLabel').textContent = `Order ${order.orderRefNo || order.id} — ${order.customerName || getCustomerName(order.customerId)}`;
+  const isCod = (order.paymentMethod || 'cod') === 'cod';
+  const codLine = isCod
+    ? `<div class="field"><label>Cash Collected</label><div style="font-weight:800;font-size:1.05rem;">${order.codCollected != null ? fmt(order.codCollected) : '<span style="opacity:.5;">Not recorded</span>'} <span style="opacity:.5;font-weight:400;">/ order total ${fmt(order.total)}</span></div></div>`
+    : '';
+  const photoBlock = order.deliveryPhotoUrl
+    ? `<div class="field"><label>Delivery Photo</label><img src="${order.deliveryPhotoUrl}" style="max-width:100%;max-height:320px;border-radius:10px;border:1px solid #ddd;"></div>`
+    : '<div class="field"><label>Delivery Photo</label><small style="opacity:.5;">No photo on file.</small></div>';
+  const sigBlock = order.deliverySignature
+    ? `<div class="field"><label>Customer Signature</label><img src="${order.deliverySignature}" style="max-width:100%;max-height:150px;border:1px solid #ddd;border-radius:10px;background:#fff;"></div>`
+    : '';
+  const failedBlock = order.status === 'failed'
+    ? `<div class="notice warn" style="margin-top:10px;"><strong>Delivery failed:</strong> ${escapeHtmlSafe(order.failedReason||'')}${order.failedNotes ? ' — '+escapeHtmlSafe(order.failedNotes) : ''}</div>`
+    : '';
+  $('proofContent').innerHTML = codLine + photoBlock + sigBlock + failedBlock;
+  $('deliveryProofModal').classList.add('active');
+}
+window.viewDeliveryProof = viewDeliveryProof;
+
+async function rescheduleFailedOrder(index) {
+  if (userRole !== 'owner') return;
+  const order = orders[index];
+  if (!order || order.status !== 'failed') return;
+  if (!confirm('Reschedule this order? It will go back to Pending for the assigned driver.')) return;
+  try {
+    const { error } = await supabase.from('orders').update({ status: 'pending', failed_reason: null, failed_notes: null }).eq('id', order.id).eq('user_id', businessId);
+    if (error) throw error;
+    order.status = 'pending'; order.failedReason = null; order.failedNotes = null;
+    saveOrders(); renderOrders(); updateOrderStats();
+    updateStatus('🔄 Order rescheduled to Pending');
+  } catch (e) {
+    console.error('Reschedule order error:', e);
+    alert('❌ Could not reschedule order: ' + e.message);
+  }
+}
+window.rescheduleFailedOrder = rescheduleFailedOrder;
 
 let driverDeliveriesChannel = null;
 function startDriverDeliveriesRealtime() {

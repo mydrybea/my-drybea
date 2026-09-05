@@ -1337,6 +1337,10 @@
       <div class="stat"><div class="k">Pending</div><div class="v" id="statPending">0</div></div>
       <div class="stat bad"><div class="k">Cancelled</div><div class="v" id="statCancelled">0</div></div>
     </div>
+    <div class="stat-grid" data-owner-only>
+      <div class="stat good"><div class="k">COD Cash Collected</div><div class="v" id="statCodCollected">Rs. 0</div></div>
+      <div class="stat"><div class="k">COD Cash Outstanding</div><div class="v" id="statCodOutstanding">Rs. 0</div></div>
+    </div>
 
     <div class="card">
       <h2><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="shopping-bag" aria-hidden="true"></i></span><span>Orders</span></h2><p class="pro-subtitle green">Track every customer sale from one command view.</p>
@@ -1613,6 +1617,16 @@
       </div>
     </div>
 
+    <div class="om-section" data-owner-order-payment>
+      <div class="om-section-title"><i class="business-icon" data-lucide="wallet" aria-hidden="true"></i> Payment</div>
+      <div class="field" style="margin-bottom:0;">
+        <select id="orderPaymentMethod">
+          <option value="cod">Cash on Delivery (COD)</option>
+          <option value="prepaid">Already Paid / Prepaid</option>
+        </select>
+      </div>
+    </div>
+
     <div class="om-section">
       <div class="om-section-title"><i class="business-icon" data-lucide="sticky-note" aria-hidden="true"></i> Notes</div>
       <div class="field" style="margin-bottom:0;">
@@ -1700,6 +1714,81 @@
     <div class="btn-row">
       <button class="btn btn-primary" onclick="saveExpense()">✅ Save Expense</button>
       <button class="btn" onclick="closeModal('expenseModal')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Delivery Confirmation Modal (driver: mark delivered with photo/signature/COD) -->
+<div class="modal-backdrop" id="deliverConfirmModal">
+  <div class="modal">
+    <h3><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="circle-check" aria-hidden="true"></i></span><span>Confirm Delivery</span></h3>
+    <p class="pro-subtitle green" id="deliverConfirmOrderLabel">Order</p>
+
+    <div class="om-section">
+      <div class="om-section-title"><i class="business-icon" data-lucide="camera" aria-hidden="true"></i> Delivery Photo <span style="color:#c0392b;">*</span></div>
+      <div class="field" style="margin-bottom:8px;">
+        <input type="file" id="deliverPhotoInput" accept="image/*" capture="environment" onchange="handleDeliveryPhotoChange(event)">
+      </div>
+      <img id="deliverPhotoPreview" style="display:none;max-width:100%;max-height:220px;border-radius:10px;border:1px solid #ddd;object-fit:cover;">
+      <small style="display:block;margin-top:6px;opacity:.6;">Photo of the delivered package / gate / customer's hand — required for proof of delivery.</small>
+    </div>
+
+    <div class="om-section">
+      <div class="om-section-title"><i class="business-icon" data-lucide="pen-line" aria-hidden="true"></i> Customer Signature <span style="opacity:.5;font-weight:400;">(optional)</span></div>
+      <canvas id="deliverSignaturePad" width="500" height="150" style="width:100%;height:150px;border:1px solid #ddd;border-radius:10px;background:#fff;touch-action:none;"></canvas>
+      <button type="button" class="btn btn-sm" style="margin-top:8px;" onclick="clearSignaturePad()"><i class="business-icon icon-inline" data-lucide="eraser" aria-hidden="true"></i> Clear Signature</button>
+    </div>
+
+    <div class="om-section" id="deliverCodSection">
+      <div class="om-section-title"><i class="business-icon" data-lucide="wallet" aria-hidden="true"></i> Cash Collected (COD)</div>
+      <div class="field" style="margin-bottom:0;">
+        <div class="input-prefix"><span>Rs.</span><input type="number" id="deliverCodAmount" min="0" step="1"></div>
+      </div>
+      <small style="display:block;margin-top:6px;opacity:.6;">Prefilled with the order total. Edit if you collected a different amount.</small>
+    </div>
+
+    <div class="om-actions">
+      <button class="btn btn-primary" id="deliverConfirmBtn" onclick="confirmDelivery()"><i class="business-icon icon-inline" data-lucide="circle-check" aria-hidden="true"></i> Confirm Delivered</button>
+      <button class="btn btn-cancel-link" onclick="closeModal('deliverConfirmModal')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Failed Delivery Modal (driver: report an issue) -->
+<div class="modal-backdrop" id="deliverFailedModal">
+  <div class="modal">
+    <h3><span class="pro-title-icon orange" aria-hidden="true"><i class="business-icon" data-lucide="circle-alert" aria-hidden="true"></i></span><span>Report Delivery Issue</span></h3>
+    <p class="pro-subtitle orange" id="deliverFailedOrderLabel">Order</p>
+    <div class="field">
+      <label>Reason</label>
+      <select id="deliverFailedReason">
+        <option value="">Select a reason...</option>
+        <option value="Customer not available">Customer not available</option>
+        <option value="Wrong address">Wrong address</option>
+        <option value="Refused">Customer refused</option>
+        <option value="Other">Other</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Notes (optional)</label>
+      <textarea id="deliverFailedNotes" placeholder="Any extra detail..."></textarea>
+    </div>
+    <div class="notice" style="margin:0 0 10px;padding:9px 12px;font-size:.72rem;"><i class="business-icon icon-inline" data-lucide="rotate-ccw"></i> This order goes back to Pending so the owner can reschedule it.</div>
+    <div class="om-actions">
+      <button class="btn btn-primary" onclick="confirmFailedDelivery()"><i class="business-icon icon-inline" data-lucide="circle-alert" aria-hidden="true"></i> Report Issue</button>
+      <button class="btn btn-cancel-link" onclick="closeModal('deliverFailedModal')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Delivery Proof Modal (owner: view photo/signature/COD for a delivered or failed order) -->
+<div class="modal-backdrop" id="deliveryProofModal">
+  <div class="modal">
+    <h3><span class="pro-title-icon slate" aria-hidden="true"><i class="business-icon" data-lucide="shield-check" aria-hidden="true"></i></span><span>Delivery Proof</span></h3>
+    <p class="pro-subtitle slate" id="proofOrderLabel">Order</p>
+    <div id="proofContent"></div>
+    <div class="om-actions">
+      <button class="btn" onclick="closeModal('deliveryProofModal')">Close</button>
     </div>
   </div>
 </div>
