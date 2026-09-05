@@ -2932,17 +2932,12 @@ async function ensureOrderGeocoded(order) {
 }
 
 function getDriverStartPosition() {
-  return new Promise((resolve) => {
-    // Prefer a recent live GPS fix (if location sharing is on) — avoids an extra
-    // permission prompt / wait when we already know where the driver is.
-    if (driverLastCoords) { resolve(driverLastCoords); return; }
-    if (!navigator.geolocation) { resolve(null); return; }
-    navigator.geolocation.getCurrentPosition(
-      (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-      () => resolve(null),
-      { enableHighAccuracy: true, maximumAge: 15000, timeout: 10000 }
-    );
-  });
+  // Every delivery run starts from the shop's pickup point (Drybea Market, or
+  // whatever the owner has set via "Change Pickup Location") — not wherever the
+  // driver's phone happens to be when they open the app. Route optimization
+  // must plan from that fixed origin so the suggested stop order matches the
+  // real route the driver actually drives, starting from pickup.
+  return Promise.resolve(getPickupLocation());
 }
 
 // Greedy nearest-neighbour: starting from `start`, repeatedly visit whichever
