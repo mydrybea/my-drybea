@@ -3022,10 +3022,29 @@ async function driverMarkStatus(orderId, newStatus) {
     const o = myDeliveries.find(x => String(x.id) === String(orderId));
     if (o) o.status = newStatus;
     if (newStatus === 'shipped') {
-      // Start (or restart, on a retry) auto-distance tracking for this delivery.
-      activeTrip = { orderId, km: 0, lastCoords: driverLastCoords };
+      // FIX: previously this reused whatever driverLastCoords happened to be —
+      // which could be several minutes old, left over from a PREVIOUS delivery,
+      // or simply null if location sharing hadn't sent a ping yet. That made
+      // the trip's starting point wrong, which threw off every km reading that
+      // followed. Now we grab a fresh, high-accuracy GPS fix at the exact
+      // moment "Start Delivery" is tapped, so the trip always starts from
+      // wherever the driver actually is right now.
+      activeTrip = { orderId, km: 0, lastCoords: null };
       updateLiveTripKmUI();
       if (!driverLocationSharing) startDriverLocationSharing(); // needed so GPS pings actually flow in
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            // Only apply if this is still the active trip (driver hasn't already moved on to another one).
+            if (activeTrip && String(activeTrip.orderId) === String(orderId) && !activeTrip.lastCoords) {
+              activeTrip.lastCoords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+              driverLastCoords = activeTrip.lastCoords;
+            }
+          },
+          (err) => console.warn('Could not get a fresh start location, will use the first GPS ping instead:', err.message),
+          { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 }
+        );
+      }
     }
     renderMyDeliveries();
     updateStatus(newStatus === 'delivered' ? '✅ Marked delivered' : '🚚 Delivery started — auto-tracking distance');
@@ -3470,7 +3489,21 @@ async function driverSendLocation(lat, lng, force) {
   if (activeTrip) {
     if (activeTrip.lastCoords) {
       const d = haversineKm(activeTrip.lastCoords.lat, activeTrip.lastCoords.lng, lat, lng);
-      if (d >= 0.005 && d <= 2) { activeTrip.km += d; activeTrip.lastCoords = { lat, lng }; }
+      if (d >= 0.005 && d <= 2) {
+        activeTrip.km += d;
+        activeTrip.lastCoords = { lat, lng };
+      } else if (d > 2) {
+        // FIX: previously a single implausible jump (>2km between two fixes) left
+        // the reference point untouched, so every later fix kept being compared
+        // against that same stale point. If the driver had genuinely moved on,
+        // the distance to that old point could stay above 2km forever — meaning
+        // the km counter got permanently stuck for the rest of the trip. Now a
+        // big jump just resets the reference point (we don't count the jump
+        // itself, since we can't tell a bad GPS fix from a real move), so normal
+        // accumulation always resumes on the very next fix instead of never.
+        activeTrip.lastCoords = { lat, lng };
+      }
+      // else: under 5m — GPS jitter while stationary, ignored entirely.
     } else {
       activeTrip.lastCoords = { lat, lng };
     }
