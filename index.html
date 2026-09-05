@@ -1002,6 +1002,22 @@
         </table>
       </div>
     </div>
+
+    <div class="card">
+      <h2><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="sparkles" aria-hidden="true"></i></span><span>Dynamic Pricing Suggestions</span></h2>
+      <p class="pro-subtitle gold">Live suggested prices based on the fish costs & mix ratio set above.</p>
+      <div class="field" style="max-width:220px;">
+        <label>Target Margin <span class="hint">(%)</span></label>
+        <input type="number" id="dpTargetMargin" value="25" min="0" max="90" oninput="renderDynamicPricing()">
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Pack</th><th class="num">Current MRP</th><th class="num">Current Cost</th><th class="num">Current Margin</th><th class="num">Suggested Price</th><th class="num">Suggestion</th></tr></thead>
+          <tbody id="dynamicPricingBody"></tbody>
+        </table>
+      </div>
+      <div class="monthly-summary-note">Recalculates instantly whenever fish prices or the mix ratio change above. Suggested price is what's needed to hit your target margin after 5% packing labour — it does not change your actual selling price automatically.</div>
+    </div>
   </section>
 
   <!-- ============ PRODUCTION TAB ============ -->

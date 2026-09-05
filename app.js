@@ -1481,7 +1481,59 @@ function calcAll() {
   calcBulk();
   calcSensitivity();
   calcDashboard();
+  renderDynamicPricing();
 }
+
+// ==================== DYNAMIC PRICING SUGGESTIONS ====================
+// Recomputes, for every pack size, what selling price would be needed to
+// hit a target margin % given the CURRENT fish prices & mix ratio set
+// above — independent of which pack size is selected for the main
+// calculator. Purely suggestive: never writes back to MRP/state.
+function renderDynamicPricing() {
+  const tbody = $('dynamicPricingBody');
+  if (!tbody) return;
+  const targetMarginEl = $('dpTargetMargin');
+  const targetMargin = targetMarginEl ? (Number(targetMarginEl.value) || 0) : 25;
+  const mix = getMixPct();
+
+  const rows = Object.keys(PACKS).map(k => {
+    const p = PACKS[k];
+    let r;
+    try {
+      r = calculatePack(k, state.linnaPrice, state.balayaPrice, state.kawalamPrice, mix, 'mrp', 0, 0);
+    } catch (e) { return null; }
+    const currentCost = r.totalCost;
+    const currentMargin = p.mrp > 0 ? ((p.mrp - currentCost) / p.mrp) * 100 : 0;
+    // Solve sp such that: sp = baseCost + sp*PACKING_LABOUR_PCT + sp*(targetMargin/100)
+    const denom = 1 - PACKING_LABOUR_PCT - (targetMargin / 100);
+    const suggestedSp = denom > 0 ? r.baseCost / denom : null;
+    const diff = suggestedSp !== null ? suggestedSp - p.mrp : null;
+    return { label: p.label, mrp: p.mrp, cost: currentCost, margin: currentMargin, suggestedSp, diff };
+  }).filter(Boolean);
+
+  tbody.innerHTML = rows.map(row => {
+    const marginColor = row.margin < targetMargin ? '#d45d55' : '#0a8f43';
+    let suggestionHtml = '—';
+    if (row.suggestedSp !== null) {
+      if (row.diff > 1) {
+        suggestionHtml = `<span style="color:#d45d55;font-weight:700;">⬆ Increase ${fmt(row.diff)}</span>`;
+      } else if (row.diff < -1) {
+        suggestionHtml = `<span style="color:#0a8f43;font-weight:700;">⬇ Can lower ${fmt(Math.abs(row.diff))}</span>`;
+      } else {
+        suggestionHtml = `<span style="opacity:.6;">✓ No change needed</span>`;
+      }
+    }
+    return `<tr>
+      <td>${row.label}</td>
+      <td class="num">${fmt(row.mrp)}</td>
+      <td class="num">${fmt(row.cost)}</td>
+      <td class="num" style="color:${marginColor};font-weight:700;">${fmt2(row.margin)}%</td>
+      <td class="num">${row.suggestedSp !== null ? fmt(row.suggestedSp) : '—'}</td>
+      <td class="num">${suggestionHtml}</td>
+    </tr>`;
+  }).join('');
+}
+window.renderDynamicPricing = renderDynamicPricing;
 
 function calcScenario() {
   const sizeKey = state.packSize;
