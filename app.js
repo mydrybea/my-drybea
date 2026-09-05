@@ -45,6 +45,11 @@ const ORDERS_KEY = 'mydrybea_v34_orders';
 const CUSTOMERS_KEY = 'mydrybea_v34_customers';
 const SNAPSHOTS_KEY = 'mydrybea_v34_snapshots';
 const MAX_SNAPSHOTS = 5;
+// Fixed pickup point for every delivery — the business's own shop/warehouse
+// (Drybea Market), taken from the owner's Google Maps pin. Used to anchor the
+// Delivery page's live map and to draw the pickup → drop-off direction line
+// for each driver's current route.
+const PICKUP_LOCATION = { lat: 5.984411, lng: 80.7312384, name: 'Drybea Market (Pickup)' };
 const USER_KEY = 'mydrybea_v34_user';
 const SUPABASE_URL = 'https://dztuyfiiyxllnvciunjv.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR6dHV5ZmlpeXhsbG52Y2l1bmp2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgwMDg3NjUsImV4cCI6MjEwMzU4NDc2NX0.NT5_fvlwZZr_MQMgerYaIZYHeeJ9l9SrConqcN50M84';
@@ -1873,6 +1878,9 @@ function dbOrderToLocal(o) {
     referralStatus: o.referral_status || 'none',
     assignedDriverId: o.assigned_driver_id || null,
     deliveryKm: (o.delivery_km !== undefined && o.delivery_km !== null) ? Number(o.delivery_km) : null,
+    deliveryLat: (o.delivery_lat !== undefined && o.delivery_lat !== null) ? Number(o.delivery_lat) : null,
+    deliveryLng: (o.delivery_lng !== undefined && o.delivery_lng !== null) ? Number(o.delivery_lng) : null,
+    routeSequence: (o.route_sequence !== undefined && o.route_sequence !== null) ? Number(o.route_sequence) : null,
     paymentMethod: o.payment_method || 'cod',
     codCollected: (o.cod_collected !== undefined && o.cod_collected !== null) ? Number(o.cod_collected) : null,
     deliveryPhotoUrl: o.delivery_photo_url || null,
@@ -3432,21 +3440,32 @@ function updateDriverNotifyPermUI() {
 // ---- Owner side: live map of all sharing drivers ----
 let ownerDriverMap = null;
 let ownerDriverMarkers = {};
+let ownerDriverRoutePolylines = {};
+let ownerPickupMarker = null;
 let ownerDriverLocationsChannel = null;
 let driverLocationPollTimer = null;
 let driverLocationFreshness = {}; // driver_id -> last-updated timestamp (ms)
 const DRIVER_ONLINE_THRESHOLD_MS = 90 * 1000; // no ping in 90s = treated as offline/stale on the map
+const DRIVER_ROUTE_COLORS = ['#2563eb', '#dc2626', '#059669', '#7c3aed', '#ea580c', '#0891b2', '#db2777'];
+function colorForDriver(driverId) {
+  const idx = driverListCache.findIndex(d => String(d.id) === String(driverId));
+  return DRIVER_ROUTE_COLORS[(idx >= 0 ? idx : 0) % DRIVER_ROUTE_COLORS.length];
+}
 
 function initOwnerDriverMap() {
   if (userRole !== 'owner') return;
   const el = document.getElementById('ownerDriverMap');
   if (!el || typeof L === 'undefined') return;
   if (!ownerDriverMap) {
-    ownerDriverMap = L.map(el).setView([7.8731, 80.7718], 8); // default: Sri Lanka
+    ownerDriverMap = L.map(el).setView([PICKUP_LOCATION.lat, PICKUP_LOCATION.lng], 11); // default: centered on the pickup point
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
       attribution: '&copy; OpenStreetMap contributors'
     }).addTo(ownerDriverMap);
+    // Fixed pickup marker — always shown, doesn't move, doesn't depend on any driver being online.
+    ownerPickupMarker = L.circleMarker([PICKUP_LOCATION.lat, PICKUP_LOCATION.lng], {
+      radius: 9, color: '#b45309', weight: 3, fillColor: '#f59e0b', fillOpacity: 0.9
+    }).addTo(ownerDriverMap).bindPopup(`<strong>🏭 ${escapeHtmlSafe(PICKUP_LOCATION.name)}</strong><br><small>Pickup point for every delivery</small>`);
     startOwnerDriverLocationsRealtime();
   }
   // FIX: the map container sits inside a tab-panel that's display:none whenever this tab
@@ -3515,12 +3534,50 @@ function renderOwnerDriverMarkers(rows) {
       ? `🟢 ${seenOnline.size} online now`
       : (seenAny.size ? `⚪ ${seenAny.size} driver(s) sharing, but no fresh signal right now` : 'No drivers sharing location right now');
   }
+  // Direction line: pickup point → each of that driver's active drop-offs (in
+  // route-optimizer order, if one was saved), only for drivers currently live —
+  // so the owner sees exactly where an online driver is headed, not stale plans.
+  renderOwnerDriverRoutes(Array.from(seenOnline));
   const markers = Object.values(ownerDriverMarkers);
+  if (ownerPickupMarker) markers.push(ownerPickupMarker);
   if (markers.length) {
     const group = L.featureGroup(markers);
     try { ownerDriverMap.fitBounds(group.getBounds().pad(0.3), { maxZoom: 14 }); } catch (e) {}
   }
   renderDeliveryDriverStats();
+}
+
+// Draws (or updates) a dashed direction line from the fixed pickup point through
+// each currently-online driver's active drop-off stops, in the order the Route
+// Optimizer picked (falling back to assignment order if a route wasn't optimized).
+function renderOwnerDriverRoutes(onlineDriverIds) {
+  if (!ownerDriverMap) return;
+  const idsSet = new Set(onlineDriverIds.map(String));
+  idsSet.forEach(id => {
+    const driverOrders = (orders || []).filter(o => String(o.assignedDriverId || '') === id
+      && (o.status === 'pending' || o.status === 'shipped')
+      && o.deliveryLat != null && o.deliveryLng != null);
+    if (!driverOrders.length) {
+      if (ownerDriverRoutePolylines[id]) { ownerDriverMap.removeLayer(ownerDriverRoutePolylines[id]); delete ownerDriverRoutePolylines[id]; }
+      return;
+    }
+    const sorted = driverOrders.slice().sort((a, b) => {
+      if (a.routeSequence != null && b.routeSequence != null) return a.routeSequence - b.routeSequence;
+      if (a.routeSequence != null) return -1;
+      if (b.routeSequence != null) return 1;
+      return new Date(a.createdAt) - new Date(b.createdAt);
+    });
+    const latlngs = [[PICKUP_LOCATION.lat, PICKUP_LOCATION.lng], ...sorted.map(o => [o.deliveryLat, o.deliveryLng])];
+    const color = colorForDriver(id);
+    if (ownerDriverRoutePolylines[id]) {
+      ownerDriverRoutePolylines[id].setLatLngs(latlngs).setStyle({ color });
+    } else {
+      ownerDriverRoutePolylines[id] = L.polyline(latlngs, { color, weight: 3, dashArray: '7 7', opacity: 0.75 }).addTo(ownerDriverMap);
+    }
+  });
+  Object.keys(ownerDriverRoutePolylines).forEach(id => {
+    if (!idsSet.has(id)) { ownerDriverMap.removeLayer(ownerDriverRoutePolylines[id]); delete ownerDriverRoutePolylines[id]; }
+  });
 }
 
 function startOwnerDriverLocationsRealtime() {
