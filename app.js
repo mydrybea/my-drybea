@@ -2799,13 +2799,21 @@ function renderMyDeliveries() {
   const active = myDeliveries.filter(o => o.status !== 'cancelled' && o.status !== 'delivered');
   const done = myDeliveries.filter(o => o.status === 'delivered');
   if (active.length === 0 && done.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;opacity:.5;padding:20px;">No deliveries assigned to you right now.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;opacity:.5;padding:20px;">No deliveries assigned to you right now.</td></tr>';
     return;
   }
-  const rows = active.concat(done.slice(0, 10)); // keep recent delivered visible, don't let history grow unbounded
-  tbody.innerHTML = rows.map(o => {
+  // If every active stop has an optimized route_sequence, show them in that order;
+  // otherwise fall back to the original (oldest-first) assignment order.
+  const hasFullRoute = active.length > 0 && active.every(o => o.route_sequence != null);
+  const orderedActive = hasFullRoute
+    ? [...active].sort((a, b) => (a.route_sequence || 0) - (b.route_sequence || 0))
+    : active;
+  const rows = orderedActive.concat(done.slice(0, 10)); // keep recent delivered visible, don't let history grow unbounded
+  tbody.innerHTML = rows.map((o, i) => {
     const addr = o.address || '';
     const mapsUrl = addr ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(addr)}` : '';
+    const isActiveRow = o.status !== 'delivered' && o.status !== 'cancelled';
+    const stopBadge = (isActiveRow && hasFullRoute) ? `<span class="badge" style="background:#eef;color:#334;font-weight:700;">${i + 1}</span>` : (isActiveRow ? `<span style="opacity:.35;">${i + 1}</span>` : '<span style="opacity:.25;">✓</span>');
     let nextBtn = '';
     if (o.status === 'pending') {
       nextBtn = `<button class="btn btn-sm btn-primary" onclick="driverMarkStatus('${o.id}','shipped')"><i class="business-icon icon-inline" data-lucide="truck" aria-hidden="true"></i> Start Delivery</button>`;
@@ -2825,6 +2833,7 @@ function renderMyDeliveries() {
       ? `<br><small style="opacity:.55;">${o.delivery_km} km • Rs. ${Math.round(calculateDriverPay(o.delivery_km).pay).toLocaleString()} pay</small>`
       : '';
     return `<tr>
+      <td>${stopBadge}</td>
       <td><strong>${o.order_ref_no || String(o.id).slice(0,8)}</strong></td>
       <td>${escapeHtmlSafe(o.customer_name_snapshot || o.customer_address_snapshot || '-')}</td>
       <td>${escapeHtmlSafe(addr || '-')}${codLabel}${payHint}</td>
@@ -2851,6 +2860,151 @@ function haversineKm(lat1, lng1, lat2, lng2) {
   const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
+
+// ==================== MULTI-STOP ROUTE OPTIMIZER ====================
+// Free stack: OpenStreetMap Nominatim for geocoding (no API key), straight-line
+// (haversine) nearest-neighbour ordering. This isn't turn-by-turn driving
+// distance, but for a handful of same-area stops it gives a very good "visit
+// these in this order" suggestion — and costs nothing to run.
+// Requires two extra columns on the `orders` table: delivery_lat, delivery_lng
+// (double precision, nullable) and route_sequence (integer, nullable).
+
+async function geocodeAddress(address) {
+  if (!address || !address.trim()) return null;
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=lk&q=${encodeURIComponent(address)}`;
+    const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+    if (!res.ok) return null;
+    const results = await res.json();
+    if (!results || !results.length) return null;
+    const lat = Number(results[0].lat), lng = Number(results[0].lon);
+    if (!isFinite(lat) || !isFinite(lng)) return null;
+    return { lat, lng };
+  } catch (e) {
+    console.warn('Geocode error for address "' + address + '":', e.message);
+    return null;
+  }
+}
+
+// Geocodes and saves coordinates for one order if it doesn't have them yet.
+// Mutates the order object in-place (delivery_lat/delivery_lng) on success.
+async function ensureOrderGeocoded(order) {
+  if (order.delivery_lat != null && order.delivery_lng != null) return true;
+  if (!order.address) return false;
+  const coords = await geocodeAddress(order.address);
+  if (!coords) return false;
+  order.delivery_lat = coords.lat;
+  order.delivery_lng = coords.lng;
+  try {
+    await supabase.from('orders').update({ delivery_lat: coords.lat, delivery_lng: coords.lng }).eq('id', order.id);
+  } catch (e) {
+    console.warn('Could not save geocoded coordinates for order ' + order.id + ':', e.message);
+  }
+  return true;
+}
+
+function getDriverStartPosition() {
+  return new Promise((resolve) => {
+    // Prefer a recent live GPS fix (if location sharing is on) — avoids an extra
+    // permission prompt / wait when we already know where the driver is.
+    if (driverLastCoords) { resolve(driverLastCoords); return; }
+    if (!navigator.geolocation) { resolve(null); return; }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => resolve(null),
+      { enableHighAccuracy: true, maximumAge: 15000, timeout: 10000 }
+    );
+  });
+}
+
+// Greedy nearest-neighbour: starting from `start`, repeatedly visit whichever
+// remaining stop is closest to the current position. Simple, fast, and in
+// practice close to optimal for the small (3-4 stop) batches drivers here
+// actually carry.
+function nearestNeighbourOrder(start, stops) {
+  const remaining = stops.slice();
+  const route = [];
+  let current = start;
+  while (remaining.length) {
+    let bestIdx = 0, bestDist = Infinity;
+    remaining.forEach((s, idx) => {
+      const d = current ? haversineKm(current.lat, current.lng, s.delivery_lat, s.delivery_lng) : 0;
+      if (d < bestDist) { bestDist = d; bestIdx = idx; }
+    });
+    const next = remaining.splice(bestIdx, 1)[0];
+    route.push(next);
+    current = { lat: next.delivery_lat, lng: next.delivery_lng };
+  }
+  return route;
+}
+
+function routeDistanceKm(start, stopsInOrder) {
+  let total = 0, current = start;
+  stopsInOrder.forEach(s => {
+    if (current) total += haversineKm(current.lat, current.lng, s.delivery_lat, s.delivery_lng);
+    current = { lat: s.delivery_lat, lng: s.delivery_lng };
+  });
+  return total;
+}
+
+async function optimizeDeliveryRoute() {
+  if (userRole !== 'driver') return;
+  const btn = $('optimizeRouteBtn');
+  const status = $('routeOptimizeStatus');
+  const active = myDeliveries.filter(o => o.status === 'pending' || o.status === 'shipped');
+  if (active.length < 2) {
+    if (status) status.textContent = 'Need at least 2 active deliveries to optimize.';
+    return;
+  }
+  if (btn) btn.disabled = true;
+  if (status) status.textContent = '📍 Locating your stops…';
+
+  // Geocode any stops that don't have coordinates yet. Sequential with a small
+  // delay to stay within Nominatim's fair-use rate limit (max ~1 request/sec).
+  const missing = active.filter(o => o.delivery_lat == null || o.delivery_lng == null);
+  for (const o of missing) {
+    await ensureOrderGeocoded(o);
+    await new Promise(r => setTimeout(r, 1100));
+  }
+
+  const locatable = active.filter(o => o.delivery_lat != null && o.delivery_lng != null);
+  const unlocatable = active.filter(o => o.delivery_lat == null || o.delivery_lng == null);
+  if (locatable.length < 2) {
+    if (status) status.textContent = '⚠️ Could not locate enough addresses to optimize (check they include a city/area name).';
+    if (btn) btn.disabled = false;
+    return;
+  }
+
+  if (status) status.textContent = '🧭 Calculating best order…';
+  const start = await getDriverStartPosition();
+
+  const naiveDistance = routeDistanceKm(start, locatable);
+  const optimized = nearestNeighbourOrder(start, locatable);
+  const optimizedDistance = routeDistanceKm(start, optimized);
+
+  // Persist the new order so it survives a refresh, and so the owner's view
+  // (if ever extended to show it) stays in sync.
+  let seq = 1;
+  const updates = optimized.map(o => {
+    const mySeq = seq++;
+    o.route_sequence = mySeq;
+    return supabase.from('orders').update({ route_sequence: mySeq }).eq('id', o.id);
+  });
+  // Unlocatable stops go to the end, in their existing order, so nothing gets lost.
+  unlocatable.forEach(o => { o.route_sequence = seq++; });
+  try { await Promise.all(updates); } catch (e) { console.warn('Save route order error:', e); }
+
+  renderMyDeliveries();
+  if (btn) btn.disabled = false;
+  const saved = naiveDistance - optimizedDistance;
+  if (status) {
+    status.textContent = saved > 0.05
+      ? `✅ Route optimized — about ${saved.toFixed(1)} km less driving than the original order.`
+      : '✅ Route optimized.';
+  }
+  updateStatus('🗺️ Delivery route optimized');
+}
+window.optimizeDeliveryRoute = optimizeDeliveryRoute;
 
 function updateLiveTripKmUI() {
   const el = $('liveTripKm');

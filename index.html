@@ -1330,13 +1330,15 @@
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;padding:10px 14px;border-radius:10px;background:#f5f6f8;flex-wrap:wrap;">
         <button id="driverLocationToggleBtn" class="btn btn-sm" onclick="toggleDriverLocationSharing()"><i class="business-icon icon-inline" data-lucide="map-pin" aria-hidden="true"></i> Share My Location</button>
         <button id="driverNotifyPermBtn" class="btn btn-sm" onclick="requestDriverNotifyPermission()"><i class="business-icon icon-inline" data-lucide="bell" aria-hidden="true"></i> Enable Delivery Alerts</button>
+        <button id="optimizeRouteBtn" class="btn btn-sm btn-primary" onclick="optimizeDeliveryRoute()"><i class="business-icon icon-inline" data-lucide="route" aria-hidden="true"></i> Optimize Route</button>
         <span id="driverLocationStatus" style="font-size:12px;opacity:.6;">Off — turn on so the owner can see you on the map while delivering</span>
         <span id="liveTripKm" style="font-size:12px;opacity:.6;"></span>
+        <span id="routeOptimizeStatus" style="font-size:12px;opacity:.7;font-weight:600;"></span>
       </div>
       <div class="table-wrap">
         <table>
           <thead>
-            <tr><th>Order</th><th>Customer</th><th>Address</th><th>Status</th><th>Actions</th></tr>
+            <tr><th>#</th><th>Order</th><th>Customer</th><th>Address</th><th>Status</th><th>Actions</th></tr>
           </thead>
           <tbody id="myDeliveriesBody"><tr><td colspan="5" style="text-align:center;opacity:.5;padding:20px;">Loading…</td></tr></tbody>
         </table>
