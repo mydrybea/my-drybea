@@ -1376,6 +1376,15 @@
         <span id="liveTripKm" style="font-size:12px;opacity:.6;"></span>
         <span id="routeOptimizeStatus" style="font-size:12px;opacity:.7;font-weight:600;"></span>
       </div>
+
+      <!-- Batch delivery mode: quick-select nearby stops, then a floating action bar to confirm them all at once -->
+      <div id="batchGroupsBar" style="display:none;margin-bottom:10px;padding:10px 14px;border-radius:10px;background:#eef6ff;"></div>
+      <div id="batchActionBar" style="display:none;align-items:center;gap:10px;margin-bottom:14px;padding:10px 14px;border-radius:10px;background:#eafaf0;flex-wrap:wrap;">
+        <strong id="batchSelectedCount" style="font-size:13px;">0 selected</strong>
+        <button class="btn btn-sm btn-primary" onclick="openBatchDeliverModal()"><i class="business-icon icon-inline" data-lucide="package-check" aria-hidden="true"></i> Batch Deliver Selected</button>
+        <button class="btn btn-sm" onclick="clearBatchSelection()">Clear Selection</button>
+      </div>
+
       <div class="table-wrap">
         <table>
           <thead>
@@ -1807,6 +1816,36 @@
     <div class="om-actions">
       <button class="btn btn-primary" id="deliverConfirmBtn" onclick="confirmDelivery()"><i class="business-icon icon-inline" data-lucide="circle-check" aria-hidden="true"></i> Confirm Delivered</button>
       <button class="btn btn-cancel-link" onclick="closeModal('deliverConfirmModal')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Batch Delivery Confirmation Modal (driver: confirm several nearby "shipped" orders at once) -->
+<div class="modal-backdrop" id="batchDeliverModal">
+  <div class="modal">
+    <h3><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="package-check" aria-hidden="true"></i></span><span id="batchDeliverTitle">Confirm Deliveries</span></h3>
+    <p class="pro-subtitle green">One photo (and signature, if you draw one) is used as proof for every order below — edit each cash amount if needed.</p>
+
+    <div id="batchDeliverList" class="om-section" style="max-height:220px;overflow:auto;"></div>
+
+    <div class="om-section">
+      <div class="om-section-title"><i class="business-icon" data-lucide="camera" aria-hidden="true"></i> Delivery Photo <span style="color:#c0392b;">*</span></div>
+      <div class="field" style="margin-bottom:8px;">
+        <input type="file" id="batchDeliverPhotoInput" accept="image/*" capture="environment" onchange="handleBatchDeliveryPhotoChange(event)">
+      </div>
+      <img id="batchDeliverPhotoPreview" style="display:none;max-width:100%;max-height:220px;border-radius:10px;border:1px solid #ddd;object-fit:cover;">
+      <small style="display:block;margin-top:6px;opacity:.6;">One photo applies to all selected deliveries — e.g. all parcels together at the drop point.</small>
+    </div>
+
+    <div class="om-section">
+      <div class="om-section-title"><i class="business-icon" data-lucide="pen-line" aria-hidden="true"></i> Signature <span style="opacity:.5;font-weight:400;">(optional, applied to all)</span></div>
+      <canvas id="batchDeliverSignaturePad" width="500" height="150" style="width:100%;height:150px;border:1px solid #ddd;border-radius:10px;background:#fff;touch-action:none;"></canvas>
+      <button type="button" class="btn btn-sm" style="margin-top:8px;" onclick="clearSignaturePad('batchDeliverSignaturePad')"><i class="business-icon icon-inline" data-lucide="eraser" aria-hidden="true"></i> Clear Signature</button>
+    </div>
+
+    <div class="om-actions">
+      <button class="btn btn-primary" id="batchDeliverConfirmBtn" onclick="confirmBatchDelivery()"><i class="business-icon icon-inline" data-lucide="circle-check" aria-hidden="true"></i> Confirm All Delivered</button>
+      <button class="btn btn-cancel-link" onclick="closeModal('batchDeliverModal')">Cancel</button>
     </div>
   </div>
 </div>

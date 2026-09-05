@@ -2902,6 +2902,16 @@ window.updateDeliveryKm = updateDeliveryKm;
 // ==================== DRIVER: MY DELIVERIES ====================
 let myDeliveries = [];
 
+// ==================== BATCH DELIVERY MODE ====================
+// Lets a driver tick several "shipped" (out-for-delivery) orders that are
+// physically close together and confirm them all delivered in one pass —
+// one shared proof photo (+ optional shared signature), with each order's
+// own COD amount still editable individually. See openBatchDeliverModal /
+// confirmBatchDelivery below.
+let batchSelectedIds = new Set(); // order ids (as strings) currently ticked
+let batchGroupsCache = [];        // last computed nearby-order clusters, indexed for selectBatchGroup()
+let batchDeliverPhotoFile = null;
+
 async function loadMyDeliveries() {
   if (!currentUser || userRole !== 'driver') return;
   try {
@@ -2923,6 +2933,12 @@ async function loadMyDeliveries() {
 function renderMyDeliveries() {
   const tbody = $('myDeliveriesBody');
   if (!tbody) return;
+  // Drop any batch selections that no longer point at a "shipped" order of
+  // ours (e.g. it was reassigned, cancelled, or already delivered elsewhere).
+  if (batchSelectedIds.size) {
+    const stillShippable = new Set(myDeliveries.filter(o => o.status === 'shipped').map(o => String(o.id)));
+    Array.from(batchSelectedIds).forEach(id => { if (!stillShippable.has(id)) batchSelectedIds.delete(id); });
+  }
   const active = myDeliveries.filter(o => o.status !== 'cancelled' && o.status !== 'delivered');
   const done = myDeliveries.filter(o => o.status === 'delivered');
   if (active.length === 0 && done.length === 0) {
@@ -2941,6 +2957,12 @@ function renderMyDeliveries() {
     const mapsUrl = addr ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(addr)}` : '';
     const isActiveRow = o.status !== 'delivered' && o.status !== 'cancelled';
     const stopBadge = (isActiveRow && hasFullRoute) ? `<span class="badge" style="background:#eef;color:#334;font-weight:700;">${i + 1}</span>` : (isActiveRow ? `<span style="opacity:.35;">${i + 1}</span>` : '<span style="opacity:.25;">✓</span>');
+    // Only orders that are actually out-for-delivery ("shipped") can be batch-confirmed —
+    // same eligibility as the single "Mark Delivered" button below.
+    const canBatchSelect = o.status === 'shipped';
+    const selectCb = canBatchSelect
+      ? `<input type="checkbox" class="batch-select-cb" title="Select for batch delivery" onchange="toggleBatchSelect('${o.id}', this.checked)" ${batchSelectedIds.has(String(o.id)) ? 'checked' : ''} style="margin-right:6px;vertical-align:middle;width:16px;height:16px;">`
+      : '';
     let nextBtn = '';
     if (o.status === 'pending') {
       nextBtn = `<button class="btn btn-sm btn-primary" onclick="driverMarkStatus('${o.id}','shipped')"><i class="business-icon icon-inline" data-lucide="truck" aria-hidden="true"></i> Start Delivery</button>`;
@@ -2974,7 +2996,7 @@ function renderMyDeliveries() {
           : (o.rating_token ? `<button class="btn btn-sm" onclick="shareDeliveryRatingLink('${o.id}')" title="WhatsApp the customer a link to rate this delivery"><i class="business-icon icon-inline" data-lucide="star" aria-hidden="true"></i> Send Rating Link</button>` : ''))
       : '';
     return `<tr>
-      <td>${stopBadge}</td>
+      <td>${selectCb}${stopBadge}</td>
       <td><strong>${o.order_ref_no || String(o.id).slice(0,8)}</strong></td>
       <td>${escapeHtmlSafe(o.customer_name_snapshot || o.customer_address_snapshot || '-')}</td>
       <td>${escapeHtmlSafe(addr || '-')}${codLabel}${payHint}${pinHint}</td>
@@ -2987,8 +3009,186 @@ function renderMyDeliveries() {
       </td>
     </tr>`;
   }).join('');
+  renderBatchGroupsBar();
+  updateBatchActionBar();
   if (window.lucide) lucide.createIcons({ attrs: { 'stroke-width': 1.9, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' } });
 }
+
+// ---- Batch selection state helpers ----
+
+function toggleBatchSelect(orderId, checked) {
+  const id = String(orderId);
+  if (checked) batchSelectedIds.add(id); else batchSelectedIds.delete(id);
+  updateBatchActionBar(); // just the count/bar — don't re-render the table mid-tick, or checkboxes would jump around
+}
+window.toggleBatchSelect = toggleBatchSelect;
+
+function clearBatchSelection() {
+  batchSelectedIds.clear();
+  renderMyDeliveries();
+}
+window.clearBatchSelection = clearBatchSelection;
+
+function updateBatchActionBar() {
+  const bar = $('batchActionBar');
+  if (!bar) return;
+  const n = batchSelectedIds.size;
+  if (n < 2) { bar.style.display = 'none'; return; }
+  bar.style.display = 'flex';
+  const countEl = $('batchSelectedCount');
+  if (countEl) countEl.textContent = `${n} selected for batch delivery`;
+}
+
+// Groups the driver's currently out-for-delivery orders that have a known
+// location (from the route optimizer's geocoding or a manually-set pin) into
+// clusters of stops within `radiusKm` of each other, so the driver can select
+// a whole cluster in one tap instead of ticking boxes one by one. Simple
+// single-linkage clustering (union-find) — good enough for the small,
+// same-area batches a delivery run actually has.
+function computeNearbyGroups(radiusKm = 0.35) {
+  const candidates = myDeliveries.filter(o => o.status === 'shipped' && o.delivery_lat != null && o.delivery_lng != null);
+  const n = candidates.length;
+  if (n < 2) return [];
+  const parent = candidates.map((_, i) => i);
+  function find(i) { while (parent[i] !== i) { parent[i] = parent[parent[i]]; i = parent[i]; } return i; }
+  function union(a, b) { const ra = find(a), rb = find(b); if (ra !== rb) parent[ra] = rb; }
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 1; j < n; j++) {
+      if (haversineKm(candidates[i].delivery_lat, candidates[i].delivery_lng, candidates[j].delivery_lat, candidates[j].delivery_lng) <= radiusKm) {
+        union(i, j);
+      }
+    }
+  }
+  const groupsMap = {};
+  candidates.forEach((o, i) => { const r = find(i); (groupsMap[r] = groupsMap[r] || []).push(o); });
+  return Object.values(groupsMap).filter(g => g.length >= 2).sort((a, b) => b.length - a.length);
+}
+
+function renderBatchGroupsBar() {
+  const bar = $('batchGroupsBar');
+  if (!bar) return;
+  batchGroupsCache = computeNearbyGroups();
+  if (!batchGroupsCache.length) { bar.style.display = 'none'; bar.innerHTML = ''; return; }
+  bar.style.display = 'block';
+  bar.innerHTML = `<div style="font-size:12px;font-weight:700;opacity:.7;margin-bottom:6px;"><i class="business-icon icon-inline" data-lucide="map-pin" aria-hidden="true"></i> Nearby stops — select a whole group in one tap:</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      ${batchGroupsCache.map((g, i) => `<button type="button" class="btn btn-sm" onclick="selectBatchGroup(${i})">${g.length} nearby — ${escapeHtmlSafe(g[0].address || g[0].customer_name_snapshot || 'stops')}</button>`).join('')}
+    </div>`;
+  if (window.lucide) lucide.createIcons({ attrs: { 'stroke-width': 1.9, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' } });
+}
+
+function selectBatchGroup(i) {
+  const g = batchGroupsCache[i];
+  if (!g) return;
+  g.forEach(o => batchSelectedIds.add(String(o.id)));
+  renderMyDeliveries();
+}
+window.selectBatchGroup = selectBatchGroup;
+
+// Opens the batch confirmation modal for every currently-ticked, still-shipped order.
+function openBatchDeliverModal() {
+  if (userRole !== 'driver') return;
+  const selected = myDeliveries.filter(o => batchSelectedIds.has(String(o.id)) && o.status === 'shipped');
+  if (selected.length < 1) { alert('Tick at least one out-for-delivery order first.'); return; }
+  batchDeliverPhotoFile = null;
+  $('batchDeliverPhotoInput').value = '';
+  $('batchDeliverPhotoPreview').style.display = 'none';
+  $('batchDeliverTitle').textContent = `Confirm ${selected.length} Deliveries`;
+  $('batchDeliverList').innerHTML = selected.map(o => {
+    const isCod = (o.payment_method || 'cod') === 'cod';
+    return `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #eee;">
+      <div>
+        <strong>${o.order_ref_no || String(o.id).slice(0,8)}</strong> — ${escapeHtmlSafe(o.customer_name_snapshot || 'Customer')}<br>
+        <small style="opacity:.65;">${escapeHtmlSafe(o.address || '-')}</small>
+      </div>
+      ${isCod ? `<div class="input-prefix" style="width:120px;flex:none;"><span>Rs.</span><input type="number" min="0" step="1" id="batchCod_${o.id}" value="${Number(o.total || 0)}"></div>` : ''}
+    </div>`;
+  }).join('');
+  $('batchDeliverModal').classList.add('active');
+  setTimeout(() => { initSignaturePad('batchDeliverSignaturePad'); clearSignaturePad('batchDeliverSignaturePad'); }, 50);
+  if (window.lucide) lucide.createIcons({ attrs: { 'stroke-width': 1.9, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' } });
+}
+window.openBatchDeliverModal = openBatchDeliverModal;
+
+function handleBatchDeliveryPhotoChange(e) {
+  const file = e.target.files && e.target.files[0];
+  const preview = $('batchDeliverPhotoPreview');
+  if (!file) { batchDeliverPhotoFile = null; if (preview) preview.style.display = 'none'; return; }
+  batchDeliverPhotoFile = file;
+  if (preview) { preview.src = URL.createObjectURL(file); preview.style.display = 'block'; }
+}
+window.handleBatchDeliveryPhotoChange = handleBatchDeliveryPhotoChange;
+
+// Confirms every order that was selected when the modal was opened: one shared
+// proof photo (and shared signature, if drawn) uploaded once, then each order
+// updated with its own COD amount — mirroring confirmDelivery() but batched.
+async function confirmBatchDelivery() {
+  if (userRole !== 'driver') return;
+  const selected = myDeliveries.filter(o => batchSelectedIds.has(String(o.id)) && o.status === 'shipped');
+  if (!selected.length) { closeModal('batchDeliverModal'); return; }
+  if (!batchDeliverPhotoFile) { alert('📷 A delivery photo is required before you can confirm.'); return; }
+  const btn = $('batchDeliverConfirmBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Uploading...'; }
+  try {
+    const ext = (batchDeliverPhotoFile.name && batchDeliverPhotoFile.name.includes('.')) ? batchDeliverPhotoFile.name.split('.').pop() : 'jpg';
+    const path = `${businessId}/batch-${Date.now()}.${ext}`;
+    const { error: upErr } = await supabase.storage.from('delivery-proofs').upload(path, batchDeliverPhotoFile, { upsert: true, contentType: batchDeliverPhotoFile.type || 'image/jpeg' });
+    if (upErr) throw upErr;
+    const { data: pub } = supabase.storage.from('delivery-proofs').getPublicUrl(path);
+    const photoUrl = pub?.publicUrl || null;
+
+    const signatureCanvas = $('batchDeliverSignaturePad');
+    const signatureData = (sigHasStroke && signatureCanvas) ? signatureCanvas.toDataURL('image/png') : null;
+    const deliveredAt = new Date().toISOString();
+
+    const results = await Promise.all(selected.map(async (o) => {
+      try {
+        const isCod = (o.payment_method || 'cod') === 'cod';
+        const codInput = isCod ? $('batchCod_' + o.id) : null;
+        const codCollected = isCod ? (Number(codInput && codInput.value) || 0) : null;
+        const update = {
+          status: 'delivered',
+          delivery_photo_url: photoUrl,
+          delivery_signature: signatureData,
+          cod_collected: codCollected,
+          delivered_at: deliveredAt,
+          rating_token: o.rating_token || genRatingToken()
+        };
+        // Same auto-distance lock-in as the single-order flow, in case the GPS-tracked trip is one of these stops.
+        if (activeTrip && String(activeTrip.orderId) === String(o.id)) {
+          update.delivery_km = Number(activeTrip.km.toFixed(2));
+        }
+        const { error } = await supabase.from('orders').update(update).eq('id', o.id).eq('assigned_driver_id', currentUser.id);
+        if (error) throw error;
+        if (activeTrip && String(activeTrip.orderId) === String(o.id)) activeTrip = null;
+        Object.assign(o, update);
+        return { id: o.id, ok: true };
+      } catch (e) {
+        console.error('Batch deliver error for order ' + o.id + ':', e);
+        return { id: o.id, ok: false, message: e.message };
+      }
+    }));
+
+    updateLiveTripKmUI();
+    const okResults = results.filter(r => r.ok);
+    const failed = results.filter(r => !r.ok);
+    okResults.forEach(r => batchSelectedIds.delete(String(r.id))); // clear only the ones that succeeded; leave failures ticked for retry
+    closeModal('batchDeliverModal');
+    renderMyDeliveries();
+    if (!failed.length) {
+      updateStatus(`✅ ${okResults.length} deliveries confirmed with proof`);
+    } else {
+      updateStatus(`⚠️ ${okResults.length}/${selected.length} confirmed — ${failed.length} failed, still selected for retry`);
+      alert('Some deliveries could not be confirmed:\n' + failed.map(f => `• Order ${f.id}: ${f.message}`).join('\n'));
+    }
+  } catch (e) {
+    console.error('Confirm batch delivery error:', e);
+    alert('❌ Could not upload the delivery photo: ' + e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="business-icon icon-inline" data-lucide="circle-check" aria-hidden="true"></i> Confirm All Delivered'; if (window.lucide) lucide.createIcons({ attrs: { 'stroke-width': 1.9, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' } }); }
+  }
+}
+window.confirmBatchDelivery = confirmBatchDelivery;
 
 // Opens a pre-filled WhatsApp message to the customer with their personal
 // "rate this delivery" link (no login needed on their end — see
@@ -3332,8 +3532,8 @@ let deliverModalOrderId = null;
 let deliverPhotoFile = null;
 let sigCtx = null, sigDrawing = false, sigHasStroke = false;
 
-function initSignaturePad() {
-  const canvas = $('deliverSignaturePad');
+function initSignaturePad(canvasId) {
+  const canvas = $(canvasId || 'deliverSignaturePad');
   if (!canvas || canvas.__wired) return;
   canvas.__wired = true;
   sigCtx = canvas.getContext('2d');
@@ -3355,8 +3555,8 @@ function initSignaturePad() {
   canvas.addEventListener('touchend', end);
 }
 
-function clearSignaturePad() {
-  const canvas = $('deliverSignaturePad');
+function clearSignaturePad(canvasId) {
+  const canvas = $(canvasId || 'deliverSignaturePad');
   if (!canvas || !sigCtx) return;
   sigCtx.clearRect(0, 0, canvas.width, canvas.height);
   sigHasStroke = false;
