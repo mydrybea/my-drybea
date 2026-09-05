@@ -60,7 +60,7 @@ const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 });
 let currentUser = null;
 let userProfile = null;
-let userRole = 'owner';   // 'owner' | 'staff'
+let userRole = 'owner';   // 'owner' | 'staff' | 'driver'
 let businessId = null;    // the effective account whose data everyone on the team shares
 
 async function loadUserProfile() {
@@ -84,8 +84,8 @@ async function loadUserProfile() {
       userProfile = data;
     }
 
-    userRole = userProfile.role === 'staff' ? 'staff' : 'owner';
-    businessId = userRole === 'staff' ? userProfile.owner_id : currentUser.id;
+    userRole = userProfile.role === 'staff' ? 'staff' : (userProfile.role === 'driver' ? 'driver' : 'owner');
+    businessId = (userRole === 'staff' || userRole === 'driver') ? userProfile.owner_id : currentUser.id;
   } catch (e) {
     console.error('Load profile error:', e);
     // Fail safe: treat as an independent owner of their own data.
@@ -93,51 +93,74 @@ async function loadUserProfile() {
     businessId = currentUser.id;
   }
   applyRoleUI();
-  await loadMyStaffData(false);
-  startAppNotifyRealtime();
+  if (userRole === 'driver') {
+    await loadMyDeliveries();
+    startDriverDeliveriesRealtime();
+  } else {
+    await loadMyStaffData(false);
+    startAppNotifyRealtime();
+  }
 }
+
+const STAFF_ALLOWED_TABS = ['staff-home','orders','my-salary','profile','expenses'];
+const DRIVER_ALLOWED_TABS = ['my-deliveries','profile'];
 
 function applyRoleUI() {
   const isStaff = userRole === 'staff';
+  const isDriver = userRole === 'driver';
+  const isRestricted = isStaff || isDriver; // anyone who isn't the owner
 
-  // Owner-only controls
+  // Owner-only controls: hidden for both staff and driver.
   document.querySelectorAll('[data-owner-only]').forEach(el => {
-    el.style.display = isStaff ? 'none' : '';
+    el.style.display = isRestricted ? 'none' : '';
   });
 
-  // Staff workspace: operational tabs only; owner-only tabs stay hidden.
-  const staffTabs = ['staff-home','orders','my-salary','profile','expenses'];
+  // Staff-only elements (nav tabs + inline blocks) — visible only for staff.
   document.querySelectorAll('[data-staff-only]').forEach(el => {
     const tab = el.getAttribute('data-tab');
-    el.style.display = (isStaff && staffTabs.includes(tab)) ? 'flex' : 'none';
+    el.style.display = (isStaff && (!tab || STAFF_ALLOWED_TABS.includes(tab))) ? 'flex' : 'none';
   });
+
+  // Driver-only elements (nav tabs + inline blocks) — visible only for drivers.
+  document.querySelectorAll('[data-driver-only]').forEach(el => {
+    const tab = el.getAttribute('data-tab');
+    el.style.display = (isDriver && (!tab || DRIVER_ALLOWED_TABS.includes(tab))) ? 'flex' : 'none';
+  });
+
+  // Every nav tab button: lock down to exactly the tabs each role may see.
   document.querySelectorAll('.tab-btn').forEach(el => {
     const tab = el.getAttribute('data-tab');
     if (isStaff) {
-      const allowed = ['staff-home','orders','my-salary','profile','expenses'].includes(tab);
-      el.style.display = allowed ? 'flex' : 'none';
+      el.style.display = STAFF_ALLOWED_TABS.includes(tab) ? 'flex' : 'none';
+    } else if (isDriver) {
+      el.style.display = DRIVER_ALLOWED_TABS.includes(tab) ? 'flex' : 'none';
     }
   });
 
-  const salaryNav = document.querySelector('.tab-btn[data-tab="my-salary"]');
-  if (salaryNav) salaryNav.style.display = isStaff ? 'flex' : 'none';
-
   const navEl = document.querySelector('.app-nav');
-  if (navEl) navEl.classList.toggle('staff-nav', isStaff);
+  if (navEl) {
+    navEl.classList.toggle('staff-nav', isStaff);
+    navEl.classList.toggle('driver-nav', isDriver);
+  }
 
   const roleBadge = $('roleBadge');
-  if (roleBadge) { roleBadge.innerHTML = `<i class="business-icon icon-inline" data-lucide="${isStaff ? 'user-round' : 'crown'}" aria-hidden="true"></i> ${isStaff ? 'Staff' : 'Owner'}`; }
+  if (roleBadge) {
+    const icon = isDriver ? 'truck' : (isStaff ? 'user-round' : 'crown');
+    const label = isDriver ? 'Driver' : (isStaff ? 'Staff' : 'Owner');
+    roleBadge.innerHTML = `<i class="business-icon icon-inline" data-lucide="${icon}" aria-hidden="true"></i> ${label}`;
+  }
   if (window.lucide) lucide.createIcons({ attrs: { 'stroke-width': 1.9, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' } });
 
   const ownerSalaryTab = document.querySelector('[data-tab="staff-salary"]');
-  if (ownerSalaryTab) ownerSalaryTab.style.display = isStaff ? 'none' : '';
+  if (ownerSalaryTab) ownerSalaryTab.style.display = isRestricted ? 'none' : '';
 
   const ownerSalaryEditor = $('salaryPanel');
-  if (ownerSalaryEditor && isStaff) ownerSalaryEditor.style.display = 'none';
+  if (ownerSalaryEditor && isRestricted) ownerSalaryEditor.style.display = 'none';
 
-  // Staff lands on the dedicated operations home.
-  if (isStaff && typeof activateAppTab === 'function') {
-    activateAppTab('staff-home');
+  // Staff lands on the dedicated operations home; drivers land on their delivery list.
+  if (typeof activateAppTab === 'function') {
+    if (isStaff) activateAppTab('staff-home');
+    else if (isDriver) activateAppTab('my-deliveries');
   }
 }
 
@@ -163,39 +186,54 @@ function renderStaffList(list) {
     tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;opacity:.5;padding:14px;">No staff added yet.</td></tr>';
     return;
   }
-  tbody.innerHTML = list.map(s => `
+  tbody.innerHTML = list.map(s => {
+    const isDrv = s.role === 'driver';
+    return `
     <tr>
-      <td>${s.display_name || '(no name)'}</td>
+      <td>${s.display_name || '(no name)'} ${isDrv ? '<span style="background:#eef;color:#334;padding:2px 7px;border-radius:6px;font-size:11px;font-weight:700;">🚚 Driver</span>' : ''}</td>
       <td style="font-size:11px;word-break:break-all;">${s.id}</td>
-      <td data-owner-only><button class="btn btn-sm btn-danger" aria-label="Remove staff" onclick="removeStaffMember('${s.id}')"><i class="business-icon" data-lucide="trash-2" aria-hidden="true"></i></button></td>
+      <td data-owner-only><button class="btn btn-sm btn-danger" aria-label="Remove" onclick="removeStaffMember('${s.id}')"><i class="business-icon" data-lucide="trash-2" aria-hidden="true"></i></button></td>
     </tr>
-  `).join('');
-  populateSalaryStaffSelect(list);
+  `;
+  }).join('');
+  // Only actual staff (not drivers) go into salary/commission pickers.
+  populateSalaryStaffSelect(list.filter(s => s.role !== 'driver'));
+  populateDriverSelects(list.filter(s => s.role === 'driver'));
   if (window.lucide) lucide.createIcons({ attrs: { 'stroke-width': 1.9, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' } });
+}
+
+let driverListCache = [];
+function populateDriverSelects(drivers) {
+  driverListCache = drivers || [];
+  renderDelivery();
 }
 
 async function addStaffMember() {
   if (userRole !== 'owner') { alert('Only the business owner can add staff.'); return; }
   const uid = $('staffUid').value.trim();
   const name = $('staffName').value.trim();
-  if (!uid) { alert("Enter the staff member's Supabase User ID."); return; }
+  const roleSelect = $('staffRoleSelect');
+  const role = (roleSelect && roleSelect.value === 'driver') ? 'driver' : 'staff';
+  if (!uid) { alert("Enter the team member's Supabase User ID."); return; }
   if (uid === currentUser.id) { alert('That is your own account.'); return; }
 
   try {
     const { error } = await supabase.from('profiles').upsert({
       id: uid,
-      role: 'staff',
+      role: role,
       owner_id: currentUser.id,
       display_name: name || null
     });
     if (error) throw error;
-    alert('✅ Staff member added. They can now log in and see your shared Orders, Customers & Expenses.');
+    alert(role === 'driver'
+      ? '✅ Driver added. They can now log in and see their assigned deliveries.'
+      : '✅ Staff member added. They can now log in and see your shared Orders, Customers & Expenses.');
     $('staffUid').value = '';
     $('staffName').value = '';
     await loadStaffList();
   } catch (e) {
     console.error('Add staff error:', e);
-    alert('❌ Could not add staff: ' + e.message + '\n\nMake sure this User ID already exists in Supabase → Authentication → Users.');
+    alert('❌ Could not add: ' + e.message + '\n\nMake sure this User ID already exists in Supabase → Authentication → Users.');
   }
 }
 
@@ -1808,7 +1846,8 @@ function dbOrderToLocal(o) {
     createdAt: o.created_at || new Date().toISOString(),
     referralStaffId: o.referral_staff_id || null,
     referralStaffReference: o.referral_staff_reference || null,
-    referralStatus: o.referral_status || 'none'
+    referralStatus: o.referral_status || 'none',
+    assignedDriverId: o.assigned_driver_id || null
   };
 }
 
@@ -2483,22 +2522,265 @@ function updateOrderStats() {
 
 function renderDelivery() {
   const tbody = $('deliveryBody');
+  if (!tbody) return;
   const activeOrders = orders.filter(o => o.status !== 'cancelled');
   if (activeOrders.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;opacity:0.5;padding:20px;">No active deliveries.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;opacity:0.5;padding:20px;">No active deliveries.</td></tr>';
     return;
   }
   const orderIndexById = new Map(orders.map((o, i) => [String(o.id), i]));
+  const hasDrivers = userRole === 'owner' && driverListCache.length > 0;
   tbody.innerHTML = activeOrders.map(order => {
     const realIndex = orderIndexById.get(String(order.id));
+    const driverCell = userRole !== 'owner' ? '' : (hasDrivers ? `
+      <select style="padding:4px 6px;font-size:12px;border-radius:6px;" onchange="assignDriver('${order.id}', this.value)">
+        <option value="">— Unassigned —</option>
+        ${driverListCache.map(d => `<option value="${d.id}" ${String(order.assignedDriverId||'')===String(d.id)?'selected':''}>${d.display_name || d.id.slice(0,8)}</option>`).join('')}
+      </select>` : '<span style="opacity:.4;">No drivers added</span>');
     return `<tr>
       <td><strong>${order.id}</strong></td>
       <td>${getCustomerName(order.customerId)}</td>
       <td>${order.address || '-'}</td>
       <td>${getStatusBadge(order.status)}</td>
+      <td data-owner-only>${driverCell}</td>
       <td><button class="btn btn-sm" onclick="cycleStatus(${realIndex})"><i class="business-icon icon-inline" data-lucide="refresh-cw" aria-hidden="true"></i> Update</button></td>
     </tr>`;
   }).join('');
+}
+
+async function assignDriver(orderId, driverId) {
+  if (userRole !== 'owner') return;
+  try {
+    const { error } = await supabase.from('orders')
+      .update({ assigned_driver_id: driverId || null })
+      .eq('id', orderId).eq('user_id', businessId);
+    if (error) throw error;
+    const o = orders.find(x => String(x.id) === String(orderId));
+    if (o) o.assignedDriverId = driverId || null;
+    saveOrders();
+    updateStatus(driverId ? '🚚 Driver assigned' : '🚚 Driver unassigned');
+  } catch (e) {
+    console.error('Assign driver error:', e);
+    alert('❌ Could not assign driver: ' + e.message + '\n\nMake sure the "assigned_driver_id" column exists on the orders table in Supabase.');
+  }
+}
+window.assignDriver = assignDriver;
+
+// ==================== DRIVER: MY DELIVERIES ====================
+let myDeliveries = [];
+
+async function loadMyDeliveries() {
+  if (!currentUser || userRole !== 'driver') return;
+  try {
+    const { data, error } = await supabase
+      .from('orders')
+      .select('*')
+      .eq('assigned_driver_id', currentUser.id)
+      .order('created_at', { ascending: true });
+    if (error) throw error;
+    myDeliveries = data || [];
+    renderMyDeliveries();
+    updateStatus('☁️ Deliveries loaded');
+  } catch (e) {
+    console.error('Load my deliveries error:', e);
+    updateStatus('⚠️ Could not load deliveries: ' + e.message);
+  }
+}
+
+function renderMyDeliveries() {
+  const tbody = $('myDeliveriesBody');
+  if (!tbody) return;
+  const active = myDeliveries.filter(o => o.status !== 'cancelled' && o.status !== 'delivered');
+  const done = myDeliveries.filter(o => o.status === 'delivered');
+  if (active.length === 0 && done.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;opacity:.5;padding:20px;">No deliveries assigned to you right now.</td></tr>';
+    return;
+  }
+  const rows = active.concat(done.slice(0, 10)); // keep recent delivered visible, don't let history grow unbounded
+  tbody.innerHTML = rows.map(o => {
+    const addr = o.address || '';
+    const mapsUrl = addr ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(addr)}` : '';
+    const nextBtn = o.status === 'pending'
+      ? `<button class="btn btn-sm btn-primary" onclick="driverMarkStatus('${o.id}','shipped')"><i class="business-icon icon-inline" data-lucide="truck" aria-hidden="true"></i> Start Delivery</button>`
+      : (o.status === 'shipped'
+        ? `<button class="btn btn-sm btn-primary" onclick="driverMarkStatus('${o.id}','delivered')"><i class="business-icon icon-inline" data-lucide="circle-check" aria-hidden="true"></i> Mark Delivered</button>`
+        : '');
+    return `<tr>
+      <td><strong>${o.order_ref_no || String(o.id).slice(0,8)}</strong></td>
+      <td>${escapeHtmlSafe(o.customer_name_snapshot || o.customer_address_snapshot || '-')}</td>
+      <td>${escapeHtmlSafe(addr || '-')}</td>
+      <td>${getStatusBadge(o.status)}</td>
+      <td>
+        ${addr ? `<a href="${mapsUrl}" target="_blank" rel="noopener" class="btn btn-sm" style="margin-right:6px;"><i class="business-icon icon-inline" data-lucide="map-pin" aria-hidden="true"></i> Navigate</a>` : ''}
+        ${nextBtn}
+      </td>
+    </tr>`;
+  }).join('');
+  if (window.lucide) lucide.createIcons({ attrs: { 'stroke-width': 1.9, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' } });
+}
+
+async function driverMarkStatus(orderId, newStatus) {
+  if (userRole !== 'driver') return;
+  try {
+    const { error } = await supabase.from('orders')
+      .update({ status: newStatus })
+      .eq('id', orderId).eq('assigned_driver_id', currentUser.id);
+    if (error) throw error;
+    const o = myDeliveries.find(x => String(x.id) === String(orderId));
+    if (o) o.status = newStatus;
+    renderMyDeliveries();
+    updateStatus(newStatus === 'delivered' ? '✅ Marked delivered' : '🚚 Delivery started');
+  } catch (e) {
+    console.error('Driver status update error:', e);
+    alert('❌ Could not update delivery status: ' + e.message);
+  }
+}
+window.driverMarkStatus = driverMarkStatus;
+
+let driverDeliveriesChannel = null;
+function startDriverDeliveriesRealtime() {
+  if (!currentUser || userRole !== 'driver' || driverDeliveriesChannel) return;
+  driverDeliveriesChannel = supabase
+    .channel('driver-deliveries-' + currentUser.id)
+    .on('postgres_changes', {
+      event: '*', schema: 'public', table: 'orders', filter: `assigned_driver_id=eq.${currentUser.id}`
+    }, () => { loadMyDeliveries(); })
+    .subscribe();
+}
+
+// ==================== LIVE DRIVER LOCATION TRACKING ====================
+// Free stack: OpenStreetMap tiles + Leaflet.js (no API key), Supabase Realtime for live pins.
+
+// ---- Owner side: live map of all sharing drivers ----
+let ownerDriverMap = null;
+let ownerDriverMarkers = {};
+let ownerDriverLocationsChannel = null;
+
+function initOwnerDriverMap() {
+  if (ownerDriverMap || userRole !== 'owner') return;
+  const el = document.getElementById('ownerDriverMap');
+  if (!el || typeof L === 'undefined') return;
+  ownerDriverMap = L.map(el).setView([7.8731, 80.7718], 8); // default: Sri Lanka
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap contributors'
+  }).addTo(ownerDriverMap);
+  setTimeout(() => ownerDriverMap && ownerDriverMap.invalidateSize(), 200);
+  startOwnerDriverLocationsRealtime();
+}
+
+async function loadDriverLocations() {
+  if (userRole !== 'owner' || !currentUser) return;
+  try {
+    const { data, error } = await supabase.from('driver_locations').select('*').eq('owner_id', currentUser.id);
+    if (error) throw error;
+    renderOwnerDriverMarkers(data || []);
+  } catch (e) {
+    console.error('Load driver locations error:', e);
+  }
+}
+
+function renderOwnerDriverMarkers(rows) {
+  if (!ownerDriverMap) return;
+  const seen = new Set();
+  (rows || []).forEach(r => {
+    if (r.latitude == null || r.longitude == null) return;
+    seen.add(String(r.driver_id));
+    const driver = driverListCache.find(d => String(d.id) === String(r.driver_id));
+    const label = (driver && driver.display_name) || 'Driver';
+    const popupHtml = `${escapeHtmlSafe(label)}<br><small>Updated ${new Date(r.updated_at).toLocaleTimeString()}</small>`;
+    if (ownerDriverMarkers[r.driver_id]) {
+      ownerDriverMarkers[r.driver_id].setLatLng([r.latitude, r.longitude]).setPopupContent(popupHtml);
+    } else {
+      ownerDriverMarkers[r.driver_id] = L.marker([r.latitude, r.longitude]).addTo(ownerDriverMap).bindPopup(popupHtml);
+    }
+  });
+  Object.keys(ownerDriverMarkers).forEach(id => {
+    if (!seen.has(id)) { ownerDriverMap.removeLayer(ownerDriverMarkers[id]); delete ownerDriverMarkers[id]; }
+  });
+  const countEl = $('liveMapDriverCount');
+  if (countEl) countEl.textContent = seen.size ? `(${seen.size} online)` : '(no drivers sharing right now)';
+  const markers = Object.values(ownerDriverMarkers);
+  if (markers.length) {
+    const group = L.featureGroup(markers);
+    try { ownerDriverMap.fitBounds(group.getBounds().pad(0.3), { maxZoom: 14 }); } catch (e) {}
+  }
+}
+
+function startOwnerDriverLocationsRealtime() {
+  if (!currentUser || userRole !== 'owner' || ownerDriverLocationsChannel) return;
+  ownerDriverLocationsChannel = supabase
+    .channel('owner-driver-locations-' + currentUser.id)
+    .on('postgres_changes', {
+      event: '*', schema: 'public', table: 'driver_locations', filter: `owner_id=eq.${currentUser.id}`
+    }, () => { loadDriverLocations(); })
+    .subscribe();
+}
+
+// ---- Driver side: opt-in location sharing ----
+let driverLocationWatchId = null;
+let driverLocationSharing = false;
+let driverLocationLastSent = 0;
+
+function toggleDriverLocationSharing() {
+  if (userRole !== 'driver') return;
+  if (driverLocationSharing) stopDriverLocationSharing();
+  else startDriverLocationSharing();
+}
+window.toggleDriverLocationSharing = toggleDriverLocationSharing;
+
+function startDriverLocationSharing() {
+  if (!navigator.geolocation) { alert('Location is not supported on this device/browser.'); return; }
+  driverLocationWatchId = navigator.geolocation.watchPosition(
+    (pos) => { driverSendLocation(pos.coords.latitude, pos.coords.longitude); },
+    (err) => {
+      console.error('Geolocation error:', err);
+      alert('⚠️ Could not get your location: ' + err.message);
+      stopDriverLocationSharing();
+    },
+    { enableHighAccuracy: true, maximumAge: 10000, timeout: 20000 }
+  );
+  driverLocationSharing = true;
+  updateDriverLocationUI();
+}
+
+function stopDriverLocationSharing() {
+  if (driverLocationWatchId != null) { navigator.geolocation.clearWatch(driverLocationWatchId); driverLocationWatchId = null; }
+  driverLocationSharing = false;
+  updateDriverLocationUI();
+}
+
+function updateDriverLocationUI() {
+  const btn = $('driverLocationToggleBtn');
+  const status = $('driverLocationStatus');
+  if (btn) {
+    btn.innerHTML = driverLocationSharing
+      ? '<i class="business-icon icon-inline" data-lucide="map-pin-off" aria-hidden="true"></i> Stop Sharing Location'
+      : '<i class="business-icon icon-inline" data-lucide="map-pin" aria-hidden="true"></i> Share My Location';
+    btn.classList.toggle('btn-primary', driverLocationSharing);
+  }
+  if (status) status.textContent = driverLocationSharing
+    ? 'On — the owner can see your live location while you deliver'
+    : 'Off — turn on so the owner can see you on the map while delivering';
+  if (window.lucide) lucide.createIcons({ attrs: { 'stroke-width': 1.9, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' } });
+}
+
+async function driverSendLocation(lat, lng) {
+  const now = Date.now();
+  if (now - driverLocationLastSent < 8000) return; // throttle: ~once per 8s, saves battery & bandwidth
+  driverLocationLastSent = now;
+  try {
+    const { error } = await supabase.from('driver_locations').upsert({
+      driver_id: currentUser.id,
+      owner_id: businessId,
+      latitude: lat,
+      longitude: lng,
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'driver_id' });
+    if (error) throw error;
+  } catch (e) {
+    console.error('Send location error:', e);
+  }
 }
 
 function viewInvoice(index) {
@@ -2901,6 +3183,7 @@ async function logout() {
   stopCommissionRealtime();
   stopAdvanceRealtime();
   stopAppNotifyRealtime();
+  if (typeof stopDriverLocationSharing === 'function') stopDriverLocationSharing();
   await supabase.auth.signOut();
   currentUser = null;
   userProfile = null;
@@ -4387,6 +4670,7 @@ document.querySelectorAll('[data-ribbon="true"]').forEach(btn => {
 
 const OWNER_ONLY_TABS = ['dashboard', 'my-staff', 'calculator', 'production', 'history', 'data', 'monthly-summary', 'income', 'analytics'];
 const STAFF_ONLY_TABS = ['staff-home', 'daily-pay', 'work-update', 'attendance', 'advance', 'my-commission', 'my-tasks', 'announcements'];
+const DRIVER_ONLY_TABS = ['my-deliveries'];
 
 let staffWorkspaceLoadSeq = 0;
 async function refreshStaffWorkspaceData(tabId){
@@ -4419,12 +4703,20 @@ function activateAppTab(tabId){
     alert('🔒 Staff access: use your staff workspace and assigned business sections.');
     return;
   }
+  if (userRole === 'driver' && !DRIVER_ALLOWED_TABS.includes(tabId)) {
+    alert('🔒 Driver access: use your delivery list and profile.');
+    return;
+  }
   if (OWNER_ONLY_TABS.includes(tabId) && userRole === 'staff') {
     alert('🔒 This section is only available to the business owner.');
     return;
   }
   if (STAFF_ONLY_TABS.includes(tabId) && userRole === 'owner') {
     alert('🔒 This section is only available to staff accounts.');
+    return;
+  }
+  if (DRIVER_ONLY_TABS.includes(tabId) && userRole !== 'driver') {
+    alert('🔒 This section is only available to driver accounts.');
     return;
   }
   const panel = document.getElementById(tabId);
@@ -4442,7 +4734,8 @@ function activateAppTab(tabId){
   if (tabId === 'analytics') { renderAnalytics(); }
   if (tabId === 'history') renderHistory();
   if (tabId === 'production') calcProduction();
-  if (tabId === 'orders') { loadCommissionClaims().finally(() => { renderOrders(); renderCustomers(); renderDelivery(); updateOrderStats(); }); }
+  if (tabId === 'orders') { loadCommissionClaims().finally(() => { renderOrders(); renderCustomers(); renderDelivery(); updateOrderStats(); }); if (userRole === 'owner') { loadStaffList(); initOwnerDriverMap(); loadDriverLocations(); } }
+  if (tabId === 'my-deliveries') { loadMyDeliveries(); }
   if (tabId === 'my-staff') { refreshMyStaffPage(); loadMyStaffOwnerData(); }
   if (tabId === 'expenses') { renderExpenses(); renderRecurringExpenses(); }
   if (tabId === 'my-salary') {

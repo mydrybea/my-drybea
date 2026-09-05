@@ -62,6 +62,8 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://unpkg.com/lucide@latest"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 
 
 <link rel="stylesheet" href="style.css">
@@ -147,6 +149,7 @@
     <button class="tab-btn active" data-tab="dashboard" role="tab" aria-label="Home" data-owner-only><i class="business-icon" data-lucide="house" aria-hidden="true"></i><span>Home</span></button>
     <button class="tab-btn" data-tab="my-staff" role="tab" aria-label="My Staff" data-owner-only><i class="business-icon" data-lucide="users-round" aria-hidden="true"></i><span>My Staff</span><span id="myStaffAdvanceBadge" class="nav-badge" style="display:none;">0</span></button>
     <button class="tab-btn" data-tab="staff-home" role="tab" aria-label="Staff Home" data-staff-only><i class="business-icon" data-lucide="layout-dashboard" aria-hidden="true"></i><span>Staff Home</span></button>
+    <button class="tab-btn" data-tab="my-deliveries" role="tab" aria-label="My Deliveries" data-driver-only><i class="business-icon" data-lucide="truck" aria-hidden="true"></i><span>My Deliveries</span></button>
     <button class="tab-btn" data-tab="my-salary" role="tab" aria-label="My Salary" data-staff-only><i class="business-icon" data-lucide="wallet-cards" aria-hidden="true"></i><span>My Salary</span></button>
     <button class="tab-btn" data-tab="orders" role="tab" aria-label="Orders"><i class="business-icon" data-lucide="shopping-bag" aria-hidden="true"></i><span>Orders</span></button>
     <button class="tab-btn" data-tab="income" role="tab" aria-label="Income" data-owner-only><i class="business-icon" data-lucide="trending-up" aria-hidden="true"></i><span>Income</span></button>
@@ -703,8 +706,15 @@
         <label>Display Name</label>
         <input type="text" id="staffName" placeholder="e.g. Kamal (Delivery)">
       </div>
+      <div class="field">
+        <label>Role</label>
+        <select id="staffRoleSelect">
+          <option value="staff">Staff (Orders, Customers, Expenses)</option>
+          <option value="driver">Driver (Delivery list only)</option>
+        </select>
+      </div>
       <div class="btn-row">
-        <button class="btn btn-primary" onclick="addStaffMember()"><i class="business-icon icon-inline" data-lucide="user-plus" aria-hidden="true"></i> Add Staff</button>
+        <button class="btn btn-primary" onclick="addStaffMember()"><i class="business-icon icon-inline" data-lucide="user-plus" aria-hidden="true"></i> Add</button>
       </div>
       <div class="table-wrap" style="margin-top:14px;">
         <table>
@@ -1232,6 +1242,26 @@
   </section>
 
   <!-- ============ ORDERS TAB ============ -->
+  <!-- ============ MY DELIVERIES TAB (driver-only) ============ -->
+  <section id="my-deliveries" class="tab-panel" style="display:none;" role="tabpanel">
+    <div class="card">
+      <h2><span class="pro-title-icon orange" aria-hidden="true"><i class="business-icon" data-lucide="truck" aria-hidden="true"></i></span><span>My Deliveries</span></h2>
+      <p class="pro-subtitle orange">Orders assigned to you. Tap Navigate for directions, then update status as you go.</p>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;padding:10px 14px;border-radius:10px;background:#f5f6f8;">
+        <button id="driverLocationToggleBtn" class="btn btn-sm" onclick="toggleDriverLocationSharing()"><i class="business-icon icon-inline" data-lucide="map-pin" aria-hidden="true"></i> Share My Location</button>
+        <span id="driverLocationStatus" style="font-size:12px;opacity:.6;">Off — turn on so the owner can see you on the map while delivering</span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Order</th><th>Customer</th><th>Address</th><th>Status</th><th>Actions</th></tr>
+          </thead>
+          <tbody id="myDeliveriesBody"><tr><td colspan="5" style="text-align:center;opacity:.5;padding:20px;">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
   <section id="orders" class="tab-panel" style="display:none;" role="tabpanel">
     <div class="stat-grid">
       <div class="stat accent"><div class="k">Total Orders</div><div class="v" id="statTotalOrders">0</div></div>
@@ -1270,10 +1300,14 @@
 
     <div class="card">
       <h2><span class="pro-title-icon orange" aria-hidden="true"><i class="business-icon" data-lucide="shopping-bag" aria-hidden="true"></i></span><span>Delivery</span></h2><p class="pro-subtitle orange">Follow fulfilment without losing the sale.</p>
+      <div data-owner-only style="margin-bottom:16px;">
+        <h3 style="font-size:14px;margin:0 0 8px;display:flex;align-items:center;gap:6px;"><i class="business-icon icon-inline" data-lucide="map" aria-hidden="true"></i> Live Driver Map <span id="liveMapDriverCount" style="font-weight:400;opacity:.55;font-size:12px;"></span></h3>
+        <div id="ownerDriverMap" style="height:320px;border-radius:12px;overflow:hidden;background:#eef1f5;"></div>
+      </div>
       <div class="table-wrap">
         <table>
           <thead>
-            <tr><th>Order ID</th><th>Customer</th><th>Address</th><th>Status</th><th>Update</th></tr>
+            <tr><th>Order ID</th><th>Customer</th><th>Address</th><th>Status</th><th data-owner-only>Driver</th><th>Update</th></tr>
           </thead>
           <tbody id="deliveryBody"></tbody>
         </table>
