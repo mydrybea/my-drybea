@@ -45,6 +45,11 @@ const ORDERS_KEY = 'mydrybea_v34_orders';
 const CUSTOMERS_KEY = 'mydrybea_v34_customers';
 const SNAPSHOTS_KEY = 'mydrybea_v34_snapshots';
 const MAX_SNAPSHOTS = 5;
+// A delivered order counts as "on time" for the Delivery Performance dashboard
+// if it was delivered within this many hours of the driver tapping "Start
+// Delivery" (shipped_at). Purely a reporting threshold — doesn't affect pay,
+// status, or anything else. Adjust here if the business wants a stricter/looser bar.
+const DELIVERY_ONTIME_HOURS = 24;
 // Default pickup point (Drybea Market), used until the owner sets their own via
 // "Change Pickup Location" on the Delivery page. Once set, the owner's choice
 // (stored on their profile as pickup_lat/pickup_lng/pickup_label) always wins,
@@ -1895,10 +1900,15 @@ function dbOrderToLocal(o) {
     codCollected: (o.cod_collected !== undefined && o.cod_collected !== null) ? Number(o.cod_collected) : null,
     deliveryPhotoUrl: o.delivery_photo_url || null,
     deliverySignature: o.delivery_signature || null,
+    shippedAt: o.shipped_at || null,
     deliveredAt: o.delivered_at || null,
     failedReason: o.failed_reason || null,
     failedNotes: o.failed_notes || null,
-    failedAt: o.failed_at || null
+    failedAt: o.failed_at || null,
+    ratingToken: o.rating_token || null,
+    customerRating: (o.customer_rating !== undefined && o.customer_rating !== null) ? Number(o.customer_rating) : null,
+    ratingFeedback: o.rating_feedback || null,
+    ratedAt: o.rated_at || null
   };
 }
 
@@ -2693,14 +2703,112 @@ function renderDeliveryDriverStats() {
 }
 window.renderDeliveryDriverStats = renderDeliveryDriverStats;
 
+// ==================== DELIVERY PERFORMANCE DASHBOARD ====================
+// On-time %, average delivery time, per-driver success rate and a breakdown
+// of why deliveries fail. Pulls from the same `orders` array everything else
+// on this tab already uses — no extra fetch needed.
+function renderDeliveryPerformance() {
+  const onTimeEl = $('perfOnTimePct');
+  const avgTimeEl = $('perfAvgTime');
+  const successEl = $('perfSuccessRate');
+  const ratingEl = $('perfAvgRating');
+  const driverBody = $('perfDriverBody');
+  const reasonsCanvas = $('perfFailedReasonsChart');
+  const reasonsNote = $('perfFailedReasonsNote');
+  if (!onTimeEl && !driverBody && !reasonsCanvas) return; // panel not on this page
+
+  const live = (orders || []).filter(o => o.status !== 'cancelled');
+  const delivered = live.filter(o => o.status === 'delivered');
+  const failed = live.filter(o => o.status === 'failed');
+  const attempts = delivered.length + failed.length;
+
+  // On-time % + average delivery time — only orders with BOTH a shipped_at and
+  // delivered_at timestamp can be judged (older orders predating this feature won't have shipped_at).
+  const timed = delivered.filter(o => o.shippedAt && o.deliveredAt);
+  const durationsMs = timed.map(o => new Date(o.deliveredAt) - new Date(o.shippedAt)).filter(ms => ms >= 0);
+  const onTimeCount = durationsMs.filter(ms => ms <= DELIVERY_ONTIME_HOURS * 3600 * 1000).length;
+  const onTimePct = durationsMs.length ? Math.round((onTimeCount / durationsMs.length) * 100) : null;
+  const avgMs = durationsMs.length ? durationsMs.reduce((a, b) => a + b, 0) / durationsMs.length : null;
+
+  const successPct = attempts ? Math.round((delivered.length / attempts) * 100) : null;
+  const rated = delivered.filter(o => o.customerRating);
+  const avgRating = rated.length ? (rated.reduce((s, o) => s + o.customerRating, 0) / rated.length) : null;
+
+  if (onTimeEl) onTimeEl.textContent = onTimePct != null ? `${onTimePct}%` : '—';
+  if (avgTimeEl) avgTimeEl.textContent = avgMs != null ? formatDurationShort(avgMs) : '—';
+  if (successEl) successEl.textContent = attempts ? `${successPct}% (${delivered.length}/${attempts})` : '—';
+  if (ratingEl) ratingEl.textContent = avgRating != null ? `⭐ ${avgRating.toFixed(1)} (${rated.length})` : '—';
+
+  // ---- Driver-wise success rate ----
+  if (driverBody) {
+    if (!driverListCache.length) {
+      driverBody.innerHTML = '<tr><td colspan="4" style="text-align:center;opacity:.5;padding:14px;">No drivers added yet.</td></tr>';
+    } else {
+      driverBody.innerHTML = driverListCache.map(d => {
+        const mineDelivered = delivered.filter(o => String(o.assignedDriverId || '') === String(d.id)).length;
+        const mineFailed = failed.filter(o => String(o.assignedDriverId || '') === String(d.id)).length;
+        const mineAttempts = mineDelivered + mineFailed;
+        const pct = mineAttempts ? Math.round((mineDelivered / mineAttempts) * 100) : null;
+        return `<tr>
+          <td>${escapeHtmlSafe(d.display_name || d.id.slice(0, 8))}</td>
+          <td>${mineDelivered}</td>
+          <td>${mineFailed}</td>
+          <td>${pct != null ? pct + '%' : '—'}</td>
+        </tr>`;
+      }).join('');
+    }
+  }
+
+  // ---- Failed-delivery reasons breakdown (bar chart) ----
+  if (reasonsCanvas) {
+    const reasonCounts = {};
+    failed.forEach(o => {
+      const r = o.failedReason || 'Unspecified';
+      reasonCounts[r] = (reasonCounts[r] || 0) + 1;
+    });
+    const labels = Object.keys(reasonCounts);
+    const colors = getChartColors();
+    const data = {
+      labels: labels.length ? labels : ['No failed deliveries'],
+      datasets: [{
+        label: 'Failed deliveries',
+        data: labels.length ? labels.map(l => reasonCounts[l]) : [0],
+        backgroundColor: '#f87171', borderRadius: 6
+      }]
+    };
+    const opts = {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: colors.text }, grid: { display: false } },
+        y: { beginAtZero: true, ticks: { color: colors.text, precision: 0 }, grid: { color: colors.grid } }
+      }
+    };
+    if (perfFailedReasonsChart) { perfFailedReasonsChart.data = data; perfFailedReasonsChart.options = opts; perfFailedReasonsChart.update(); }
+    else perfFailedReasonsChart = new Chart(reasonsCanvas.getContext('2d'), { type: 'bar', data, options: opts });
+    if (reasonsNote) reasonsNote.textContent = failed.length ? `${failed.length} failed deliveries recorded.` : 'No failed deliveries recorded yet — great!';
+  }
+}
+window.renderDeliveryPerformance = renderDeliveryPerformance;
+
+// Formats a millisecond duration as "Xh Ym" (or "Ym" if under an hour) for the
+// Delivery Performance dashboard's "Avg Delivery Time" stat.
+function formatDurationShort(ms) {
+  const totalMin = Math.round(ms / 60000);
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
 function renderDelivery() {
   const tbody = $('deliveryBody');
-  if (!tbody) { renderDeliveryStats(); return; }
+  if (!tbody) { renderDeliveryStats(); renderDeliveryPerformance(); return; }
   const activeOrders = orders.filter(o => o.status !== 'cancelled');
   if (activeOrders.length === 0) {
     tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;opacity:0.5;padding:20px;">No active deliveries.</td></tr>';
     renderDeliveryStats();
     renderDeliveryDriverStats();
+    renderDeliveryPerformance();
     return;
   }
   const orderIndexById = new Map(orders.map((o, i) => [String(o.id), i]));
@@ -2733,6 +2841,7 @@ function renderDelivery() {
   if (window.lucide) lucide.createIcons({ attrs: { 'stroke-width': 1.9, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' } });
   renderDeliveryStats();
   renderDeliveryDriverStats();
+  renderDeliveryPerformance();
 }
 
 async function assignDriver(orderId, driverId) {
@@ -2859,6 +2968,11 @@ function renderMyDeliveries() {
     const setPinBtn = isActiveRow
       ? `<button class="btn btn-sm" onclick="openSetPinModal('${o.id}')" style="margin-right:6px;" title="Drop an exact map pin for this address"><i class="business-icon icon-inline" data-lucide="map-pinned" aria-hidden="true"></i> ${hasPin ? 'Edit Pin' : 'Set Pin'}</button>`
       : '';
+    const ratingCell = o.status === 'delivered'
+      ? (o.customer_rating
+          ? `<br><small style="opacity:.7;">⭐ Rated ${o.customer_rating}/5${o.rating_feedback ? ' — '+escapeHtmlSafe(o.rating_feedback) : ''}</small>`
+          : (o.rating_token ? `<button class="btn btn-sm" onclick="shareDeliveryRatingLink('${o.id}')" title="WhatsApp the customer a link to rate this delivery"><i class="business-icon icon-inline" data-lucide="star" aria-hidden="true"></i> Send Rating Link</button>` : ''))
+      : '';
     return `<tr>
       <td>${stopBadge}</td>
       <td><strong>${o.order_ref_no || String(o.id).slice(0,8)}</strong></td>
@@ -2869,11 +2983,32 @@ function renderMyDeliveries() {
         ${addr ? `<a href="${mapsUrl}" target="_blank" rel="noopener" class="btn btn-sm" style="margin-right:6px;"><i class="business-icon icon-inline" data-lucide="map-pin" aria-hidden="true"></i> Navigate</a>` : ''}
         ${setPinBtn}
         ${nextBtn}
+        ${ratingCell}
       </td>
     </tr>`;
   }).join('');
   if (window.lucide) lucide.createIcons({ attrs: { 'stroke-width': 1.9, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' } });
 }
+
+// Opens a pre-filled WhatsApp message to the customer with their personal
+// "rate this delivery" link (no login needed on their end — see
+// initPublicRatingPage, wired up on ?rate=&rt= at the top of DOMContentLoaded).
+function shareDeliveryRatingLink(orderId) {
+  const o = (myDeliveries || []).find(x => String(x.id) === String(orderId))
+    || (typeof orders !== 'undefined' ? orders.find(x => String(x.id) === String(orderId)) : null);
+  if (!o) return;
+  const token = o.rating_token || o.ratingToken;
+  if (!token) { alert('⭐ Rating link isn\'t ready for this delivery yet — try again in a moment.'); return; }
+  const phone = o.customer_phone_snapshot || o.customerPhone || '';
+  const name = o.customer_name_snapshot || o.customerName || 'Customer';
+  const base = window.location.origin + window.location.pathname;
+  const link = `${base}?rate=${encodeURIComponent(orderId)}&rt=${encodeURIComponent(token)}`;
+  const msg = `Hi ${name}! 🙏 Thanks for your order — could you take 10 seconds to rate your delivery?\n${link}`;
+  const digits = String(phone).replace(/\D/g, '');
+  const waLink = digits ? ('https://wa.me/' + digits + '?text=' + encodeURIComponent(msg)) : ('https://wa.me/?text=' + encodeURIComponent(msg));
+  window.open(waLink, '_blank');
+}
+window.shareDeliveryRatingLink = shareDeliveryRatingLink;
 
 // ==================== AUTO DISTANCE (GPS-based km) ====================
 // Replaces manual km entry for the driver: while a delivery is "shipped", GPS
@@ -3148,12 +3283,16 @@ function updateLiveTripKmUI() {
 async function driverMarkStatus(orderId, newStatus) {
   if (userRole !== 'driver') return;
   try {
+    const update = { status: newStatus };
+    // Stamp the moment the trip actually starts — this is what the owner's
+    // Delivery Performance dashboard uses for on-time % and average delivery time.
+    if (newStatus === 'shipped') update.shipped_at = new Date().toISOString();
     const { error } = await supabase.from('orders')
-      .update({ status: newStatus })
+      .update(update)
       .eq('id', orderId).eq('assigned_driver_id', currentUser.id);
     if (error) throw error;
     const o = myDeliveries.find(x => String(x.id) === String(orderId));
-    if (o) o.status = newStatus;
+    if (o) Object.assign(o, update);
     if (newStatus === 'shipped') {
       // FIX: previously this reused whatever driverLastCoords happened to be —
       // which could be several minutes old, left over from a PREVIOUS delivery,
@@ -3183,7 +3322,7 @@ async function driverMarkStatus(orderId, newStatus) {
     updateStatus(newStatus === 'delivered' ? '✅ Marked delivered' : '🚚 Delivery started — auto-tracking distance');
   } catch (e) {
     console.error('Driver status update error:', e);
-    alert('❌ Could not update delivery status: ' + e.message);
+    alert('❌ Could not update delivery status: ' + e.message + '\n\nMake sure the "shipped_at" column exists on the orders table (see setup notes).');
   }
 }
 window.driverMarkStatus = driverMarkStatus;
@@ -3253,6 +3392,14 @@ function openDeliverModal(orderId) {
 }
 window.openDeliverModal = openDeliverModal;
 
+// Short random token used in the public rating link (?rate=orderId&rt=token).
+// Doesn't need to be a full UUID — just unguessable enough that a stranger
+// can't rate someone else's delivery by trying random order ids.
+function genRatingToken() {
+  if (window.crypto && window.crypto.randomUUID) return window.crypto.randomUUID().replace(/-/g, '');
+  return Array.from({ length: 24 }, () => Math.floor(Math.random() * 36).toString(36)).join('');
+}
+
 async function confirmDelivery() {
   if (userRole !== 'driver' || !deliverModalOrderId) return;
   if (!deliverPhotoFile) { alert('📷 A delivery photo is required before you can confirm.'); return; }
@@ -3279,7 +3426,8 @@ async function confirmDelivery() {
       delivery_photo_url: photoUrl,
       delivery_signature: signatureData,
       cod_collected: codCollected,
-      delivered_at: new Date().toISOString()
+      delivered_at: new Date().toISOString(),
+      rating_token: o.rating_token || genRatingToken() // lets us send a "rate your delivery" link afterwards
     };
     // Auto-distance: if this order's trip was being GPS-tracked, lock in the final figure.
     if (activeTrip && String(activeTrip.orderId) === String(o.id)) {
@@ -3295,7 +3443,7 @@ async function confirmDelivery() {
     updateStatus('✅ Delivery confirmed with proof' + (isCod ? ` • Rs. ${codCollected.toLocaleString()} collected` : ''));
   } catch (e) {
     console.error('Confirm delivery error:', e);
-    alert('❌ Could not confirm delivery: ' + e.message + '\n\nMake sure the delivery-proofs storage bucket and the delivery_photo_url / delivery_signature / cod_collected / delivered_at columns exist (see setup notes).');
+    alert('❌ Could not confirm delivery: ' + e.message + '\n\nMake sure the delivery-proofs storage bucket and the delivery_photo_url / delivery_signature / cod_collected / delivered_at / rating_token columns exist (see setup notes).');
   } finally {
     if (btn) { btn.disabled = false; btn.innerHTML = '<i class="business-icon icon-inline" data-lucide="circle-check" aria-hidden="true"></i> Confirm Delivered'; if (window.lucide) lucide.createIcons({ attrs: { 'stroke-width': 1.9, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' } }); }
   }
@@ -3484,6 +3632,43 @@ function initOwnerDriverMap() {
   // opens, not just the first time.
   setTimeout(() => ownerDriverMap && ownerDriverMap.invalidateSize(), 150);
 }
+
+// ==================== DELIVERY HEATMAP ====================
+// Plots every geocoded delivery address (from Route Optimizer or a driver's
+// manual pin-drop) as a density heatmap, so the owner can see which areas
+// generate the most orders — useful for driver allocation and zone pricing.
+let deliveryHeatmapMap = null, deliveryHeatmapLayer = null;
+
+function initDeliveryHeatmap() {
+  if (userRole !== 'owner') return;
+  const el = document.getElementById('deliveryHeatmapMap');
+  const note = $('deliveryHeatmapNote');
+  if (!el || typeof L === 'undefined' || typeof L.heatLayer !== 'function') return;
+  const pickup = getPickupLocation();
+  if (!deliveryHeatmapMap) {
+    deliveryHeatmapMap = L.map(el).setView([pickup.lat, pickup.lng], 11);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(deliveryHeatmapMap);
+  }
+  setTimeout(() => deliveryHeatmapMap && deliveryHeatmapMap.invalidateSize(), 150);
+
+  const points = (orders || [])
+    .filter(o => o.status !== 'cancelled' && o.deliveryLat != null && o.deliveryLng != null)
+    .map(o => [o.deliveryLat, o.deliveryLng, 1]);
+
+  if (deliveryHeatmapLayer) { deliveryHeatmapMap.removeLayer(deliveryHeatmapLayer); deliveryHeatmapLayer = null; }
+  if (points.length) {
+    deliveryHeatmapLayer = L.heatLayer(points, { radius: 28, blur: 20, maxZoom: 15 }).addTo(deliveryHeatmapMap);
+  }
+  if (note) {
+    note.textContent = points.length
+      ? `Showing ${points.length} geocoded delivery location${points.length === 1 ? '' : 's'}.`
+      : 'No geocoded delivery locations yet — coordinates are captured when a driver runs "Optimize Route" or drops a pin on an address.';
+  }
+}
+window.initDeliveryHeatmap = initDeliveryHeatmap;
 
 function startDriverLocationPolling() {
   if (driverLocationPollTimer || userRole !== 'owner') return;
@@ -4559,7 +4744,7 @@ function updateMonthlySummary() {
 }
 
 // ==================== ANALYTICS ====================
-let trendChart = null, orderStatusChart = null, productMixChart = null, expenseCatChart = null, profitBySizeChart = null;
+let trendChart = null, orderStatusChart = null, productMixChart = null, expenseCatChart = null, profitBySizeChart = null, perfFailedReasonsChart = null;
 
 function analyticsMonthKey(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); }
 function analyticsMonthLabel(d) { return d.toLocaleDateString(undefined, { month: 'short', year: '2-digit' }); }
@@ -5788,6 +5973,7 @@ function activateAppTab(tabId){
     loadOrdersFromCloud().then(() => { renderDelivery(); updateOrderStats(); });
     loadStaffList();
     initOwnerDriverMap();
+    initDeliveryHeatmap();
     loadDriverLocations();
     startDriverLocationPolling();
     renderDelPayPreview();
@@ -5852,8 +6038,72 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
   btn.addEventListener('click', (ev) => { ev.preventDefault(); activateAppTab(btn.dataset.tab); });
 });
 
+// ==================== PUBLIC DELIVERY RATING PAGE ====================
+// Reached via the "rate your delivery" WhatsApp link (?rate=<orderId>&rt=<token>).
+// The customer never logs in — the token proves which delivery is theirs, and
+// the actual write happens through the submit_delivery_rating() Postgres
+// function (SECURITY DEFINER) so the public anon key can't touch anything else.
+function initPublicRatingPage(orderId, token) {
+  // Hide the entire app shell and show only the rating card.
+  Array.from(document.body.children).forEach(el => {
+    if (el.id !== 'publicRatingScreen') el.style.display = 'none';
+  });
+  const screen = document.getElementById('publicRatingScreen');
+  if (!screen) return;
+  screen.style.display = 'flex';
+
+  let selected = 0;
+  const stars = Array.from(screen.querySelectorAll('.rating-star'));
+  const submitBtn = document.getElementById('ratingSubmitBtn');
+  const feedbackEl = document.getElementById('ratingFeedback');
+  const cardEl = screen.querySelector('.rating-card');
+
+  stars.forEach(star => {
+    star.addEventListener('click', () => {
+      selected = Number(star.dataset.val);
+      stars.forEach(s => { s.textContent = Number(s.dataset.val) <= selected ? '★' : '☆'; });
+    });
+  });
+
+  if (submitBtn) {
+    submitBtn.addEventListener('click', async () => {
+      if (!selected) { alert('Please tap a star to rate your delivery.'); return; }
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Submitting…';
+      try {
+        const { data, error } = await supabase.rpc('submit_delivery_rating', {
+          p_order_id: orderId,
+          p_token: token,
+          p_rating: selected,
+          p_feedback: (feedbackEl && feedbackEl.value.trim()) || ''
+        });
+        if (error) throw error;
+        if (cardEl) {
+          cardEl.innerHTML = data
+            ? '<div style="font-size:40px;">🙏</div><h2 style="margin:10px 0 4px;">Thank you!</h2><p style="opacity:.7;margin:0;">Your feedback helps us improve delivery.</p>'
+            : '<div style="font-size:40px;">✅</div><h2 style="margin:10px 0 4px;">Already rated</h2><p style="opacity:.7;margin:0;">This delivery has already been rated — thank you!</p>';
+        }
+      } catch (e) {
+        console.error('Submit rating error:', e);
+        alert('Could not submit your rating: ' + e.message);
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Submit Rating';
+      }
+    });
+  }
+}
+
 // ==================== INIT ====================
 document.addEventListener('DOMContentLoaded', async () => {
+  // ---- PUBLIC RATING LINK: bypasses login entirely ----
+  const __ratingParams = new URLSearchParams(window.location.search);
+  const __rateOrderId = __ratingParams.get('rate');
+  const __rateToken = __ratingParams.get('rt');
+  if (__rateOrderId && __rateToken) {
+    initPublicRatingPage(__rateOrderId, __rateToken);
+    return;
+  }
+
   // ---- AUTHORITATIVE SUPABASE AUTH GATE ----
   const { data: { session } } = await supabase.auth.getSession();
   const email = session && session.user && session.user.email ? session.user.email.toLowerCase() : null;

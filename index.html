@@ -64,6 +64,7 @@
 <script src="https://unpkg.com/lucide@latest"></script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
 
 
 <link rel="stylesheet" href="style.css">
@@ -689,6 +690,38 @@
       <div id="ownerDriverMap" style="height:360px;border-radius:12px;overflow:hidden;background:#eef1f5;margin-top:10px;"></div>
       <div style="margin-top:8px;font-size:12px;opacity:.65;" id="liveMapDriverCount">Loading driver locations…</div>
       <div style="margin-top:4px;font-size:11px;opacity:.55;">🟠 Pickup point (fixed) · dashed line = that driver's planned pickup → drop-off direction, shown while they're online</div>
+    </div>
+
+    <div class="card" style="margin-top:16px;">
+      <h2><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="gauge" aria-hidden="true"></i></span><span>Delivery Performance</span></h2>
+      <p class="pro-subtitle green">On-time rate, delivery speed and failure patterns across your fleet.</p>
+      <div class="stat-grid">
+        <div class="stat accent"><div class="k">On-Time Rate</div><div class="v" id="perfOnTimePct">—</div></div>
+        <div class="stat"><div class="k">Avg Delivery Time</div><div class="v" id="perfAvgTime">—</div></div>
+        <div class="stat good"><div class="k">Success Rate</div><div class="v" id="perfSuccessRate">—</div></div>
+        <div class="stat"><div class="k">Avg Customer Rating</div><div class="v" id="perfAvgRating">—</div></div>
+      </div>
+      <div class="notice" style="margin-top:10px;">💡 "On-time" = delivered within 24 hours of the driver tapping "Start Delivery". Only deliveries made after this feature was added have the timestamps needed to count.</div>
+
+      <div class="table-wrap" style="margin-top:14px;">
+        <table class="staff-table-compact">
+          <thead><tr><th>Driver</th><th>Delivered</th><th>Failed</th><th>Success Rate</th></tr></thead>
+          <tbody id="perfDriverBody"><tr><td colspan="4" style="text-align:center;opacity:.5;padding:14px;">No data yet.</td></tr></tbody>
+        </table>
+      </div>
+
+      <h2 style="margin-top:18px;"><span class="pro-title-icon orange" aria-hidden="true"><i class="business-icon" data-lucide="chart-no-axes-combined" aria-hidden="true"></i></span><span>Failed-Delivery Reasons</span></h2>
+      <div class="chart-wrap" style="height:260px;"><canvas id="perfFailedReasonsChart"></canvas></div>
+      <div style="font-size:12px;opacity:.6;margin-top:6px;" id="perfFailedReasonsNote"></div>
+    </div>
+
+    <div class="card" style="margin-top:16px;">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;">
+        <div><h2><span class="pro-title-icon purple" aria-hidden="true"><i class="business-icon" data-lucide="flame" aria-hidden="true"></i></span><span>Delivery Heatmap</span></h2><p class="pro-subtitle purple">Where your orders cluster — helps with driver allocation and zone pricing.</p></div>
+        <button class="btn btn-sm" onclick="initDeliveryHeatmap()"><i class="business-icon icon-inline" data-lucide="refresh-cw"></i> Refresh</button>
+      </div>
+      <div id="deliveryHeatmapMap" style="height:360px;border-radius:12px;overflow:hidden;background:#eef1f5;margin-top:10px;"></div>
+      <div style="margin-top:8px;font-size:12px;opacity:.65;" id="deliveryHeatmapNote">Loading delivery locations…</div>
     </div>
 
     <div class="card" style="margin-top:16px;">
@@ -1877,7 +1910,22 @@
   </div>
 </div>
 
-
+<!-- ============ PUBLIC DELIVERY RATING SCREEN (no login) ============
+     Shown instead of the whole app when opened via ?rate=<orderId>&rt=<token>,
+     e.g. the link a driver WhatsApps to the customer after "Mark Delivered".
+     See initPublicRatingPage() in app.js. -->
+<div id="publicRatingScreen" style="display:none;position:fixed;inset:0;z-index:99999;background:#0f172a;align-items:center;justify-content:center;padding:20px;font-family:inherit;">
+  <div class="rating-card" style="background:#fff;border-radius:16px;max-width:380px;width:100%;padding:28px 24px;text-align:center;box-shadow:0 20px 50px rgba(0,0,0,.35);">
+    <div style="font-size:32px;">🚚</div>
+    <h2 style="margin:8px 0 4px;color:#111;">Rate Your Delivery</h2>
+    <p style="opacity:.65;margin:0 0 18px;color:#333;">How was your delivery experience?</p>
+    <div style="font-size:40px;letter-spacing:6px;margin-bottom:14px;">
+      <span class="rating-star" data-val="1" style="cursor:pointer;color:#f59e0b;">☆</span><span class="rating-star" data-val="2" style="cursor:pointer;color:#f59e0b;">☆</span><span class="rating-star" data-val="3" style="cursor:pointer;color:#f59e0b;">☆</span><span class="rating-star" data-val="4" style="cursor:pointer;color:#f59e0b;">☆</span><span class="rating-star" data-val="5" style="cursor:pointer;color:#f59e0b;">☆</span>
+    </div>
+    <textarea id="ratingFeedback" rows="3" placeholder="Anything you'd like to tell us? (optional)" style="width:100%;box-sizing:border-box;border-radius:10px;border:1px solid #ddd;padding:10px;font-family:inherit;font-size:14px;resize:vertical;color:#111;"></textarea>
+    <button id="ratingSubmitBtn" style="margin-top:14px;width:100%;padding:12px;border:none;border-radius:10px;background:#16a34a;color:#fff;font-weight:700;font-size:15px;cursor:pointer;">Submit Rating</button>
+  </div>
+</div>
 
 
 <script src="app.js"></script>
