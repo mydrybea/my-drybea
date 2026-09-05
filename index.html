@@ -237,6 +237,8 @@
       <div class="monthly-stat gold"><div class="ms-icon"><i class="business-icon" data-lucide="receipt" aria-hidden="true"></i></div><div class="ms-label">6-Month Expenses</div><div class="ms-value" id="anExpenses6m">Rs. 0</div><div class="ms-sub">All recorded expenses</div></div>
       <div class="monthly-stat blue"><div class="ms-icon"><i class="business-icon" data-lucide="chart-no-axes-combined" aria-hidden="true"></i></div><div class="ms-label">6-Month Profit</div><div class="ms-value" id="anProfit6m">Rs. 0</div><div class="ms-sub">Revenue minus expenses</div></div>
       <div class="monthly-stat red"><div class="ms-icon"><i class="business-icon" data-lucide="star" aria-hidden="true"></i></div><div class="ms-label">Best Month</div><div class="ms-value" id="anBestMonth">—</div><div class="ms-sub" id="anBestMonthSub">—</div></div>
+      <div class="monthly-stat"><div class="ms-icon"><i class="business-icon" data-lucide="sparkles" aria-hidden="true"></i></div><div class="ms-label">Next Month Forecast</div><div class="ms-value" id="anForecastRevenue">Rs. 0</div><div class="ms-sub" id="anForecastProfit">Estimated profit —</div></div>
+      <div class="monthly-stat gold"><div class="ms-icon"><i class="business-icon" data-lucide="user-round-x" aria-hidden="true"></i></div><div class="ms-label">Need Re-engagement</div><div class="ms-value" id="anChurnCount">0</div><div class="ms-sub">Customers inactive 30+ days</div></div>
     </div>
 
     <div class="card">
@@ -271,6 +273,21 @@
           <tr><td colspan="2" style="text-align:center;opacity:.5;">Loading…</td></tr>
         </table>
       </div>
+    </div>
+
+    <div class="card">
+      <h2><span class="pro-title-icon purple" aria-hidden="true"><i class="business-icon" data-lucide="badge-percent" aria-hidden="true"></i></span><span>Profit per Pack Size</span></h2>
+      <p class="pro-subtitle purple">Revenue, estimated cost & profit by product size, all-time.</p>
+      <div class="chart-wrap"><canvas id="profitBySizeChart"></canvas></div>
+      <div class="monthly-summary-note" id="profitBySizeNote">Cost is estimated using the current fish prices &amp; mix ratio set in the Costing tab — actual historical cost may vary.</div>
+    </div>
+
+    <div class="card">
+      <h2><span class="pro-title-icon orange" aria-hidden="true"><i class="business-icon" data-lucide="user-round-x" aria-hidden="true"></i></span><span>Customers to Re-engage</span></h2>
+      <p class="pro-subtitle orange">Past customers who haven't ordered in 30+ days.</p>
+      <table class="monthly-summary-table" id="churnTable">
+        <tr><td colspan="3" style="text-align:center;opacity:.5;">Loading…</td></tr>
+      </table>
     </div>
   </section>
 

@@ -2992,6 +2992,7 @@ function toggleTheme() {
   if (orderStatusChart) { orderStatusChart.destroy(); orderStatusChart = null; }
   if (productMixChart) { productMixChart.destroy(); productMixChart = null; }
   if (expenseCatChart) { expenseCatChart.destroy(); expenseCatChart = null; }
+  if (profitBySizeChart) { profitBySizeChart.destroy(); profitBySizeChart = null; }
   onDataChange();
 }
 
@@ -3174,7 +3175,7 @@ function updateMonthlySummary() {
 }
 
 // ==================== ANALYTICS ====================
-let trendChart = null, orderStatusChart = null, productMixChart = null, expenseCatChart = null;
+let trendChart = null, orderStatusChart = null, productMixChart = null, expenseCatChart = null, profitBySizeChart = null;
 
 function analyticsMonthKey(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); }
 function analyticsMonthLabel(d) { return d.toLocaleDateString(undefined, { month: 'short', year: '2-digit' }); }
@@ -3220,15 +3221,40 @@ function renderAnalytics() {
   set('anBestMonth', labels[bestIdx] || '—');
   set('anBestMonthSub', profitData.some(p => p !== 0) ? `Profit ${fmt(profitData[bestIdx])}` : 'No data yet');
 
-  // ---- Revenue vs Expenses vs Profit trend (line) ----
+  // ---- Simple forecast: linear regression over the 6 monthly points ----
+  function linearForecast(values) {
+    const n = values.length;
+    const xs = values.map((_, i) => i);
+    const sumX = xs.reduce((a, b) => a + b, 0);
+    const sumY = values.reduce((a, b) => a + b, 0);
+    const sumXY = xs.reduce((a, x, i) => a + x * values[i], 0);
+    const sumXX = xs.reduce((a, x) => a + x * x, 0);
+    const denom = (n * sumXX - sumX * sumX);
+    const slope = denom !== 0 ? (n * sumXY - sumX * sumY) / denom : 0;
+    const intercept = (sumY - slope * sumX) / n;
+    return Math.max(0, slope * n + intercept); // predict at x = n (next month)
+  }
+  const hasEnoughData = revenueData.some(v => v > 0);
+  const forecastRevenue = hasEnoughData ? linearForecast(revenueData) : 0;
+  const forecastExpenses = hasEnoughData ? linearForecast(expenseData) : 0;
+  const forecastProfit = forecastRevenue - forecastExpenses;
+  set('anForecastRevenue', hasEnoughData ? fmt(forecastRevenue) : '—');
+  set('anForecastProfit', hasEnoughData ? `Estimated profit ${fmt(forecastProfit)}` : 'Not enough data yet');
+
+  // ---- Revenue vs Expenses vs Profit trend (line), with next-month forecast ----
   const trendCanvas = $('trendChart');
   if (trendCanvas) {
+    const forecastLabels = [...labels, hasEnoughData ? 'Next (est.)' : ''];
+    const revForecastLine = [...Array(revenueData.length - 1).fill(null), revenueData[revenueData.length - 1], forecastRevenue];
+    const profitForecastLine = [...Array(profitData.length - 1).fill(null), profitData[profitData.length - 1], forecastProfit];
     const data = {
-      labels,
+      labels: forecastLabels,
       datasets: [
-        { label: 'Revenue', data: revenueData, borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,.12)', tension: .35, fill: true },
-        { label: 'Expenses', data: expenseData, borderColor: '#f87171', backgroundColor: 'rgba(248,113,113,.10)', tension: .35, fill: true },
-        { label: 'Profit', data: profitData, borderColor: '#d4af37', backgroundColor: 'rgba(212,175,55,.10)', tension: .35, fill: true }
+        { label: 'Revenue', data: [...revenueData, null], borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,.12)', tension: .35, fill: true },
+        { label: 'Expenses', data: [...expenseData, null], borderColor: '#f87171', backgroundColor: 'rgba(248,113,113,.10)', tension: .35, fill: true },
+        { label: 'Profit', data: [...profitData, null], borderColor: '#d4af37', backgroundColor: 'rgba(212,175,55,.10)', tension: .35, fill: true },
+        { label: 'Revenue forecast', data: hasEnoughData ? revForecastLine : [], borderColor: '#10b981', borderDash: [6, 4], borderWidth: 2, pointStyle: 'star', backgroundColor: 'transparent', tension: 0, fill: false },
+        { label: 'Profit forecast', data: hasEnoughData ? profitForecastLine : [], borderColor: '#d4af37', borderDash: [6, 4], borderWidth: 2, pointStyle: 'star', backgroundColor: 'transparent', tension: 0, fill: false }
       ]
     };
     const opts = {
@@ -3324,6 +3350,93 @@ function renderAnalytics() {
     tbl.innerHTML = topCustomers.length
       ? topCustomers.map(([name, total]) => `<tr><td>${escapeHtmlSafe(name)}</td><td>${fmt(total)}</td></tr>`).join('')
       : '<tr><td colspan="2" style="text-align:center;opacity:.5;padding:14px;">No orders recorded yet.</td></tr>';
+  }
+
+  // ---- Profit per pack size (all-time) ----
+  // Cost is estimated from the CURRENT costing settings (fish prices & mix
+  // ratio on the Costing tab) applied to every historical order of that
+  // size — actual cost at the time of each order may have differed.
+  const mixForCosting = (typeof getMixPct === 'function') ? getMixPct() : { linna: 1, balaya: 0, kawalam: 0 };
+  const sizeStats = {};
+  Object.keys(PACKS).forEach(k => { sizeStats[k] = { revenue: 0, units: 0 }; });
+  (orders || []).forEach(o => {
+    if (o.status === 'cancelled') return;
+    const key = String(o.product);
+    if (!sizeStats[key]) return;
+    sizeStats[key].revenue += Number(o.total) || 0;
+    sizeStats[key].units += Number(o.qty) || 0;
+  });
+  const sizeLabels = Object.keys(PACKS).map(k => PACKS[k].label);
+  const sizeRevenue = [], sizeCost = [], sizeProfit = [], sizeMargin = [];
+  Object.keys(PACKS).forEach(k => {
+    const stat = sizeStats[k];
+    let unitCost = 0;
+    try {
+      unitCost = calculatePack(k, state.linnaPrice, state.balayaPrice, state.kawalamPrice, mixForCosting, state.mode, state.targetProfit, state.customSp).totalCost;
+    } catch (e) { unitCost = 0; }
+    const cost = unitCost * stat.units;
+    const profit = stat.revenue - cost;
+    sizeRevenue.push(stat.revenue);
+    sizeCost.push(cost);
+    sizeProfit.push(profit);
+    sizeMargin.push(stat.revenue > 0 ? (profit / stat.revenue) * 100 : null);
+  });
+  const profitSizeCanvas = $('profitBySizeChart');
+  if (profitSizeCanvas) {
+    const data = {
+      labels: sizeLabels,
+      datasets: [
+        { label: 'Revenue', data: sizeRevenue, backgroundColor: '#4b9cff', borderRadius: 6 },
+        { label: 'Est. Cost', data: sizeCost, backgroundColor: '#f87171', borderRadius: 6 },
+        { label: 'Est. Profit', data: sizeProfit, backgroundColor: '#10b981', borderRadius: 6 }
+      ]
+    };
+    const opts = {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom', labels: { color: colors.text, boxWidth: 12 } } },
+      scales: { x: { ticks: { color: colors.text }, grid: { display: false } }, y: { ticks: { color: colors.text }, grid: { color: colors.grid } } }
+    };
+    if (profitBySizeChart) { profitBySizeChart.data = data; profitBySizeChart.update(); }
+    else profitBySizeChart = new Chart(profitSizeCanvas.getContext('2d'), { type: 'bar', data, options: opts });
+  }
+  const noteEl = $('profitBySizeNote');
+  if (noteEl) {
+    const withMargin = sizeLabels.map((lbl, i) => ({ lbl, margin: sizeMargin[i] })).filter(x => x.margin !== null);
+    if (withMargin.length) {
+      const best = withMargin.reduce((a, b) => b.margin > a.margin ? b : a);
+      const worst = withMargin.reduce((a, b) => b.margin < a.margin ? b : a);
+      noteEl.textContent = `Best margin: ${best.lbl} (${fmt2(best.margin)}%). Lowest margin: ${worst.lbl} (${fmt2(worst.margin)}%). Cost is estimated using the current fish prices & mix ratio set in the Costing tab — actual historical cost may vary.`;
+    } else {
+      noteEl.textContent = 'Cost is estimated using the current fish prices & mix ratio set in the Costing tab — actual historical cost may vary. No sales recorded yet to estimate margins.';
+    }
+  }
+
+  // ---- Customer churn detection: past customers inactive 30+ days ----
+  const CHURN_DAYS = 30;
+  const customerLastOrder = {};
+  (orders || []).forEach(o => {
+    if (o.status === 'cancelled') return;
+    const d = parseSummaryDate(o.createdAt);
+    if (!d) return;
+    const name = o.customerName || 'Unknown';
+    const existing = customerLastOrder[name];
+    if (!existing || d > existing.date) {
+      customerLastOrder[name] = { date: d, phone: o.customerPhone || '', orderCount: (existing ? existing.orderCount : 0) + 1 };
+    } else if (existing) {
+      existing.orderCount += 1;
+    }
+  });
+  const msPerDay = 1000 * 60 * 60 * 24;
+  const churnList = Object.entries(customerLastOrder)
+    .map(([name, info]) => ({ name, ...info, daysSince: Math.floor((now - info.date) / msPerDay) }))
+    .filter(c => c.daysSince >= CHURN_DAYS)
+    .sort((a, b) => b.daysSince - a.daysSince);
+  set('anChurnCount', String(churnList.length));
+  const churnTbl = $('churnTable');
+  if (churnTbl) {
+    churnTbl.innerHTML = churnList.length
+      ? churnList.slice(0, 10).map(c => `<tr><td>${escapeHtmlSafe(c.name)}</td><td>${c.daysSince} days ago</td><td>${escapeHtmlSafe(c.phone || '-')}</td></tr>`).join('')
+      : '<tr><td colspan="3" style="text-align:center;opacity:.5;padding:14px;">All customers ordered within the last 30 days. 🎉</td></tr>';
   }
 }
 window.renderAnalytics = renderAnalytics;
