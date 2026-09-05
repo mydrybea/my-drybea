@@ -752,6 +752,18 @@
       </div>
     </div>
 
+    <div class="card" data-driver-only-card style="margin-top:16px;display:none;">
+      <h2><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="smartphone" aria-hidden="true"></i></span><span>My WhatsApp Number</span></h2>
+      <p class="pro-subtitle gold">When the owner assigns you a delivery, they can message you here instantly.</p>
+      <div class="field">
+        <label>WhatsApp Number <span class="hint">(with country code, e.g. 94771234567)</span></label>
+        <input type="text" id="driverWhatsapp" placeholder="94762432963">
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="saveDriverWhatsapp()"><i class="business-icon icon-inline" data-lucide="save" aria-hidden="true"></i> Save Number</button>
+      </div>
+    </div>
+
     <div class="card" data-owner-only style="margin-top:16px;">
       <h2><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="hand-coins" aria-hidden="true"></i></span><span>Pending Advance Requests</span></h2>
       <p class="pro-subtitle gold">Approve or reject advance requests from your staff.</p>
@@ -1315,9 +1327,11 @@
     <div class="card">
       <h2><span class="pro-title-icon orange" aria-hidden="true"><i class="business-icon" data-lucide="truck" aria-hidden="true"></i></span><span>My Deliveries</span></h2>
       <p class="pro-subtitle orange">Orders assigned to you. Tap Navigate for directions, then update status as you go.</p>
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;padding:10px 14px;border-radius:10px;background:#f5f6f8;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;padding:10px 14px;border-radius:10px;background:#f5f6f8;flex-wrap:wrap;">
         <button id="driverLocationToggleBtn" class="btn btn-sm" onclick="toggleDriverLocationSharing()"><i class="business-icon icon-inline" data-lucide="map-pin" aria-hidden="true"></i> Share My Location</button>
+        <button id="driverNotifyPermBtn" class="btn btn-sm" onclick="requestDriverNotifyPermission()"><i class="business-icon icon-inline" data-lucide="bell" aria-hidden="true"></i> Enable Delivery Alerts</button>
         <span id="driverLocationStatus" style="font-size:12px;opacity:.6;">Off — turn on so the owner can see you on the map while delivering</span>
+        <span id="liveTripKm" style="font-size:12px;opacity:.6;"></span>
       </div>
       <div class="table-wrap">
         <table>

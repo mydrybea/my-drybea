@@ -96,6 +96,7 @@ async function loadUserProfile() {
   if (userRole === 'driver') {
     await loadMyDeliveries();
     startDriverDeliveriesRealtime();
+    updateDriverNotifyPermUI();
   } else {
     await loadMyStaffData(false);
     startAppNotifyRealtime();
@@ -125,6 +126,11 @@ function applyRoleUI() {
   document.querySelectorAll('[data-driver-only]').forEach(el => {
     const tab = el.getAttribute('data-tab');
     el.style.display = (isDriver && (!tab || DRIVER_ALLOWED_TABS.includes(tab))) ? 'flex' : 'none';
+  });
+
+  // Driver-only block-level cards (not nav buttons, so must not be forced to flex).
+  document.querySelectorAll('[data-driver-only-card]').forEach(el => {
+    el.style.display = isDriver ? '' : 'none';
   });
 
   // Every nav tab button: lock down to exactly the tabs each role may see.
@@ -1261,6 +1267,24 @@ async function saveOwnerWhatsapp() {
     alert('❌ Could not save number: ' + e.message);
   }
 }
+
+async function saveDriverWhatsapp() {
+  if (!currentUser || userRole !== 'driver') return;
+  const num = $('driverWhatsapp').value.trim();
+  try {
+    const { error } = await supabase.from('profiles').update({ whatsapp_number: num || null }).eq('id', currentUser.id);
+    if (error) throw error;
+    if (driverListCache && driverListCache.length) {
+      const me = driverListCache.find(d => String(d.id) === String(currentUser.id));
+      if (me) me.whatsapp_number = num || null;
+    }
+    updateStatus('✅ WhatsApp number saved — the owner can now reach you here');
+  } catch (e) {
+    console.error('Save driver whatsapp error:', e);
+    alert('❌ Could not save number: ' + e.message);
+  }
+}
+window.saveDriverWhatsapp = saveDriverWhatsapp;
 
 async function loadOwnerAdvanceRequests() {
   if (!currentUser || userRole !== 'owner') return;
@@ -2704,6 +2728,7 @@ async function assignDriver(orderId, driverId) {
     if (o) o.assignedDriverId = driverId || null;
     saveOrders();
     renderDeliveryDriverStats();
+    if (driverId && o) notifyDriverOnWhatsApp(driverId, o);
     updateStatus(driverId ? '🚚 Driver assigned' : '🚚 Driver unassigned');
   } catch (e) {
     console.error('Assign driver error:', e);
@@ -2711,6 +2736,21 @@ async function assignDriver(orderId, driverId) {
   }
 }
 window.assignDriver = assignDriver;
+
+// Best-effort WhatsApp "push": opens a pre-filled wa.me link to the driver's own
+// saved number (see the "My WhatsApp Number" card on their Profile tab). If the
+// driver hasn't saved a number yet, this quietly does nothing — the in-app /
+// browser notification (see notifyDriverNewDelivery) still reaches them.
+function notifyDriverOnWhatsApp(driverId, order) {
+  const driver = (driverListCache || []).find(d => String(d.id) === String(driverId));
+  const num = driver && driver.whatsapp_number;
+  if (!num) return;
+  const digits = String(num).replace(/\D/g, '');
+  if (!digits) return;
+  const label = order.orderRefNo || order.id;
+  const msg = `🚚 New delivery assigned!\nOrder: ${label}\nCustomer: ${getCustomerName(order.customerId)}\nAddress: ${order.address || '-'}\nTotal: Rs. ${Number(order.total || 0).toLocaleString()}\n\nOpen the MY DRYBEA app → My Deliveries to see it.`;
+  window.open('https://wa.me/' + digits + '?text=' + encodeURIComponent(msg), '_blank');
+}
 
 async function updateDeliveryKm(orderId, kmValue) {
   if (userRole !== 'owner') return;
@@ -2798,6 +2838,26 @@ function renderMyDeliveries() {
   if (window.lucide) lucide.createIcons({ attrs: { 'stroke-width': 1.9, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' } });
 }
 
+// ==================== AUTO DISTANCE (GPS-based km) ====================
+// Replaces manual km entry for the driver: while a delivery is "shipped", GPS
+// pings (from the location-sharing watch below) are summed into a running
+// trip distance using the haversine formula, with basic noise/jump filtering.
+let activeTrip = null; // { orderId, km, lastCoords }
+
+function haversineKm(lat1, lng1, lat2, lng2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function updateLiveTripKmUI() {
+  const el = $('liveTripKm');
+  if (!el) return;
+  el.textContent = activeTrip ? `📏 Auto-tracking trip: ${activeTrip.km.toFixed(2)} km so far` : '';
+}
+
 async function driverMarkStatus(orderId, newStatus) {
   if (userRole !== 'driver') return;
   try {
@@ -2807,8 +2867,14 @@ async function driverMarkStatus(orderId, newStatus) {
     if (error) throw error;
     const o = myDeliveries.find(x => String(x.id) === String(orderId));
     if (o) o.status = newStatus;
+    if (newStatus === 'shipped') {
+      // Start (or restart, on a retry) auto-distance tracking for this delivery.
+      activeTrip = { orderId, km: 0, lastCoords: driverLastCoords };
+      updateLiveTripKmUI();
+      if (!driverLocationSharing) startDriverLocationSharing(); // needed so GPS pings actually flow in
+    }
     renderMyDeliveries();
-    updateStatus(newStatus === 'delivered' ? '✅ Marked delivered' : '🚚 Delivery started');
+    updateStatus(newStatus === 'delivered' ? '✅ Marked delivered' : '🚚 Delivery started — auto-tracking distance');
   } catch (e) {
     console.error('Driver status update error:', e);
     alert('❌ Could not update delivery status: ' + e.message);
@@ -2909,9 +2975,14 @@ async function confirmDelivery() {
       cod_collected: codCollected,
       delivered_at: new Date().toISOString()
     };
+    // Auto-distance: if this order's trip was being GPS-tracked, lock in the final figure.
+    if (activeTrip && String(activeTrip.orderId) === String(o.id)) {
+      update.delivery_km = Number(activeTrip.km.toFixed(2));
+    }
     const { error } = await supabase.from('orders').update(update).eq('id', o.id).eq('assigned_driver_id', currentUser.id);
     if (error) throw error;
 
+    if (activeTrip && String(activeTrip.orderId) === String(o.id)) { activeTrip = null; updateLiveTripKmUI(); }
     Object.assign(o, update);
     closeModal('deliverConfirmModal');
     renderMyDeliveries();
@@ -3006,8 +3077,59 @@ function startDriverDeliveriesRealtime() {
     .channel('driver-deliveries-' + currentUser.id)
     .on('postgres_changes', {
       event: '*', schema: 'public', table: 'orders', filter: `assigned_driver_id=eq.${currentUser.id}`
-    }, () => { loadMyDeliveries(); })
+    }, (payload) => {
+      const wasAssignedBefore = payload.old && String(payload.old.assigned_driver_id || '') === String(currentUser.id);
+      const isNewAssignment = payload.eventType === 'INSERT' || (payload.eventType === 'UPDATE' && !wasAssignedBefore);
+      if (isNewAssignment && payload.new) notifyDriverNewDelivery(payload.new);
+      loadMyDeliveries();
+    })
     .subscribe();
+}
+
+// In-app toast (always) + native browser notification (if the driver granted
+// permission) whenever a new order lands on this driver's list — the closest
+// thing to a phone push notification this stack can do without a backend.
+function notifyDriverNewDelivery(o) {
+  const label = o.order_ref_no || String(o.id || '').slice(0, 8);
+  const addr = o.address || '';
+  showAppNotification('🚚 New Delivery Assigned', `${label} — ${addr || 'Check My Deliveries'}`, 'info', {
+    tab: 'my-deliveries',
+    details: [
+      { label: 'Order', value: label },
+      { label: 'Address', value: addr || '-' },
+      { label: 'Total', value: 'Rs. ' + Number(o.total || 0).toLocaleString() }
+    ]
+  });
+  if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+    try {
+      const n = new Notification('🚚 New delivery assigned', { body: `${label} — ${addr || 'Open the app to see it'}`, tag: 'delivery-' + o.id });
+      n.onclick = () => { window.focus(); n.close(); };
+    } catch (e) { console.warn('Native notification failed:', e); }
+  }
+}
+
+// Lets the driver opt in to native browser notifications (so alerts still show
+// up even if the app tab is in the background). Wired to a button on My Deliveries.
+function requestDriverNotifyPermission() {
+  if (typeof Notification === 'undefined') { alert('Notifications are not supported on this device/browser.'); return; }
+  Notification.requestPermission().then(perm => {
+    updateDriverNotifyPermUI();
+    if (perm === 'granted') updateStatus('🔔 Delivery alerts enabled');
+    else if (perm === 'denied') updateStatus('🔕 Notifications blocked — enable them in your browser/site settings to get alerts');
+  });
+}
+window.requestDriverNotifyPermission = requestDriverNotifyPermission;
+
+function updateDriverNotifyPermUI() {
+  const btn = $('driverNotifyPermBtn');
+  if (!btn) return;
+  if (typeof Notification === 'undefined') { btn.style.display = 'none'; return; }
+  const granted = Notification.permission === 'granted';
+  btn.innerHTML = granted
+    ? '<i class="business-icon icon-inline" data-lucide="bell-ring" aria-hidden="true"></i> Delivery Alerts: On'
+    : '<i class="business-icon icon-inline" data-lucide="bell" aria-hidden="true"></i> Enable Delivery Alerts';
+  btn.classList.toggle('btn-primary', granted);
+  if (window.lucide) lucide.createIcons({ attrs: { 'stroke-width': 1.9, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' } });
 }
 
 // ==================== LIVE DRIVER LOCATION TRACKING ====================
@@ -3187,6 +3309,20 @@ function updateDriverLocationUI() {
 
 async function driverSendLocation(lat, lng, force) {
   driverLastCoords = { lat, lng };
+
+  // Auto-distance: accumulate onto the active trip on every GPS fix (not just the
+  // throttled network sends below), filtering tiny GPS jitter (<5m) and unrealistic
+  // jumps (>2km between fixes, almost certainly a bad fix) so the total stays sane.
+  if (activeTrip) {
+    if (activeTrip.lastCoords) {
+      const d = haversineKm(activeTrip.lastCoords.lat, activeTrip.lastCoords.lng, lat, lng);
+      if (d >= 0.005 && d <= 2) { activeTrip.km += d; activeTrip.lastCoords = { lat, lng }; }
+    } else {
+      activeTrip.lastCoords = { lat, lng };
+    }
+    updateLiveTripKmUI();
+  }
+
   const now = Date.now();
   if (!force && now - driverLocationLastSent < 8000) return; // throttle: ~once per 8s, saves battery & bandwidth
   driverLocationLastSent = now;
@@ -3205,6 +3341,15 @@ async function driverSendLocation(lat, lng, force) {
     // actually receiving anything.
     const status = $('driverLocationStatus');
     if (status && driverLocationSharing) status.textContent = 'On — last sent ' + nowHHMM() + ' • the owner can see you on the map';
+    if (activeTrip) {
+      // Debounced save of the running trip distance so the owner's Delivery tab
+      // reflects it live too (they can still override the figure manually).
+      const km = Number(activeTrip.km.toFixed(2));
+      supabase.from('orders').update({ delivery_km: km }).eq('id', activeTrip.orderId).eq('assigned_driver_id', currentUser.id)
+        .then(({ error: kmErr }) => { if (kmErr) console.warn('Auto-km save error:', kmErr); });
+      const o = myDeliveries.find(x => String(x.id) === String(activeTrip.orderId));
+      if (o) o.delivery_km = km;
+    }
   } catch (e) {
     console.error('Send location error:', e);
     const status = $('driverLocationStatus');
@@ -5173,7 +5318,7 @@ function activateAppTab(tabId){
     renderDelPayPreview();
   }
   if (tabId !== 'delivery' && driverLocationPollTimer) { clearInterval(driverLocationPollTimer); driverLocationPollTimer = null; }
-  if (tabId === 'my-deliveries') { loadMyDeliveries(); }
+  if (tabId === 'my-deliveries') { loadMyDeliveries(); updateDriverNotifyPermUI(); }
   if (tabId === 'my-staff') { refreshMyStaffPage(); loadMyStaffOwnerData(); }
   if (tabId === 'expenses') { renderExpenses(); renderRecurringExpenses(); }
   if (tabId === 'my-salary') {
@@ -5207,6 +5352,7 @@ function activateAppTab(tabId){
       loadStaffList();
       loadOwnerAdvanceRequests();
       if ($('ownerWhatsapp') && userProfile) $('ownerWhatsapp').value = userProfile.whatsapp_number || '';
+      if ($('driverWhatsapp') && userProfile) $('driverWhatsapp').value = userProfile.whatsapp_number || '';
     }
   }
 }
