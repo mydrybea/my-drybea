@@ -8017,6 +8017,19 @@ window.openNotifyCenter = openNotifyCenter;
 window.openAppNotifyDetail = openAppNotifyDetail;
 window.refreshMySmartSalary = refreshMySmartSalary;
 window.loadOwnerAttendanceToday = loadOwnerAttendanceToday;
+window.openNewSale = openNewSale;
+window.saveSale = saveSale;
+window.renderSales = renderSales;
+window.clearSalesFilter = clearSalesFilter;
+window.setSalesFilterToday = setSalesFilterToday;
+window.exportSalesCSV = exportSalesCSV;
+window.loadStaffList = loadStaffList;
+window.togglePaymentMethodFields = togglePaymentMethodFields;
+window.recalcSaleModal = recalcSaleModal;
+window.editSale = editSale;
+window.deleteSale = deleteSale;
+window.markSalePaid = markSalePaid;
+window.updateChequeStatus = updateChequeStatus;
 
 })();
 
