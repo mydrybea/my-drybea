@@ -270,6 +270,7 @@ async function addStaffMember() {
   if (!uid) { alert("Enter the team member's Supabase User ID."); return; }
   if (uid === currentUser.id) { alert('That is your own account.'); return; }
 
+  if (!(await ensureFreshSession())) return;
   try {
     const { error } = await supabase.from('profiles').upsert({
       id: uid,
@@ -292,6 +293,7 @@ async function addStaffMember() {
 
 async function removeStaffMember(uid) {
   if (!confirm("Remove this staff member's access?")) return;
+  if (!(await ensureFreshSession())) return;
   try {
     const { error } = await supabase.from('profiles').delete().eq('id', uid).eq('owner_id', currentUser.id);
     if (error) throw error;
@@ -529,6 +531,7 @@ async function saveSalarySettings() {
   if (!currentSalaryStaffId) { alert('Select a staff member first.'); return; }
   const base_salary = Number($('salBaseMonthly').value) || 0;
   const daily_rate = Number($('salDailyRate').value) || 0;
+  if (!(await ensureFreshSession())) return;
   try {
     const { error } = await supabase.from('profiles').update({ base_salary, daily_rate }).eq('id', currentSalaryStaffId);
     if (error) throw error;
@@ -575,6 +578,7 @@ async function insertSalaryEntry({ entry_date, amount, entry_type, note }) {
     note: note || null,
     created_by: currentUser.id
   };
+  if (!(await ensureFreshSession())) return;
   try {
     const { data, error } = await supabase.from('staff_salaries').insert(row).select().single();
     if (error) throw error;
@@ -608,6 +612,7 @@ async function loadSalaryHistory(staffId) {
 
 async function deleteSalaryEntry(id) {
   if (!confirm('Delete this salary entry?')) return;
+  if (!(await ensureFreshSession())) return;
   try {
     const { error } = await supabase.from('staff_salaries').delete().eq('id', id);
     if (error) throw error;
@@ -847,6 +852,7 @@ async function saveWorkNote() {
   if (!currentUser) { alert('Please login first.'); return; }
   const note = $('wuNoteText').value.trim();
   if (!note) { alert('Write something first!'); return; }
+  if (!(await ensureFreshSession())) return;
   try {
     const { error } = await supabase.from('attendance').upsert({
       owner_id: businessId,
@@ -1056,6 +1062,7 @@ async function startDay() {
   setAttendBtnState(startBtn, 'loading', 'play', 'Starting…');
   setAttendBtnState(endBtn, 'locked', 'square', 'End Day');
   if (box) { box.textContent = '⏳ Starting your day…'; box.className = 'notice'; }
+  if (!(await ensureFreshSession())) return;
   try {
     const { data, error } = await withTimeout(
       supabase.rpc('attendance_clock_in', {
@@ -1088,6 +1095,7 @@ async function endDay() {
   setAttendBtnState(startBtn, 'done', 'play', 'Started');
   setAttendBtnState(endBtn, 'loading', 'square', 'Ending…');
   if (box) { box.textContent = '⏳ Ending your day…'; box.className = 'notice'; }
+  if (!(await ensureFreshSession())) return;
   try {
     // ANTI-CHEAT: OFF time is stamped server-side too (attendance_clock_out()),
     // same reasoning as startDay() — the server clock can never be behind or
@@ -1138,6 +1146,7 @@ async function requestAttendanceCorrection(which) {
   attendanceBusy = true;
   const originalHtml = saveBtn ? saveBtn.innerHTML : '';
   if (saveBtn) { saveBtn.disabled = true; saveBtn.innerHTML = '<span class="mini-spin" aria-hidden="true"></span>'; }
+  if (!(await ensureFreshSession())) return;
   try {
     const { error } = await withTimeout(
       supabase.rpc('request_attendance_correction', {
@@ -1249,6 +1258,7 @@ async function submitAdvanceRequest() {
   if (amount <= 0) { alert('Enter an amount greater than 0!'); return; }
   const btn = document.querySelector('button[onclick="submitAdvanceRequest()"]');
   if (btn) { btn.disabled = true; btn.dataset.originalText = btn.textContent; btn.textContent = 'Sending…'; }
+  if (!(await ensureFreshSession())) return;
   try {
     // Saving the request is the priority — nothing here should ever be able
     // to silently kill this before the insert happens (see notifyOwnerWhatsApp
@@ -1334,6 +1344,7 @@ async function loadMyAdvanceRequests() {
 async function saveOwnerWhatsapp() {
   if (!currentUser || userRole !== 'owner') return;
   const num = $('ownerWhatsapp').value.trim();
+  if (!(await ensureFreshSession())) return;
   try {
     const { error } = await supabase.from('profiles').update({ whatsapp_number: num || null }).eq('id', currentUser.id);
     if (error) throw error;
@@ -1347,6 +1358,7 @@ async function saveOwnerWhatsapp() {
 async function saveDriverWhatsapp() {
   if (!currentUser || userRole !== 'driver') return;
   const num = $('driverWhatsapp').value.trim();
+  if (!(await ensureFreshSession())) return;
   try {
     const { error } = await supabase.from('profiles').update({ whatsapp_number: num || null }).eq('id', currentUser.id);
     if (error) throw error;
@@ -1416,6 +1428,7 @@ function updateAdvancePendingBadge(pending) {
 
 async function decideAdvance(id, status) {
   if (!currentUser) return;
+  if (!(await ensureFreshSession())) return;
   try {
     const { error } = await supabase.from('advance_requests').update({
       status, decided_at: new Date().toISOString(), decided_by: currentUser.id
@@ -2062,6 +2075,7 @@ async function saveExpense() {
     created_by: currentUser.id
   };
 
+  if (!(await ensureFreshSession())) return;
   try {
     const { data, error } = await supabase.from('expenses').insert(row).select().single();
     if (error) throw error;
@@ -2108,6 +2122,7 @@ async function deleteExpense(id) {
   if (userRole !== 'owner') { alert('Only the owner can delete expenses.'); return; }
   if (!confirm('Delete this expense?')) return;
   if (!currentUser) { alert('Please login first.'); return; }
+  if (!(await ensureFreshSession())) return;
   try {
     const { error } = await supabase.from('expenses').delete().eq('id', id);
     if (error) throw error;
@@ -2170,7 +2185,8 @@ async function generateDueRecurringExpenses() {
   if (!due.length) return;
 
   for (const r of due) {
-    try {
+    if (!(await ensureFreshSession())) return;
+  try {
       const { data, error } = await supabase.from('expenses').insert({
         expense_date: today,
         category: r.category,
@@ -2220,6 +2236,7 @@ function renderRecurringExpenses() {
 }
 
 async function toggleRecurringExpense(id, newActive) {
+  if (!(await ensureFreshSession())) return;
   try {
     const { error } = await supabase.from('recurring_expenses').update({ active: newActive }).eq('id', id);
     if (error) throw error;
@@ -2235,6 +2252,7 @@ async function toggleRecurringExpense(id, newActive) {
 
 async function deleteRecurringExpense(id) {
   if (!confirm('Stop this recurring expense? Past auto-added entries stay in your Expenses list.')) return;
+  if (!(await ensureFreshSession())) return;
   try {
     const { error } = await supabase.from('recurring_expenses').delete().eq('id', id);
     if (error) throw error;
@@ -2285,6 +2303,7 @@ async function saveCustomer() {
     referralStaffReference = referralStaffId ? (staffListCache||[]).find(s=>String(s.id)===String(referralStaffId))?.staff_reference || '' : null;
   }
   const row = { id: Date.now().toString(), user_id: businessId, name, phone, address, referral_staff_id: referralStaffId, referral_staff_reference: referralStaffReference };
+  if (!(await ensureFreshSession())) return;
   try {
     let result = await supabase.from('customers').insert(row);
     if (result.error && /column|schema|does not exist/i.test(result.error.message||'')) {
@@ -2325,6 +2344,7 @@ function renderCustomers() {
 async function deleteCustomer(id) {
   if (!confirm('Delete this customer?')) return;
   if (!currentUser) { alert('Please login first.'); return; }
+  if (!(await ensureFreshSession())) return;
   try {
     const { error } = await supabase.from('customers').delete().eq('id', id).eq('user_id', businessId);
     if (error) throw error;
@@ -2447,6 +2467,7 @@ async function createOrder() {
   if (qty <= 0) { alert('Quantity must be at least 1!'); return; }
   if (unitPrice <= 0) { alert('Unit price required!'); return; }
   if (!currentUser) { alert('Please login first.'); return; }
+  if (!(await ensureFreshSession())) return;
 
   // STAFF MODE: no customer master list. The sale itself owns the customer snapshot.
   if (userRole === 'staff') {
@@ -2601,6 +2622,7 @@ async function cycleStatus(index) {
   const order = orders[index];
   if (!currentUser) { alert('Please login first.'); return; }
   const newStatus = cycle[(cycle.indexOf(order.status) + 1) % cycle.length];
+  if (!(await ensureFreshSession())) return;
   try {
     const { error } = await supabase.from('orders').update({ status: newStatus }).eq('id', order.id).eq('user_id', businessId);
     if (error) throw error;
@@ -2940,6 +2962,7 @@ function renderDelivery() {
 
 async function assignDriver(orderId, driverId) {
   if (userRole !== 'owner') return;
+  if (!(await ensureFreshSession())) return;
   try {
     const { error } = await supabase.from('orders')
       .update({ assigned_driver_id: driverId || null })
@@ -2976,6 +2999,7 @@ function notifyDriverOnWhatsApp(driverId, order) {
 async function updateDeliveryKm(orderId, kmValue) {
   if (userRole !== 'owner') return;
   const km = kmValue === '' ? null : Math.max(0, Number(kmValue) || 0);
+  if (!(await ensureFreshSession())) return;
   try {
     const { error } = await supabase.from('orders')
       .update({ delivery_km: km })
@@ -3485,6 +3509,7 @@ async function confirmBatchDelivery() {
   if (!batchDeliverPhotoFile) { alert('📷 A delivery photo is required before you can confirm.'); return; }
   const btn = $('batchDeliverConfirmBtn');
   if (btn) { btn.disabled = true; btn.textContent = 'Uploading...'; }
+  if (!(await ensureFreshSession())) return;
   try {
     const ext = (batchDeliverPhotoFile.name && batchDeliverPhotoFile.name.includes('.')) ? batchDeliverPhotoFile.name.split('.').pop() : 'jpg';
     const path = `${businessId}/batch-${Date.now()}.${ext}`;
@@ -3729,6 +3754,7 @@ function routeDistanceKm(start, stopsInOrder) {
 
 async function optimizeDeliveryRoute() {
   if (userRole !== 'driver') return;
+  if (!(await ensureFreshSession())) return;
   const btn = $('optimizeRouteBtn');
   const status = $('routeOptimizeStatus');
   const active = myDeliveries.filter(o => o.status === 'pending' || o.status === 'shipped');
@@ -3876,6 +3902,7 @@ window.usePinMyLocation = usePinMyLocation;
 async function saveSetPinLocation() {
   if (!setPinOrderId || !setPinMarker) { alert('📍 Tap the map (or use "Use My Current Location") to drop a pin first.'); return; }
   const { lat, lng } = setPinMarker.getLatLng();
+  if (!(await ensureFreshSession())) return;
   try {
     const { error } = await supabase.from('orders')
       .update({ delivery_lat: lat, delivery_lng: lng })
@@ -3904,6 +3931,7 @@ function updateLiveTripKmUI() {
 
 async function driverMarkStatus(orderId, newStatus) {
   if (userRole !== 'driver') return;
+  if (!(await ensureFreshSession())) return;
   try {
     const update = { status: newStatus };
     // Stamp the moment the trip actually starts — this is what the owner's
@@ -4029,6 +4057,7 @@ async function confirmDelivery() {
   if (!o) return;
   const btn = $('deliverConfirmBtn');
   if (btn) { btn.disabled = true; btn.textContent = 'Uploading...'; }
+  if (!(await ensureFreshSession())) return;
   try {
     const ext = (deliverPhotoFile.name && deliverPhotoFile.name.includes('.')) ? deliverPhotoFile.name.split('.').pop() : 'jpg';
     const path = `${businessId}/${o.id}-${Date.now()}.${ext}`;
@@ -4095,6 +4124,7 @@ async function confirmFailedDelivery() {
   const notes = $('deliverFailedNotes').value.trim();
   const o = myDeliveries.find(x => String(x.id) === String(deliverModalOrderId));
   if (!o) return;
+  if (!(await ensureFreshSession())) return;
   try {
     const update = { status: 'failed', failed_reason: reason, failed_notes: notes, failed_at: new Date().toISOString() };
     const { error } = await supabase.from('orders').update(update).eq('id', o.id).eq('assigned_driver_id', currentUser.id);
@@ -4138,6 +4168,7 @@ async function rescheduleFailedOrder(index) {
   const order = orders[index];
   if (!order || order.status !== 'failed') return;
   if (!confirm('Reschedule this order? It will go back to Pending for the assigned driver.')) return;
+  if (!(await ensureFreshSession())) return;
   try {
     const { error } = await supabase.from('orders').update({ status: 'pending', failed_reason: null, failed_notes: null }).eq('id', order.id).eq('user_id', businessId);
     if (error) throw error;
@@ -6061,7 +6092,7 @@ function exportMyStaffData(){
 async function importMyStaffData(ev){
   if(!currentUser||userRole!=='owner')return; const file=ev.target.files?.[0]; if(!file)return;
   const r=new FileReader();
-  r.onload=async()=>{try{
+  r.onload=async()=>{if(!(await ensureFreshSession()))return;try{
     const state=JSON.parse(r.result); if(state.ownerId&&state.ownerId!==currentUser.id)throw new Error('This backup belongs to another owner.');
     saveMyStaffDataState({...state,ownerId:currentUser.id});
     if(Array.isArray(state.tasks))for(const t of state.tasks){
@@ -6083,7 +6114,7 @@ async function addStaffTask(){
   if(userRole!=='owner'){alert('Tasks are assigned by the business owner.');return;}
   if(!currentUser)return; const title=($('staffTaskTitle')?.value||'').trim(),priority=$('staffTaskPriority')?.value||'normal';
   if(!title)return alert('Enter a task first.'); const owner=effectiveOwnerId();
-  try{
+  if(!(await ensureFreshSession()))return;try{
     const {data,error}=await supabase.from('staff_tasks').insert({owner_id:owner,staff_id:currentUser.id,title,priority,status:'pending'}).select().single();
     if(error)throw error; cacheStaffData({tasks:[data,...(getMyStaffDataState().tasks||[])]}); $('staffTaskTitle').value='';
     renderStaffTasks();refreshStaffHome();updateStatus('✅ Task saved to Supabase');
@@ -6091,7 +6122,7 @@ async function addStaffTask(){
 }
 
 async function toggleStaffTask(id){
-  try{
+  if(!(await ensureFreshSession()))return;try{
     const task=(getMyStaffDataState().tasks||[]).find(t=>t.id===id); if(!task)return;
     const next=taskDone(task)?'pending':'completed';
     const {data,error}=await supabase.from('staff_tasks').update({status:next,completed_at:next==='completed'?new Date().toISOString():null,updated_at:new Date().toISOString()}).eq('id',id).eq('staff_id',currentUser.id).select().single();
@@ -6101,7 +6132,7 @@ async function toggleStaffTask(id){
 
 async function deleteStaffTask(id){
   if(userRole==='staff'){ alert('Tasks are assigned and managed by the business owner. You can mark them Done/Reopen.'); return; }
-  try{const {error}=await supabase.from('staff_tasks').delete().eq('id',id).eq('staff_id',currentUser.id);if(error)throw error;cacheStaffData({tasks:(getMyStaffDataState().tasks||[]).filter(x=>x.id!==id)});renderStaffTasks();refreshStaffHome();}
+  if(!(await ensureFreshSession()))return;try{const {error}=await supabase.from('staff_tasks').delete().eq('id',id).eq('staff_id',currentUser.id);if(error)throw error;cacheStaffData({tasks:(getMyStaffDataState().tasks||[]).filter(x=>x.id!==id)});renderStaffTasks();refreshStaffHome();}
   catch(e){alert('❌ Task delete failed: '+e.message);}
 }
 
@@ -6158,16 +6189,16 @@ async function editOwnerStaffPerformance(staffId){
 
 async function ownerAssignStaffTask(){
   if(!currentUser||userRole!=='owner')return;const staffId=$('ownerTaskStaff')?.value||'',title=($('ownerTaskTitle')?.value||'').trim(),priority=$('ownerTaskPriority')?.value||'normal';if(!staffId||!title)return alert('Select a staff member and enter a task.');
-  try{const {data,error}=await supabase.from('staff_tasks').insert({owner_id:currentUser.id,staff_id:staffId,title,priority,status:'pending'}).select().single();if(error)throw error;cacheStaffData({tasks:[data,...(getMyStaffDataState().tasks||[])]});$('ownerTaskTitle').value='';renderOwnerStaffPerformance();renderOwnerStaffManagement();updateStatus('☁️ Task assigned to Supabase');}catch(e){alert('❌ Task assign failed: '+e.message);}
+  if(!(await ensureFreshSession()))return;try{const {data,error}=await supabase.from('staff_tasks').insert({owner_id:currentUser.id,staff_id:staffId,title,priority,status:'pending'}).select().single();if(error)throw error;cacheStaffData({tasks:[data,...(getMyStaffDataState().tasks||[])]});$('ownerTaskTitle').value='';renderOwnerStaffPerformance();renderOwnerStaffManagement();updateStatus('☁️ Task assigned to Supabase');}catch(e){alert('❌ Task assign failed: '+e.message);}
 }
 
 async function ownerPublishNotice(){
   if(!currentUser||userRole!=='owner')return;const title=($('ownerNoticeTitle')?.value||'').trim(),message=($('ownerNoticeBody')?.value||'').trim();if(!title||!message)return alert('Enter a notice title and message.');
-  try{const {data,error}=await supabase.from('staff_announcements').insert({owner_id:currentUser.id,title,message,active:true}).select().single();if(error)throw error;cacheStaffData({notices:[data,...(getMyStaffDataState().notices||[])]});$('ownerNoticeTitle').value='';$('ownerNoticeBody').value='';renderOwnerStaffManagement();renderStaffAnnouncements();updateStatus('☁️ Notice published to Supabase');}catch(e){alert('❌ Notice publish failed: '+e.message);}
+  if(!(await ensureFreshSession()))return;try{const {data,error}=await supabase.from('staff_announcements').insert({owner_id:currentUser.id,title,message,active:true}).select().single();if(error)throw error;cacheStaffData({notices:[data,...(getMyStaffDataState().notices||[])]});$('ownerNoticeTitle').value='';$('ownerNoticeBody').value='';renderOwnerStaffManagement();renderStaffAnnouncements();updateStatus('☁️ Notice published to Supabase');}catch(e){alert('❌ Notice publish failed: '+e.message);}
 }
-async function ownerToggleTask(id){if(userRole!=='owner')return;try{const task=(getMyStaffDataState().tasks||[]).find(x=>x.id===id);if(!task)return;const {data,error}=await supabase.from('staff_tasks').update({status:taskDone(task)?'pending':'completed',completed_at:taskDone(task)?null:new Date().toISOString(),updated_at:new Date().toISOString()}).eq('id',id).eq('owner_id',currentUser.id).select().single();if(error)throw error;cacheStaffData({tasks:(getMyStaffDataState().tasks||[]).map(x=>x.id===id?data:x)});renderOwnerStaffManagement();renderOwnerStaffPerformance();}catch(e){alert('❌ Task update failed: '+e.message);}}
-async function ownerDeleteTask(id){if(userRole!=='owner'||!confirm('Delete this task?'))return;try{const {error}=await supabase.from('staff_tasks').delete().eq('id',id).eq('owner_id',currentUser.id);if(error)throw error;cacheStaffData({tasks:(getMyStaffDataState().tasks||[]).filter(x=>x.id!==id)});renderOwnerStaffManagement();renderOwnerStaffPerformance();}catch(e){alert('❌ Task delete failed: '+e.message);}}
-async function ownerDeleteNotice(id){if(userRole!=='owner'||!confirm('Delete this notice?'))return;try{const {error}=await supabase.from('staff_announcements').delete().eq('id',id).eq('owner_id',currentUser.id);if(error)throw error;cacheStaffData({notices:(getMyStaffDataState().notices||[]).filter(x=>x.id!==id)});renderOwnerStaffManagement();renderStaffAnnouncements();}catch(e){alert('❌ Notice delete failed: '+e.message);}}
+async function ownerToggleTask(id){if(userRole!=='owner')return;if(!(await ensureFreshSession()))return;try{const task=(getMyStaffDataState().tasks||[]).find(x=>x.id===id);if(!task)return;const {data,error}=await supabase.from('staff_tasks').update({status:taskDone(task)?'pending':'completed',completed_at:taskDone(task)?null:new Date().toISOString(),updated_at:new Date().toISOString()}).eq('id',id).eq('owner_id',currentUser.id).select().single();if(error)throw error;cacheStaffData({tasks:(getMyStaffDataState().tasks||[]).map(x=>x.id===id?data:x)});renderOwnerStaffManagement();renderOwnerStaffPerformance();}catch(e){alert('❌ Task update failed: '+e.message);}}
+async function ownerDeleteTask(id){if(userRole!=='owner'||!confirm('Delete this task?'))return;if(!(await ensureFreshSession()))return;try{const {error}=await supabase.from('staff_tasks').delete().eq('id',id).eq('owner_id',currentUser.id);if(error)throw error;cacheStaffData({tasks:(getMyStaffDataState().tasks||[]).filter(x=>x.id!==id)});renderOwnerStaffManagement();renderOwnerStaffPerformance();}catch(e){alert('❌ Task delete failed: '+e.message);}}
+async function ownerDeleteNotice(id){if(userRole!=='owner'||!confirm('Delete this notice?'))return;if(!(await ensureFreshSession()))return;try{const {error}=await supabase.from('staff_announcements').delete().eq('id',id).eq('owner_id',currentUser.id);if(error)throw error;cacheStaffData({notices:(getMyStaffDataState().notices||[]).filter(x=>x.id!==id)});renderOwnerStaffManagement();renderStaffAnnouncements();}catch(e){alert('❌ Notice delete failed: '+e.message);}}
 
 function renderOwnerStaffPerformance(){
   const list=staffListCache||[],month=new Date().toISOString().slice(0,7),perf=getOwnerPerformanceState();
@@ -6688,7 +6719,7 @@ async function verifyCommissionClaim(id,status){
   if(!confirm(status==='approved'?'Verify this sale and add 12% commission?':'Reject this commission claim?')) return;
   const btn=document.querySelector(`button[onclick="verifyCommissionClaim('${id}','${status}')"]`);
   if(btn){ btn.disabled=true; btn.dataset.originalText=btn.textContent; btn.textContent=status==='approved'?'Verifying…':'Rejecting…'; }
-  try{
+  if(!(await ensureFreshSession()))return;try{
     const {data,error}=await supabase.rpc('verify_staff_commission_claim',{p_claim_id:id,p_status:status,p_owner_note:note});
     if(error) throw error;
     // Immediately reflect the authoritative RPC result in the UI.
@@ -6826,6 +6857,7 @@ function renderOwnerPendingCorrections() {
 }
 
 async function decideAttendanceCorrection(id, approve) {
+  if (!(await ensureFreshSession())) return;
   try {
     const { error } = await withTimeout(
       supabase.rpc('decide_attendance_correction', { p_id: id, p_approve: approve }),
