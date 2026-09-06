@@ -203,6 +203,18 @@
 /* ---------- Map cards ---------- */
 #delivery .dv-map-frame{ position:relative; margin-top:10px; }
 #delivery .dv-map-frame > div{ box-shadow:inset 0 0 0 1px rgba(255,255,255,.06); }
+/* Dark map look via CSS filter on the raster tiles only — Leaflet keeps markers,
+   circles, polylines and the heat layer in separate panes, so inverting just the
+   tile pane gives a premium dark map with zero dependency on any paid/keyed dark
+   tile service (which is what broke and showed "API KEY REQUIRED" before). */
+#delivery #ownerDriverMap .leaflet-tile-pane,
+#delivery #deliveryHeatmapMap .leaflet-tile-pane{
+  filter:invert(1) hue-rotate(180deg) brightness(0.92) contrast(0.9) saturate(0.7);
+}
+#delivery #ownerDriverMap .leaflet-control-zoom a,
+#delivery #deliveryHeatmapMap .leaflet-control-zoom a{
+  background:#1a2332; color:#e2e8f0; border-color:rgba(255,255,255,.12);
+}
 #delivery .dv-map-legend{
   position:absolute; left:10px; bottom:10px; z-index:400;
   background:rgba(15,23,42,.72); backdrop-filter:blur(4px);

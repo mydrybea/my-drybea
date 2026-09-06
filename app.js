@@ -4011,9 +4011,9 @@ function initOwnerDriverMap() {
   const pickup = getPickupLocation();
   if (!ownerDriverMap) {
     ownerDriverMap = L.map(el, { zoomControl: true }).setView([pickup.lat, pickup.lng], 11); // default: centered on the pickup point
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      maxZoom: 19, subdomains: 'abcd',
-      attribution: '&copy; OpenStreetMap contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors'
     }).addTo(ownerDriverMap);
     // Pickup marker — always shown, doesn't depend on any driver being online.
     // Position/label refresh automatically if the owner changes it later (see
@@ -4046,9 +4046,9 @@ function initDeliveryHeatmap() {
   const pickup = getPickupLocation();
   if (!deliveryHeatmapMap) {
     deliveryHeatmapMap = L.map(el).setView([pickup.lat, pickup.lng], 11);
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      maxZoom: 19, subdomains: 'abcd',
-      attribution: '&copy; OpenStreetMap contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors'
     }).addTo(deliveryHeatmapMap);
   }
   setTimeout(() => deliveryHeatmapMap && deliveryHeatmapMap.invalidateSize(), 150);
