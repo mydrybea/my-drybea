@@ -151,7 +151,7 @@ async function loadUserProfile() {
 }
 
 const STAFF_ALLOWED_TABS = ['staff-home','orders','my-salary','profile','expenses'];
-const DRIVER_ALLOWED_TABS = ['my-deliveries','profile'];
+const DRIVER_ALLOWED_TABS = ['my-deliveries','my-earnings','profile'];
 
 function applyRoleUI() {
   const isStaff = userRole === 'staff';
@@ -3081,6 +3081,136 @@ function renderMyDeliveries() {
   if (window.lucide) lucide.createIcons({ attrs: { 'stroke-width': 1.9, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' } });
 }
 
+// ==================== DRIVER: MY EARNINGS (pay-per-km + COD handover) ====================
+// Read-only pay summary built entirely from the driver's own `myDeliveries`
+// (already loaded for the My Deliveries tab — no extra order fetch needed),
+// plus a self-reported cash-handover log so a driver can tell the owner
+// "I gave you Rs. X" without a phone call, and the owner gets notified
+// instantly (see the driver_cod_handovers realtime hookup below).
+let driverHandovers = []; // this driver's own logged cash handovers to the owner
+
+async function loadDriverHandovers() {
+  if (!currentUser || userRole !== 'driver') return;
+  try {
+    const { data, error } = await supabase
+      .from('driver_cod_handovers')
+      .select('*')
+      .eq('driver_id', currentUser.id)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    driverHandovers = data || [];
+    renderMyEarnings();
+  } catch (e) {
+    console.error('Load driver handovers error:', e);
+  }
+}
+window.loadDriverHandovers = loadDriverHandovers;
+
+function startOfWeek(d) {
+  const date = new Date(d);
+  const day = date.getDay(); // 0 = Sunday
+  const diff = (day === 0 ? -6 : 1) - day; // shift so Monday starts the week
+  date.setDate(date.getDate() + diff);
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+function renderMyEarnings() {
+  if (!$('myEarnTodayPay')) return; // panel not on this page / not a driver
+  const today = todayStr();
+  const monthPrefix = today.slice(0, 7);
+  const weekStart = startOfWeek(new Date());
+
+  const delivered = (myDeliveries || []).filter(o => o.status === 'delivered');
+  const sumPay = (list) => list.reduce((s, o) => s + calculateDriverPay(o.delivery_km).pay, 0);
+  const sumKm = (list) => list.reduce((s, o) => s + (Number(o.delivery_km) || 0), 0);
+  const dayOf = (o) => (o.delivered_at || o.created_at || '').slice(0, 10);
+
+  const todayList = delivered.filter(o => dayOf(o) === today);
+  const weekList = delivered.filter(o => new Date(o.delivered_at || o.created_at || 0) >= weekStart);
+  const monthList = delivered.filter(o => dayOf(o).slice(0, 7) === monthPrefix);
+
+  $('myEarnTodayPay').textContent = 'Rs. ' + Math.round(sumPay(todayList)).toLocaleString();
+  $('myEarnTodayKm').textContent = sumKm(todayList).toFixed(1) + ' km';
+  $('myEarnWeekPay').textContent = 'Rs. ' + Math.round(sumPay(weekList)).toLocaleString();
+  $('myEarnMonthPay').textContent = 'Rs. ' + Math.round(sumPay(monthList)).toLocaleString();
+  $('myEarnMonthKm').textContent = sumKm(monthList).toFixed(1) + ' km';
+
+  // COD collected only counts orders actually marked delivered with a recorded
+  // collection amount — matches the same fields the proof-of-delivery flow saves.
+  const isCollectedCod = (o) => (o.payment_method || 'cod') === 'cod' && o.cod_collected != null;
+  const codCollectedMonth = monthList.filter(isCollectedCod).reduce((s, o) => s + Number(o.cod_collected || 0), 0);
+  const handedOverMonth = (driverHandovers || [])
+    .filter(h => (h.created_at || '').slice(0, 7) === monthPrefix)
+    .reduce((s, h) => s + Number(h.amount || 0), 0);
+  // Outstanding is all-time collected minus all-time handed over — cash a
+  // driver is still holding doesn't reset just because the month rolled over.
+  const codCollectedAll = delivered.filter(isCollectedCod).reduce((s, o) => s + Number(o.cod_collected || 0), 0);
+  const handedOverAll = (driverHandovers || []).reduce((s, h) => s + Number(h.amount || 0), 0);
+  const outstanding = codCollectedAll - handedOverAll;
+
+  if ($('myEarnCodCollected')) $('myEarnCodCollected').textContent = 'Rs. ' + Math.round(codCollectedMonth).toLocaleString();
+  if ($('myEarnCodHanded')) $('myEarnCodHanded').textContent = 'Rs. ' + Math.round(handedOverMonth).toLocaleString();
+  if ($('myEarnCodOutstanding')) $('myEarnCodOutstanding').textContent = 'Rs. ' + Math.round(outstanding).toLocaleString();
+
+  const tbody = $('myEarningsDeliveriesBody');
+  if (tbody) {
+    const rows = [...delivered]
+      .sort((a, b) => new Date(b.delivered_at || b.created_at || 0) - new Date(a.delivered_at || a.created_at || 0))
+      .slice(0, 30);
+    tbody.innerHTML = rows.length ? rows.map(o => {
+      const pay = calculateDriverPay(o.delivery_km);
+      const codText = isCollectedCod(o) ? ('Rs. ' + Number(o.cod_collected).toLocaleString()) : '—';
+      const when = o.delivered_at ? new Date(o.delivered_at).toLocaleDateString() : (o.created_at ? new Date(o.created_at).toLocaleDateString() : '-');
+      return `<tr>
+        <td>${when}</td>
+        <td>${o.order_ref_no || String(o.id).slice(0, 8)}</td>
+        <td>${o.delivery_km ? Number(o.delivery_km).toFixed(1) + ' km' : '-'}</td>
+        <td>Rs. ${Math.round(pay.pay).toLocaleString()}</td>
+        <td>${codText}</td>
+      </tr>`;
+    }).join('') : '<tr><td colspan="5" style="text-align:center;opacity:.5;padding:14px;">No completed deliveries yet.</td></tr>';
+  }
+
+  const htbody = $('myEarningsHandoverBody');
+  if (htbody) {
+    htbody.innerHTML = (driverHandovers || []).length ? driverHandovers.map(h => `<tr>
+      <td>${h.created_at ? new Date(h.created_at).toLocaleString() : '-'}</td>
+      <td>Rs. ${Number(h.amount || 0).toLocaleString()}</td>
+      <td>${escapeHtmlSafe(h.note || '-')}</td>
+    </tr>`).join('') : '<tr><td colspan="3" style="text-align:center;opacity:.5;padding:14px;">No cash handovers logged yet.</td></tr>';
+  }
+}
+window.renderMyEarnings = renderMyEarnings;
+
+async function submitCodHandover() {
+  if (!currentUser || userRole !== 'driver') return;
+  const amountInput = $('codHandoverAmount');
+  const noteInput = $('codHandoverNote');
+  const amount = Number(amountInput && amountInput.value);
+  if (!(amount > 0)) { alert('Enter the amount you handed over (must be more than 0).'); return; }
+  if (!businessId) { alert('Could not find your business owner — try logging out and back in.'); return; }
+  if (!(await ensureFreshSession())) return;
+  try {
+    const { error } = await supabase.from('driver_cod_handovers').insert({
+      driver_id: currentUser.id,
+      owner_id: businessId,
+      driver_name: (userProfile && userProfile.display_name) || null,
+      amount,
+      note: (noteInput && noteInput.value || '').trim() || null
+    });
+    if (error) throw error;
+    if (amountInput) amountInput.value = '';
+    if (noteInput) noteInput.value = '';
+    updateStatus('✅ Handover logged');
+    loadDriverHandovers();
+  } catch (e) {
+    console.error('Log handover error:', e);
+    alert('❌ Could not log handover: ' + e.message + '\n\nMake sure the "driver_cod_handovers" table exists in Supabase (see setup notes).');
+  }
+}
+window.submitCodHandover = submitCodHandover;
+
 // ---- Batch selection state helpers ----
 
 function toggleBatchSelect(orderId, checked) {
@@ -6005,6 +6135,12 @@ function nbNewSaleToVerify(r){
     {label:'Commission (12%)', value: 'Rs. '+fmt(Number(r.order_total)*0.12||0)}
   ]}];
 }
+function nbCodHandover(r){
+  return ['💰 Cash handed over', `${r.driver_name||'A driver'} handed over Rs. ${fmt(r.amount)}`, 'info', { tab:'delivery', details:[
+    {label:'Driver', value: r.driver_name || '-'}, {label:'Amount', value: 'Rs. '+fmt(r.amount)},
+    {label:'Note', value: r.note || '-'}, {label:'Logged at', value: r.created_at ? new Date(r.created_at).toLocaleString() : '-'}
+  ]}];
+}
 function nbNewTask(r){
   return ['📋 New task assigned', r.title||'Check My Tasks', 'info', { tab:'my-tasks', details:[
     {label:'Task', value: r.title || '-'}, {label:'Priority', value: r.priority || 'normal'}, {label:'Status', value: r.status || 'pending'}
@@ -6042,6 +6178,7 @@ function startAppNotifyRealtime(){
       });
       ch.on('postgres_changes',{event:'INSERT',schema:'public',table:'attendance_corrections',filter:`owner_id=eq.${currentUser.id}`},(p)=> showAppNotification(...nbCorrectionRequested(p.new||{})));
       ch.on('postgres_changes',{event:'INSERT',schema:'public',table:'staff_commission_claims',filter:`owner_id=eq.${currentUser.id}`},(p)=> showAppNotification(...nbNewSaleToVerify(p.new||{})));
+      ch.on('postgres_changes',{event:'INSERT',schema:'public',table:'driver_cod_handovers',filter:`owner_id=eq.${currentUser.id}`},(p)=> showAppNotification(...nbCodHandover(p.new||{})));
     } else if(userRole === 'staff'){
       ch.on('postgres_changes',{event:'UPDATE',schema:'public',table:'advance_requests',filter:`staff_id=eq.${currentUser.id}`},(p)=>{
         const r=p.new||{}, o=p.old||{};
@@ -6099,11 +6236,12 @@ async function catchUpMissedNotifications(){
   catchUpBusy = true;
   try{
     if(userRole === 'owner'){
-      const [advs, att, corr, claims] = await Promise.all([
+      const [advs, att, corr, claims, handovers] = await Promise.all([
         supabase.from('advance_requests').select('*').eq('owner_id',currentUser.id).gt('requested_at',lastSeen).order('requested_at',{ascending:true}),
         supabase.from('attendance').select('*').eq('owner_id',currentUser.id).or(`check_in.gt.${lastSeen},check_out.gt.${lastSeen}`).order('work_date',{ascending:true}),
         supabase.from('attendance_corrections').select('*').eq('owner_id',currentUser.id).gt('requested_at',lastSeen).order('requested_at',{ascending:true}),
-        supabase.from('staff_commission_claims').select('*').eq('owner_id',currentUser.id).gt('submitted_at',lastSeen).order('submitted_at',{ascending:true})
+        supabase.from('staff_commission_claims').select('*').eq('owner_id',currentUser.id).gt('submitted_at',lastSeen).order('submitted_at',{ascending:true}),
+        supabase.from('driver_cod_handovers').select('*').eq('owner_id',currentUser.id).gt('created_at',lastSeen).order('created_at',{ascending:true})
       ]);
       (advs.data||[]).forEach(r=> showAppNotification(...nbAdvanceRequested(r)));
       (att.data||[]).forEach(r=>{
@@ -6112,6 +6250,7 @@ async function catchUpMissedNotifications(){
       });
       (corr.data||[]).forEach(r=> showAppNotification(...nbCorrectionRequested(r)));
       (claims.data||[]).forEach(r=> showAppNotification(...nbNewSaleToVerify(r)));
+      (handovers.data||[]).forEach(r=> showAppNotification(...nbCodHandover(r)));
     } else if(userRole === 'staff'){
       const queries = [
         supabase.from('advance_requests').select('*').eq('staff_id',currentUser.id).not('decided_at','is',null).gt('decided_at',lastSeen).order('decided_at',{ascending:true}),
@@ -6335,7 +6474,7 @@ document.querySelectorAll('[data-ribbon="true"]').forEach(btn => {
 
 const OWNER_ONLY_TABS = ['dashboard', 'my-staff', 'delivery', 'calculator', 'production', 'history', 'data', 'monthly-summary', 'income', 'analytics'];
 const STAFF_ONLY_TABS = ['staff-home', 'daily-pay', 'work-update', 'attendance', 'advance', 'my-commission', 'my-tasks', 'announcements'];
-const DRIVER_ONLY_TABS = ['my-deliveries'];
+const DRIVER_ONLY_TABS = ['my-deliveries','my-earnings'];
 
 let staffWorkspaceLoadSeq = 0;
 async function refreshStaffWorkspaceData(tabId){
@@ -6411,6 +6550,7 @@ function activateAppTab(tabId){
   }
   if (tabId !== 'delivery' && driverLocationPollTimer) { clearInterval(driverLocationPollTimer); driverLocationPollTimer = null; }
   if (tabId === 'my-deliveries') { loadMyDeliveries(); updateDriverNotifyPermUI(); }
+  if (tabId === 'my-earnings') { loadMyDeliveries().then(() => renderMyEarnings()); loadDriverHandovers(); }
   if (tabId === 'my-staff') { refreshMyStaffPage(); loadMyStaffOwnerData(); }
   if (tabId === 'expenses') { renderExpenses(); renderRecurringExpenses(); }
   if (tabId === 'my-salary') {
