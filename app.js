@@ -4360,21 +4360,41 @@ function startDriverLocationSharing() {
   if (!navigator.geolocation) { alert('Location is not supported on this device/browser.'); return; }
   driverLastGoodCoords = null;
   driverLocationShareStartTs = Date.now();
+  const status = $('driverLocationStatus');
+  if (status) status.textContent = '📡 Getting your location…';
   // FIX: send an immediate fix right away instead of waiting for the first watchPosition
   // callback (which can take a while, or never fire if the device isn't moving) — this is
   // why the owner used to see "sharing on" but no pin appear for a long time.
   navigator.geolocation.getCurrentPosition(
     (pos) => { driverSendLocation(pos.coords.latitude, pos.coords.longitude, true, pos.coords.accuracy); },
-    (err) => console.warn('Initial location fix failed:', err.message),
+    (err) => {
+      console.warn('Initial location fix failed:', err.message);
+      // Don't leave this silent — on mobile there's no console to see it in, so the
+      // button used to just look "stuck" with no clue why. Still keep watchPosition
+      // running below; a real fix may still arrive from it shortly after.
+      if (status && driverLocationSharing) status.textContent = geolocationErrorMessage(err) + ' Still trying…';
+    },
     { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
   );
   driverLocationWatchId = navigator.geolocation.watchPosition(
     (pos) => { driverSendLocation(pos.coords.latitude, pos.coords.longitude, false, pos.coords.accuracy); },
     (err) => {
       console.error('Geolocation error:', err);
+      // FIX: previously ANY error here (including a plain GPS timeout — very common on
+      // mobile indoors / weak signal, which fires repeatedly and is not fatal) immediately
+      // called stopDriverLocationSharing(). That flipped the button straight back to
+      // "Share My Location" within seconds of tapping it, looking like the tap did nothing
+      // ("stuck") when really it was working but just hadn't gotten a GPS lock yet.
+      // Now: only a real permission denial turns sharing off. Everything else just shows
+      // a status message and keeps the watch running — the browser keeps retrying and a
+      // later fix (or the 20s heartbeat once one arrives) will clear the warning.
       const status = $('driverLocationStatus');
-      if (status) status.textContent = '⚠️ Location error: ' + err.message + ' — sharing stopped.';
-      stopDriverLocationSharing();
+      if (err.code === err.PERMISSION_DENIED) {
+        if (status) status.textContent = '⚠️ ' + geolocationErrorMessage(err) + ' — sharing stopped.';
+        stopDriverLocationSharing();
+      } else if (status) {
+        status.textContent = '⚠️ ' + geolocationErrorMessage(err) + ' — still sharing, retrying…';
+      }
     },
     { enableHighAccuracy: true, maximumAge: 10000, timeout: 20000 }
   );
@@ -4388,6 +4408,21 @@ function startDriverLocationSharing() {
   }, 20000);
   driverLocationSharing = true;
   updateDriverLocationUI();
+}
+
+// Turns a raw GeolocationPositionError into a short, mobile-friendly message.
+// Kept separate so both the initial fix and the ongoing watch show the same wording.
+function geolocationErrorMessage(err) {
+  switch (err.code) {
+    case err.PERMISSION_DENIED:
+      return 'Location permission is blocked for this site — enable it in your phone/browser settings.';
+    case err.POSITION_UNAVAILABLE:
+      return "Couldn't get a GPS fix (weak signal).";
+    case err.TIMEOUT:
+      return 'GPS is taking a while (weak signal or indoors).';
+    default:
+      return 'Location error: ' + err.message;
+  }
 }
 
 function stopDriverLocationSharing() {
