@@ -4141,15 +4141,9 @@ let driverLastCoords = null;
 let driverLocationHeartbeat = null;
 
 function toggleDriverLocationSharing() {
-  // TEMP DEBUG — remove this alert() line once the location-sharing bug is fixed.
-  try {
-    alert('DEBUG: button clicked. userRole=' + userRole + ' geolocation=' + (!!navigator.geolocation));
-    if (userRole !== 'driver') return;
-    if (driverLocationSharing) stopDriverLocationSharing();
-    else startDriverLocationSharing();
-  } catch (e) {
-    alert('DEBUG ERROR: ' + e.message);
-  }
+  if (userRole !== 'driver') return;
+  if (driverLocationSharing) stopDriverLocationSharing();
+  else startDriverLocationSharing();
 }
 window.toggleDriverLocationSharing = toggleDriverLocationSharing;
 
