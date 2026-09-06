@@ -875,11 +875,11 @@
         <button class="btn btn-primary" onclick="document.getElementById('staffUid')?.scrollIntoView({behavior:'smooth',block:'center'});activateAppTab('profile');if(document.getElementById('staffRoleSelect'))document.getElementById('staffRoleSelect').value='driver';"><i class="business-icon icon-inline" data-lucide="user-plus"></i> Add Driver</button>
       </div>
       <div class="staff-suite-grid">
-        <div class="staff-mini"><div class="mini-icon"><i class="business-icon" data-lucide="truck"></i></div><strong id="delStatDrivers">0</strong><span>Drivers online</span></div>
-        <div class="staff-mini"><div class="mini-icon"><i class="business-icon" data-lucide="package"></i></div><strong id="delStatPending">0</strong><span>Awaiting delivery</span></div>
-        <div class="staff-mini"><div class="mini-icon"><i class="business-icon" data-lucide="circle-check"></i></div><strong id="delStatDeliveredToday">0</strong><span>Delivered today</span></div>
-        <div class="staff-mini"><div class="mini-icon"><i class="business-icon" data-lucide="route"></i></div><strong id="delStatKmMonth">0 km</strong><span>Distance this month</span></div>
-        <div class="staff-mini"><div class="mini-icon"><i class="business-icon" data-lucide="wallet-cards"></i></div><strong id="delStatPayMonth">Rs. 0</strong><span>Driver payout this month</span></div>
+        <div class="staff-mini"><div class="mini-icon"><i class="business-icon" data-lucide="truck"></i></div><strong id="delStatDrivers">–</strong><span>Drivers online</span></div>
+        <div class="staff-mini"><div class="mini-icon"><i class="business-icon" data-lucide="package"></i></div><strong id="delStatPending">–</strong><span>Awaiting delivery</span></div>
+        <div class="staff-mini"><div class="mini-icon"><i class="business-icon" data-lucide="circle-check"></i></div><strong id="delStatDeliveredToday">–</strong><span>Delivered today</span></div>
+        <div class="staff-mini"><div class="mini-icon"><i class="business-icon" data-lucide="route"></i></div><strong id="delStatKmMonth">–</strong><span>Distance this month</span></div>
+        <div class="staff-mini"><div class="mini-icon"><i class="business-icon" data-lucide="wallet-cards"></i></div><strong id="delStatPayMonth">–</strong><span>Driver payout this month</span></div>
       </div>
     </div>
 
@@ -966,7 +966,7 @@
           <thead>
             <tr><th>Order ID</th><th>Customer</th><th>Address</th><th>Status</th><th>Driver</th><th>Distance (km)</th><th>Driver Pay</th><th>Update</th></tr>
           </thead>
-          <tbody id="deliveryBody"></tbody>
+          <tbody id="deliveryBody"><tr><td colspan="8" style="text-align:center;opacity:.5;padding:18px;">Loading deliveries…</td></tr></tbody>
         </table>
       </div>
     </div>

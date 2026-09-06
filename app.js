@@ -3997,6 +3997,7 @@ let ownerPickupMarker = null;
 let ownerDriverLocationsChannel = null;
 let driverLocationPollTimer = null;
 let driverLocationFreshness = {}; // driver_id -> last-updated timestamp (ms)
+let ownerDriverMapLastFitKey = null; // which set of markers the map was last auto-fitted to (see BUG FIX below)
 const DRIVER_ONLINE_THRESHOLD_MS = 90 * 1000; // no ping in 90s = treated as offline/stale on the map
 const DRIVER_ROUTE_COLORS = ['#2563eb', '#dc2626', '#059669', '#7c3aed', '#ea580c', '#0891b2', '#db2777'];
 function colorForDriver(driverId) {
@@ -4169,8 +4170,20 @@ function renderOwnerDriverMarkers(rows) {
   const markers = Object.values(ownerDriverMarkers);
   if (ownerPickupMarker) markers.push(ownerPickupMarker);
   if (markers.length) {
-    const group = L.featureGroup(markers);
-    try { ownerDriverMap.fitBounds(group.getBounds().pad(0.3), { maxZoom: 14 }); } catch (e) {}
+    // BUG FIX: this used to call fitBounds() on every single call to this function —
+    // which runs on every 15s poll AND every realtime ping from ANY driver (so
+    // potentially every few seconds). That silently re-centered/re-zoomed the map
+    // out from under the owner while they were trying to pan or zoom in on a
+    // specific driver, making the map feel broken/unusable for anything but a
+    // glance. Now it only auto-fits when the actual set of visible drivers changes
+    // (one comes online or goes offline) — a driver simply moving no longer yanks
+    // the view around.
+    const fitKey = Object.keys(ownerDriverMarkers).sort().join(',');
+    if (fitKey !== ownerDriverMapLastFitKey) {
+      ownerDriverMapLastFitKey = fitKey;
+      const group = L.featureGroup(markers);
+      try { ownerDriverMap.fitBounds(group.getBounds().pad(0.3), { maxZoom: 14 }); } catch (e) {}
+    }
   }
   renderDeliveryDriverStats();
 }
