@@ -3549,12 +3549,16 @@ window.confirmBatchDelivery = confirmBatchDelivery;
 // Opens a pre-filled WhatsApp message to the customer with their personal
 // "rate this delivery" link (no login needed on their end — see
 // initPublicRatingPage, wired up on ?rate=&rt= at the top of DOMContentLoaded).
-function shareDeliveryRatingLink(orderId) {
+// opts.silent suppresses the "not ready yet" alert and the blocked-popup status
+// message — used when this is auto-triggered right after confirming delivery,
+// so the caller can fold the outcome into its own single status line instead.
+function shareDeliveryRatingLink(orderId, opts) {
+  const silent = !!(opts && opts.silent);
   const o = (myDeliveries || []).find(x => String(x.id) === String(orderId))
     || (typeof orders !== 'undefined' ? orders.find(x => String(x.id) === String(orderId)) : null);
-  if (!o) return;
+  if (!o) return false;
   const token = o.rating_token || o.ratingToken;
-  if (!token) { alert('⭐ Rating link isn\'t ready for this delivery yet — try again in a moment.'); return; }
+  if (!token) { if (!silent) alert('⭐ Rating link isn\'t ready for this delivery yet — try again in a moment.'); return false; }
   const phone = o.customer_phone_snapshot || o.customerPhone || '';
   const name = o.customer_name_snapshot || o.customerName || 'Customer';
   const base = window.location.origin + window.location.pathname;
@@ -3562,7 +3566,11 @@ function shareDeliveryRatingLink(orderId) {
   const msg = `Hi ${name}! 🙏 Thanks for your order — could you take 10 seconds to rate your delivery?\n${link}`;
   const digits = String(phone).replace(/\D/g, '');
   const waLink = digits ? ('https://wa.me/' + digits + '?text=' + encodeURIComponent(msg)) : ('https://wa.me/?text=' + encodeURIComponent(msg));
-  window.open(waLink, '_blank');
+  const win = window.open(waLink, '_blank');
+  if (!win && !silent) {
+    updateStatus('⚠️ Your browser blocked the WhatsApp popup — tap "Send Rating Link" to open it manually.');
+  }
+  return !!win;
 }
 window.shareDeliveryRatingLink = shareDeliveryRatingLink;
 
@@ -3996,7 +4004,14 @@ async function confirmDelivery() {
     Object.assign(o, update);
     closeModal('deliverConfirmModal');
     renderMyDeliveries();
-    updateStatus('✅ Delivery confirmed with proof' + (isCod ? ` • Rs. ${codCollected.toLocaleString()} collected` : ''));
+    // Auto-send the customer's rating link right away — the rider no longer
+    // needs to separately tap "Send Rating Link"; only opening WhatsApp with
+    // the message pre-filled is possible client-side, so the rider still taps
+    // "Send" once inside WhatsApp itself (that step can't be automated).
+    const ratingLinkSent = shareDeliveryRatingLink(o.id, { silent: true });
+    updateStatus('✅ Delivery confirmed with proof'
+      + (isCod ? ` • Rs. ${codCollected.toLocaleString()} collected` : '')
+      + (ratingLinkSent ? ' • rating request opened in WhatsApp' : ' • tap "Send Rating Link" in history to ask for a rating'));
   } catch (e) {
     console.error('Confirm delivery error:', e);
     alert('❌ Could not confirm delivery: ' + e.message + '\n\nMake sure the delivery-proofs storage bucket and the delivery_photo_url / delivery_signature / cod_collected / delivered_at / rating_token columns exist (see setup notes).');
