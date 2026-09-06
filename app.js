@@ -2952,9 +2952,20 @@ function renderMyDeliveries() {
     ? [...active].sort((a, b) => (a.route_sequence || 0) - (b.route_sequence || 0))
     : active;
   const rows = orderedActive.concat(done.slice(0, 10)); // keep recent delivered visible, don't let history grow unbounded
+  // Every "Navigate" link should route starting from the pickup point (Drybea
+  // Market, or whatever the owner has set), not from wherever the driver's
+  // phone happens to be right now — same fixed-origin rule as the Route
+  // Optimizer (see getDriverStartPosition()).
+  const navOrigin = getPickupLocation();
+  const navOriginParam = `&origin=${navOrigin.lat},${navOrigin.lng}`;
   tbody.innerHTML = rows.map((o, i) => {
     const addr = o.address || '';
-    const mapsUrl = addr ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(addr)}` : '';
+    // Prefer an exact dropped pin (delivery_lat/lng) over the raw address text
+    // for the destination, same source of truth the Route Optimizer uses.
+    const destParam = (o.delivery_lat != null && o.delivery_lng != null)
+      ? `${o.delivery_lat},${o.delivery_lng}`
+      : addr;
+    const mapsUrl = destParam ? `https://www.google.com/maps/dir/?api=1${navOriginParam}&destination=${encodeURIComponent(destParam)}` : '';
     const isActiveRow = o.status !== 'delivered' && o.status !== 'cancelled';
     const stopBadge = (isActiveRow && hasFullRoute) ? `<span class="badge" style="background:#eef;color:#334;font-weight:700;">${i + 1}</span>` : (isActiveRow ? `<span style="opacity:.35;">${i + 1}</span>` : '<span style="opacity:.25;">✓</span>');
     // Only orders that are actually out-for-delivery ("shipped") can be batch-confirmed —
@@ -3002,7 +3013,7 @@ function renderMyDeliveries() {
       <td>${escapeHtmlSafe(addr || '-')}${codLabel}${payHint}${pinHint}</td>
       <td>${getStatusBadge(o.status)}${failedHint}</td>
       <td>
-        ${addr ? `<a href="${mapsUrl}" target="_blank" rel="noopener" class="btn btn-sm" style="margin-right:6px;"><i class="business-icon icon-inline" data-lucide="map-pin" aria-hidden="true"></i> Navigate</a>` : ''}
+        ${mapsUrl ? `<a href="${mapsUrl}" target="_blank" rel="noopener" class="btn btn-sm" style="margin-right:6px;"><i class="business-icon icon-inline" data-lucide="map-pin" aria-hidden="true"></i> Navigate</a>` : ''}
         ${setPinBtn}
         ${nextBtn}
         ${ratingCell}
