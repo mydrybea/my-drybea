@@ -3949,6 +3949,12 @@ function startDriverLocationPolling() {
 
 async function loadDriverLocations() {
   if (userRole !== 'owner' || !currentUser) return;
+  // Same fix as the pickup-location save: this runs on a 15s timer for as long as
+  // the owner leaves the Delivery tab open, so it's exactly the kind of call that
+  // hits an access token that expired quietly in the background. Confirm/refresh
+  // the session before the query instead of letting it fail with a raw JWT error
+  // every single poll.
+  if (!(await ensureFreshSession())) return;
   try {
     const { data, error } = await supabase.from('driver_locations').select('*').eq('owner_id', currentUser.id);
     if (error) throw error;
@@ -3956,7 +3962,11 @@ async function loadDriverLocations() {
   } catch (e) {
     console.error('Load driver locations error:', e);
     const countEl = $('liveMapDriverCount');
-    if (countEl) countEl.textContent = '⚠️ Could not load driver locations: ' + e.message;
+    if (countEl) {
+      countEl.textContent = /jwt|expired|not authenticated|401/i.test(e.message || '')
+        ? '⚠️ Session expired — refreshing…' // ensureFreshSession() will catch this on the next poll and redirect if it truly can't recover
+        : '⚠️ Could not load driver locations: ' + e.message;
+    }
   }
 }
 window.loadDriverLocations = loadDriverLocations;
@@ -6123,9 +6133,19 @@ async function catchUpMissedNotifications(){
 // Reconnect + catch up whenever the device comes back online, or the tab/PWA
 // is brought back to the foreground after being backgrounded — both are
 // cases where the websocket may have silently died without onclose firing.
-window.addEventListener('online', () => { if(currentUser) startAppNotifyRealtime(); });
+window.addEventListener('online', () => { if(currentUser) { ensureFreshSession(); startAppNotifyRealtime(); } });
 document.addEventListener('visibilitychange', () => {
   if(document.visibilityState === 'visible' && currentUser){
+    // ROOT-CAUSE FIX for the recurring "JWT expired" errors (pickup location save,
+    // live driver map, etc.): those all happened because the tab sat backgrounded
+    // long enough for the access token to expire while supabase-js's own refresh
+    // timer was frozen by the browser and never fired. The moment the app is
+    // foregrounded again — someone unlocking their phone and tapping back in —
+    // is exactly when that stale token is about to be used for the first time.
+    // Refreshing it here, proactively, before any button tap can hit it, is what
+    // actually stops the whole class of error instead of catching it after the
+    // fact in each individual save/load function.
+    ensureFreshSession();
     if(!appNotifyChannel) startAppNotifyRealtime();
     else catchUpMissedNotifications();
   }
