@@ -342,7 +342,6 @@
     <button class="tab-btn" data-tab="my-reviews" role="tab" aria-label="My Reviews" data-driver-only><i class="business-icon" data-lucide="star" aria-hidden="true"></i><span>Reviews</span></button>
     <button class="tab-btn" data-tab="my-salary" role="tab" aria-label="My Salary" data-staff-only><i class="business-icon" data-lucide="wallet-cards" aria-hidden="true"></i><span>My Salary</span></button>
     <button class="tab-btn" data-tab="orders" role="tab" aria-label="Orders"><i class="business-icon" data-lucide="shopping-bag" aria-hidden="true"></i><span>Orders</span></button>
-    <button class="tab-btn" data-tab="sales" role="tab" aria-label="Sales" data-owner-only><i class="business-icon" data-lucide="store" aria-hidden="true"></i><span>Sales</span><span id="salesPendingBadge" class="nav-badge" style="display:none;">0</span></button>
     <button class="tab-btn" data-tab="income" role="tab" aria-label="Income" data-owner-only><i class="business-icon" data-lucide="trending-up" aria-hidden="true"></i><span>Income</span></button>
     <button class="tab-btn" data-tab="calculator" role="tab" aria-label="Cost" data-owner-only><i class="business-icon" data-lucide="calculator" aria-hidden="true"></i><span>Cost</span></button>
     <button class="tab-btn" data-tab="expenses" role="tab" aria-label="Daily Expenses"><i class="business-icon" data-lucide="receipt" aria-hidden="true"></i><span>Daily Expenses</span></button>
@@ -388,9 +387,13 @@
     <div class="stat-grid">
       <div class="stat accent"><div class="k">Today's Sales</div><div class="v" id="statSalesToday">Rs. 0</div></div>
       <div class="stat"><div class="k">Today's Profit</div><div class="v" id="statProfitToday">Rs. 0</div></div>
-      <div class="stat"><div class="k">Pending Payments</div><div class="v" id="statPendingTotal">Rs. 0</div></div>
       <div class="stat"><div class="k">Wages (Today)</div><div class="v" id="statWageToday">Rs. 0</div></div>
+      <div class="stat"><div class="k">This Month Sales</div><div class="v" id="statSalesMonth">Rs. 0</div></div>
+      <div class="stat"><div class="k">This Month Profit</div><div class="v" id="statProfitMonth">Rs. 0</div></div>
+      <div class="stat"><div class="k">Pending Payments</div><div class="v" id="statPendingTotal">Rs. 0</div></div>
     </div>
+
+    <div class="notice" id="salesTopSellerNotice" style="display:none;"></div>
 
     <div class="card">
       <h2><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="notebook-pen" aria-hidden="true"></i></span><span>Sales Diary</span></h2>
@@ -403,17 +406,30 @@
         <input type="date" id="salesFilterTo" style="max-width:145px;">
         <input type="text" id="salesFilterProduct" placeholder="Search product / customer..." style="max-width:200px;">
         <button class="btn btn-sm" onclick="renderSales()"><i class="business-icon icon-inline" data-lucide="filter" aria-hidden="true"></i> Filter</button>
+        <button class="btn btn-sm" onclick="setSalesFilterToday()">Today</button>
         <button class="btn btn-sm" onclick="clearSalesFilter()">Clear</button>
       </div>
       <div class="table-wrap">
         <table>
           <thead>
-            <tr><th>Date</th><th>Product</th><th>Customer</th><th>Qty</th><th>Price</th><th>Total</th><th>Cost</th><th>Wage</th><th>Marketing</th><th>Profit</th><th>Paid</th><th>Pending</th><th>Actions</th></tr>
+            <tr><th>Date</th><th>Product</th><th>Customer</th><th>Qty</th><th>Price</th><th>Total</th><th>Cost</th><th>Wage</th><th>Marketing</th><th>Profit</th><th>Margin</th><th>Paid</th><th>Pending</th><th>Status</th><th>Actions</th></tr>
           </thead>
           <tbody id="salesBody"></tbody>
         </table>
       </div>
     </div>
+
+    <div class="card">
+      <h2><span class="pro-title-icon slate" aria-hidden="true"><i class="business-icon" data-lucide="calendar-days" aria-hidden="true"></i></span><span>Diary by Day</span></h2>
+      <p class="pro-subtitle slate">Each day's totals, at a glance — the true daily diary view.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Date</th><th>Sales Count</th><th>Revenue</th><th>Profit</th><th>Wages</th><th>Pending</th></tr></thead>
+          <tbody id="salesByDayBody"></tbody>
+        </table>
+      </div>
+    </div>
+
 
     <div class="card">
       <h2><span class="pro-title-icon orange" aria-hidden="true"><i class="business-icon" data-lucide="hand-coins" aria-hidden="true"></i></span><span>Pending Payments</span></h2>
@@ -437,7 +453,7 @@
       </div>
       <div class="table-wrap" style="margin-top:14px;">
         <table>
-          <thead><tr><th>Marketing Channel</th><th>Spend</th><th>Sales Generated</th><th>Revenue</th></tr></thead>
+          <thead><tr><th>Marketing Channel</th><th>Spend</th><th>Sales Generated</th><th>Revenue</th><th>ROI</th></tr></thead>
           <tbody id="salesChannelBody"></tbody>
         </table>
       </div>
@@ -1559,6 +1575,12 @@
           <button class="home-action primary" data-home-tab="dashboard" data-ribbon="true" aria-label="Open Dashboard">
             <span class="home-icon"><i class="business-icon" data-lucide="layout-dashboard" aria-hidden="true"></i></span>
             <span class="home-action-copy"><strong>Dashboard</strong><small>Business at a glance</small></span>
+            <span class="quick-status" aria-hidden="true"></span>
+          </button>
+          <button class="home-action" data-home-tab="sales" data-ribbon="true" aria-label="Open Sales">
+            <span class="home-icon"><i class="business-icon" data-lucide="store" aria-hidden="true"></i></span>
+            <span class="home-action-copy"><strong>Sales</strong><small>Daily diary, profit &amp; pending payments</small></span>
+            <span id="salesQuickBadge" class="nav-badge" style="display:none;">0</span>
             <span class="quick-status" aria-hidden="true"></span>
           </button>
           <button class="home-action" data-home-tab="calculator" data-ribbon="true" aria-label="Open Costing">

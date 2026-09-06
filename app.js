@@ -2516,6 +2516,13 @@ function clearSalesFilter() {
   renderSales();
 }
 
+function setSalesFilterToday() {
+  const today = todayStr();
+  $('salesFilterFrom').value = today;
+  $('salesFilterTo').value = today;
+  renderSales();
+}
+
 function getFilteredSales() {
   const from = $('salesFilterFrom') ? $('salesFilterFrom').value : '';
   const to = $('salesFilterTo') ? $('salesFilterTo').value : '';
@@ -2528,15 +2535,30 @@ function getFilteredSales() {
   });
 }
 
+// Paid in full / part-paid / nothing paid yet — used for the Status column
+// and for coloured badges across the tab.
+function saleStatus(s) {
+  if (s.pending <= 0) return { label: 'Paid', color: '#16a34a', bg: '#dcfce7' };
+  if (s.paid > 0) return { label: 'Partial', color: '#c2410c', bg: '#ffedd5' };
+  return { label: 'Pending', color: '#b91c1c', bg: '#fee2e2' };
+}
+
+function statusBadge(s) {
+  const st = saleStatus(s);
+  return `<span style="display:inline-block;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:700;color:${st.color};background:${st.bg};">${st.label}</span>`;
+}
+
 function renderSales() {
   const tbody = $('salesBody');
   if (!tbody) return;
   const list = getFilteredSales();
 
   if (list.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;opacity:0.5;padding:20px;">No sales logged yet. Tap "Add Sale" to start today\'s diary.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="15" style="text-align:center;opacity:0.5;padding:20px;">No sales logged yet. Tap "Add Sale" to start today\'s diary.</td></tr>';
   } else {
-    tbody.innerHTML = list.map(s => `
+    tbody.innerHTML = list.map(s => {
+      const margin = s.total > 0 ? (s.profit / s.total * 100) : 0;
+      return `
       <tr>
         <td>${s.date}</td>
         <td>${s.product}</td>
@@ -2548,20 +2570,52 @@ function renderSales() {
         <td>${fmt(s.wage)}</td>
         <td>${s.marketingChannel ? s.marketingChannel + (s.marketingCost ? ' (' + fmt(s.marketingCost) + ')' : '') : '-'}</td>
         <td style="color:${s.profit >= 0 ? '#16a34a' : '#dc2626'};font-weight:700;">${fmt(s.profit)}</td>
+        <td>${margin.toFixed(0)}%</td>
         <td>${fmt(s.paid)}</td>
         <td>${s.pending > 0 ? '<span style="color:#c2410c;font-weight:700;">' + fmt(s.pending) + '</span>' : '<span style="opacity:.5;">Rs. 0</span>'}</td>
+        <td>${statusBadge(s)}</td>
         <td>
           <button class="btn btn-sm" onclick="editSale('${s.id}')"><i class="business-icon icon-inline" data-lucide="pencil" aria-hidden="true"></i></button>
           ${userRole === 'owner' ? `<button class="btn btn-sm btn-danger" onclick="deleteSale('${s.id}')"><i class="business-icon icon-inline" data-lucide="trash-2" aria-hidden="true"></i></button>` : ''}
         </td>
       </tr>
-    `).join('');
+    `;
+    }).join('');
   }
 
+  renderSalesByDay(list);
   renderSalesPending(list);
   renderSalesProductPerformance(list);
   updateSalesStats();
   if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+// True "daily diary" view — one row per calendar day with that day's totals,
+// most recent day first.
+function renderSalesByDay(list) {
+  const tbody = $('salesByDayBody');
+  if (!tbody) return;
+  const byDay = {};
+  list.forEach(s => {
+    const d = byDay[s.date] || { count: 0, revenue: 0, profit: 0, wage: 0, pending: 0 };
+    d.count += 1;
+    d.revenue += s.total;
+    d.profit += s.profit;
+    d.wage += s.wage;
+    d.pending += s.pending;
+    byDay[s.date] = d;
+  });
+  const days = Object.entries(byDay).sort((a, b) => b[0].localeCompare(a[0]));
+  tbody.innerHTML = days.length ? days.map(([date, d]) => `
+    <tr>
+      <td>${date}</td>
+      <td>${d.count}</td>
+      <td>${fmt(d.revenue)}</td>
+      <td style="color:${d.profit >= 0 ? '#16a34a' : '#dc2626'};font-weight:700;">${fmt(d.profit)}</td>
+      <td>${fmt(d.wage)}</td>
+      <td>${d.pending > 0 ? '<span style="color:#c2410c;font-weight:700;">' + fmt(d.pending) + '</span>' : '<span style="opacity:.5;">Rs. 0</span>'}</td>
+    </tr>
+  `).join('') : '<tr><td colspan="6" style="text-align:center;opacity:0.5;padding:14px;">No days recorded yet.</td></tr>';
 }
 
 function renderSalesPending(list) {
@@ -2605,8 +2659,10 @@ function renderSalesProductPerformance(list) {
   });
 
   const prodBody = $('salesProductBody');
+  let topSeller = null;
   if (prodBody) {
     const entries = Object.entries(byProduct).sort((a, b) => b[1].revenue - a[1].revenue);
+    if (entries.length) topSeller = entries[0];
     prodBody.innerHTML = entries.length ? entries.map(([name, d]) => `
       <tr>
         <td>${name}</td>
@@ -2621,31 +2677,54 @@ function renderSalesProductPerformance(list) {
   const chanBody = $('salesChannelBody');
   if (chanBody) {
     const entries = Object.entries(byChannel).sort((a, b) => b[1].revenue - a[1].revenue);
-    chanBody.innerHTML = entries.length ? entries.map(([name, d]) => `
+    chanBody.innerHTML = entries.length ? entries.map(([name, d]) => {
+      const roi = d.spend > 0 ? (d.revenue / d.spend) : null;
+      return `
       <tr>
         <td>${name}</td>
         <td>${fmt(d.spend)}</td>
         <td>${d.count}</td>
         <td>${fmt(d.revenue)}</td>
+        <td>${roi !== null ? roi.toFixed(1) + 'x' : '—'}</td>
       </tr>
-    `).join('') : '<tr><td colspan="4" style="text-align:center;opacity:0.5;padding:14px;">No data yet.</td></tr>';
+    `;
+    }).join('') : '<tr><td colspan="5" style="text-align:center;opacity:0.5;padding:14px;">No data yet.</td></tr>';
+  }
+
+  const notice = $('salesTopSellerNotice');
+  if (notice) {
+    if (topSeller) {
+      notice.style.display = 'block';
+      notice.innerHTML = `<i class="business-icon icon-inline" data-lucide="trophy" aria-hidden="true"></i> Best seller in view: <strong>${topSeller[0]}</strong> — ${fmt(topSeller[1].revenue)} revenue, ${fmt(topSeller[1].profit)} profit.`;
+      if (typeof lucide !== 'undefined') lucide.createIcons();
+    } else {
+      notice.style.display = 'none';
+    }
   }
 }
 
 function updateSalesStats() {
   const today = todayStr();
+  const monthPrefix = today.slice(0, 7);
+
   const todaysSales = sales.filter(s => s.date === today);
+  const monthSales = sales.filter(s => s.date.slice(0, 7) === monthPrefix);
+
   const salesToday = todaysSales.reduce((sum, s) => sum + s.total, 0);
   const profitToday = todaysSales.reduce((sum, s) => sum + s.profit, 0);
   const wageToday = todaysSales.reduce((sum, s) => sum + s.wage, 0);
+  const salesMonth = monthSales.reduce((sum, s) => sum + s.total, 0);
+  const profitMonth = monthSales.reduce((sum, s) => sum + s.profit, 0);
   const pendingTotal = sales.reduce((sum, s) => sum + s.pending, 0);
 
   if ($('statSalesToday')) $('statSalesToday').textContent = fmt(salesToday);
   if ($('statProfitToday')) $('statProfitToday').textContent = fmt(profitToday);
   if ($('statWageToday')) $('statWageToday').textContent = fmt(wageToday);
+  if ($('statSalesMonth')) $('statSalesMonth').textContent = fmt(salesMonth);
+  if ($('statProfitMonth')) $('statProfitMonth').textContent = fmt(profitMonth);
   if ($('statPendingTotal')) $('statPendingTotal').textContent = fmt(pendingTotal);
 
-  const badge = $('salesPendingBadge');
+  const badge = $('salesQuickBadge');
   if (badge) {
     const pendingCount = sales.filter(s => s.pending > 0).length;
     if (pendingCount > 0) { badge.style.display = 'inline-block'; badge.textContent = pendingCount; }
@@ -2656,8 +2735,11 @@ function updateSalesStats() {
 function exportSalesCSV() {
   const list = getFilteredSales();
   if (!list.length) { alert('No sales to export.'); return; }
-  const header = ['Date','Product','Customer','Qty','Unit Price','Total','Cost','Wage','Marketing Channel','Marketing Cost','Profit','Paid','Pending','Notes'];
-  const rows = list.map(s => [s.date, s.product, s.customer, s.qty, s.unitPrice, s.total, s.cost, s.wage, s.marketingChannel, s.marketingCost, s.profit, s.paid, s.pending, (s.notes || '').replace(/[\r\n,]+/g, ' ')]);
+  const header = ['Date','Product','Customer','Qty','Unit Price','Total','Cost','Wage','Marketing Channel','Marketing Cost','Profit','Margin %','Paid','Pending','Status','Notes'];
+  const rows = list.map(s => {
+    const margin = s.total > 0 ? (s.profit / s.total * 100) : 0;
+    return [s.date, s.product, s.customer, s.qty, s.unitPrice, s.total, s.cost, s.wage, s.marketingChannel, s.marketingCost, s.profit, margin.toFixed(1), s.paid, s.pending, saleStatus(s).label, (s.notes || '').replace(/[\r\n,]+/g, ' ')];
+  });
   const csv = [header, ...rows].map(r => r.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
@@ -5680,6 +5762,7 @@ async function cloudLoad() {
       // login — not only after manually opening MY STAFF / Profile.
       try { await loadMyStaffOwnerData(); } catch (e) { console.warn('Advance init load:', e); }
       startAdvanceRealtime();
+      try { await loadSalesFromCloud(); updateSalesStats(); } catch (e) { console.warn('Sales init load:', e); }
     }
     updateStatus('☁️ Cloud data loaded');
   } catch (e) {
