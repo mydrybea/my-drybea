@@ -4193,8 +4193,20 @@ function startOwnerDriverLocationsRealtime() {
 let driverLocationWatchId = null;
 let driverLocationSharing = false;
 let driverLocationLastSent = 0;
-let driverLastCoords = null;
+let driverLastCoords = null;      // most recent raw fix, good or bad — used for the trip km counter
+let driverLastGoodCoords = null;  // most recent fix that cleared the accuracy bar — this is what gets shown to the owner
+let driverLocationShareStartTs = 0;
 let driverLocationHeartbeat = null;
+// A GPS fix worse than this (metres of uncertainty) is treated as "not good enough
+// to show" rather than sent as-is — this is what was putting the pin a whole
+// province away: phones fall back to Wi-Fi/cell-tower location (accuracy in the
+// tens of km, sometimes country-level) when they can't get a real GPS lock yet,
+// and the old code forwarded that straight to the owner's map as if it were exact.
+const GOOD_GPS_ACCURACY_M = 500;
+// If no fix ever clears that bar within this long, send the best we've got anyway
+// (heavily flagged) rather than leaving the driver invisible on the map forever —
+// some devices/locations genuinely can't get better than a rough fix.
+const GPS_FALLBACK_GRACE_MS = 45000;
 
 function toggleDriverLocationSharing() {
   if (userRole !== 'driver') return;
@@ -4205,6 +4217,8 @@ window.toggleDriverLocationSharing = toggleDriverLocationSharing;
 
 function startDriverLocationSharing() {
   if (!navigator.geolocation) { alert('Location is not supported on this device/browser.'); return; }
+  driverLastGoodCoords = null;
+  driverLocationShareStartTs = Date.now();
   // FIX: send an immediate fix right away instead of waiting for the first watchPosition
   // callback (which can take a while, or never fire if the device isn't moving) — this is
   // why the owner used to see "sharing on" but no pin appear for a long time.
@@ -4225,10 +4239,11 @@ function startDriverLocationSharing() {
   );
   // FIX: some phones pause/throttle watchPosition callbacks once the driver stops moving or
   // the screen dims, so the owner's map would freeze at the last spot and look "broken" even
-  // though the driver hadn't gone anywhere. A heartbeat resends the last known fix every 20s
-  // regardless, so the "updated Xs ago" freshness on the owner's map stays accurate.
+  // though the driver hadn't gone anywhere. A heartbeat resends the last known GOOD fix every
+  // 20s regardless — never a bad one — so the "updated Xs ago" freshness on the owner's map
+  // stays accurate without ever re-sending a wrong position.
   driverLocationHeartbeat = setInterval(() => {
-    if (driverLastCoords) driverSendLocation(driverLastCoords.lat, driverLastCoords.lng, true, driverLastCoords.accuracy);
+    if (driverLastGoodCoords) driverSendLocation(driverLastGoodCoords.lat, driverLastGoodCoords.lng, true, driverLastGoodCoords.accuracy);
   }, 20000);
   driverLocationSharing = true;
   updateDriverLocationUI();
@@ -4258,6 +4273,33 @@ function updateDriverLocationUI() {
 
 async function driverSendLocation(lat, lng, force, accuracy) {
   driverLastCoords = { lat, lng, accuracy };
+  const acc = (typeof accuracy === 'number' && isFinite(accuracy)) ? Math.round(accuracy) : null;
+
+  // ---- Accuracy gate: don't forward a fix that's too rough to be useful ----
+  // This is the actual fix for the pin showing miles from the driver's real spot:
+  // a poor fix (Wi-Fi/cell-tower estimate, tens of km of uncertainty) is now held
+  // back instead of being upserted straight to the owner's map. We wait for GPS to
+  // lock on to something under GOOD_GPS_ACCURACY_M; only after a grace period with
+  // nothing better do we give up and send the rough one anyway (heavily flagged),
+  // so a driver genuinely stuck with a weak signal still shows up eventually.
+  if (acc != null && acc > GOOD_GPS_ACCURACY_M) {
+    const withinGrace = (Date.now() - driverLocationShareStartTs) < GPS_FALLBACK_GRACE_MS;
+    if (withinGrace || driverLastGoodCoords) {
+      // Either still waiting for the first good lock, or we already have a good
+      // fix on record — in both cases, don't push this rough one. The status
+      // line still updates so the driver can see it's actively trying.
+      const status = $('driverLocationStatus');
+      if (status && driverLocationSharing && !driverLastGoodCoords) {
+        status.textContent = `📡 Getting a precise GPS lock… (currently accurate to ~${(acc/1000).toFixed(1)}km — go outdoors if possible)`;
+      }
+      return;
+    }
+    // Grace period expired and we've never had a good fix at all — send this one
+    // anyway so the driver isn't invisible forever, but it's clearly marked as
+    // approximate both here and in the accuracy circle the owner sees.
+  }
+
+  driverLastGoodCoords = { lat, lng, accuracy: acc };
 
   // Auto-distance: accumulate onto the active trip on every GPS fix (not just the
   // throttled network sends below), filtering tiny GPS jitter (<5m) and unrealistic
@@ -4289,11 +4331,6 @@ async function driverSendLocation(lat, lng, force, accuracy) {
   const now = Date.now();
   if (!force && now - driverLocationLastSent < 8000) return; // throttle: ~once per 8s, saves battery & bandwidth
   driverLocationLastSent = now;
-  // A round accuracy figure in metres, when the browser provided one — this is what lets
-  // the owner (and the driver) tell a genuine GPS fix apart from a rough Wi-Fi/cell-tower
-  // guess, which is the usual cause of the pin looking "wrong" even though nothing in the
-  // app mixed up the coordinates.
-  const acc = (typeof accuracy === 'number' && isFinite(accuracy)) ? Math.round(accuracy) : null;
   const basePayload = {
     driver_id: currentUser.id,
     owner_id: businessId,
