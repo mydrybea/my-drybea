@@ -3071,7 +3071,7 @@ function buildMyDeliveryRow(o, stopBadge, navOriginParam, mode) {
   const ratingCell = o.status === 'delivered'
     ? (o.customer_rating
         ? `<br><small style="opacity:.7;">⭐ Rated ${o.customer_rating}/5${o.rating_feedback ? ' — '+escapeHtmlSafe(o.rating_feedback) : ''}</small>`
-        : (o.rating_token ? `<button class="btn btn-sm" onclick="shareDeliveryRatingLink('${o.id}')" title="WhatsApp the customer a link to rate this delivery"><i class="business-icon icon-inline" data-lucide="star" aria-hidden="true"></i> Send Rating Link</button>` : ''))
+        : (o.rating_token ? `<button class="btn btn-sm" onclick="openRatingLinkModal('${o.id}')" title="Show a QR / WhatsApp link for the customer to rate this delivery"><i class="business-icon icon-inline" data-lucide="star" aria-hidden="true"></i> Send Rating Link</button>` : ''))
     : '';
   const navBtn = mapsUrl ? `<a href="${mapsUrl}" target="_blank" rel="noopener" class="btn btn-sm" style="margin-right:6px;"><i class="business-icon icon-inline" data-lucide="map-pin" aria-hidden="true"></i> Navigate</a>` : '';
 
@@ -3546,19 +3546,16 @@ async function confirmBatchDelivery() {
 }
 window.confirmBatchDelivery = confirmBatchDelivery;
 
-// Opens a pre-filled WhatsApp message to the customer with their personal
-// "rate this delivery" link (no login needed on their end — see
-// initPublicRatingPage, wired up on ?rate=&rt= at the top of DOMContentLoaded).
-// opts.silent suppresses the "not ready yet" alert and the blocked-popup status
-// message — used when this is auto-triggered right after confirming delivery,
-// so the caller can fold the outcome into its own single status line instead.
-function shareDeliveryRatingLink(orderId, opts) {
-  const silent = !!(opts && opts.silent);
+// Builds the customer-facing "rate this delivery" link + WhatsApp message for
+// an order (no login needed on the customer's end — see initPublicRatingPage,
+// wired up on ?rate=&rt= at the top of DOMContentLoaded). Returns null if the
+// order isn't found or doesn't have a rating token yet.
+function buildRatingLinkInfo(orderId) {
   const o = (myDeliveries || []).find(x => String(x.id) === String(orderId))
     || (typeof orders !== 'undefined' ? orders.find(x => String(x.id) === String(orderId)) : null);
-  if (!o) return false;
+  if (!o) return null;
   const token = o.rating_token || o.ratingToken;
-  if (!token) { if (!silent) alert('⭐ Rating link isn\'t ready for this delivery yet — try again in a moment.'); return false; }
+  if (!token) return null;
   const phone = o.customer_phone_snapshot || o.customerPhone || '';
   const name = o.customer_name_snapshot || o.customerName || 'Customer';
   const base = window.location.origin + window.location.pathname;
@@ -3566,13 +3563,74 @@ function shareDeliveryRatingLink(orderId, opts) {
   const msg = `Hi ${name}! 🙏 Thanks for your order — could you take 10 seconds to rate your delivery?\n${link}`;
   const digits = String(phone).replace(/\D/g, '');
   const waLink = digits ? ('https://wa.me/' + digits + '?text=' + encodeURIComponent(msg)) : ('https://wa.me/?text=' + encodeURIComponent(msg));
-  const win = window.open(waLink, '_blank');
+  return { order: o, orderId, name, phone, link, msg, waLink };
+}
+
+// Opens a pre-filled WhatsApp message to the customer with their personal
+// rating link. opts.silent suppresses the "not ready yet" alert and the
+// blocked-popup status message.
+function shareDeliveryRatingLink(orderId, opts) {
+  const silent = !!(opts && opts.silent);
+  const info = buildRatingLinkInfo(orderId);
+  if (!info) { if (!silent) alert('⭐ Rating link isn\'t ready for this delivery yet — try again in a moment.'); return false; }
+  const win = window.open(info.waLink, '_blank');
   if (!win && !silent) {
     updateStatus('⚠️ Your browser blocked the WhatsApp popup — tap "Send Rating Link" to open it manually.');
   }
   return !!win;
 }
 window.shareDeliveryRatingLink = shareDeliveryRatingLink;
+
+// ==================== RATING LINK MODAL (QR + WhatsApp, shown to the rider) ====================
+// Shown right after a driver confirms a delivery, and from "Send Rating Link"
+// in delivery history. Gives the rider two ways to get the customer's rating
+// link into the customer's hands: a QR they can scan on the spot (no need for
+// the customer's phone number / WhatsApp to be reachable), or the existing
+// pre-filled WhatsApp message.
+let ratingLinkModalOrderId = null;
+
+function openRatingLinkModal(orderId) {
+  const info = buildRatingLinkInfo(orderId);
+  if (!info) { alert('⭐ Rating link isn\'t ready for this delivery yet — try again in a moment.'); return false; }
+  ratingLinkModalOrderId = orderId;
+  const label = info.order.order_ref_no || info.order.orderRefNo || String(orderId).slice(0, 8);
+  $('ratingLinkOrderLabel').textContent = `${label} — ${info.name}`;
+  $('ratingLinkQr').innerHTML = '';
+  const img = document.createElement('img');
+  img.src = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(info.link)}`;
+  img.alt = 'Scan to rate this delivery';
+  img.style.borderRadius = '8px';
+  img.style.maxWidth = '100%';
+  $('ratingLinkQr').appendChild(img);
+  $('ratingLinkModal').classList.add('active');
+  return true;
+}
+window.openRatingLinkModal = openRatingLinkModal;
+
+function closeRatingLinkModal() {
+  $('ratingLinkModal').classList.remove('active');
+  ratingLinkModalOrderId = null;
+}
+window.closeRatingLinkModal = closeRatingLinkModal;
+
+function sendRatingLinkFromModal() {
+  if (!ratingLinkModalOrderId) return;
+  shareDeliveryRatingLink(ratingLinkModalOrderId);
+}
+window.sendRatingLinkFromModal = sendRatingLinkFromModal;
+
+async function copyRatingLinkFromModal() {
+  if (!ratingLinkModalOrderId) return;
+  const info = buildRatingLinkInfo(ratingLinkModalOrderId);
+  if (!info) return;
+  try {
+    await navigator.clipboard.writeText(info.link);
+    updateStatus('🔗 Rating link copied');
+  } catch (e) {
+    prompt('Copy this link:', info.link);
+  }
+}
+window.copyRatingLinkFromModal = copyRatingLinkFromModal;
 
 // ==================== AUTO DISTANCE (GPS-based km) ====================
 // Replaces manual km entry for the driver: while a delivery is "shipped", GPS
@@ -4004,14 +4062,12 @@ async function confirmDelivery() {
     Object.assign(o, update);
     closeModal('deliverConfirmModal');
     renderMyDeliveries();
-    // Auto-send the customer's rating link right away — the rider no longer
-    // needs to separately tap "Send Rating Link"; only opening WhatsApp with
-    // the message pre-filled is possible client-side, so the rider still taps
-    // "Send" once inside WhatsApp itself (that step can't be automated).
-    const ratingLinkSent = shareDeliveryRatingLink(o.id, { silent: true });
     updateStatus('✅ Delivery confirmed with proof'
-      + (isCod ? ` • Rs. ${codCollected.toLocaleString()} collected` : '')
-      + (ratingLinkSent ? ' • rating request opened in WhatsApp' : ' • tap "Send Rating Link" in history to ask for a rating'));
+      + (isCod ? ` • Rs. ${codCollected.toLocaleString()} collected` : ''));
+    // Straight after confirming, show the rider a QR + WhatsApp option to get
+    // the customer's rating link across — QR works even if WhatsApp/the
+    // customer's number isn't reachable right now.
+    openRatingLinkModal(o.id);
   } catch (e) {
     console.error('Confirm delivery error:', e);
     alert('❌ Could not confirm delivery: ' + e.message + '\n\nMake sure the delivery-proofs storage bucket and the delivery_photo_url / delivery_signature / cod_collected / delivered_at / rating_token columns exist (see setup notes).');

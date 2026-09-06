@@ -1950,6 +1950,21 @@
   </div>
 </div>
 
+<!-- Rating Link Modal (QR + WhatsApp, shown to the rider after delivery) -->
+<div class="modal-backdrop" id="ratingLinkModal">
+  <div class="modal">
+    <h3><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="star" aria-hidden="true"></i></span><span>Ask for a Rating</span></h3>
+    <p class="pro-subtitle gold" id="ratingLinkOrderLabel">Order</p>
+    <p style="font-size:0.85rem;color:var(--text-muted);">Let the customer scan this QR on your phone, or send it to them on WhatsApp.</p>
+    <div id="ratingLinkQr" style="display:flex;justify-content:center;margin:16px 0;"></div>
+    <div class="om-actions" style="flex-direction:column;gap:8px;">
+      <button class="btn btn-primary" onclick="sendRatingLinkFromModal()" style="width:100%;"><i class="business-icon icon-inline" data-lucide="message-circle" aria-hidden="true"></i> Send via WhatsApp</button>
+      <button class="btn btn-sm" onclick="copyRatingLinkFromModal()" style="width:100%;"><i class="business-icon icon-inline" data-lucide="copy" aria-hidden="true"></i> Copy Link</button>
+      <button class="btn btn-cancel-link" onclick="closeRatingLinkModal()" style="width:100%;">Close</button>
+    </div>
+  </div>
+</div>
+
 <!-- New Order Modal -->
 <div class="modal-backdrop" id="orderModal">
   <div class="modal">
