@@ -2725,7 +2725,7 @@ function renderDeliveryDriverStats() {
   const onlineCountEl = $('delStatDrivers');
   if (!tbody) return;
   if (!driverListCache.length) {
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;opacity:.5;padding:18px;">No drivers added yet. Use "Add Driver" above.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;opacity:.5;padding:18px;">No drivers added yet. Use "Add Driver" above.</td></tr>';
     if (onlineCountEl) onlineCountEl.textContent = '0';
     return;
   }
@@ -2745,12 +2745,26 @@ function renderDeliveryDriverStats() {
     const statusBadge = isOnline
       ? '<span style="color:#1a7f37;font-weight:600;">🟢 Online</span>'
       : (lastSeen ? `<span style="opacity:.6;">⚪ Last seen ${Math.max(1, Math.round((Date.now() - lastSeen) / 60000))}m ago</span>` : '<span style="opacity:.5;">⚪ Not sharing</span>');
+    // "Working %" = how much of today's shift (first share → now) actually had
+    // location sharing ON. Needs shift_start_at to be from TODAY — a driver who
+    // hasn't opened the app yet today (stale row from yesterday) shows "—"
+    // rather than a misleading number computed against a shift that isn't real.
+    const shift = driverShiftDataCache[String(d.id)];
+    let workingPctCell = '<span style="opacity:.4;">—</span>';
+    if (shift && shift.shiftStartAt && shift.shiftStartAt.slice(0, 10) === today) {
+      const shiftMs = Date.now() - new Date(shift.shiftStartAt).getTime();
+      if (shiftMs > 0) {
+        const pct = Math.max(0, Math.min(100, Math.round((shift.activeSeconds * 1000 / shiftMs) * 100)));
+        workingPctCell = `${pct}%`;
+      }
+    }
     return `<tr>
       <td>${escapeHtmlSafe(d.display_name || d.id.slice(0, 8))}</td>
       <td>${statusBadge}</td>
       <td>${todayOrders.length}</td>
       <td>${todayKm ? todayKm.toFixed(1) : '-'}</td>
       <td>Rs. ${Math.round(todayPay).toLocaleString()}</td>
+      <td>${workingPctCell}</td>
       <td>Rs. ${Math.round(monthPay).toLocaleString()}</td>
       <td><button class="btn btn-sm btn-danger" onclick="removeStaffMember('${d.id}')" aria-label="Remove driver"><i class="business-icon icon-inline" data-lucide="trash-2" aria-hidden="true"></i></button></td>
     </tr>`;
@@ -2764,6 +2778,18 @@ window.renderDeliveryDriverStats = renderDeliveryDriverStats;
 // On-time %, average delivery time, per-driver success rate and a breakdown
 // of why deliveries fail. Pulls from the same `orders` array everything else
 // on this tab already uses — no extra fetch needed.
+// Which range the "Driver-wise Success Rate" table is filtered to: 'today' or 'all'.
+let perfDriverRange = 'today';
+function setPerfDriverRange(range) {
+  perfDriverRange = range;
+  const todayBtn = $('perfDriverRangeTodayBtn');
+  const allBtn = $('perfDriverRangeAllBtn');
+  if (todayBtn) todayBtn.classList.toggle('btn-primary', range === 'today');
+  if (allBtn) allBtn.classList.toggle('btn-primary', range === 'all');
+  renderDeliveryPerformance();
+}
+window.setPerfDriverRange = setPerfDriverRange;
+
 function renderDeliveryPerformance() {
   const onTimeEl = $('perfOnTimePct');
   const avgTimeEl = $('perfAvgTime');
@@ -2801,9 +2827,16 @@ function renderDeliveryPerformance() {
     if (!driverListCache.length) {
       driverBody.innerHTML = '<tr><td colspan="4" style="text-align:center;opacity:.5;padding:14px;">No drivers added yet.</td></tr>';
     } else {
+      const today = todayStr();
+      // "Today" = attempts (delivered or failed) that were actually resolved today —
+      // by delivered_at/failed_at when present, falling back to created_at for older
+      // rows recorded before those timestamp columns existed.
+      const isToday = (o, dateField) => ((o[dateField] || o.createdAt || '').slice(0, 10)) === today;
+      const deliveredForRange = perfDriverRange === 'today' ? delivered.filter(o => isToday(o, 'deliveredAt')) : delivered;
+      const failedForRange = perfDriverRange === 'today' ? failed.filter(o => isToday(o, 'failedAt')) : failed;
       driverBody.innerHTML = driverListCache.map(d => {
-        const mineDelivered = delivered.filter(o => String(o.assignedDriverId || '') === String(d.id)).length;
-        const mineFailed = failed.filter(o => String(o.assignedDriverId || '') === String(d.id)).length;
+        const mineDelivered = deliveredForRange.filter(o => String(o.assignedDriverId || '') === String(d.id)).length;
+        const mineFailed = failedForRange.filter(o => String(o.assignedDriverId || '') === String(d.id)).length;
         const mineAttempts = mineDelivered + mineFailed;
         const pct = mineAttempts ? Math.round((mineDelivered / mineAttempts) * 100) : null;
         return `<tr>
@@ -2987,98 +3020,154 @@ async function loadMyDeliveries() {
   }
 }
 
+// Which "My Deliveries" sub-tab is currently shown: 'active' (not yet out for
+// delivery, or a failed attempt to retry), 'proof' (out for delivery — close
+// out with a photo or report an issue), or 'history' (already delivered).
+let myDeliveriesActiveTab = 'active';
+
+function switchMyDeliveriesTab(tab) {
+  myDeliveriesActiveTab = tab;
+  ['active', 'proof', 'history'].forEach(t => {
+    const panel = $(`myDelTab-${t}`);
+    if (panel) panel.style.display = (t === tab) ? '' : 'none';
+  });
+  document.querySelectorAll('.my-del-subtab').forEach(btn => {
+    btn.classList.toggle('btn-primary', btn.getAttribute('data-mydel-tab') === tab);
+  });
+}
+window.switchMyDeliveriesTab = switchMyDeliveriesTab;
+
+// Builds one <tr> for a delivery row. `mode` controls which action buttons show:
+// 'active' (pending/failed — Start/Retry only), 'proof' (shipped — batch
+// checkbox, Mark Delivered, Report Issue), 'history' (delivered — read-only).
+function buildMyDeliveryRow(o, stopBadge, navOriginParam, mode) {
+  const addr = o.address || '';
+  const destParam = (o.delivery_lat != null && o.delivery_lng != null)
+    ? `${o.delivery_lat},${o.delivery_lng}`
+    : addr;
+  const mapsUrl = destParam ? `https://www.google.com/maps/dir/?api=1${navOriginParam}&destination=${encodeURIComponent(destParam)}` : '';
+  const codLabel = (o.payment_method || 'cod') === 'cod'
+    ? `<br><small style="opacity:.7;font-weight:700;">💵 COD Rs. ${Number(o.total || 0).toLocaleString()}${o.status==='delivered' && o.cod_collected!=null ? ' • collected Rs. '+Number(o.cod_collected).toLocaleString() : ''}</small>`
+    : '';
+  const failedHint = o.status === 'failed' && o.failed_reason
+    ? `<br><small style="color:#c0392b;">⚠️ ${escapeHtmlSafe(o.failed_reason)}${o.failed_notes ? ' — '+escapeHtmlSafe(o.failed_notes) : ''}</small>`
+    : '';
+  const payHint = o.delivery_km
+    ? `<br><small style="opacity:.55;">${o.delivery_km} km • Rs. ${Math.round(calculateDriverPay(o.delivery_km).pay).toLocaleString()} pay</small>`
+    : '';
+  const hasPin = o.delivery_lat != null && o.delivery_lng != null;
+  const pinHint = mode !== 'history'
+    ? (hasPin
+        ? '<br><small style="color:#1a7f4b;">📍 Pin set</small>'
+        : '<br><small style="opacity:.5;">📍 No exact pin yet</small>')
+    : '';
+  const setPinBtn = mode !== 'history'
+    ? `<button class="btn btn-sm" onclick="openSetPinModal('${o.id}')" style="margin-right:6px;" title="Drop an exact map pin for this address"><i class="business-icon icon-inline" data-lucide="map-pinned" aria-hidden="true"></i> ${hasPin ? 'Edit Pin' : 'Set Pin'}</button>`
+    : '';
+  const ratingCell = o.status === 'delivered'
+    ? (o.customer_rating
+        ? `<br><small style="opacity:.7;">⭐ Rated ${o.customer_rating}/5${o.rating_feedback ? ' — '+escapeHtmlSafe(o.rating_feedback) : ''}</small>`
+        : (o.rating_token ? `<button class="btn btn-sm" onclick="shareDeliveryRatingLink('${o.id}')" title="WhatsApp the customer a link to rate this delivery"><i class="business-icon icon-inline" data-lucide="star" aria-hidden="true"></i> Send Rating Link</button>` : ''))
+    : '';
+  const navBtn = mapsUrl ? `<a href="${mapsUrl}" target="_blank" rel="noopener" class="btn btn-sm" style="margin-right:6px;"><i class="business-icon icon-inline" data-lucide="map-pin" aria-hidden="true"></i> Navigate</a>` : '';
+
+  if (mode === 'active') {
+    const nextBtn = o.status === 'pending'
+      ? `<button class="btn btn-sm btn-primary" onclick="driverMarkStatus('${o.id}','shipped')"><i class="business-icon icon-inline" data-lucide="truck" aria-hidden="true"></i> Start Delivery</button>`
+      : `<button class="btn btn-sm btn-primary" onclick="driverMarkStatus('${o.id}','shipped')"><i class="business-icon icon-inline" data-lucide="rotate-ccw" aria-hidden="true"></i> Retry Delivery</button>`;
+    return `<tr>
+      <td>${stopBadge}</td>
+      <td><strong>${o.order_ref_no || String(o.id).slice(0,8)}</strong></td>
+      <td>${escapeHtmlSafe(o.customer_name_snapshot || o.customer_address_snapshot || '-')}</td>
+      <td>${escapeHtmlSafe(addr || '-')}${codLabel}${payHint}${pinHint}</td>
+      <td>${getStatusBadge(o.status)}${failedHint}</td>
+      <td>${navBtn}${setPinBtn}${nextBtn}</td>
+    </tr>`;
+  }
+  if (mode === 'proof') {
+    const selectCb = `<input type="checkbox" class="batch-select-cb" title="Select for batch delivery" onchange="toggleBatchSelect('${o.id}', this.checked)" ${batchSelectedIds.has(String(o.id)) ? 'checked' : ''} style="margin-right:6px;vertical-align:middle;width:16px;height:16px;">`;
+    const nextBtn = `<button class="btn btn-sm btn-primary" onclick="openDeliverModal('${o.id}')" style="margin-right:6px;"><i class="business-icon icon-inline" data-lucide="circle-check" aria-hidden="true"></i> Mark Delivered</button>
+      <button class="btn btn-sm" onclick="openFailedModal('${o.id}')"><i class="business-icon icon-inline" data-lucide="circle-alert" aria-hidden="true"></i> Report Issue</button>`;
+    return `<tr>
+      <td>${selectCb}${stopBadge}</td>
+      <td><strong>${o.order_ref_no || String(o.id).slice(0,8)}</strong></td>
+      <td>${escapeHtmlSafe(o.customer_name_snapshot || o.customer_address_snapshot || '-')}</td>
+      <td>${escapeHtmlSafe(addr || '-')}${codLabel}${payHint}${pinHint}</td>
+      <td>${getStatusBadge(o.status)}</td>
+      <td>${navBtn}${setPinBtn}${nextBtn}</td>
+    </tr>`;
+  }
+  // mode === 'history'
+  const deliveredAgo = o.delivered_at ? new Date(o.delivered_at).toLocaleString() : '-';
+  return `<tr>
+    <td><strong>${o.order_ref_no || String(o.id).slice(0,8)}</strong></td>
+    <td>${escapeHtmlSafe(o.customer_name_snapshot || o.customer_address_snapshot || '-')}</td>
+    <td>${escapeHtmlSafe(addr || '-')}${codLabel}${payHint}</td>
+    <td>${deliveredAgo}</td>
+    <td>${ratingCell || '<span style="opacity:.4;">—</span>'}</td>
+  </tr>`;
+}
+
 function renderMyDeliveries() {
-  const tbody = $('myDeliveriesBody');
-  if (!tbody) return;
+  const activeBody = $('myDeliveriesActiveBody');
+  const proofBody = $('myDeliveriesProofBody');
+  const historyBody = $('myDeliveriesHistoryBody');
+  if (!activeBody && !proofBody && !historyBody) return;
   // Drop any batch selections that no longer point at a "shipped" order of
   // ours (e.g. it was reassigned, cancelled, or already delivered elsewhere).
   if (batchSelectedIds.size) {
     const stillShippable = new Set(myDeliveries.filter(o => o.status === 'shipped').map(o => String(o.id)));
     Array.from(batchSelectedIds).forEach(id => { if (!stillShippable.has(id)) batchSelectedIds.delete(id); });
   }
-  const active = myDeliveries.filter(o => o.status !== 'cancelled' && o.status !== 'delivered');
+  const notStarted = myDeliveries.filter(o => o.status === 'pending' || o.status === 'failed');
+  const shipped = myDeliveries.filter(o => o.status === 'shipped');
   const done = myDeliveries.filter(o => o.status === 'delivered');
-  if (active.length === 0 && done.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;opacity:.5;padding:20px;">No deliveries assigned to you right now.</td></tr>';
-    return;
-  }
-  // If every active stop has an optimized route_sequence, show them in that order;
-  // otherwise fall back to the original (oldest-first) assignment order.
-  const hasFullRoute = active.length > 0 && active.every(o => o.route_sequence != null);
+  const allActive = notStarted.concat(shipped);
+
+  // If every active stop has an optimized route_sequence, number them in that
+  // order across BOTH tabs, so "#3" means the same stop no matter which tab
+  // it's currently sitting in; otherwise fall back to assignment order.
+  const hasFullRoute = allActive.length > 0 && allActive.every(o => o.route_sequence != null);
   const orderedActive = hasFullRoute
-    ? [...active].sort((a, b) => (a.route_sequence || 0) - (b.route_sequence || 0))
-    : active;
-  const rows = orderedActive.concat(done.slice(0, 10)); // keep recent delivered visible, don't let history grow unbounded
+    ? [...allActive].sort((a, b) => (a.route_sequence || 0) - (b.route_sequence || 0))
+    : allActive;
+  const stopIndex = new Map(orderedActive.map((o, i) => [String(o.id), i + 1]));
+  const stopBadgeFor = (o) => hasFullRoute
+    ? `<span class="badge" style="background:#eef;color:#334;font-weight:700;">${stopIndex.get(String(o.id))}</span>`
+    : `<span style="opacity:.35;">${stopIndex.get(String(o.id))}</span>`;
+
   // Every "Navigate" link should route starting from the pickup point (Drybea
   // Market, or whatever the owner has set), not from wherever the driver's
   // phone happens to be right now — same fixed-origin rule as the Route
   // Optimizer (see getDriverStartPosition()).
   const navOrigin = getPickupLocation();
   const navOriginParam = `&origin=${navOrigin.lat},${navOrigin.lng}`;
-  tbody.innerHTML = rows.map((o, i) => {
-    const addr = o.address || '';
-    // Prefer an exact dropped pin (delivery_lat/lng) over the raw address text
-    // for the destination, same source of truth the Route Optimizer uses.
-    const destParam = (o.delivery_lat != null && o.delivery_lng != null)
-      ? `${o.delivery_lat},${o.delivery_lng}`
-      : addr;
-    const mapsUrl = destParam ? `https://www.google.com/maps/dir/?api=1${navOriginParam}&destination=${encodeURIComponent(destParam)}` : '';
-    const isActiveRow = o.status !== 'delivered' && o.status !== 'cancelled';
-    const stopBadge = (isActiveRow && hasFullRoute) ? `<span class="badge" style="background:#eef;color:#334;font-weight:700;">${i + 1}</span>` : (isActiveRow ? `<span style="opacity:.35;">${i + 1}</span>` : '<span style="opacity:.25;">✓</span>');
-    // Only orders that are actually out-for-delivery ("shipped") can be batch-confirmed —
-    // same eligibility as the single "Mark Delivered" button below.
-    const canBatchSelect = o.status === 'shipped';
-    const selectCb = canBatchSelect
-      ? `<input type="checkbox" class="batch-select-cb" title="Select for batch delivery" onchange="toggleBatchSelect('${o.id}', this.checked)" ${batchSelectedIds.has(String(o.id)) ? 'checked' : ''} style="margin-right:6px;vertical-align:middle;width:16px;height:16px;">`
-      : '';
-    let nextBtn = '';
-    if (o.status === 'pending') {
-      nextBtn = `<button class="btn btn-sm btn-primary" onclick="driverMarkStatus('${o.id}','shipped')"><i class="business-icon icon-inline" data-lucide="truck" aria-hidden="true"></i> Start Delivery</button>`;
-    } else if (o.status === 'shipped') {
-      nextBtn = `<button class="btn btn-sm btn-primary" onclick="openDeliverModal('${o.id}')" style="margin-right:6px;"><i class="business-icon icon-inline" data-lucide="circle-check" aria-hidden="true"></i> Mark Delivered</button>
-        <button class="btn btn-sm" onclick="openFailedModal('${o.id}')"><i class="business-icon icon-inline" data-lucide="circle-alert" aria-hidden="true"></i> Report Issue</button>`;
-    } else if (o.status === 'failed') {
-      nextBtn = `<button class="btn btn-sm btn-primary" onclick="driverMarkStatus('${o.id}','shipped')"><i class="business-icon icon-inline" data-lucide="rotate-ccw" aria-hidden="true"></i> Retry Delivery</button>`;
-    }
-    const codLabel = (o.payment_method || 'cod') === 'cod'
-      ? `<br><small style="opacity:.7;font-weight:700;">💵 COD Rs. ${Number(o.total || 0).toLocaleString()}${o.status==='delivered' && o.cod_collected!=null ? ' • collected Rs. '+Number(o.cod_collected).toLocaleString() : ''}</small>`
-      : '';
-    const failedHint = o.status === 'failed' && o.failed_reason
-      ? `<br><small style="color:#c0392b;">⚠️ ${escapeHtmlSafe(o.failed_reason)}${o.failed_notes ? ' — '+escapeHtmlSafe(o.failed_notes) : ''}</small>`
-      : '';
-    const payHint = o.delivery_km
-      ? `<br><small style="opacity:.55;">${o.delivery_km} km • Rs. ${Math.round(calculateDriverPay(o.delivery_km).pay).toLocaleString()} pay</small>`
-      : '';
-    const hasPin = o.delivery_lat != null && o.delivery_lng != null;
-    const pinHint = isActiveRow
-      ? (hasPin
-          ? '<br><small style="color:#1a7f4b;">📍 Pin set</small>'
-          : '<br><small style="opacity:.5;">📍 No exact pin yet</small>')
-      : '';
-    const setPinBtn = isActiveRow
-      ? `<button class="btn btn-sm" onclick="openSetPinModal('${o.id}')" style="margin-right:6px;" title="Drop an exact map pin for this address"><i class="business-icon icon-inline" data-lucide="map-pinned" aria-hidden="true"></i> ${hasPin ? 'Edit Pin' : 'Set Pin'}</button>`
-      : '';
-    const ratingCell = o.status === 'delivered'
-      ? (o.customer_rating
-          ? `<br><small style="opacity:.7;">⭐ Rated ${o.customer_rating}/5${o.rating_feedback ? ' — '+escapeHtmlSafe(o.rating_feedback) : ''}</small>`
-          : (o.rating_token ? `<button class="btn btn-sm" onclick="shareDeliveryRatingLink('${o.id}')" title="WhatsApp the customer a link to rate this delivery"><i class="business-icon icon-inline" data-lucide="star" aria-hidden="true"></i> Send Rating Link</button>` : ''))
-      : '';
-    return `<tr>
-      <td>${selectCb}${stopBadge}</td>
-      <td><strong>${o.order_ref_no || String(o.id).slice(0,8)}</strong></td>
-      <td>${escapeHtmlSafe(o.customer_name_snapshot || o.customer_address_snapshot || '-')}</td>
-      <td>${escapeHtmlSafe(addr || '-')}${codLabel}${payHint}${pinHint}</td>
-      <td>${getStatusBadge(o.status)}${failedHint}</td>
-      <td>
-        ${mapsUrl ? `<a href="${mapsUrl}" target="_blank" rel="noopener" class="btn btn-sm" style="margin-right:6px;"><i class="business-icon icon-inline" data-lucide="map-pin" aria-hidden="true"></i> Navigate</a>` : ''}
-        ${setPinBtn}
-        ${nextBtn}
-        ${ratingCell}
-      </td>
-    </tr>`;
-  }).join('');
-  renderBatchGroupsBar();
-  updateBatchActionBar();
+
+  if (activeBody) {
+    activeBody.innerHTML = notStarted.length
+      ? notStarted.slice().sort((a, b) => (stopIndex.get(String(a.id)) || 0) - (stopIndex.get(String(b.id)) || 0))
+          .map(o => buildMyDeliveryRow(o, stopBadgeFor(o), navOriginParam, 'active')).join('')
+      : '<tr><td colspan="6" style="text-align:center;opacity:.5;padding:20px;">Nothing waiting to start — check Proof Upload for what\'s out for delivery.</td></tr>';
+  }
+  if (proofBody) {
+    proofBody.innerHTML = shipped.length
+      ? shipped.slice().sort((a, b) => (stopIndex.get(String(a.id)) || 0) - (stopIndex.get(String(b.id)) || 0))
+          .map(o => buildMyDeliveryRow(o, stopBadgeFor(o), navOriginParam, 'proof')).join('')
+      : '<tr><td colspan="6" style="text-align:center;opacity:.5;padding:20px;">Nothing out for delivery right now.</td></tr>';
+    renderBatchGroupsBar();
+    updateBatchActionBar();
+  }
+  if (historyBody) {
+    const doneSorted = done.slice().sort((a, b) => new Date(b.delivered_at || b.created_at || 0) - new Date(a.delivered_at || a.created_at || 0));
+    historyBody.innerHTML = doneSorted.length
+      ? doneSorted.map(o => buildMyDeliveryRow(o, '', navOriginParam, 'history')).join('')
+      : '<tr><td colspan="5" style="text-align:center;opacity:.5;padding:20px;">No deliveries completed yet.</td></tr>';
+  }
+  const proofCountEl = $('myDelProofCount');
+  if (proofCountEl) {
+    if (shipped.length) { proofCountEl.style.display = ''; proofCountEl.textContent = String(shipped.length); }
+    else proofCountEl.style.display = 'none';
+  }
   if (window.lucide) lucide.createIcons({ attrs: { 'stroke-width': 1.9, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' } });
 }
 
@@ -3992,13 +4081,23 @@ function updateDriverNotifyPermUI() {
 let ownerDriverMap = null;
 let ownerDriverMarkers = {};
 let ownerDriverAccuracyCircles = {};
-let ownerDriverRoutePolylines = {};
 let ownerPickupMarker = null;
 let ownerDriverLocationsChannel = null;
 let driverLocationPollTimer = null;
 let driverLocationFreshness = {}; // driver_id -> last-updated timestamp (ms)
+let driverShiftDataCache = {}; // driver_id -> { shiftStartAt: iso|null, activeSeconds: number } — see "daily working %" below
 let ownerDriverMapLastFitKey = null; // which set of markers the map was last auto-fitted to (see BUG FIX below)
 const DRIVER_ONLINE_THRESHOLD_MS = 90 * 1000; // no ping in 90s = treated as offline/stale on the map
+
+// ---- Breadcrumb trail: the ACTUAL path a driver has driven, from their real GPS
+// fixes, instead of a straight guessed line. No routing service, so it can never
+// be "wrong" the way a road-snapped line could be with a bad geocode — it's
+// literally just where the phone has been. Built client-side from every location
+// update the owner's map receives, so it needs no schema change and starts fresh
+// each time the owner opens the map (older history isn't stored/replayed).
+let ownerDriverBreadcrumbs = {}; // driver_id -> [[lat,lng], ...]
+const BREADCRUMB_MIN_MOVE_M = 20;   // ignore GPS jitter under this distance so the trail stays clean
+const BREADCRUMB_MAX_POINTS = 400;  // cap memory/rendering cost per driver
 const DRIVER_ROUTE_COLORS = ['#2563eb', '#dc2626', '#059669', '#7c3aed', '#ea580c', '#0891b2', '#db2777'];
 function colorForDriver(driverId) {
   const idx = driverListCache.findIndex(d => String(d.id) === String(driverId));
@@ -4135,6 +4234,12 @@ function renderOwnerDriverMarkers(rows) {
     } else {
       ownerDriverMarkers[id] = L.marker([r.latitude, r.longitude], { opacity: isFresh ? 1 : 0.45 }).addTo(ownerDriverMap).bindPopup(popupHtml);
     }
+    // Cache the driver's daily working-% inputs (see driverSendLocation) so
+    // renderDeliveryDriverStats() can show it without a second query.
+    if (isFresh) driverShiftDataCache[id] = { shiftStartAt: r.shift_start_at || null, activeSeconds: Number(r.active_seconds_today) || 0 };
+    // Only extend the breadcrumb trail for a fresh fix — a stale/offline reading
+    // is the driver's last known spot, not a new point they've actually reached.
+    if (isFresh) appendBreadcrumbPoint(id, r.latitude, r.longitude);
     // Draw/update the accuracy circle only when it's actually worth showing (a
     // tight GPS fix under ~30m would just clutter the map with a barely-visible
     // ring) and only for live drivers, so stale circles don't linger.
@@ -4154,7 +4259,12 @@ function renderOwnerDriverMarkers(rows) {
   Object.keys(ownerDriverMarkers).forEach(id => {
     if (!seenAny.has(id)) {
       ownerDriverMap.removeLayer(ownerDriverMarkers[id]); delete ownerDriverMarkers[id]; delete driverLocationFreshness[id];
+      delete driverShiftDataCache[id];
       if (ownerDriverAccuracyCircles[id]) { ownerDriverMap.removeLayer(ownerDriverAccuracyCircles[id]); delete ownerDriverAccuracyCircles[id]; }
+      // Driver's gone from the driver_locations table entirely (not just offline) —
+      // drop their breadcrumb trail too rather than leaving an orphaned line on the map.
+      if (ownerDriverBreadcrumbPolylines[id]) { ownerDriverMap.removeLayer(ownerDriverBreadcrumbPolylines[id]); delete ownerDriverBreadcrumbPolylines[id]; }
+      delete ownerDriverBreadcrumbs[id];
     }
   });
   const countEl = $('liveMapDriverCount');
@@ -4163,10 +4273,10 @@ function renderOwnerDriverMarkers(rows) {
       ? `🟢 ${seenOnline.size} online now`
       : (seenAny.size ? `⚪ ${seenAny.size} driver(s) sharing, but no fresh signal right now` : 'No drivers sharing location right now');
   }
-  // Direction line: pickup point → each of that driver's active drop-offs (in
-  // route-optimizer order, if one was saved), only for drivers currently live —
-  // so the owner sees exactly where an online driver is headed, not stale plans.
-  renderOwnerDriverRoutes(Array.from(seenOnline));
+  // Breadcrumb trail: the actual path each currently-online driver has driven
+  // (real GPS points, starting from the pickup point), not a guessed straight
+  // line — see appendBreadcrumbPoint/renderOwnerDriverBreadcrumbs below.
+  renderOwnerDriverBreadcrumbs(Array.from(seenOnline));
   const markers = Object.values(ownerDriverMarkers);
   if (ownerPickupMarker) markers.push(ownerPickupMarker);
   if (markers.length) {
@@ -4188,37 +4298,48 @@ function renderOwnerDriverMarkers(rows) {
   renderDeliveryDriverStats();
 }
 
-// Draws (or updates) a dashed direction line from the fixed pickup point through
-// each currently-online driver's active drop-off stops, in the order the Route
-// Optimizer picked (falling back to assignment order if a route wasn't optimized).
-function renderOwnerDriverRoutes(onlineDriverIds) {
+// Adds a new point to a driver's breadcrumb trail — but only if it's actually
+// moved a meaningful distance from the last recorded point, so a parked/idle
+// driver's tiny GPS jitter doesn't turn the trail into a fuzzy scribble.
+function appendBreadcrumbPoint(id, lat, lng) {
+  const trail = ownerDriverBreadcrumbs[id] || (ownerDriverBreadcrumbs[id] = []);
+  if (trail.length) {
+    const [lastLat, lastLng] = trail[trail.length - 1];
+    const movedKm = haversineKm(lastLat, lastLng, lat, lng);
+    if (movedKm * 1000 < BREADCRUMB_MIN_MOVE_M) return;
+  } else {
+    // Seed the very first point with the fixed pickup location, so the trail
+    // visibly starts from the shop/warehouse rather than wherever the driver
+    // happened to be when the owner's map first loaded.
+    const pickup = getPickupLocation();
+    trail.push([pickup.lat, pickup.lng]);
+  }
+  trail.push([lat, lng]);
+  if (trail.length > BREADCRUMB_MAX_POINTS) trail.splice(0, trail.length - BREADCRUMB_MAX_POINTS);
+}
+
+// Draws (or updates) a solid line tracing each currently-online driver's actual
+// GPS breadcrumb trail — real fixes the phone has reported, not a routing
+// guess — so the owner sees exactly where that driver has really been today.
+let ownerDriverBreadcrumbPolylines = {};
+function renderOwnerDriverBreadcrumbs(onlineDriverIds) {
   if (!ownerDriverMap) return;
   const idsSet = new Set(onlineDriverIds.map(String));
   idsSet.forEach(id => {
-    const driverOrders = (orders || []).filter(o => String(o.assignedDriverId || '') === id
-      && (o.status === 'pending' || o.status === 'shipped')
-      && o.deliveryLat != null && o.deliveryLng != null);
-    if (!driverOrders.length) {
-      if (ownerDriverRoutePolylines[id]) { ownerDriverMap.removeLayer(ownerDriverRoutePolylines[id]); delete ownerDriverRoutePolylines[id]; }
+    const trail = ownerDriverBreadcrumbs[id];
+    if (!trail || trail.length < 2) {
+      if (ownerDriverBreadcrumbPolylines[id]) { ownerDriverMap.removeLayer(ownerDriverBreadcrumbPolylines[id]); delete ownerDriverBreadcrumbPolylines[id]; }
       return;
     }
-    const sorted = driverOrders.slice().sort((a, b) => {
-      if (a.routeSequence != null && b.routeSequence != null) return a.routeSequence - b.routeSequence;
-      if (a.routeSequence != null) return -1;
-      if (b.routeSequence != null) return 1;
-      return new Date(a.createdAt) - new Date(b.createdAt);
-    });
-    const pickup = getPickupLocation();
-    const latlngs = [[pickup.lat, pickup.lng], ...sorted.map(o => [o.deliveryLat, o.deliveryLng])];
     const color = colorForDriver(id);
-    if (ownerDriverRoutePolylines[id]) {
-      ownerDriverRoutePolylines[id].setLatLngs(latlngs).setStyle({ color });
+    if (ownerDriverBreadcrumbPolylines[id]) {
+      ownerDriverBreadcrumbPolylines[id].setLatLngs(trail).setStyle({ color });
     } else {
-      ownerDriverRoutePolylines[id] = L.polyline(latlngs, { color, weight: 3, dashArray: '7 7', opacity: 0.75 }).addTo(ownerDriverMap);
+      ownerDriverBreadcrumbPolylines[id] = L.polyline(trail, { color, weight: 3, opacity: 0.75 }).addTo(ownerDriverMap);
     }
   });
-  Object.keys(ownerDriverRoutePolylines).forEach(id => {
-    if (!idsSet.has(id)) { ownerDriverMap.removeLayer(ownerDriverRoutePolylines[id]); delete ownerDriverRoutePolylines[id]; }
+  Object.keys(ownerDriverBreadcrumbPolylines).forEach(id => {
+    if (!idsSet.has(id)) { ownerDriverMap.removeLayer(ownerDriverBreadcrumbPolylines[id]); delete ownerDriverBreadcrumbPolylines[id]; }
   });
 }
 
@@ -4351,6 +4472,57 @@ let driverLastCoords = null;      // most recent raw fix, good or bad — used f
 let driverLastGoodCoords = null;  // most recent fix that cleared the accuracy bar — this is what gets shown to the owner
 let driverLocationShareStartTs = 0;
 let driverLocationHeartbeat = null;
+
+// ---- Daily "working %" tracking ----
+// Working % = how much of today's shift the driver actually had location
+// sharing switched on. "Shift" starts at the first time-share of the day and
+// runs to now; "on" time accumulates only while sharing is actually active.
+// Tracked in localStorage (survives app restarts/reloads through the day) and
+// pushed to Supabase alongside each location update so the OWNER can see it
+// too — not just the driver on their own device.
+function driverShiftStorageKey() { return `mydrybea_v34_shift_${(currentUser && currentUser.id) || 'anon'}`; }
+function loadDriverShiftState() {
+  let s;
+  try { s = JSON.parse(localStorage.getItem(driverShiftStorageKey())); } catch (e) { s = null; }
+  const today = todayStr();
+  if (!s || s.date !== today) s = { date: today, shiftStartAt: null, accumulatedMs: 0, sessionStartTs: null };
+  return s;
+}
+function saveDriverShiftState(s) {
+  try { localStorage.setItem(driverShiftStorageKey(), JSON.stringify(s)); } catch (e) {}
+}
+// Call when sharing turns ON: opens today's shift (if not already open) and starts an active session.
+function driverShiftSessionStart() {
+  const s = loadDriverShiftState();
+  if (!s.shiftStartAt) s.shiftStartAt = new Date().toISOString();
+  if (!s.sessionStartTs) s.sessionStartTs = Date.now();
+  saveDriverShiftState(s);
+}
+// Call when sharing turns OFF: folds the just-finished session into the accumulated total.
+function driverShiftSessionStop() {
+  const s = loadDriverShiftState();
+  if (s.sessionStartTs) { s.accumulatedMs += Date.now() - s.sessionStartTs; s.sessionStartTs = null; }
+  saveDriverShiftState(s);
+}
+// Called frequently (every send/heartbeat) while sharing is ON: folds elapsed time
+// into the accumulated total and resets the checkpoint. This means if the browser/app
+// is killed outright without ever calling driverShiftSessionStop(), at most a few
+// seconds since the last checkpoint go uncounted — never hours of "phantom" active
+// time from a session that never got closed out properly.
+function driverShiftCheckpoint() {
+  const s = loadDriverShiftState();
+  if (s.sessionStartTs) {
+    s.accumulatedMs += Date.now() - s.sessionStartTs;
+    s.sessionStartTs = Date.now();
+    saveDriverShiftState(s);
+  }
+}
+// Returns { shiftStartAtIso, activeSeconds } for whatever should be sent to Supabase right now.
+function getDriverShiftStatsForUpload() {
+  const s = loadDriverShiftState();
+  const liveMs = s.accumulatedMs + (s.sessionStartTs ? (Date.now() - s.sessionStartTs) : 0);
+  return { shiftStartAtIso: s.shiftStartAt, activeSeconds: Math.round(liveMs / 1000) };
+}
 // A GPS fix worse than this (metres of uncertainty) is treated as "not good enough
 // to show" rather than sent as-is — this is what was putting the pin a whole
 // province away: phones fall back to Wi-Fi/cell-tower location (accuracy in the
@@ -4373,6 +4545,7 @@ function startDriverLocationSharing() {
   if (!navigator.geolocation) { alert('Location is not supported on this device/browser.'); return; }
   driverLastGoodCoords = null;
   driverLocationShareStartTs = Date.now();
+  driverShiftSessionStart();
   const status = $('driverLocationStatus');
   if (status) status.textContent = '📡 Getting your location…';
   // FIX: send an immediate fix right away instead of waiting for the first watchPosition
@@ -4442,6 +4615,7 @@ function stopDriverLocationSharing() {
   if (driverLocationWatchId != null) { navigator.geolocation.clearWatch(driverLocationWatchId); driverLocationWatchId = null; }
   if (driverLocationHeartbeat != null) { clearInterval(driverLocationHeartbeat); driverLocationHeartbeat = null; }
   driverLocationSharing = false;
+  driverShiftSessionStop();
   updateDriverLocationUI();
 }
 
@@ -4460,9 +4634,35 @@ function updateDriverLocationUI() {
   if (window.lucide) lucide.createIcons({ attrs: { 'stroke-width': 1.9, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' } });
 }
 
+// Upserts a driver_locations row, gracefully dropping any column Supabase
+// doesn't recognize yet (e.g. `accuracy`, `shift_start_at`, `active_seconds_today`
+// before their migration has been run) and retrying, instead of failing the
+// whole location update — and thus silently going invisible on the owner's
+// map — over one missing optional column. Generalizes the accuracy-column
+// fallback that used to be hardcoded here to cover every optional field.
+async function upsertDriverLocationResilient(payload) {
+  let attempt = { ...payload };
+  for (let i = 0; i < 4; i++) {
+    const { error } = await supabase.from('driver_locations').upsert(attempt, { onConflict: 'driver_id' });
+    if (!error) return { error: null };
+    const m = /column ["']?([a-zA-Z0-9_]+)["']? does not exist/i.exec(error.message || '');
+    if (m && attempt.hasOwnProperty(m[1])) {
+      delete attempt[m[1]];
+      continue; // retry without that column
+    }
+    return { error }; // some other error — don't loop forever
+  }
+  return { error: new Error('Could not save location after removing unrecognized columns.') };
+}
+
 async function driverSendLocation(lat, lng, force, accuracy) {
   driverLastCoords = { lat, lng, accuracy };
   const acc = (typeof accuracy === 'number' && isFinite(accuracy)) ? Math.round(accuracy) : null;
+  // Checkpoint the "working %" shift clock on every fix — even one that gets
+  // filtered out below by the accuracy gate — because the driver still has
+  // sharing switched ON and is out working; that's what this stat measures,
+  // not whether any particular fix was precise enough to forward.
+  driverShiftCheckpoint();
 
   // ---- Accuracy gate: don't forward a fix that's too rough to be useful ----
   // This is the actual fix for the pin showing miles from the driver's real spot:
@@ -4527,16 +4727,18 @@ async function driverSendLocation(lat, lng, force, accuracy) {
     longitude: lng,
     updated_at: new Date().toISOString()
   };
+  if (acc != null) basePayload.accuracy = acc;
+  // "Working %" inputs — shift_start_at (when today's shift began) and
+  // active_seconds_today (accumulated ON time) — sent alongside every location
+  // update so the owner's Drivers & Earnings table can show it without a
+  // separate query. Optional columns: see upsertDriverLocationResilient below,
+  // which drops any column Supabase doesn't recognize yet and retries, the
+  // same graceful pattern already used for the `accuracy` column.
+  const shiftStats = getDriverShiftStatsForUpload();
+  if (shiftStats.shiftStartAtIso) basePayload.shift_start_at = shiftStats.shiftStartAtIso;
+  basePayload.active_seconds_today = shiftStats.activeSeconds;
   try {
-    let { error } = await supabase.from('driver_locations')
-      .upsert(acc != null ? { ...basePayload, accuracy: acc } : basePayload, { onConflict: 'driver_id' });
-    if (error && acc != null && /column .*accuracy.* does not exist/i.test(error.message || '')) {
-      // The accuracy column hasn't been added to the driver_locations table yet —
-      // fall back to sending without it rather than failing the whole location
-      // update (and thus silently going invisible on the owner's map) over one
-      // missing column.
-      ({ error } = await supabase.from('driver_locations').upsert(basePayload, { onConflict: 'driver_id' }));
-    }
+    const { error } = await upsertDriverLocationResilient(basePayload);
     if (error) throw error;
     // FIX: surface success/failure on-screen. Previously a failed upsert (e.g. a missing
     // RLS policy or unique constraint on driver_id) only logged to the browser console —

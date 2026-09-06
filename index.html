@@ -893,10 +893,10 @@
       </div>
       <div class="dv-map-frame">
         <div id="ownerDriverMap" style="height:360px;border-radius:14px;overflow:hidden;background:#1a2332;margin-top:10px;"></div>
-        <div class="dv-map-legend">🟠 Pickup point · ┄ planned route</div>
+        <div class="dv-map-legend">🟠 Pickup point · ── actual GPS trail</div>
       </div>
       <div style="margin-top:8px;font-size:12px;opacity:.65;" id="liveMapDriverCount">Loading driver locations…</div>
-      <div style="margin-top:4px;font-size:11px;opacity:.55;">🟠 Pickup point (fixed) · dashed line = that driver's planned pickup → drop-off direction, shown while they're online</div>
+      <div style="margin-top:4px;font-size:11px;opacity:.55;">🟠 Pickup point (fixed) · colored line = that driver's real GPS breadcrumb trail so far today, shown while they're online (not a routed guess)</div>
     </div>
 
     <div class="card" style="margin-top:16px;">
@@ -911,6 +911,13 @@
       <div class="notice" style="margin-top:10px;">💡 "On-time" = delivered within 24 hours of the driver tapping "Start Delivery". Only deliveries made after this feature was added have the timestamps needed to count.</div>
 
       <div class="table-wrap" style="margin-top:14px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;">
+          <h3 style="margin:0;font-size:14px;">Driver-wise Success Rate</h3>
+          <div style="display:flex;gap:6px;">
+            <button type="button" id="perfDriverRangeTodayBtn" class="btn btn-sm btn-primary" onclick="setPerfDriverRange('today')">Today</button>
+            <button type="button" id="perfDriverRangeAllBtn" class="btn btn-sm" onclick="setPerfDriverRange('all')">All-time</button>
+          </div>
+        </div>
         <table class="staff-table-compact">
           <thead><tr><th>Driver</th><th>Delivered</th><th>Failed</th><th>Success Rate</th></tr></thead>
           <tbody id="perfDriverBody"><tr><td colspan="4" style="text-align:center;opacity:.5;padding:14px;">No data yet.</td></tr></tbody>
@@ -953,8 +960,8 @@
       </div>
       <div class="table-wrap" style="margin-top:10px;">
         <table class="staff-table-compact">
-          <thead><tr><th>Driver</th><th>Status</th><th>Deliveries Today</th><th>Today km</th><th>Today Pay</th><th>This Month Pay</th><th></th></tr></thead>
-          <tbody id="deliveryDriverStatsBody"><tr><td colspan="7" style="text-align:center;opacity:.5;padding:18px;">Loading drivers…</td></tr></tbody>
+          <thead><tr><th>Driver</th><th>Status</th><th>Deliveries Today</th><th>Today km</th><th>Today Pay</th><th>Working %</th><th>This Month Pay</th><th></th></tr></thead>
+          <tbody id="deliveryDriverStatsBody"><tr><td colspan="8" style="text-align:center;opacity:.5;padding:18px;">Loading drivers…</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -1587,21 +1594,58 @@
         <span id="routeOptimizeStatus" style="font-size:12px;opacity:.7;font-weight:600;"></span>
       </div>
 
-      <!-- Batch delivery mode: quick-select nearby stops, then a floating action bar to confirm them all at once -->
-      <div id="batchGroupsBar" style="display:none;margin-bottom:10px;padding:10px 14px;border-radius:10px;background:#eef6ff;"></div>
-      <div id="batchActionBar" style="display:none;align-items:center;gap:10px;margin-bottom:14px;padding:10px 14px;border-radius:10px;background:#eafaf0;flex-wrap:wrap;">
-        <strong id="batchSelectedCount" style="font-size:13px;">0 selected</strong>
-        <button class="btn btn-sm btn-primary" onclick="openBatchDeliverModal()"><i class="business-icon icon-inline" data-lucide="package-check" aria-hidden="true"></i> Batch Deliver Selected</button>
-        <button class="btn btn-sm" onclick="clearBatchSelection()">Clear Selection</button>
+      <!-- Sub-tabs: keeps "still to do", "ready to close out with proof", and "already done" from
+           being crammed into one long mixed-status table (see renderMyDeliveries in app.js). -->
+      <div id="myDeliveriesSubTabs" style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;">
+        <button type="button" class="btn btn-sm my-del-subtab btn-primary" data-mydel-tab="active" onclick="switchMyDeliveriesTab('active')"><i class="business-icon icon-inline" data-lucide="list-checks" aria-hidden="true"></i> Active Deliveries</button>
+        <button type="button" class="btn btn-sm my-del-subtab" data-mydel-tab="proof" onclick="switchMyDeliveriesTab('proof')"><i class="business-icon icon-inline" data-lucide="camera" aria-hidden="true"></i> Proof Upload <span id="myDelProofCount" class="badge" style="display:none;"></span></button>
+        <button type="button" class="btn btn-sm my-del-subtab" data-mydel-tab="history" onclick="switchMyDeliveriesTab('history')"><i class="business-icon icon-inline" data-lucide="history" aria-hidden="true"></i> Delivery History</button>
       </div>
 
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr><th>#</th><th>Order</th><th>Customer</th><th>Address</th><th>Status</th><th>Actions</th></tr>
-          </thead>
-          <tbody id="myDeliveriesBody"><tr><td colspan="5" style="text-align:center;opacity:.5;padding:20px;">Loading…</td></tr></tbody>
-        </table>
+      <!-- ---- Active Deliveries: not yet out for delivery (pending), or a previous attempt failed ---- -->
+      <div id="myDelTab-active">
+        <p class="pro-subtitle orange" style="margin-top:0;">Not yet out for delivery, or a previous attempt failed. Tap Navigate, then Start Delivery when you head out.</p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>#</th><th>Order</th><th>Customer</th><th>Address</th><th>Status</th><th>Actions</th></tr>
+            </thead>
+            <tbody id="myDeliveriesActiveBody"><tr><td colspan="6" style="text-align:center;opacity:.5;padding:20px;">Loading…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ---- Proof Upload: out for delivery ("shipped") — close these out with a photo, or report an issue ---- -->
+      <div id="myDelTab-proof" style="display:none;">
+        <p class="pro-subtitle orange" style="margin-top:0;">Out for delivery right now. Confirm with a photo once dropped off, or report an issue if it can't be completed.</p>
+        <!-- Batch delivery mode: quick-select nearby stops, then a floating action bar to confirm them all at once -->
+        <div id="batchGroupsBar" style="display:none;margin-bottom:10px;padding:10px 14px;border-radius:10px;background:#eef6ff;"></div>
+        <div id="batchActionBar" style="display:none;align-items:center;gap:10px;margin-bottom:14px;padding:10px 14px;border-radius:10px;background:#eafaf0;flex-wrap:wrap;">
+          <strong id="batchSelectedCount" style="font-size:13px;">0 selected</strong>
+          <button class="btn btn-sm btn-primary" onclick="openBatchDeliverModal()"><i class="business-icon icon-inline" data-lucide="package-check" aria-hidden="true"></i> Batch Deliver Selected</button>
+          <button class="btn btn-sm" onclick="clearBatchSelection()">Clear Selection</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>#</th><th>Order</th><th>Customer</th><th>Address</th><th>Status</th><th>Actions</th></tr>
+            </thead>
+            <tbody id="myDeliveriesProofBody"><tr><td colspan="6" style="text-align:center;opacity:.5;padding:20px;">Loading…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ---- Delivery History: already delivered ---- -->
+      <div id="myDelTab-history" style="display:none;">
+        <p class="pro-subtitle orange" style="margin-top:0;">Everything you've already delivered.</p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Order</th><th>Customer</th><th>Address</th><th>Delivered</th><th>Rating</th></tr>
+            </thead>
+            <tbody id="myDeliveriesHistoryBody"><tr><td colspan="5" style="text-align:center;opacity:.5;padding:20px;">Loading…</td></tr></tbody>
+          </table>
+        </div>
       </div>
     </div>
   </section>
