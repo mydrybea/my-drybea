@@ -1594,31 +1594,17 @@
         <span id="routeOptimizeStatus" style="font-size:12px;opacity:.7;font-weight:600;"></span>
       </div>
 
-      <!-- Sub-tabs: keeps "still to do", "ready to close out with proof", and "already done" from
-           being crammed into one long mixed-status table (see renderMyDeliveries in app.js). -->
+      <!-- Sub-tabs: keeps "still to do" and "already done" from being crammed
+           into one long mixed-status table (see renderMyDeliveries in app.js). -->
       <div id="myDeliveriesSubTabs" style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;">
         <button type="button" class="btn btn-sm my-del-subtab btn-primary" data-mydel-tab="active" onclick="switchMyDeliveriesTab('active')"><i class="business-icon icon-inline" data-lucide="list-checks" aria-hidden="true"></i> Active Deliveries</button>
-        <button type="button" class="btn btn-sm my-del-subtab" data-mydel-tab="proof" onclick="switchMyDeliveriesTab('proof')"><i class="business-icon icon-inline" data-lucide="camera" aria-hidden="true"></i> Proof Upload <span id="myDelProofCount" class="badge" style="display:none;"></span></button>
         <button type="button" class="btn btn-sm my-del-subtab" data-mydel-tab="history" onclick="switchMyDeliveriesTab('history')"><i class="business-icon icon-inline" data-lucide="history" aria-hidden="true"></i> Delivery History</button>
       </div>
 
-      <!-- ---- Active Deliveries: not yet out for delivery (pending), or a previous attempt failed ---- -->
+      <!-- ---- Active Deliveries: pending, out for delivery, or a previous attempt failed ---- -->
       <div id="myDelTab-active">
-        <p class="pro-subtitle orange" style="margin-top:0;">Not yet out for delivery, or a previous attempt failed. Tap Navigate, then Start Delivery when you head out.</p>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr><th>#</th><th>Order</th><th>Customer</th><th>Address</th><th>Status</th><th>Actions</th></tr>
-            </thead>
-            <tbody id="myDeliveriesActiveBody"><tr><td colspan="6" style="text-align:center;opacity:.5;padding:20px;">Loading…</td></tr></tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- ---- Proof Upload: out for delivery ("shipped") — close these out with a photo, or report an issue ---- -->
-      <div id="myDelTab-proof" style="display:none;">
-        <p class="pro-subtitle orange" style="margin-top:0;">Out for delivery right now. Confirm with a photo once dropped off, or report an issue if it can't be completed.</p>
-        <!-- Batch delivery mode: quick-select nearby stops, then a floating action bar to confirm them all at once -->
+        <p class="pro-subtitle orange" style="margin-top:0;">Everything not yet delivered. Navigate, start the delivery, then confirm with a photo (or report an issue) once you're there.</p>
+        <!-- Batch delivery mode: quick-select nearby out-for-delivery stops, then a floating action bar to confirm them all at once -->
         <div id="batchGroupsBar" style="display:none;margin-bottom:10px;padding:10px 14px;border-radius:10px;background:#eef6ff;"></div>
         <div id="batchActionBar" style="display:none;align-items:center;gap:10px;margin-bottom:14px;padding:10px 14px;border-radius:10px;background:#eafaf0;flex-wrap:wrap;">
           <strong id="batchSelectedCount" style="font-size:13px;">0 selected</strong>
@@ -1630,7 +1616,7 @@
             <thead>
               <tr><th>#</th><th>Order</th><th>Customer</th><th>Address</th><th>Status</th><th>Actions</th></tr>
             </thead>
-            <tbody id="myDeliveriesProofBody"><tr><td colspan="6" style="text-align:center;opacity:.5;padding:20px;">Loading…</td></tr></tbody>
+            <tbody id="myDeliveriesActiveBody"><tr><td colspan="6" style="text-align:center;opacity:.5;padding:20px;">Loading…</td></tr></tbody>
           </table>
         </div>
       </div>

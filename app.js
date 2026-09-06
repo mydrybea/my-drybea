@@ -3020,14 +3020,14 @@ async function loadMyDeliveries() {
   }
 }
 
-// Which "My Deliveries" sub-tab is currently shown: 'active' (not yet out for
-// delivery, or a failed attempt to retry), 'proof' (out for delivery — close
-// out with a photo or report an issue), or 'history' (already delivered).
+// Which "My Deliveries" sub-tab is currently shown: 'active' (everything not
+// yet delivered — pending, out for delivery, or a failed attempt to retry)
+// or 'history' (already delivered).
 let myDeliveriesActiveTab = 'active';
 
 function switchMyDeliveriesTab(tab) {
   myDeliveriesActiveTab = tab;
-  ['active', 'proof', 'history'].forEach(t => {
+  ['active', 'history'].forEach(t => {
     const panel = $(`myDelTab-${t}`);
     if (panel) panel.style.display = (t === tab) ? '' : 'none';
   });
@@ -3038,8 +3038,8 @@ function switchMyDeliveriesTab(tab) {
 window.switchMyDeliveriesTab = switchMyDeliveriesTab;
 
 // Builds one <tr> for a delivery row. `mode` controls which action buttons show:
-// 'active' (pending/failed — Start/Retry only), 'proof' (shipped — batch
-// checkbox, Mark Delivered, Report Issue), 'history' (delivered — read-only).
+// 'active' (pending/shipped/failed — Start, batch checkbox + Mark Delivered/Report
+// Issue, or Retry, depending on status), 'history' (delivered — read-only).
 function buildMyDeliveryRow(o, stopBadge, navOriginParam, mode) {
   const addr = o.address || '';
   const destParam = (o.delivery_lat != null && o.delivery_lng != null)
@@ -3072,28 +3072,24 @@ function buildMyDeliveryRow(o, stopBadge, navOriginParam, mode) {
   const navBtn = mapsUrl ? `<a href="${mapsUrl}" target="_blank" rel="noopener" class="btn btn-sm" style="margin-right:6px;"><i class="business-icon icon-inline" data-lucide="map-pin" aria-hidden="true"></i> Navigate</a>` : '';
 
   if (mode === 'active') {
-    const nextBtn = o.status === 'pending'
-      ? `<button class="btn btn-sm btn-primary" onclick="driverMarkStatus('${o.id}','shipped')"><i class="business-icon icon-inline" data-lucide="truck" aria-hidden="true"></i> Start Delivery</button>`
-      : `<button class="btn btn-sm btn-primary" onclick="driverMarkStatus('${o.id}','shipped')"><i class="business-icon icon-inline" data-lucide="rotate-ccw" aria-hidden="true"></i> Retry Delivery</button>`;
-    return `<tr>
-      <td>${stopBadge}</td>
-      <td><strong>${o.order_ref_no || String(o.id).slice(0,8)}</strong></td>
-      <td>${escapeHtmlSafe(o.customer_name_snapshot || o.customer_address_snapshot || '-')}</td>
-      <td>${escapeHtmlSafe(addr || '-')}${codLabel}${payHint}${pinHint}</td>
-      <td>${getStatusBadge(o.status)}${failedHint}</td>
-      <td>${navBtn}${setPinBtn}${nextBtn}</td>
-    </tr>`;
-  }
-  if (mode === 'proof') {
-    const selectCb = `<input type="checkbox" class="batch-select-cb" title="Select for batch delivery" onchange="toggleBatchSelect('${o.id}', this.checked)" ${batchSelectedIds.has(String(o.id)) ? 'checked' : ''} style="margin-right:6px;vertical-align:middle;width:16px;height:16px;">`;
-    const nextBtn = `<button class="btn btn-sm btn-primary" onclick="openDeliverModal('${o.id}')" style="margin-right:6px;"><i class="business-icon icon-inline" data-lucide="circle-check" aria-hidden="true"></i> Mark Delivered</button>
-      <button class="btn btn-sm" onclick="openFailedModal('${o.id}')"><i class="business-icon icon-inline" data-lucide="circle-alert" aria-hidden="true"></i> Report Issue</button>`;
+    const selectCb = o.status === 'shipped'
+      ? `<input type="checkbox" class="batch-select-cb" title="Select for batch delivery" onchange="toggleBatchSelect('${o.id}', this.checked)" ${batchSelectedIds.has(String(o.id)) ? 'checked' : ''} style="margin-right:6px;vertical-align:middle;width:16px;height:16px;">`
+      : '';
+    let nextBtn = '';
+    if (o.status === 'pending') {
+      nextBtn = `<button class="btn btn-sm btn-primary" onclick="driverMarkStatus('${o.id}','shipped')"><i class="business-icon icon-inline" data-lucide="truck" aria-hidden="true"></i> Start Delivery</button>`;
+    } else if (o.status === 'shipped') {
+      nextBtn = `<button class="btn btn-sm btn-primary" onclick="openDeliverModal('${o.id}')" style="margin-right:6px;"><i class="business-icon icon-inline" data-lucide="circle-check" aria-hidden="true"></i> Mark Delivered</button>
+        <button class="btn btn-sm" onclick="openFailedModal('${o.id}')"><i class="business-icon icon-inline" data-lucide="circle-alert" aria-hidden="true"></i> Report Issue</button>`;
+    } else if (o.status === 'failed') {
+      nextBtn = `<button class="btn btn-sm btn-primary" onclick="driverMarkStatus('${o.id}','shipped')"><i class="business-icon icon-inline" data-lucide="rotate-ccw" aria-hidden="true"></i> Retry Delivery</button>`;
+    }
     return `<tr>
       <td>${selectCb}${stopBadge}</td>
       <td><strong>${o.order_ref_no || String(o.id).slice(0,8)}</strong></td>
       <td>${escapeHtmlSafe(o.customer_name_snapshot || o.customer_address_snapshot || '-')}</td>
       <td>${escapeHtmlSafe(addr || '-')}${codLabel}${payHint}${pinHint}</td>
-      <td>${getStatusBadge(o.status)}</td>
+      <td>${getStatusBadge(o.status)}${failedHint}</td>
       <td>${navBtn}${setPinBtn}${nextBtn}</td>
     </tr>`;
   }
@@ -3110,23 +3106,19 @@ function buildMyDeliveryRow(o, stopBadge, navOriginParam, mode) {
 
 function renderMyDeliveries() {
   const activeBody = $('myDeliveriesActiveBody');
-  const proofBody = $('myDeliveriesProofBody');
   const historyBody = $('myDeliveriesHistoryBody');
-  if (!activeBody && !proofBody && !historyBody) return;
+  if (!activeBody && !historyBody) return;
   // Drop any batch selections that no longer point at a "shipped" order of
   // ours (e.g. it was reassigned, cancelled, or already delivered elsewhere).
   if (batchSelectedIds.size) {
     const stillShippable = new Set(myDeliveries.filter(o => o.status === 'shipped').map(o => String(o.id)));
     Array.from(batchSelectedIds).forEach(id => { if (!stillShippable.has(id)) batchSelectedIds.delete(id); });
   }
-  const notStarted = myDeliveries.filter(o => o.status === 'pending' || o.status === 'failed');
-  const shipped = myDeliveries.filter(o => o.status === 'shipped');
+  const allActive = myDeliveries.filter(o => o.status === 'pending' || o.status === 'shipped' || o.status === 'failed');
   const done = myDeliveries.filter(o => o.status === 'delivered');
-  const allActive = notStarted.concat(shipped);
 
   // If every active stop has an optimized route_sequence, number them in that
-  // order across BOTH tabs, so "#3" means the same stop no matter which tab
-  // it's currently sitting in; otherwise fall back to assignment order.
+  // order; otherwise fall back to assignment order.
   const hasFullRoute = allActive.length > 0 && allActive.every(o => o.route_sequence != null);
   const orderedActive = hasFullRoute
     ? [...allActive].sort((a, b) => (a.route_sequence || 0) - (b.route_sequence || 0))
@@ -3144,16 +3136,9 @@ function renderMyDeliveries() {
   const navOriginParam = `&origin=${navOrigin.lat},${navOrigin.lng}`;
 
   if (activeBody) {
-    activeBody.innerHTML = notStarted.length
-      ? notStarted.slice().sort((a, b) => (stopIndex.get(String(a.id)) || 0) - (stopIndex.get(String(b.id)) || 0))
-          .map(o => buildMyDeliveryRow(o, stopBadgeFor(o), navOriginParam, 'active')).join('')
-      : '<tr><td colspan="6" style="text-align:center;opacity:.5;padding:20px;">Nothing waiting to start — check Proof Upload for what\'s out for delivery.</td></tr>';
-  }
-  if (proofBody) {
-    proofBody.innerHTML = shipped.length
-      ? shipped.slice().sort((a, b) => (stopIndex.get(String(a.id)) || 0) - (stopIndex.get(String(b.id)) || 0))
-          .map(o => buildMyDeliveryRow(o, stopBadgeFor(o), navOriginParam, 'proof')).join('')
-      : '<tr><td colspan="6" style="text-align:center;opacity:.5;padding:20px;">Nothing out for delivery right now.</td></tr>';
+    activeBody.innerHTML = orderedActive.length
+      ? orderedActive.map(o => buildMyDeliveryRow(o, stopBadgeFor(o), navOriginParam, 'active')).join('')
+      : '<tr><td colspan="6" style="text-align:center;opacity:.5;padding:20px;">No deliveries assigned to you right now.</td></tr>';
     renderBatchGroupsBar();
     updateBatchActionBar();
   }
@@ -3162,11 +3147,6 @@ function renderMyDeliveries() {
     historyBody.innerHTML = doneSorted.length
       ? doneSorted.map(o => buildMyDeliveryRow(o, '', navOriginParam, 'history')).join('')
       : '<tr><td colspan="5" style="text-align:center;opacity:.5;padding:20px;">No deliveries completed yet.</td></tr>';
-  }
-  const proofCountEl = $('myDelProofCount');
-  if (proofCountEl) {
-    if (shipped.length) { proofCountEl.style.display = ''; proofCountEl.textContent = String(shipped.length); }
-    else proofCountEl.style.display = 'none';
   }
   if (window.lucide) lucide.createIcons({ attrs: { 'stroke-width': 1.9, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' } });
 }
