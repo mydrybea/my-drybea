@@ -3860,6 +3860,7 @@ function updateDriverNotifyPermUI() {
 // ---- Owner side: live map of all sharing drivers ----
 let ownerDriverMap = null;
 let ownerDriverMarkers = {};
+let ownerDriverAccuracyCircles = {};
 let ownerDriverRoutePolylines = {};
 let ownerPickupMarker = null;
 let ownerDriverLocationsChannel = null;
@@ -3977,16 +3978,42 @@ function renderOwnerDriverMarkers(rows) {
     const label = (driver && driver.display_name) || 'Driver';
     const ago = updatedMs ? Math.max(0, Math.round((now - updatedMs) / 1000)) : null;
     const agoTxt = ago == null ? 'unknown' : (ago < 60 ? `${ago}s ago` : `${Math.round(ago / 60)}m ago`);
-    const popupHtml = `<strong>${escapeHtmlSafe(label)}</strong><br><small>${isFresh ? '🟢 Live' : '⚪ Stale'} — updated ${agoTxt}</small>`;
+    // Accuracy comes straight from the driver's phone GPS (metres of uncertainty).
+    // A pin that looks "wrong" is very often just a low-accuracy fix (Wi-Fi/cell
+    // location instead of true GPS) rather than a bug — showing the radius and a
+    // plain-language note makes that obvious instead of leaving the owner to guess.
+    const acc = (r.accuracy != null && isFinite(r.accuracy)) ? Math.round(r.accuracy) : null;
+    const accNote = acc == null ? '' : (acc > 300
+      ? `<br><small style="color:#c0392b;">⚠️ Weak signal — accurate to ~${acc}m, pin may be off</small>`
+      : `<br><small style="opacity:.6;">Accurate to ~${acc}m</small>`);
+    const popupHtml = `<strong>${escapeHtmlSafe(label)}</strong><br><small>${isFresh ? '🟢 Live' : '⚪ Stale'} — updated ${agoTxt}</small>${accNote}`;
     if (ownerDriverMarkers[id]) {
       ownerDriverMarkers[id].setLatLng([r.latitude, r.longitude]).setPopupContent(popupHtml);
       ownerDriverMarkers[id].setOpacity(isFresh ? 1 : 0.45);
     } else {
       ownerDriverMarkers[id] = L.marker([r.latitude, r.longitude], { opacity: isFresh ? 1 : 0.45 }).addTo(ownerDriverMap).bindPopup(popupHtml);
     }
+    // Draw/update the accuracy circle only when it's actually worth showing (a
+    // tight GPS fix under ~30m would just clutter the map with a barely-visible
+    // ring) and only for live drivers, so stale circles don't linger.
+    if (acc != null && acc > 30 && isFresh) {
+      if (ownerDriverAccuracyCircles[id]) {
+        ownerDriverAccuracyCircles[id].setLatLng([r.latitude, r.longitude]).setRadius(acc);
+      } else {
+        ownerDriverAccuracyCircles[id] = L.circle([r.latitude, r.longitude], {
+          radius: acc, color: '#2563eb', weight: 1, fillColor: '#2563eb', fillOpacity: 0.08
+        }).addTo(ownerDriverMap);
+      }
+    } else if (ownerDriverAccuracyCircles[id]) {
+      ownerDriverMap.removeLayer(ownerDriverAccuracyCircles[id]);
+      delete ownerDriverAccuracyCircles[id];
+    }
   });
   Object.keys(ownerDriverMarkers).forEach(id => {
-    if (!seenAny.has(id)) { ownerDriverMap.removeLayer(ownerDriverMarkers[id]); delete ownerDriverMarkers[id]; delete driverLocationFreshness[id]; }
+    if (!seenAny.has(id)) {
+      ownerDriverMap.removeLayer(ownerDriverMarkers[id]); delete ownerDriverMarkers[id]; delete driverLocationFreshness[id];
+      if (ownerDriverAccuracyCircles[id]) { ownerDriverMap.removeLayer(ownerDriverAccuracyCircles[id]); delete ownerDriverAccuracyCircles[id]; }
+    }
   });
   const countEl = $('liveMapDriverCount');
   if (countEl) {
@@ -4182,12 +4209,12 @@ function startDriverLocationSharing() {
   // callback (which can take a while, or never fire if the device isn't moving) — this is
   // why the owner used to see "sharing on" but no pin appear for a long time.
   navigator.geolocation.getCurrentPosition(
-    (pos) => { driverSendLocation(pos.coords.latitude, pos.coords.longitude, true); },
+    (pos) => { driverSendLocation(pos.coords.latitude, pos.coords.longitude, true, pos.coords.accuracy); },
     (err) => console.warn('Initial location fix failed:', err.message),
     { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
   );
   driverLocationWatchId = navigator.geolocation.watchPosition(
-    (pos) => { driverSendLocation(pos.coords.latitude, pos.coords.longitude); },
+    (pos) => { driverSendLocation(pos.coords.latitude, pos.coords.longitude, false, pos.coords.accuracy); },
     (err) => {
       console.error('Geolocation error:', err);
       const status = $('driverLocationStatus');
@@ -4201,7 +4228,7 @@ function startDriverLocationSharing() {
   // though the driver hadn't gone anywhere. A heartbeat resends the last known fix every 20s
   // regardless, so the "updated Xs ago" freshness on the owner's map stays accurate.
   driverLocationHeartbeat = setInterval(() => {
-    if (driverLastCoords) driverSendLocation(driverLastCoords.lat, driverLastCoords.lng, true);
+    if (driverLastCoords) driverSendLocation(driverLastCoords.lat, driverLastCoords.lng, true, driverLastCoords.accuracy);
   }, 20000);
   driverLocationSharing = true;
   updateDriverLocationUI();
@@ -4229,8 +4256,8 @@ function updateDriverLocationUI() {
   if (window.lucide) lucide.createIcons({ attrs: { 'stroke-width': 1.9, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' } });
 }
 
-async function driverSendLocation(lat, lng, force) {
-  driverLastCoords = { lat, lng };
+async function driverSendLocation(lat, lng, force, accuracy) {
+  driverLastCoords = { lat, lng, accuracy };
 
   // Auto-distance: accumulate onto the active trip on every GPS fix (not just the
   // throttled network sends below), filtering tiny GPS jitter (<5m) and unrealistic
@@ -4262,21 +4289,39 @@ async function driverSendLocation(lat, lng, force) {
   const now = Date.now();
   if (!force && now - driverLocationLastSent < 8000) return; // throttle: ~once per 8s, saves battery & bandwidth
   driverLocationLastSent = now;
+  // A round accuracy figure in metres, when the browser provided one — this is what lets
+  // the owner (and the driver) tell a genuine GPS fix apart from a rough Wi-Fi/cell-tower
+  // guess, which is the usual cause of the pin looking "wrong" even though nothing in the
+  // app mixed up the coordinates.
+  const acc = (typeof accuracy === 'number' && isFinite(accuracy)) ? Math.round(accuracy) : null;
+  const basePayload = {
+    driver_id: currentUser.id,
+    owner_id: businessId,
+    latitude: lat,
+    longitude: lng,
+    updated_at: new Date().toISOString()
+  };
   try {
-    const { error } = await supabase.from('driver_locations').upsert({
-      driver_id: currentUser.id,
-      owner_id: businessId,
-      latitude: lat,
-      longitude: lng,
-      updated_at: new Date().toISOString()
-    }, { onConflict: 'driver_id' });
+    let { error } = await supabase.from('driver_locations')
+      .upsert(acc != null ? { ...basePayload, accuracy: acc } : basePayload, { onConflict: 'driver_id' });
+    if (error && acc != null && /column .*accuracy.* does not exist/i.test(error.message || '')) {
+      // The accuracy column hasn't been added to the driver_locations table yet —
+      // fall back to sending without it rather than failing the whole location
+      // update (and thus silently going invisible on the owner's map) over one
+      // missing column.
+      ({ error } = await supabase.from('driver_locations').upsert(basePayload, { onConflict: 'driver_id' }));
+    }
     if (error) throw error;
     // FIX: surface success/failure on-screen. Previously a failed upsert (e.g. a missing
     // RLS policy or unique constraint on driver_id) only logged to the browser console —
     // the driver would see "Sharing: On" and have no idea the owner's map was never
     // actually receiving anything.
     const status = $('driverLocationStatus');
-    if (status && driverLocationSharing) status.textContent = 'On — last sent ' + nowHHMM() + ' • the owner can see you on the map';
+    if (status && driverLocationSharing) {
+      const accTxt = acc != null ? ` • ±${acc}m accuracy` : '';
+      const warnTxt = (acc != null && acc > 300) ? ' ⚠️ Weak GPS signal — enable Precise/High-accuracy Location in your phone settings for a correct pin.' : '';
+      status.textContent = 'On — last sent ' + nowHHMM() + accTxt + ' • the owner can see you on the map' + warnTxt;
+    }
     if (activeTrip) {
       // Debounced save of the running trip distance so the owner's Delivery tab
       // reflects it live too (they can still override the figure manually).
