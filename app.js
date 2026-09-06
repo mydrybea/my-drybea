@@ -2308,6 +2308,368 @@ async function deleteRecurringExpense(id) {
   }
 }
 
+// ==================== SUPABASE-BACKED SALES / DAILY BUSINESS DIARY ====================
+let sales = [];
+let salesFilterState = { from: '', to: '', text: '' };
+
+function dbSaleToLocal(s) {
+  const total = Number(s.total_amount) || 0;
+  const cost = Number(s.cost_amount) || 0;
+  const wage = Number(s.wage_amount) || 0;
+  const mktCost = Number(s.marketing_cost) || 0;
+  const paid = Number(s.amount_paid) || 0;
+  return {
+    id: s.id,
+    date: s.sale_date,
+    product: s.product_name,
+    customer: s.customer_name || '',
+    qty: Number(s.quantity) || 0,
+    unitPrice: Number(s.unit_price) || 0,
+    total,
+    cost,
+    wage,
+    marketingChannel: s.marketing_channel || '',
+    marketingCost: mktCost,
+    paid,
+    pending: Math.max(0, total - paid),
+    profit: total - cost - wage - mktCost,
+    notes: s.notes || '',
+    createdAt: s.created_at
+  };
+}
+
+async function loadSalesFromCloud() {
+  if (!currentUser) return;
+  try {
+    const { data, error } = await supabase
+      .from('sales')
+      .select('*')
+      .eq('user_id', businessId)
+      .order('sale_date', { ascending: false });
+    if (error) throw error;
+    sales = (data || []).map(dbSaleToLocal);
+  } catch (e) {
+    console.error('Load sales error:', e);
+    updateStatus('⚠️ Could not load sales from cloud');
+  }
+}
+
+function openNewSale() {
+  $('saleModalTitle').textContent = 'New Sale';
+  $('saleEditId').value = '';
+  $('saleDate').value = new Date().toISOString().slice(0, 10);
+  $('saleProduct').value = '';
+  $('saleCustomer').value = '';
+  $('saleQty').value = 1;
+  $('saleUnitPrice').value = 0;
+  $('saleTotal').value = 0;
+  $('saleCost').value = 0;
+  $('saleWage').value = 0;
+  $('saleMarketingChannel').value = '';
+  $('saleMarketingCost').value = 0;
+  $('salePaid').value = 0;
+  $('saleNotes').value = '';
+  recalcSaleModal();
+  $('saleModal').classList.add('active');
+}
+
+function editSale(id) {
+  const s = sales.find(x => x.id === id);
+  if (!s) return;
+  $('saleModalTitle').textContent = 'Edit Sale';
+  $('saleEditId').value = s.id;
+  $('saleDate').value = s.date;
+  $('saleProduct').value = s.product;
+  $('saleCustomer').value = s.customer;
+  $('saleQty').value = s.qty;
+  $('saleUnitPrice').value = s.unitPrice;
+  $('saleTotal').value = s.total;
+  $('saleCost').value = s.cost;
+  $('saleWage').value = s.wage;
+  $('saleMarketingChannel').value = s.marketingChannel;
+  $('saleMarketingCost').value = s.marketingCost;
+  $('salePaid').value = s.paid;
+  $('saleNotes').value = s.notes;
+  recalcSaleModal();
+  $('saleModal').classList.add('active');
+}
+
+// Keeps Total in sync with Qty × Unit Price unless the user is editing
+// Total directly (skipAuto=true), and always refreshes the live profit/
+// pending preview at the bottom of the modal.
+function recalcSaleModal(skipAuto) {
+  const qty = Number($('saleQty').value) || 0;
+  const unitPrice = Number($('saleUnitPrice').value) || 0;
+  if (!skipAuto) $('saleTotal').value = (qty * unitPrice) || 0;
+  const total = Number($('saleTotal').value) || 0;
+  const cost = Number($('saleCost').value) || 0;
+  const wage = Number($('saleWage').value) || 0;
+  const mktCost = Number($('saleMarketingCost').value) || 0;
+  const paid = Number($('salePaid').value) || 0;
+  const profit = total - cost - wage - mktCost;
+  const pending = Math.max(0, total - paid);
+  if ($('saleLiveProfit')) $('saleLiveProfit').textContent = fmt(profit);
+  if ($('saleLivePending')) $('saleLivePending').textContent = fmt(pending);
+}
+
+async function saveSale() {
+  const editId = $('saleEditId').value;
+  const date = $('saleDate').value || new Date().toISOString().slice(0, 10);
+  const product = $('saleProduct').value.trim();
+  const customer = $('saleCustomer').value.trim();
+  const qty = Number($('saleQty').value) || 0;
+  const unitPrice = Number($('saleUnitPrice').value) || 0;
+  const total = Number($('saleTotal').value) || 0;
+  const cost = Number($('saleCost').value) || 0;
+  const wage = Number($('saleWage').value) || 0;
+  const marketingChannel = $('saleMarketingChannel').value;
+  const marketingCost = Number($('saleMarketingCost').value) || 0;
+  const paid = Number($('salePaid').value) || 0;
+  const notes = $('saleNotes').value.trim();
+
+  if (!currentUser) { alert('Please login first.'); return; }
+  if (!product) { alert('Enter a product name!'); return; }
+  if (total <= 0) { alert('Total sale amount must be greater than 0!'); return; }
+
+  const row = {
+    user_id: businessId,
+    sale_date: date,
+    product_name: product,
+    customer_name: customer || null,
+    quantity: qty,
+    unit_price: unitPrice,
+    total_amount: total,
+    cost_amount: cost,
+    wage_amount: wage,
+    marketing_channel: marketingChannel || null,
+    marketing_cost: marketingCost,
+    amount_paid: paid,
+    notes: notes || null,
+    created_by: currentUser.id
+  };
+
+  if (!(await ensureFreshSession())) return;
+  try {
+    if (editId) {
+      const { data, error } = await supabase.from('sales').update(row).eq('id', editId).select().single();
+      if (error) throw error;
+      const idx = sales.findIndex(s => s.id === editId);
+      if (idx !== -1) sales[idx] = dbSaleToLocal(data);
+    } else {
+      const { data, error } = await supabase.from('sales').insert(row).select().single();
+      if (error) throw error;
+      sales.unshift(dbSaleToLocal(data));
+    }
+  } catch (e) {
+    console.error('Save sale error:', e);
+    alert('❌ Could not save sale: ' + e.message);
+    return;
+  }
+
+  renderSales();
+  closeModal('saleModal');
+  updateStatus(editId ? '✅ Sale updated' : '✅ Sale saved to diary');
+}
+
+async function deleteSale(id) {
+  if (userRole !== 'owner') { alert('Only the owner can delete sales.'); return; }
+  if (!confirm('Delete this sale entry?')) return;
+  if (!currentUser) { alert('Please login first.'); return; }
+  if (!(await ensureFreshSession())) return;
+  try {
+    const { error } = await supabase.from('sales').delete().eq('id', id);
+    if (error) throw error;
+  } catch (e) {
+    console.error('Delete sale error:', e);
+    alert('❌ Could not delete sale: ' + e.message);
+    return;
+  }
+  sales = sales.filter(s => s.id !== id);
+  renderSales();
+  updateStatus('🗑️ Sale deleted');
+}
+
+// Quick action: collect the full pending balance in one tap.
+async function markSalePaid(id) {
+  const s = sales.find(x => x.id === id);
+  if (!s) return;
+  if (!confirm('Mark the remaining Rs. ' + s.pending.toFixed(2) + ' as paid?')) return;
+  if (!(await ensureFreshSession())) return;
+  try {
+    const { data, error } = await supabase.from('sales').update({ amount_paid: s.total }).eq('id', id).select().single();
+    if (error) throw error;
+    const idx = sales.findIndex(x => x.id === id);
+    if (idx !== -1) sales[idx] = dbSaleToLocal(data);
+  } catch (e) {
+    console.error('Mark paid error:', e);
+    alert('❌ Could not update payment: ' + e.message);
+    return;
+  }
+  renderSales();
+  updateStatus('✅ Payment collected');
+}
+
+function clearSalesFilter() {
+  $('salesFilterFrom').value = '';
+  $('salesFilterTo').value = '';
+  $('salesFilterProduct').value = '';
+  renderSales();
+}
+
+function getFilteredSales() {
+  const from = $('salesFilterFrom') ? $('salesFilterFrom').value : '';
+  const to = $('salesFilterTo') ? $('salesFilterTo').value : '';
+  const text = $('salesFilterProduct') ? $('salesFilterProduct').value.trim().toLowerCase() : '';
+  return sales.filter(s => {
+    if (from && s.date < from) return false;
+    if (to && s.date > to) return false;
+    if (text && !(s.product.toLowerCase().includes(text) || (s.customer || '').toLowerCase().includes(text))) return false;
+    return true;
+  });
+}
+
+function renderSales() {
+  const tbody = $('salesBody');
+  if (!tbody) return;
+  const list = getFilteredSales();
+
+  if (list.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;opacity:0.5;padding:20px;">No sales logged yet. Tap "Add Sale" to start today\'s diary.</td></tr>';
+  } else {
+    tbody.innerHTML = list.map(s => `
+      <tr>
+        <td>${s.date}</td>
+        <td>${s.product}</td>
+        <td>${s.customer || '-'}</td>
+        <td>${s.qty}</td>
+        <td>${fmt(s.unitPrice)}</td>
+        <td>${fmt(s.total)}</td>
+        <td>${fmt(s.cost)}</td>
+        <td>${fmt(s.wage)}</td>
+        <td>${s.marketingChannel ? s.marketingChannel + (s.marketingCost ? ' (' + fmt(s.marketingCost) + ')' : '') : '-'}</td>
+        <td style="color:${s.profit >= 0 ? '#16a34a' : '#dc2626'};font-weight:700;">${fmt(s.profit)}</td>
+        <td>${fmt(s.paid)}</td>
+        <td>${s.pending > 0 ? '<span style="color:#c2410c;font-weight:700;">' + fmt(s.pending) + '</span>' : '<span style="opacity:.5;">Rs. 0</span>'}</td>
+        <td>
+          <button class="btn btn-sm" onclick="editSale('${s.id}')"><i class="business-icon icon-inline" data-lucide="pencil" aria-hidden="true"></i></button>
+          ${userRole === 'owner' ? `<button class="btn btn-sm btn-danger" onclick="deleteSale('${s.id}')"><i class="business-icon icon-inline" data-lucide="trash-2" aria-hidden="true"></i></button>` : ''}
+        </td>
+      </tr>
+    `).join('');
+  }
+
+  renderSalesPending(list);
+  renderSalesProductPerformance(list);
+  updateSalesStats();
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+function renderSalesPending(list) {
+  const tbody = $('salesPendingBody');
+  if (!tbody) return;
+  const pending = list.filter(s => s.pending > 0);
+  if (!pending.length) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;opacity:0.5;padding:14px;">No pending payments — everything in view is fully paid. 🎉</td></tr>';
+    return;
+  }
+  tbody.innerHTML = pending.map(s => `
+    <tr>
+      <td>${s.date}</td>
+      <td>${s.product}</td>
+      <td>${s.customer || '-'}</td>
+      <td>${fmt(s.total)}</td>
+      <td>${fmt(s.paid)}</td>
+      <td style="color:#c2410c;font-weight:700;">${fmt(s.pending)}</td>
+      <td><button class="btn btn-sm btn-primary" onclick="markSalePaid('${s.id}')"><i class="business-icon icon-inline" data-lucide="hand-coins" aria-hidden="true"></i> Collect</button></td>
+    </tr>
+  `).join('');
+}
+
+function renderSalesProductPerformance(list) {
+  const byProduct = {};
+  const byChannel = {};
+  list.forEach(s => {
+    const p = byProduct[s.product] || { units: 0, revenue: 0, profit: 0, marketing: 0 };
+    p.units += s.qty;
+    p.revenue += s.total;
+    p.profit += s.profit;
+    p.marketing += s.marketingCost;
+    byProduct[s.product] = p;
+
+    const chan = s.marketingChannel || 'Organic / None';
+    const c = byChannel[chan] || { spend: 0, count: 0, revenue: 0 };
+    c.spend += s.marketingCost;
+    c.count += 1;
+    c.revenue += s.total;
+    byChannel[chan] = c;
+  });
+
+  const prodBody = $('salesProductBody');
+  if (prodBody) {
+    const entries = Object.entries(byProduct).sort((a, b) => b[1].revenue - a[1].revenue);
+    prodBody.innerHTML = entries.length ? entries.map(([name, d]) => `
+      <tr>
+        <td>${name}</td>
+        <td>${d.units}</td>
+        <td>${fmt(d.revenue)}</td>
+        <td style="color:${d.profit >= 0 ? '#16a34a' : '#dc2626'};font-weight:700;">${fmt(d.profit)}</td>
+        <td>${fmt(d.marketing)}</td>
+      </tr>
+    `).join('') : '<tr><td colspan="5" style="text-align:center;opacity:0.5;padding:14px;">No data yet.</td></tr>';
+  }
+
+  const chanBody = $('salesChannelBody');
+  if (chanBody) {
+    const entries = Object.entries(byChannel).sort((a, b) => b[1].revenue - a[1].revenue);
+    chanBody.innerHTML = entries.length ? entries.map(([name, d]) => `
+      <tr>
+        <td>${name}</td>
+        <td>${fmt(d.spend)}</td>
+        <td>${d.count}</td>
+        <td>${fmt(d.revenue)}</td>
+      </tr>
+    `).join('') : '<tr><td colspan="4" style="text-align:center;opacity:0.5;padding:14px;">No data yet.</td></tr>';
+  }
+}
+
+function updateSalesStats() {
+  const today = todayStr();
+  const todaysSales = sales.filter(s => s.date === today);
+  const salesToday = todaysSales.reduce((sum, s) => sum + s.total, 0);
+  const profitToday = todaysSales.reduce((sum, s) => sum + s.profit, 0);
+  const wageToday = todaysSales.reduce((sum, s) => sum + s.wage, 0);
+  const pendingTotal = sales.reduce((sum, s) => sum + s.pending, 0);
+
+  if ($('statSalesToday')) $('statSalesToday').textContent = fmt(salesToday);
+  if ($('statProfitToday')) $('statProfitToday').textContent = fmt(profitToday);
+  if ($('statWageToday')) $('statWageToday').textContent = fmt(wageToday);
+  if ($('statPendingTotal')) $('statPendingTotal').textContent = fmt(pendingTotal);
+
+  const badge = $('salesPendingBadge');
+  if (badge) {
+    const pendingCount = sales.filter(s => s.pending > 0).length;
+    if (pendingCount > 0) { badge.style.display = 'inline-block'; badge.textContent = pendingCount; }
+    else { badge.style.display = 'none'; }
+  }
+}
+
+function exportSalesCSV() {
+  const list = getFilteredSales();
+  if (!list.length) { alert('No sales to export.'); return; }
+  const header = ['Date','Product','Customer','Qty','Unit Price','Total','Cost','Wage','Marketing Channel','Marketing Cost','Profit','Paid','Pending','Notes'];
+  const rows = list.map(s => [s.date, s.product, s.customer, s.qty, s.unitPrice, s.total, s.cost, s.wage, s.marketingChannel, s.marketingCost, s.profit, s.paid, s.pending, (s.notes || '').replace(/[\r\n,]+/g, ' ')]);
+  const csv = [header, ...rows].map(r => r.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'sales-diary-' + todayStr() + '.csv';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 function updateExpenseStats() {
   const total = expenses.reduce((sum, e) => sum + e.amount, 0);
   const now = new Date();
@@ -6938,7 +7300,7 @@ document.querySelectorAll('[data-ribbon="true"]').forEach(btn => {
   });
 });
 
-const OWNER_ONLY_TABS = ['dashboard', 'my-staff', 'delivery', 'calculator', 'production', 'history', 'data', 'monthly-summary', 'income', 'analytics'];
+const OWNER_ONLY_TABS = ['dashboard', 'my-staff', 'delivery', 'calculator', 'production', 'history', 'data', 'monthly-summary', 'income', 'analytics', 'sales'];
 const STAFF_ONLY_TABS = ['staff-home', 'daily-pay', 'work-update', 'attendance', 'advance', 'my-commission', 'my-tasks', 'announcements'];
 const DRIVER_ONLY_TABS = ['my-deliveries','my-earnings','my-reviews'];
 
@@ -7020,6 +7382,7 @@ function activateAppTab(tabId){
   if (tabId === 'my-reviews') { loadMyDeliveries().then(() => renderMyReviews()); }
   if (tabId === 'my-staff') { refreshMyStaffPage(); loadMyStaffOwnerData(); }
   if (tabId === 'expenses') { renderExpenses(); renderRecurringExpenses(); }
+  if (tabId === 'sales') { loadSalesFromCloud().then(renderSales); }
   if (tabId === 'my-salary') {
     if (userRole === 'owner') {
       loadStaffList();
