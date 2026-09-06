@@ -86,17 +86,31 @@ const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 // can simply never fire. The token then sits expired in storage and the next
 // save fails with a raw "JWT expired" error from the server. getSession()
 // checks expiry itself and uses the refresh token to get a new one when
-// needed, so calling it first fixes that silently in the common case. If the
-// refresh token itself is dead (real logout / long-expired session), there's
-// nothing to recover — send the user to log in again instead of letting the
-// save fail with a confusing error.
+// needed, so calling it first fixes that silently in the common case. As a
+// belt-and-braces measure, if the token is already expired (or expiring
+// within the next minute) we also force an explicit refreshSession() call —
+// getSession()'s own silent refresh can lose a race with a frozen background
+// tab and hand back a session that LOOKS present but carries a dead token,
+// which is what let "JWT expired" through even with this check in place. If
+// the refresh token itself is dead (real logout / long-expired session),
+// there's nothing to recover — send the user to log in again instead of
+// letting the save fail with a confusing error.
 async function ensureFreshSession() {
   try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
+    const { data: { session }, error } = await supabase.auth.getSession();
+    if (error || !session) {
       alert('⚠️ Your session has expired. Please log in again.');
       window.location.replace('login.html');
       return false;
+    }
+    const nowSec = Math.floor(Date.now() / 1000);
+    if (!session.expires_at || session.expires_at - nowSec < 60) {
+      const { data: refreshed, error: refreshErr } = await supabase.auth.refreshSession();
+      if (refreshErr || !refreshed?.session) {
+        alert('⚠️ Your session has expired. Please log in again.');
+        window.location.replace('login.html');
+        return false;
+      }
     }
     return true;
   } catch (e) {
@@ -104,6 +118,35 @@ async function ensureFreshSession() {
     return true; // don't block the save on a check that itself failed to reach the network
   }
 }
+
+// Last-resort safety net: if a Supabase write still comes back with a
+// JWT/token error despite ensureFreshSession() having just run (a stale
+// token race, or a token that expired in the few seconds between the check
+// and the request going out), force one real refresh and retry the write
+// exactly once before giving up. fn must be a zero-argument function that
+// performs the write and returns its Supabase `{ data, error }` result (or
+// throws) — call it again inside fn each time, don't reuse a promise.
+function isJwtExpiredError(err) {
+  const msg = String(err && (err.message || err) || '').toLowerCase();
+  return msg.includes('jwt expired') || msg.includes('jwt is expired') || (msg.includes('jwt') && msg.includes('expired')) || msg.includes('pgrst301');
+}
+async function withSessionRetry(fn) {
+  let result;
+  try {
+    result = await fn();
+  } catch (e) {
+    if (!isJwtExpiredError(e)) throw e;
+    result = { error: e };
+  }
+  if (result && result.error && isJwtExpiredError(result.error)) {
+    console.warn('Write hit an expired token after the pre-check — forcing a refresh and retrying once.');
+    const { error: refreshErr } = await supabase.auth.refreshSession();
+    if (refreshErr) return result; // nothing more we can do — return the original error to the caller
+    result = await fn();
+  }
+  return result;
+}
+window.withSessionRetry = withSessionRetry;
 
 let currentUser = null;
 let userProfile = null;
@@ -2479,7 +2522,7 @@ async function createOrder() {
 
     try {
       // Server creates the immutable random SALE REF and the pending commission claim atomically.
-      const { data, error } = await supabase.rpc('create_staff_sale_secure', {
+      const { data, error } = await withSessionRetry(() => supabase.rpc('create_staff_sale_secure', {
         p_product_size_g: Number(product) || 0,
         p_qty: qty,
         p_unit_price: unitPrice,
@@ -2487,7 +2530,7 @@ async function createOrder() {
         p_customer_phone: customerPhone,
         p_customer_address: address,
         p_notes: notes
-      });
+      }));
       if (error) throw error;
       const row = data;
       orders.unshift({
@@ -2537,7 +2580,7 @@ async function createOrder() {
   const paymentMethod = $('orderPaymentMethod')?.value === 'prepaid' ? 'prepaid' : 'cod';
   const row = { id: generateOrderId(), user_id: businessId, customer_id: customerId, product_size_g: Number(product)||0, qty, unit_price:unitPrice, total, address, notes, status:'pending', created_by:currentUser.id, referral_staff_id:referralStaffId, referral_staff_reference:referralStaffReference, referral_status:referralStaffId?'pending_verification':'none', payment_method:paymentMethod };
   try {
-    const { data, error } = await supabase.from('orders').insert(row).select().single();
+    const { data, error } = await withSessionRetry(() => supabase.from('orders').insert(row).select().single());
     if (error) throw error;
     if (referralStaffId) {
       const claim = { owner_id: businessId, staff_id:String(referralStaffId), staff_reference:referralStaffReference||'', order_id:String(data.id), customer_id:String(customerId), customer_name:customer?.name||'', customer_phone:customer?.phone||'', order_total:total, commission_rate:STAFF_COMMISSION_RATE, commission_amount:0, status:'pending', order_ref_no:data.order_ref_no||null, order_snapshot:{order_id:data.id,order_ref_no:data.order_ref_no||null,customer_id:customerId,customer_name:customer?.name||'',product_size_g:Number(product)||0,qty,unit_price:unitPrice,total,address,notes,created_by:currentUser.id,referral_staff_id:String(referralStaffId),referral_staff_reference:referralStaffReference} };
