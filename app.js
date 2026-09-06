@@ -298,7 +298,36 @@ async function removeStaffMember(uid) {
     await loadStaffList();
   } catch (e) {
     console.error('Remove staff error:', e);
-    alert('❌ Could not remove staff: ' + e.message);
+    // Drivers who have (or ever had) deliveries assigned to them can't be deleted
+    // outright — the orders table's assigned_driver_id foreign key blocks it, since
+    // that would either orphan those rows or silently erase "who delivered this"
+    // history. Offer to clear the assignment on their orders first, then retry —
+    // this keeps the orders themselves (and any delivered/COD/pay data on them)
+    // intact, it just unlinks them from this driver's now-removed account.
+    if (/orders_assigned_driver_id_fkey/i.test(e.message || '')) {
+      const clear = confirm(
+        "This person has delivery orders assigned to them, so they can't be removed yet.\n\n" +
+        "Clear the driver assignment on those orders (the orders and their history stay — " +
+        "only the link to this account is removed) and then remove them?"
+      );
+      if (!clear) return;
+      try {
+        const { error: clearErr } = await supabase.from('orders')
+          .update({ assigned_driver_id: null })
+          .eq('assigned_driver_id', uid);
+        if (clearErr) throw clearErr;
+        const { error: retryErr } = await supabase.from('profiles').delete().eq('id', uid).eq('owner_id', currentUser.id);
+        if (retryErr) throw retryErr;
+        await loadStaffList();
+        renderDelivery();
+        updateStatus('✅ Staff removed and their past orders unassigned');
+      } catch (e2) {
+        console.error('Remove staff (after clearing orders) error:', e2);
+        alert('❌ Still could not remove staff: ' + e2.message);
+      }
+    } else {
+      alert('❌ Could not remove staff: ' + e.message);
+    }
   }
 }
 
@@ -4991,7 +5020,7 @@ function updateMonthlySummary() {
 }
 
 // ==================== ANALYTICS ====================
-let trendChart = null, orderStatusChart = null, productMixChart = null, expenseCatChart = null, profitBySizeChart = null, perfFailedReasonsChart = null;
+let trendChart = null, orderStatusChart = null, productMixChart = null, expenseCatChart = null, profitBySizeChart = null, perfFailedReasonsChart = null, newReturningChart = null;
 
 function analyticsMonthKey(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); }
 function analyticsMonthLabel(d) { return d.toLocaleDateString(undefined, { month: 'short', year: '2-digit' }); }
@@ -5225,6 +5254,59 @@ function renderAnalytics() {
     } else {
       noteEl.textContent = 'Cost is estimated using the current fish prices & mix ratio set in the Costing tab — actual historical cost may vary. No sales recorded yet to estimate margins.';
     }
+  }
+
+  // ---- New vs Returning customers (this month) + repeat purchase rate (all-time) ----
+  // "New" = a customer whose very first non-cancelled order ever falls in the
+  // current calendar month. "Returning" = ordered this month but had at least
+  // one earlier order. Repeat rate looks at all-time: what share of everyone
+  // who has ever ordered has ordered more than once — a simple loyalty signal
+  // that's useful once a team is juggling many customers day to day.
+  const custFirstOrder = {}, custOrderCount = {};
+  (orders || []).forEach(o => {
+    if (o.status === 'cancelled') return;
+    const d = parseSummaryDate(o.createdAt);
+    if (!d) return;
+    const name = o.customerName || 'Unknown';
+    custOrderCount[name] = (custOrderCount[name] || 0) + 1;
+    if (!custFirstOrder[name] || d < custFirstOrder[name]) custFirstOrder[name] = d;
+  });
+  const totalCustomersAllTime = Object.keys(custOrderCount).length;
+  const repeatCustomers = Object.values(custOrderCount).filter(c => c > 1).length;
+  const repeatRate = totalCustomersAllTime ? (repeatCustomers / totalCustomersAllTime) * 100 : 0;
+
+  const custOrderedThisMonth = new Set();
+  (orders || []).forEach(o => {
+    if (o.status === 'cancelled') return;
+    const d = parseSummaryDate(o.createdAt);
+    if (!d || d.getFullYear() !== now.getFullYear() || d.getMonth() !== now.getMonth()) return;
+    custOrderedThisMonth.add(o.customerName || 'Unknown');
+  });
+  let newThisMonth = 0, returningThisMonth = 0;
+  custOrderedThisMonth.forEach(name => {
+    const first = custFirstOrder[name];
+    if (first && first.getFullYear() === now.getFullYear() && first.getMonth() === now.getMonth()) newThisMonth++;
+    else returningThisMonth++;
+  });
+  set('anNewCustomers', String(newThisMonth));
+  set('anReturningCustomers', String(returningThisMonth));
+  set('anRepeatRate', totalCustomersAllTime ? fmt2(repeatRate) + '%' : '—');
+  set('anRepeatRateSub', totalCustomersAllTime ? `${repeatCustomers} of ${totalCustomersAllTime} customers have ordered more than once` : 'No customers recorded yet');
+
+  const newRetCanvas = $('newReturningChart');
+  if (newRetCanvas) {
+    const hasAny = newThisMonth + returningThisMonth > 0;
+    const data = {
+      labels: hasAny ? ['New this month', 'Returning this month'] : ['No orders this month'],
+      datasets: [{
+        data: hasAny ? [newThisMonth, returningThisMonth] : [1],
+        backgroundColor: hasAny ? ['#4b9cff', '#10b981'] : ['#e5e7eb'],
+        borderWidth: 0, hoverOffset: 6
+      }]
+    };
+    const opts = { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: colors.text, boxWidth: 12 } } } };
+    if (newReturningChart) { newReturningChart.data = data; newReturningChart.update(); }
+    else newReturningChart = new Chart(newRetCanvas.getContext('2d'), { type: 'doughnut', data, options: opts });
   }
 
   // ---- Customer churn detection: past customers inactive 30+ days ----

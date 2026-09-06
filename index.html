@@ -279,6 +279,23 @@
       </div>
     </div>
 
+    <div class="grid-2">
+      <div class="card">
+        <h2><span class="pro-title-icon blue" aria-hidden="true"><i class="business-icon" data-lucide="user-round-plus" aria-hidden="true"></i></span><span>New vs Returning</span></h2>
+        <p class="pro-subtitle blue">Customers who ordered this month.</p>
+        <div class="chart-wrap" style="height:200px;"><canvas id="newReturningChart"></canvas></div>
+      </div>
+      <div class="card">
+        <h2><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="repeat" aria-hidden="true"></i></span><span>Repeat Purchase Rate</span></h2>
+        <p class="pro-subtitle green">Share of all-time customers who've ordered more than once.</p>
+        <div class="monthly-stat" style="margin-top:6px;"><div class="ms-value" id="anRepeatRate" style="font-size:2.2rem;">—</div><div class="ms-sub" id="anRepeatRateSub">No customers recorded yet</div></div>
+        <div class="monthly-summary-table" style="margin-top:14px;display:flex;justify-content:space-between;padding:0 4px;">
+          <div><strong id="anNewCustomers">0</strong><br><small style="opacity:.6;">New this month</small></div>
+          <div><strong id="anReturningCustomers">0</strong><br><small style="opacity:.6;">Returning this month</small></div>
+        </div>
+      </div>
+    </div>
+
     <div class="card">
       <h2><span class="pro-title-icon purple" aria-hidden="true"><i class="business-icon" data-lucide="badge-percent" aria-hidden="true"></i></span><span>Profit per Pack Size</span></h2>
       <p class="pro-subtitle purple">Revenue, estimated cost & profit by product size, all-time.</p>
