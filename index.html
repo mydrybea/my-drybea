@@ -395,6 +395,30 @@
 
     <div class="notice" id="salesTopSellerNotice" style="display:none;"></div>
 
+    <!-- ============ LIVE SALES SUMMARY (updates instantly as sales are logged) ============ -->
+    <div class="card">
+      <h2><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="activity" aria-hidden="true"></i></span><span>Live Summary</span></h2>
+      <p class="pro-subtitle gold">Updates the moment a sale is added, edited or paid — reflects whatever's in the filter above.</p>
+      <div class="stat-grid" style="margin-bottom:14px;">
+        <div class="stat"><div class="k">💵 Cash</div><div class="v" id="statPayCash">Rs. 0</div></div>
+        <div class="stat"><div class="k">🧾 Cheque</div><div class="v" id="statPayCheque">Rs. 0</div></div>
+        <div class="stat"><div class="k">🏦 Deposit</div><div class="v" id="statPayDeposit">Rs. 0</div></div>
+        <div class="stat accent"><div class="k">Total Received</div><div class="v" id="statPayReceived">Rs. 0</div></div>
+        <div class="stat"><div class="k">Pending / Credit</div><div class="v" id="statPayPending">Rs. 0</div></div>
+        <div class="stat"><div class="k">🧾 Cheques Awaiting Clearance</div><div class="v" id="statChequeAwaiting">0</div></div>
+      </div>
+      <div class="grid-2">
+        <div class="card" style="box-shadow:none;background:var(--card-bg,transparent);padding:0;">
+          <h2 style="font-size:.95rem;"><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="trending-up" aria-hidden="true"></i></span><span>Sales Trend (Last 14 Days)</span></h2>
+          <div class="chart-wrap" style="height:220px;"><canvas id="salesTrendChart"></canvas></div>
+        </div>
+        <div class="card" style="box-shadow:none;background:var(--card-bg,transparent);padding:0;">
+          <h2 style="font-size:.95rem;"><span class="pro-title-icon purple" aria-hidden="true"><i class="business-icon" data-lucide="wallet" aria-hidden="true"></i></span><span>Payment Method Mix</span></h2>
+          <div class="chart-wrap" style="height:220px;"><canvas id="salesPaymentChart"></canvas></div>
+        </div>
+      </div>
+    </div>
+
     <div class="card">
       <h2><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="notebook-pen" aria-hidden="true"></i></span><span>Sales Diary</span></h2>
       <p class="pro-subtitle green">Log every sale — quantity, price, cost, wage, marketing and payment, all in one row.</p>
@@ -405,6 +429,12 @@
         <span style="align-self:center;opacity:.5;">to</span>
         <input type="date" id="salesFilterTo" style="max-width:145px;">
         <input type="text" id="salesFilterProduct" placeholder="Search product / customer..." style="max-width:200px;">
+        <select id="salesFilterPayment" style="max-width:160px;">
+          <option value="">All Payment Types</option>
+          <option value="cash">💵 Cash</option>
+          <option value="cheque">🧾 Cheque</option>
+          <option value="deposit">🏦 Deposit</option>
+        </select>
         <button class="btn btn-sm" onclick="renderSales()"><i class="business-icon icon-inline" data-lucide="filter" aria-hidden="true"></i> Filter</button>
         <button class="btn btn-sm" onclick="setSalesFilterToday()">Today</button>
         <button class="btn btn-sm" onclick="clearSalesFilter()">Clear</button>
@@ -412,9 +442,20 @@
       <div class="table-wrap">
         <table>
           <thead>
-            <tr><th>Date</th><th>Product</th><th>Customer</th><th>Qty</th><th>Price</th><th>Total</th><th>Cost</th><th>Wage</th><th>Marketing</th><th>Profit</th><th>Margin</th><th>Paid</th><th>Pending</th><th>Status</th><th>Actions</th></tr>
+            <tr><th>Date</th><th>Product</th><th>Customer</th><th>Qty</th><th>Price</th><th>Total</th><th>Cost</th><th>Wage</th><th>Marketing</th><th>Profit</th><th>Margin</th><th>Paid</th><th>Payment</th><th>Pending</th><th>Status</th><th>Actions</th></tr>
           </thead>
           <tbody id="salesBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2><span class="pro-title-icon slate" aria-hidden="true"><i class="business-icon" data-lucide="landmark" aria-hidden="true"></i></span><span>Cheque &amp; Deposit Tracker</span></h2>
+      <p class="pro-subtitle slate">Every cheque and bank deposit received — track clearance so nothing bounces unnoticed.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Date</th><th>Product</th><th>Customer</th><th>Type</th><th>Bank</th><th>Ref / Cheque No.</th><th>Ref Date</th><th>Amount</th><th>Status</th></tr></thead>
+          <tbody id="salesChequeDepositBody"></tbody>
         </table>
       </div>
     </div>
@@ -2250,12 +2291,67 @@
       </div>
     </div>
     <div class="field">
-      <label>Amount Paid (Rs.)</label>
+      <label>Amount Received (Rs.) <span style="opacity:.55;font-weight:400;">— labadun mudala</span></label>
       <div class="input-prefix"><span>Rs.</span><input type="number" id="salePaid" value="0" min="0" oninput="recalcSaleModal()"></div>
     </div>
+
+    <div class="field">
+      <label>Payment Method</label>
+      <select id="salePaymentMethod" onchange="togglePaymentMethodFields()">
+        <option value="cash">💵 Cash</option>
+        <option value="cheque">🧾 Cheque</option>
+        <option value="deposit">🏦 Bank Deposit</option>
+      </select>
+      <p style="font-size:0.72rem;opacity:0.6;margin-top:4px;">How the <strong>Amount Received</strong> above came in. Any unpaid balance is tracked automatically as Pending.</p>
+    </div>
+
+    <div id="saleChequeFields" style="display:none;">
+      <div class="grid-2">
+        <div class="field">
+          <label>Cheque Number</label>
+          <input type="text" id="saleChequeNumber" placeholder="e.g. 004521">
+        </div>
+        <div class="field">
+          <label>Bank</label>
+          <input type="text" id="saleChequeBank" placeholder="e.g. Commercial Bank">
+        </div>
+      </div>
+      <div class="grid-2">
+        <div class="field">
+          <label>Cheque Date</label>
+          <input type="date" id="saleChequeDate">
+        </div>
+        <div class="field">
+          <label>Clearing Status</label>
+          <select id="saleChequeStatus">
+            <option value="pending">⏳ Pending Clearance</option>
+            <option value="cleared">✅ Cleared</option>
+            <option value="bounced">❌ Bounced</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div id="saleDepositFields" style="display:none;">
+      <div class="grid-2">
+        <div class="field">
+          <label>Bank</label>
+          <input type="text" id="saleDepositBank" placeholder="e.g. Sampath Bank">
+        </div>
+        <div class="field">
+          <label>Slip / Reference No.</label>
+          <input type="text" id="saleDepositRef" placeholder="e.g. SLIP-88213">
+        </div>
+      </div>
+      <div class="field">
+        <label>Deposit Date</label>
+        <input type="date" id="saleDepositDate">
+      </div>
+    </div>
+
     <div class="notice" style="margin:0 0 10px;padding:9px 12px;font-size:.78rem;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;">
       <span>Profit: <strong id="saleLiveProfit">Rs. 0</strong></span>
-      <span>Pending: <strong id="saleLivePending">Rs. 0</strong></span>
+      <span>Pending: <strong id="saleLivePending">Rs. 0</strong> <span style="opacity:.55;font-weight:400;">(lebenna thiyena mudala)</span></span>
     </div>
     <div class="field">
       <label>Notes (optional)</label>

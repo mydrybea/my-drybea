@@ -2334,7 +2334,15 @@ function dbSaleToLocal(s) {
     pending: Math.max(0, total - paid),
     profit: total - cost - wage - mktCost,
     notes: s.notes || '',
-    createdAt: s.created_at
+    createdAt: s.created_at,
+    paymentMethod: s.payment_method || 'cash',
+    chequeNumber: s.cheque_number || '',
+    chequeBank: s.cheque_bank || '',
+    chequeDate: s.cheque_date || '',
+    chequeStatus: s.cheque_status || 'pending',
+    depositBank: s.deposit_bank || '',
+    depositRef: s.deposit_ref || '',
+    depositDate: s.deposit_date || ''
   };
 }
 
@@ -2369,8 +2377,25 @@ function openNewSale() {
   $('saleMarketingCost').value = 0;
   $('salePaid').value = 0;
   $('saleNotes').value = '';
+  if ($('salePaymentMethod')) $('salePaymentMethod').value = 'cash';
+  if ($('saleChequeNumber')) $('saleChequeNumber').value = '';
+  if ($('saleChequeBank')) $('saleChequeBank').value = '';
+  if ($('saleChequeDate')) $('saleChequeDate').value = new Date().toISOString().slice(0, 10);
+  if ($('saleChequeStatus')) $('saleChequeStatus').value = 'pending';
+  if ($('saleDepositBank')) $('saleDepositBank').value = '';
+  if ($('saleDepositRef')) $('saleDepositRef').value = '';
+  if ($('saleDepositDate')) $('saleDepositDate').value = new Date().toISOString().slice(0, 10);
+  togglePaymentMethodFields();
   recalcSaleModal();
   $('saleModal').classList.add('active');
+}
+
+// Shows/hides the Cheque or Deposit detail block based on the chosen
+// Payment Method — keeps the form short unless it's actually needed.
+function togglePaymentMethodFields() {
+  const method = $('salePaymentMethod') ? $('salePaymentMethod').value : 'cash';
+  if ($('saleChequeFields')) $('saleChequeFields').style.display = (method === 'cheque') ? 'block' : 'none';
+  if ($('saleDepositFields')) $('saleDepositFields').style.display = (method === 'deposit') ? 'block' : 'none';
 }
 
 function editSale(id) {
@@ -2390,6 +2415,15 @@ function editSale(id) {
   $('saleMarketingCost').value = s.marketingCost;
   $('salePaid').value = s.paid;
   $('saleNotes').value = s.notes;
+  if ($('salePaymentMethod')) $('salePaymentMethod').value = s.paymentMethod || 'cash';
+  if ($('saleChequeNumber')) $('saleChequeNumber').value = s.chequeNumber || '';
+  if ($('saleChequeBank')) $('saleChequeBank').value = s.chequeBank || '';
+  if ($('saleChequeDate')) $('saleChequeDate').value = s.chequeDate || '';
+  if ($('saleChequeStatus')) $('saleChequeStatus').value = s.chequeStatus || 'pending';
+  if ($('saleDepositBank')) $('saleDepositBank').value = s.depositBank || '';
+  if ($('saleDepositRef')) $('saleDepositRef').value = s.depositRef || '';
+  if ($('saleDepositDate')) $('saleDepositDate').value = s.depositDate || '';
+  togglePaymentMethodFields();
   recalcSaleModal();
   $('saleModal').classList.add('active');
 }
@@ -2426,10 +2460,20 @@ async function saveSale() {
   const marketingCost = Number($('saleMarketingCost').value) || 0;
   const paid = Number($('salePaid').value) || 0;
   const notes = $('saleNotes').value.trim();
+  const paymentMethod = $('salePaymentMethod') ? $('salePaymentMethod').value : 'cash';
+  const chequeNumber = $('saleChequeNumber') ? $('saleChequeNumber').value.trim() : '';
+  const chequeBank = $('saleChequeBank') ? $('saleChequeBank').value.trim() : '';
+  const chequeDate = $('saleChequeDate') ? $('saleChequeDate').value : '';
+  const chequeStatus = $('saleChequeStatus') ? $('saleChequeStatus').value : 'pending';
+  const depositBank = $('saleDepositBank') ? $('saleDepositBank').value.trim() : '';
+  const depositRef = $('saleDepositRef') ? $('saleDepositRef').value.trim() : '';
+  const depositDate = $('saleDepositDate') ? $('saleDepositDate').value : '';
 
   if (!currentUser) { alert('Please login first.'); return; }
   if (!product) { alert('Enter a product name!'); return; }
   if (total <= 0) { alert('Total sale amount must be greater than 0!'); return; }
+  if (paid > 0 && paymentMethod === 'cheque' && !chequeNumber) { alert('Enter the cheque number!'); return; }
+  if (paid > 0 && paymentMethod === 'deposit' && !depositRef) { alert('Enter the deposit slip / reference number!'); return; }
 
   const row = {
     user_id: businessId,
@@ -2445,7 +2489,15 @@ async function saveSale() {
     marketing_cost: marketingCost,
     amount_paid: paid,
     notes: notes || null,
-    created_by: currentUser.id
+    created_by: currentUser.id,
+    payment_method: paymentMethod,
+    cheque_number: paymentMethod === 'cheque' ? (chequeNumber || null) : null,
+    cheque_bank: paymentMethod === 'cheque' ? (chequeBank || null) : null,
+    cheque_date: paymentMethod === 'cheque' ? (chequeDate || null) : null,
+    cheque_status: paymentMethod === 'cheque' ? chequeStatus : null,
+    deposit_bank: paymentMethod === 'deposit' ? (depositBank || null) : null,
+    deposit_ref: paymentMethod === 'deposit' ? (depositRef || null) : null,
+    deposit_date: paymentMethod === 'deposit' ? (depositDate || null) : null
   };
 
   if (!(await ensureFreshSession())) return;
@@ -2527,12 +2579,48 @@ function getFilteredSales() {
   const from = $('salesFilterFrom') ? $('salesFilterFrom').value : '';
   const to = $('salesFilterTo') ? $('salesFilterTo').value : '';
   const text = $('salesFilterProduct') ? $('salesFilterProduct').value.trim().toLowerCase() : '';
+  const payMethod = $('salesFilterPayment') ? $('salesFilterPayment').value : '';
   return sales.filter(s => {
     if (from && s.date < from) return false;
     if (to && s.date > to) return false;
     if (text && !(s.product.toLowerCase().includes(text) || (s.customer || '').toLowerCase().includes(text))) return false;
+    if (payMethod && s.paymentMethod !== payMethod) return false;
     return true;
   });
+}
+
+// Cheque short badge shown in the Payment column + Cheque/Deposit Tracker card.
+function paymentMethodBadge(s) {
+  if (s.paymentMethod === 'cheque') {
+    const st = s.chequeStatus || 'pending';
+    const map = { pending: ['⏳ Pending', '#c2410c', '#ffedd5'], cleared: ['✅ Cleared', '#16a34a', '#dcfce7'], bounced: ['❌ Bounced', '#b91c1c', '#fee2e2'] };
+    const [label, color, bg] = map[st] || map.pending;
+    return `🧾 Cheque${s.chequeNumber ? ' #' + s.chequeNumber : ''}<br><span style="display:inline-block;margin-top:2px;padding:1px 7px;border-radius:999px;font-size:10px;font-weight:700;color:${color};background:${bg};">${label}</span>`;
+  }
+  if (s.paymentMethod === 'deposit') {
+    return `🏦 Deposit${s.depositRef ? '<br><small style="opacity:.65;">' + s.depositRef + '</small>' : ''}`;
+  }
+  return '💵 Cash';
+}
+
+// Owner/staff can flip a cheque between Pending / Cleared / Bounced as the
+// bank confirms it — keeps the Cheque & Deposit Tracker trustworthy.
+async function updateChequeStatus(id, status) {
+  const s = sales.find(x => x.id === id);
+  if (!s) return;
+  if (!(await ensureFreshSession())) return;
+  try {
+    const { data, error } = await supabase.from('sales').update({ cheque_status: status }).eq('id', id).select().single();
+    if (error) throw error;
+    const idx = sales.findIndex(x => x.id === id);
+    if (idx !== -1) sales[idx] = dbSaleToLocal(data);
+  } catch (e) {
+    console.error('Update cheque status error:', e);
+    alert('❌ Could not update cheque status: ' + e.message);
+    return;
+  }
+  renderSales();
+  updateStatus(status === 'cleared' ? '✅ Cheque marked cleared' : status === 'bounced' ? '⚠️ Cheque marked bounced' : '⏳ Cheque marked pending');
 }
 
 // Paid in full / part-paid / nothing paid yet — used for the Status column
@@ -2554,7 +2642,7 @@ function renderSales() {
   const list = getFilteredSales();
 
   if (list.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="15" style="text-align:center;opacity:0.5;padding:20px;">No sales logged yet. Tap "Add Sale" to start today\'s diary.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="16" style="text-align:center;opacity:0.5;padding:20px;">No sales logged yet. Tap "Add Sale" to start today\'s diary.</td></tr>';
   } else {
     tbody.innerHTML = list.map(s => {
       const margin = s.total > 0 ? (s.profit / s.total * 100) : 0;
@@ -2572,6 +2660,7 @@ function renderSales() {
         <td style="color:${s.profit >= 0 ? '#16a34a' : '#dc2626'};font-weight:700;">${fmt(s.profit)}</td>
         <td>${margin.toFixed(0)}%</td>
         <td>${fmt(s.paid)}</td>
+        <td style="font-size:11px;">${paymentMethodBadge(s)}</td>
         <td>${s.pending > 0 ? '<span style="color:#c2410c;font-weight:700;">' + fmt(s.pending) + '</span>' : '<span style="opacity:.5;">Rs. 0</span>'}</td>
         <td>${statusBadge(s)}</td>
         <td>
@@ -2586,8 +2675,122 @@ function renderSales() {
   renderSalesByDay(list);
   renderSalesPending(list);
   renderSalesProductPerformance(list);
+  renderSalesChequeDepositTracker(list);
+  renderSalesSummaryChart(list);
   updateSalesStats();
   if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+// ---- Cheque & Deposit Tracker: every non-cash payment, with clearance status ----
+function renderSalesChequeDepositTracker(list) {
+  const tbody = $('salesChequeDepositBody');
+  if (!tbody) return;
+  const entries = list.filter(s => s.paymentMethod === 'cheque' || s.paymentMethod === 'deposit');
+  if (!entries.length) {
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;opacity:0.5;padding:14px;">No cheques or deposits in view.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = entries.map(s => {
+    const isCheque = s.paymentMethod === 'cheque';
+    const bank = isCheque ? (s.chequeBank || '-') : (s.depositBank || '-');
+    const ref = isCheque ? (s.chequeNumber || '-') : (s.depositRef || '-');
+    const refDate = isCheque ? (s.chequeDate || '-') : (s.depositDate || '-');
+    let statusHtml;
+    if (isCheque) {
+      const st = s.chequeStatus || 'pending';
+      const map = { pending: ['⏳ Pending', '#c2410c', '#ffedd5'], cleared: ['✅ Cleared', '#16a34a', '#dcfce7'], bounced: ['❌ Bounced', '#b91c1c', '#fee2e2'] };
+      const [label, color, bg] = map[st] || map.pending;
+      statusHtml = `
+        <span style="display:inline-block;margin-bottom:4px;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:700;color:${color};background:${bg};">${label}</span><br>
+        ${st !== 'cleared' ? `<button class="btn btn-sm" style="padding:2px 8px;font-size:11px;" onclick="updateChequeStatus('${s.id}','cleared')">Mark Cleared</button>` : ''}
+        ${st !== 'bounced' ? `<button class="btn btn-sm btn-danger" style="padding:2px 8px;font-size:11px;" onclick="updateChequeStatus('${s.id}','bounced')">Mark Bounced</button>` : ''}
+        ${st !== 'pending' ? `<button class="btn btn-sm" style="padding:2px 8px;font-size:11px;" onclick="updateChequeStatus('${s.id}','pending')">Reset</button>` : ''}
+      `;
+    } else {
+      statusHtml = '<span style="display:inline-block;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:700;color:#16a34a;background:#dcfce7;">🏦 Deposited</span>';
+    }
+    return `
+      <tr>
+        <td>${s.date}</td>
+        <td>${s.product}</td>
+        <td>${s.customer || '-'}</td>
+        <td>${isCheque ? '🧾 Cheque' : '🏦 Deposit'}</td>
+        <td>${bank}</td>
+        <td>${ref}</td>
+        <td>${refDate}</td>
+        <td>${fmt(s.paid)}</td>
+        <td>${statusHtml}</td>
+      </tr>
+    `;
+  }).join('');
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+// ---- Live Summary charts: 14-day revenue/profit trend + payment method mix ----
+let salesTrendChart = null, salesPaymentChart = null;
+function renderSalesSummaryChart(list) {
+  const colors = getChartColors();
+
+  // 14-day trend (based on today, regardless of the active date filter, so
+  // the chart always shows real recent momentum).
+  const days = [];
+  for (let i = 13; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    days.push(d.toISOString().slice(0, 10));
+  }
+  const revenueByDay = {}, profitByDay = {};
+  sales.forEach(s => {
+    if (!days.includes(s.date)) return;
+    revenueByDay[s.date] = (revenueByDay[s.date] || 0) + s.total;
+    profitByDay[s.date] = (profitByDay[s.date] || 0) + s.profit;
+  });
+  const trendCanvas = $('salesTrendChart');
+  if (trendCanvas) {
+    const data = {
+      labels: days.map(d => d.slice(5)),
+      datasets: [
+        { label: 'Revenue', data: days.map(d => revenueByDay[d] || 0), borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,.15)', tension: .35, fill: true },
+        { label: 'Profit', data: days.map(d => profitByDay[d] || 0), borderColor: '#d4af37', backgroundColor: 'rgba(212,175,55,.12)', tension: .35, fill: true }
+      ]
+    };
+    const opts = {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: colors.text, boxWidth: 12 } } },
+      scales: { x: { ticks: { color: colors.text, maxRotation: 0 }, grid: { display: false } }, y: { ticks: { color: colors.text }, grid: { color: colors.grid } } }
+    };
+    if (salesTrendChart) { salesTrendChart.data = data; salesTrendChart.options = opts; salesTrendChart.update(); }
+    else salesTrendChart = new Chart(trendCanvas.getContext('2d'), { type: 'line', data, options: opts });
+  }
+
+  // Payment method mix — respects the active filter (matches the stat cards).
+  let cash = 0, cheque = 0, deposit = 0;
+  list.forEach(s => {
+    if (s.paymentMethod === 'cheque') cheque += s.paid;
+    else if (s.paymentMethod === 'deposit') deposit += s.paid;
+    else cash += s.paid;
+  });
+  const payCanvas = $('salesPaymentChart');
+  if (payCanvas) {
+    const data = {
+      labels: ['Cash', 'Cheque', 'Deposit'],
+      datasets: [{ data: [cash, cheque, deposit], backgroundColor: ['#10b981', '#f97316', '#818cf8'], borderWidth: 0, hoverOffset: 6 }]
+    };
+    const opts = { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: colors.text, boxWidth: 12 } } } };
+    if (salesPaymentChart) { salesPaymentChart.data = data; salesPaymentChart.update(); }
+    else salesPaymentChart = new Chart(payCanvas.getContext('2d'), { type: 'doughnut', data, options: opts });
+  }
+
+  // Stat mini-cards for the filtered view.
+  const received = cash + cheque + deposit;
+  const pending = list.reduce((sum, s) => sum + s.pending, 0);
+  const chequesAwaiting = list.filter(s => s.paymentMethod === 'cheque' && (s.chequeStatus || 'pending') === 'pending').length;
+  if ($('statPayCash')) $('statPayCash').textContent = fmt(cash);
+  if ($('statPayCheque')) $('statPayCheque').textContent = fmt(cheque);
+  if ($('statPayDeposit')) $('statPayDeposit').textContent = fmt(deposit);
+  if ($('statPayReceived')) $('statPayReceived').textContent = fmt(received);
+  if ($('statPayPending')) $('statPayPending').textContent = fmt(pending);
+  if ($('statChequeAwaiting')) $('statChequeAwaiting').textContent = chequesAwaiting;
 }
 
 // True "daily diary" view — one row per calendar day with that day's totals,
@@ -2735,10 +2938,10 @@ function updateSalesStats() {
 function exportSalesCSV() {
   const list = getFilteredSales();
   if (!list.length) { alert('No sales to export.'); return; }
-  const header = ['Date','Product','Customer','Qty','Unit Price','Total','Cost','Wage','Marketing Channel','Marketing Cost','Profit','Margin %','Paid','Pending','Status','Notes'];
+  const header = ['Date','Product','Customer','Qty','Unit Price','Total','Cost','Wage','Marketing Channel','Marketing Cost','Profit','Margin %','Paid','Payment Method','Cheque No.','Cheque Bank','Cheque Date','Cheque Status','Deposit Bank','Deposit Ref','Deposit Date','Pending','Status','Notes'];
   const rows = list.map(s => {
     const margin = s.total > 0 ? (s.profit / s.total * 100) : 0;
-    return [s.date, s.product, s.customer, s.qty, s.unitPrice, s.total, s.cost, s.wage, s.marketingChannel, s.marketingCost, s.profit, margin.toFixed(1), s.paid, s.pending, saleStatus(s).label, (s.notes || '').replace(/[\r\n,]+/g, ' ')];
+    return [s.date, s.product, s.customer, s.qty, s.unitPrice, s.total, s.cost, s.wage, s.marketingChannel, s.marketingCost, s.profit, margin.toFixed(1), s.paid, s.paymentMethod, s.chequeNumber, s.chequeBank, s.chequeDate, s.chequeStatus, s.depositBank, s.depositRef, s.depositDate, s.pending, saleStatus(s).label, (s.notes || '').replace(/[\r\n,]+/g, ' ')];
   });
   const csv = [header, ...rows].map(r => r.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
