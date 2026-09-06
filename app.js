@@ -2622,6 +2622,7 @@ async function deleteOrder(index) {
   if (userRole !== 'owner') { alert('🔒 Only the business owner can delete orders.'); return; }
   if (!confirm('Delete this order?')) return;
   if (!currentUser) { alert('Please login first.'); return; }
+  if (!(await ensureFreshSession())) return;
   const order = orders[index];
   try {
     const { error } = await supabase.from('orders').delete().eq('id', order.id).eq('user_id', businessId);
