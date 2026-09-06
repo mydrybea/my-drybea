@@ -339,6 +339,7 @@
     <button class="tab-btn" data-tab="staff-home" role="tab" aria-label="Staff Home" data-staff-only><i class="business-icon" data-lucide="layout-dashboard" aria-hidden="true"></i><span>Staff Home</span></button>
     <button class="tab-btn" data-tab="my-deliveries" role="tab" aria-label="My Deliveries" data-driver-only><i class="business-icon" data-lucide="truck" aria-hidden="true"></i><span>My Deliveries</span></button>
     <button class="tab-btn" data-tab="my-earnings" role="tab" aria-label="My Earnings" data-driver-only><i class="business-icon" data-lucide="wallet-cards" aria-hidden="true"></i><span>My Earnings</span></button>
+    <button class="tab-btn" data-tab="my-reviews" role="tab" aria-label="My Reviews" data-driver-only><i class="business-icon" data-lucide="star" aria-hidden="true"></i><span>Reviews</span></button>
     <button class="tab-btn" data-tab="my-salary" role="tab" aria-label="My Salary" data-staff-only><i class="business-icon" data-lucide="wallet-cards" aria-hidden="true"></i><span>My Salary</span></button>
     <button class="tab-btn" data-tab="orders" role="tab" aria-label="Orders"><i class="business-icon" data-lucide="shopping-bag" aria-hidden="true"></i><span>Orders</span></button>
     <button class="tab-btn" data-tab="income" role="tab" aria-label="Income" data-owner-only><i class="business-icon" data-lucide="trending-up" aria-hidden="true"></i><span>Income</span></button>
@@ -952,6 +953,28 @@
       </div>
       <div class="field" style="max-width:260px;margin-top:12px;"><label>Try a distance (km)</label><input type="number" id="delPayCalcKm" min="0" step="0.1" placeholder="e.g. 25" oninput="renderDelPayPreview()"></div>
       <div class="notice" id="delPayCalcResult" style="margin-top:8px;">Enter a distance to see the driver's pay.</div>
+    </div>
+
+    <div class="card" style="margin-top:16px;">
+      <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;">
+        <div><h2><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="star" aria-hidden="true"></i></span><span>Rider Feedback &amp; Reviews</span></h2><p class="pro-subtitle gold">Select a rider to see customer ratings and feedback for each delivery they made.</p></div>
+      </div>
+      <div class="field" style="max-width:280px;margin-top:10px;">
+        <label>Rider</label>
+        <select id="riderFeedbackDriverSelect" onchange="onRiderFeedbackDriverChange(this.value)">
+          <option value="">— Select a rider —</option>
+        </select>
+      </div>
+      <div class="stat-grid" style="margin-top:12px;grid-template-columns:repeat(2,1fr);max-width:400px;">
+        <div class="stat accent"><div class="k">Average Rating</div><div class="v" id="riderFeedbackAvg">—</div></div>
+        <div class="stat"><div class="k">Total Reviews</div><div class="v" id="riderFeedbackCount">0</div></div>
+      </div>
+      <div class="table-wrap" style="margin-top:12px;">
+        <table>
+          <thead><tr><th>Order</th><th>Customer</th><th>Date</th><th>Rating</th><th>Feedback</th></tr></thead>
+          <tbody id="riderFeedbackBody"><tr><td colspan="5" style="text-align:center;opacity:.5;padding:14px;">Select a rider above to see their reviews.</td></tr></tbody>
+        </table>
+      </div>
     </div>
 
     <div class="card" style="margin-top:16px;">
@@ -1692,6 +1715,27 @@
         <table>
           <thead><tr><th>Date</th><th>Order</th><th>Distance</th><th>Pay</th><th>COD</th></tr></thead>
           <tbody id="myEarningsDeliveriesBody"><tr><td colspan="5" style="text-align:center;opacity:.5;padding:14px;">No completed deliveries yet.</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ MY REVIEWS TAB (driver-only) — Customer Feedback per Order ============ -->
+  <section id="my-reviews" class="tab-panel" style="display:none;" role="tabpanel">
+    <div class="mobile-greeting no-print" style="padding:0 0 8px;">
+      <div><span class="eyebrow">CUSTOMER FEEDBACK</span><h2><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="star" aria-hidden="true"></i></span><span>My Reviews</span></h2><p class="pro-subtitle gold">What customers said about your deliveries, order by order.</p></div>
+      <div class="profile-dot"><i class="business-icon" data-lucide="star" aria-hidden="true"></i></div>
+    </div>
+
+    <div class="card">
+      <div class="stat-grid" style="grid-template-columns:repeat(2,1fr);">
+        <div class="stat accent"><div class="k">Average Rating</div><div class="v" id="myReviewsAvg">—</div></div>
+        <div class="stat"><div class="k">Total Reviews</div><div class="v" id="myReviewsCount">0</div></div>
+      </div>
+      <div class="table-wrap" style="margin-top:14px;">
+        <table>
+          <thead><tr><th>Order</th><th>Customer</th><th>Date</th><th>Rating</th><th>Feedback</th></tr></thead>
+          <tbody id="myReviewsBody"><tr><td colspan="5" style="text-align:center;opacity:.5;padding:14px;">No customer feedback yet.</td></tr></tbody>
         </table>
       </div>
     </div>

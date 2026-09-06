@@ -151,7 +151,7 @@ async function loadUserProfile() {
 }
 
 const STAFF_ALLOWED_TABS = ['staff-home','orders','my-salary','profile','expenses'];
-const DRIVER_ALLOWED_TABS = ['my-deliveries','my-earnings','profile'];
+const DRIVER_ALLOWED_TABS = ['my-deliveries','my-earnings','my-reviews','profile'];
 
 function applyRoleUI() {
   const isStaff = userRole === 'staff';
@@ -2899,6 +2899,8 @@ function renderDelivery() {
     renderDeliveryStats();
     renderDeliveryDriverStats();
     renderDeliveryPerformance();
+    populateRiderFeedbackSelect();
+    renderRiderFeedback();
     return;
   }
   const orderIndexById = new Map(orders.map((o, i) => [String(o.id), i]));
@@ -2932,6 +2934,8 @@ function renderDelivery() {
   renderDeliveryStats();
   renderDeliveryDriverStats();
   renderDeliveryPerformance();
+  populateRiderFeedbackSelect();
+  renderRiderFeedback();
 }
 
 async function assignDriver(orderId, driverId) {
@@ -3150,6 +3154,91 @@ function renderMyDeliveries() {
   }
   if (window.lucide) lucide.createIcons({ attrs: { 'stroke-width': 1.9, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' } });
 }
+
+// ==================== DRIVER: MY REVIEWS (customer feedback per order, self view) ====================
+// Read-only, built entirely from the driver's own `myDeliveries` (already
+// loaded for the My Deliveries tab — no extra fetch needed). Shows every
+// delivered order the customer actually rated, newest first.
+function renderMyReviews() {
+  const tbody = $('myReviewsBody');
+  const avgEl = $('myReviewsAvg');
+  const countEl = $('myReviewsCount');
+  if (!tbody && !avgEl && !countEl) return; // panel not on this page / not a driver
+  const rated = (myDeliveries || []).filter(o => o.status === 'delivered' && o.customer_rating != null);
+  const sorted = rated.slice().sort((a, b) => new Date(b.rated_at || b.delivered_at || 0) - new Date(a.rated_at || a.delivered_at || 0));
+  const avg = rated.length ? (rated.reduce((s, o) => s + Number(o.customer_rating), 0) / rated.length) : null;
+  if (avgEl) avgEl.textContent = avg != null ? `⭐ ${avg.toFixed(1)}` : '—';
+  if (countEl) countEl.textContent = String(rated.length);
+  if (tbody) {
+    tbody.innerHTML = sorted.length ? sorted.map(o => {
+      const full = Math.round(Number(o.customer_rating));
+      const stars = '⭐'.repeat(full) + `<span style="opacity:.25;">${'⭐'.repeat(Math.max(0, 5 - full))}</span>`;
+      const when = o.rated_at ? new Date(o.rated_at).toLocaleDateString() : (o.delivered_at ? new Date(o.delivered_at).toLocaleDateString() : '-');
+      return `<tr>
+        <td><strong>${o.order_ref_no || String(o.id).slice(0, 8)}</strong></td>
+        <td>${escapeHtmlSafe(o.customer_name_snapshot || o.customer_address_snapshot || '-')}</td>
+        <td>${when}</td>
+        <td>${stars}</td>
+        <td>${o.rating_feedback ? escapeHtmlSafe(o.rating_feedback) : '<span style="opacity:.4;">No written feedback</span>'}</td>
+      </tr>`;
+    }).join('') : '<tr><td colspan="5" style="text-align:center;opacity:.5;padding:14px;">No customer feedback yet.</td></tr>';
+  }
+}
+window.renderMyReviews = renderMyReviews;
+
+// ==================== OWNER: RIDER FEEDBACK (per-driver customer reviews) ====================
+// Owner picks a rider from the Delivery page and sees every order that rider
+// delivered with the customer's rating + written feedback. Reuses the same
+// `orders` array and `driverListCache` already loaded for the rest of this
+// page — no extra fetch needed.
+let riderFeedbackDriverId = '';
+
+function populateRiderFeedbackSelect() {
+  const sel = $('riderFeedbackDriverSelect');
+  if (!sel) return;
+  const prev = riderFeedbackDriverId;
+  sel.innerHTML = '<option value="">— Select a rider —</option>' +
+    driverListCache.map(d => `<option value="${d.id}">${escapeHtmlSafe(d.display_name || d.id.slice(0, 8))}</option>`).join('');
+  if (prev && driverListCache.some(d => String(d.id) === String(prev))) sel.value = prev;
+  else riderFeedbackDriverId = '';
+}
+
+function onRiderFeedbackDriverChange(val) {
+  riderFeedbackDriverId = val;
+  renderRiderFeedback();
+}
+window.onRiderFeedbackDriverChange = onRiderFeedbackDriverChange;
+
+function renderRiderFeedback() {
+  const tbody = $('riderFeedbackBody');
+  const avgEl = $('riderFeedbackAvg');
+  const countEl = $('riderFeedbackCount');
+  if (!tbody) return;
+  if (!riderFeedbackDriverId) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;opacity:.5;padding:14px;">Select a rider above to see their reviews.</td></tr>';
+    if (avgEl) avgEl.textContent = '—';
+    if (countEl) countEl.textContent = '0';
+    return;
+  }
+  const mine = (orders || []).filter(o => String(o.assignedDriverId || '') === String(riderFeedbackDriverId) && o.customerRating != null);
+  const sorted = mine.slice().sort((a, b) => new Date(b.ratedAt || b.deliveredAt || 0) - new Date(a.ratedAt || a.deliveredAt || 0));
+  const avg = mine.length ? (mine.reduce((s, o) => s + Number(o.customerRating), 0) / mine.length) : null;
+  if (avgEl) avgEl.textContent = avg != null ? `⭐ ${avg.toFixed(1)}` : '—';
+  if (countEl) countEl.textContent = String(mine.length);
+  tbody.innerHTML = sorted.length ? sorted.map(o => {
+    const full = Math.round(Number(o.customerRating));
+    const stars = '⭐'.repeat(full) + `<span style="opacity:.25;">${'⭐'.repeat(Math.max(0, 5 - full))}</span>`;
+    const when = o.ratedAt ? new Date(o.ratedAt).toLocaleDateString() : (o.deliveredAt ? new Date(o.deliveredAt).toLocaleDateString() : '-');
+    return `<tr>
+      <td><strong>${o.orderRefNo || String(o.id).slice(0, 8)}</strong></td>
+      <td>${escapeHtmlSafe(getCustomerName(o.customerId))}</td>
+      <td>${when}</td>
+      <td>${stars}</td>
+      <td>${o.ratingFeedback ? escapeHtmlSafe(o.ratingFeedback) : '<span style="opacity:.4;">No written feedback</span>'}</td>
+    </tr>`;
+  }).join('') : '<tr><td colspan="5" style="text-align:center;opacity:.5;padding:14px;">No reviews for this rider yet.</td></tr>';
+}
+window.renderRiderFeedback = renderRiderFeedback;
 
 // ==================== DRIVER: MY EARNINGS (pay-per-km + COD handover) ====================
 // Read-only pay summary built entirely from the driver's own `myDeliveries`
@@ -6705,7 +6794,7 @@ document.querySelectorAll('[data-ribbon="true"]').forEach(btn => {
 
 const OWNER_ONLY_TABS = ['dashboard', 'my-staff', 'delivery', 'calculator', 'production', 'history', 'data', 'monthly-summary', 'income', 'analytics'];
 const STAFF_ONLY_TABS = ['staff-home', 'daily-pay', 'work-update', 'attendance', 'advance', 'my-commission', 'my-tasks', 'announcements'];
-const DRIVER_ONLY_TABS = ['my-deliveries','my-earnings'];
+const DRIVER_ONLY_TABS = ['my-deliveries','my-earnings','my-reviews'];
 
 let staffWorkspaceLoadSeq = 0;
 async function refreshStaffWorkspaceData(tabId){
@@ -6782,6 +6871,7 @@ function activateAppTab(tabId){
   if (tabId !== 'delivery' && driverLocationPollTimer) { clearInterval(driverLocationPollTimer); driverLocationPollTimer = null; }
   if (tabId === 'my-deliveries') { loadMyDeliveries(); updateDriverNotifyPermUI(); }
   if (tabId === 'my-earnings') { loadMyDeliveries().then(() => renderMyEarnings()); loadDriverHandovers(); }
+  if (tabId === 'my-reviews') { loadMyDeliveries().then(() => renderMyReviews()); }
   if (tabId === 'my-staff') { refreshMyStaffPage(); loadMyStaffOwnerData(); }
   if (tabId === 'expenses') { renderExpenses(); renderRecurringExpenses(); }
   if (tabId === 'my-salary') {
