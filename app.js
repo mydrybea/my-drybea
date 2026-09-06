@@ -78,6 +78,33 @@ const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     storageKey: 'sb-dztuyfiiyxllnvciunjv-auth-token'
   }
 });
+
+// Confirms (and, if needed, silently refreshes) the Supabase session's access
+// token right before a write. Needed because drivers/owners often leave the
+// app open for hours — screen locked, tab backgrounded — during which mobile
+// browsers throttle/freeze JS timers and autoRefreshToken's scheduled refresh
+// can simply never fire. The token then sits expired in storage and the next
+// save fails with a raw "JWT expired" error from the server. getSession()
+// checks expiry itself and uses the refresh token to get a new one when
+// needed, so calling it first fixes that silently in the common case. If the
+// refresh token itself is dead (real logout / long-expired session), there's
+// nothing to recover — send the user to log in again instead of letting the
+// save fail with a confusing error.
+async function ensureFreshSession() {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      alert('⚠️ Your session has expired. Please log in again.');
+      window.location.replace('login.html');
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.error('Session refresh check failed:', e);
+    return true; // don't block the save on a check that itself failed to reach the network
+  }
+}
+
 let currentUser = null;
 let userProfile = null;
 let userRole = 'owner';   // 'owner' | 'staff' | 'driver'
@@ -4068,6 +4095,7 @@ window.useOwnerPickupMyLocation = useOwnerPickupMyLocation;
 async function saveOwnerPickupLocation() {
   if (userRole !== 'owner' || !currentUser) return;
   if (!ownerPickupMarkerEdit) { alert('📍 Tap the map (or use "Use My Current Location") to place the pin first.'); return; }
+  if (!(await ensureFreshSession())) return;
   const { lat, lng } = ownerPickupMarkerEdit.getLatLng();
   const label = $('ownerPickupLabel').value.trim();
   try {
@@ -4082,7 +4110,15 @@ async function saveOwnerPickupLocation() {
     updateStatus('✅ Pickup location saved');
   } catch (e) {
     console.error('Save pickup location error:', e);
-    alert('❌ Could not save the pickup location: ' + e.message + '\n\nMake sure the pickup_lat/pickup_lng/pickup_label columns exist on the profiles table.');
+    // A JWT/auth error here means the session died *after* ensureFreshSession's
+    // check (e.g. mid-request) — not a schema problem, so don't show the
+    // misleading "columns exist" hint for it.
+    if (/jwt|expired|not authenticated|401/i.test(e.message || '')) {
+      alert('⚠️ Your session expired while saving. Please log in again and try once more.');
+      window.location.replace('login.html');
+    } else {
+      alert('❌ Could not save the pickup location: ' + e.message + '\n\nMake sure the pickup_lat/pickup_lng/pickup_label columns exist on the profiles table.');
+    }
   }
 }
 window.saveOwnerPickupLocation = saveOwnerPickupLocation;
