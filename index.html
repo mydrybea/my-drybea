@@ -85,6 +85,181 @@
      Design-only layer: no ids, onclick handlers or JS-facing
      classes were removed, so all existing logic keeps working.
      ============================================================ -->
+
+<!-- ============================================================
+     DELIVERY PAGE — "NEXT LEVEL" VISUAL REDESIGN
+     Design-only layer, scoped entirely under #delivery (and the
+     three delivery-related modals by id). No ids, onclick handlers,
+     table structures or JS-facing classes were touched — every
+     selector below only changes appearance, so all existing
+     Delivery-tab logic (map init, driver assignment, status
+     cycling, heatmap, pay calculator, etc.) keeps working exactly
+     as before.
+     ============================================================ -->
+<style>
+#delivery{
+  --dv-green:#0ea472; --dv-green-ink:#047a56; --dv-green-soft:#e6f7f1;
+  --dv-orange:#f97316; --dv-orange-ink:#c2410c; --dv-orange-soft:#fff1e6;
+  --dv-purple:#8b5cf6; --dv-purple-ink:#6d28d9; --dv-purple-soft:#f3effe;
+  --dv-gold:#eab308;  --dv-gold-ink:#a16207;  --dv-gold-soft:#fdf6e3;
+  --dv-slate:#64748b; --dv-slate-ink:#475569; --dv-slate-soft:#f1f5f9;
+  --dv-red:#ef4444;
+  --dv-ink:#0f172a;
+  --dv-radius:20px;
+  --dv-shadow:0 1px 2px rgba(15,23,42,.04), 0 10px 28px -12px rgba(15,23,42,.14);
+  --dv-shadow-hover:0 2px 4px rgba(15,23,42,.06), 0 18px 40px -14px rgba(15,23,42,.20);
+}
+
+/* ---------- Hero ---------- */
+#delivery .staff-suite-hero{
+  position:relative; overflow:hidden;
+  border-radius:var(--dv-radius);
+  background:
+    radial-gradient(120% 180% at 100% 0%, rgba(255,255,255,.16), rgba(255,255,255,0) 55%),
+    linear-gradient(120deg, var(--dv-green) 0%, var(--dv-green-ink) 65%, #075e42 100%);
+  box-shadow:var(--dv-shadow-hover);
+  padding:26px 26px 22px;
+}
+#delivery .staff-suite-hero::before{
+  content:""; position:absolute; inset:0; pointer-events:none; opacity:.5;
+  background-image:radial-gradient(rgba(255,255,255,.16) 1.4px, transparent 1.4px);
+  background-size:18px 18px;
+  -webkit-mask-image:linear-gradient(120deg, rgba(0,0,0,.9), transparent 60%);
+          mask-image:linear-gradient(120deg, rgba(0,0,0,.9), transparent 60%);
+}
+#delivery .staff-suite-hero .eyebrow{
+  color:rgba(255,255,255,.85); letter-spacing:.14em; font-weight:700; font-size:11px;
+}
+#delivery .staff-suite-hero h2{ color:#fff; letter-spacing:-.01em; }
+#delivery .staff-suite-hero .pro-subtitle{ color:rgba(255,255,255,.82) !important; }
+#delivery .staff-suite-hero .btn-primary{
+  background:#fff; color:var(--dv-green-ink); border:none; font-weight:700;
+  box-shadow:0 6px 16px -4px rgba(0,0,0,.25);
+}
+#delivery .staff-suite-hero .btn-primary:hover{ filter:brightness(.97); transform:translateY(-1px); }
+
+#delivery .staff-suite-grid{
+  position:relative; margin-top:18px;
+  display:grid; grid-template-columns:repeat(5,1fr); gap:12px;
+}
+@media (max-width:900px){ #delivery .staff-suite-grid{ grid-template-columns:repeat(2,1fr); } }
+#delivery .staff-mini{
+  background:rgba(255,255,255,.12);
+  border:1px solid rgba(255,255,255,.22);
+  border-radius:14px; padding:14px 14px 12px;
+  backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px);
+  transition:transform .18s ease, background .18s ease;
+}
+#delivery .staff-mini:hover{ transform:translateY(-2px); background:rgba(255,255,255,.18); }
+#delivery .staff-mini .mini-icon{
+  width:32px; height:32px; border-radius:9px;
+  display:flex; align-items:center; justify-content:center;
+  background:rgba(255,255,255,.2); color:#fff; margin-bottom:8px;
+}
+#delivery .staff-mini strong{ color:#fff; font-size:1.4rem; font-weight:800; display:block; letter-spacing:-.02em; }
+#delivery .staff-mini span{ color:rgba(255,255,255,.78); font-size:11.5px; font-weight:600; }
+
+/* ---------- Section cards ---------- */
+#delivery .card{
+  border-radius:var(--dv-radius);
+  border:1px solid rgba(15,23,42,.06);
+  box-shadow:var(--dv-shadow);
+  padding:20px 22px 22px;
+  transition:box-shadow .2s ease, transform .2s ease;
+}
+#delivery .card:hover{ box-shadow:var(--dv-shadow-hover); }
+#delivery .card > h2{ font-size:1.05rem; letter-spacing:-.01em; display:flex; align-items:center; gap:10px; }
+#delivery .card > div > h2{ font-size:1.05rem; letter-spacing:-.01em; display:flex; align-items:center; gap:10px; }
+
+#delivery .pro-title-icon{
+  width:34px; height:34px; border-radius:11px;
+  display:inline-flex; align-items:center; justify-content:center; flex-shrink:0;
+}
+#delivery .pro-title-icon.orange{ background:var(--dv-orange-soft); color:var(--dv-orange-ink); }
+#delivery .pro-title-icon.green{ background:var(--dv-green-soft); color:var(--dv-green-ink); }
+#delivery .pro-title-icon.purple{ background:var(--dv-purple-soft); color:var(--dv-purple-ink); }
+#delivery .pro-title-icon.gold{ background:var(--dv-gold-soft); color:var(--dv-gold-ink); }
+#delivery .pro-title-icon.slate{ background:var(--dv-slate-soft); color:var(--dv-slate-ink); }
+#delivery .pro-subtitle{ font-size:12.5px; opacity:.65; margin-top:2px; }
+
+/* ---------- KPI stat tiles (Delivery Performance + Pay Rate) ---------- */
+#delivery .stat-grid{ display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-top:14px; }
+@media (max-width:760px){ #delivery .stat-grid{ grid-template-columns:repeat(2,1fr); } }
+#delivery .stat{
+  position:relative; border-radius:14px; padding:14px 16px 13px;
+  background:var(--dv-slate-soft); border:1px solid rgba(15,23,42,.05);
+  overflow:hidden;
+}
+#delivery .stat::before{
+  content:""; position:absolute; left:0; top:0; bottom:0; width:4px; background:var(--dv-slate);
+}
+#delivery .stat.accent{ background:var(--dv-green-soft); }
+#delivery .stat.accent::before{ background:var(--dv-green); }
+#delivery .stat.good{ background:var(--dv-green-soft); }
+#delivery .stat.good::before{ background:var(--dv-green); }
+#delivery .stat .k{ font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; opacity:.6; }
+#delivery .stat .v{ font-size:1.35rem; font-weight:800; letter-spacing:-.02em; margin-top:3px; color:var(--dv-ink); }
+
+/* ---------- Map cards ---------- */
+#delivery .dv-map-frame{ position:relative; margin-top:10px; }
+#delivery .dv-map-frame > div{ box-shadow:inset 0 0 0 1px rgba(255,255,255,.06); }
+#delivery .dv-map-legend{
+  position:absolute; left:10px; bottom:10px; z-index:400;
+  background:rgba(15,23,42,.72); backdrop-filter:blur(4px);
+  color:#e2e8f0; font-size:11px; font-weight:600;
+  padding:6px 10px; border-radius:999px;
+  display:flex; align-items:center; gap:6px;
+  box-shadow:0 4px 14px rgba(0,0,0,.3);
+}
+#delivery .card > div > div > .btn-sm{
+  border-radius:999px; font-weight:700; font-size:12px;
+}
+
+/* ---------- Driver Pay Rate → pricing-tier look ---------- */
+#delivery .card:has(#delPayCalcKm) .stat-grid{ grid-template-columns:repeat(3,1fr); }
+@media (max-width:760px){ #delivery .card:has(#delPayCalcKm) .stat-grid{ grid-template-columns:1fr; } }
+#delivery .card:has(#delPayCalcKm) .stat{ text-align:center; background:#fff; border:1px solid rgba(15,23,42,.08); }
+#delivery .card:has(#delPayCalcKm) .stat::before{ display:none; }
+#delivery .card:has(#delPayCalcKm) .stat.accent{ background:linear-gradient(160deg, var(--dv-gold-soft), #fff); border-color:rgba(234,179,8,.35); }
+#delivery .card:has(#delPayCalcKm) .stat .v{ font-size:1.15rem; }
+#delivery #delPayCalcResult{ border-radius:14px; font-weight:600; }
+
+/* ---------- Tables ---------- */
+#delivery .table-wrap{ margin-top:12px; border-radius:14px; overflow:hidden; border:1px solid rgba(15,23,42,.07); }
+#delivery table{ width:100%; border-collapse:collapse; }
+#delivery table thead th{
+  background:var(--dv-slate-soft); text-align:left; font-size:11px; font-weight:700;
+  text-transform:uppercase; letter-spacing:.05em; opacity:.7; padding:11px 14px;
+  position:sticky; top:0;
+}
+#delivery table tbody td{ padding:11px 14px; font-size:13px; border-top:1px solid rgba(15,23,42,.055); vertical-align:middle; }
+#delivery table tbody tr{ transition:background .12s ease; }
+#delivery table tbody tr:hover{ background:rgba(14,164,114,.05); }
+#delivery table tbody tr:nth-child(even){ background:rgba(15,23,42,.015); }
+#delivery table tbody tr:nth-child(even):hover{ background:rgba(14,164,114,.06); }
+
+#delivery .badge{ border-radius:999px; padding:4px 10px; font-size:11.5px; font-weight:700; display:inline-flex; align-items:center; gap:4px; }
+#delivery .badge-pending{ background:var(--dv-gold-soft); color:var(--dv-gold-ink); }
+#delivery .badge-shipped{ background:var(--dv-purple-soft); color:var(--dv-purple-ink); }
+#delivery .badge-delivered{ background:var(--dv-green-soft); color:var(--dv-green-ink); }
+#delivery .badge-cancelled{ background:#fee2e2; color:#b91c1c; }
+
+#delivery table select, #delivery table input[type="number"]{
+  border:1px solid rgba(15,23,42,.14); border-radius:8px !important; transition:border-color .15s ease;
+}
+#delivery table select:focus, #delivery table input[type="number"]:focus{
+  outline:none; border-color:var(--dv-green); box-shadow:0 0 0 3px rgba(14,164,114,.15);
+}
+
+/* ---------- Chart card ---------- */
+#delivery .chart-wrap{ margin-top:10px; background:var(--dv-slate-soft); border-radius:14px; padding:12px; }
+
+/* ---------- Delivery-related modals (map pickers + proof) ---------- */
+#setPinModal .modal, #ownerPickupModal .modal, #deliveryProofModal .modal{ border-radius:var(--dv-radius); }
+#setPinModal #setPinMap, #ownerPickupModal #ownerPickupMap{
+  box-shadow:0 1px 2px rgba(15,23,42,.05), 0 12px 26px -12px rgba(15,23,42,.25);
+}
+</style>
 </head>
 <body>
 
@@ -704,7 +879,10 @@
           <button class="btn btn-sm" onclick="loadDriverLocations()"><i class="business-icon icon-inline" data-lucide="refresh-cw"></i> Refresh</button>
         </div>
       </div>
-      <div id="ownerDriverMap" style="height:360px;border-radius:12px;overflow:hidden;background:#eef1f5;margin-top:10px;"></div>
+      <div class="dv-map-frame">
+        <div id="ownerDriverMap" style="height:360px;border-radius:14px;overflow:hidden;background:#1a2332;margin-top:10px;"></div>
+        <div class="dv-map-legend">🟠 Pickup point · ┄ planned route</div>
+      </div>
       <div style="margin-top:8px;font-size:12px;opacity:.65;" id="liveMapDriverCount">Loading driver locations…</div>
       <div style="margin-top:4px;font-size:11px;opacity:.55;">🟠 Pickup point (fixed) · dashed line = that driver's planned pickup → drop-off direction, shown while they're online</div>
     </div>
@@ -737,7 +915,10 @@
         <div><h2><span class="pro-title-icon purple" aria-hidden="true"><i class="business-icon" data-lucide="flame" aria-hidden="true"></i></span><span>Delivery Heatmap</span></h2><p class="pro-subtitle purple">Where your orders cluster — helps with driver allocation and zone pricing.</p></div>
         <button class="btn btn-sm" onclick="initDeliveryHeatmap()"><i class="business-icon icon-inline" data-lucide="refresh-cw"></i> Refresh</button>
       </div>
-      <div id="deliveryHeatmapMap" style="height:360px;border-radius:12px;overflow:hidden;background:#eef1f5;margin-top:10px;"></div>
+      <div class="dv-map-frame">
+        <div id="deliveryHeatmapMap" style="height:360px;border-radius:14px;overflow:hidden;background:#1a2332;margin-top:10px;"></div>
+        <div class="dv-map-legend">🔥 Order density</div>
+      </div>
       <div style="margin-top:8px;font-size:12px;opacity:.65;" id="deliveryHeatmapNote">Loading delivery locations…</div>
     </div>
 
