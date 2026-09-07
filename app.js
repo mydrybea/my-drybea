@@ -5265,6 +5265,13 @@ async function driverMarkStatus(orderId, newStatus) {
       }
     }
     renderMyDeliveries();
+    // A driver marking the order delivered is a real delivery just like the
+    // owner doing it via cycleStatus()/confirmDelivery()/confirmBatchDelivery()
+    // — all three of those finalize the pending distributor commission claim
+    // to 'approved' on delivery. This path was missing that call, so any
+    // order delivered by a driver left its distributor commission stuck on
+    // 'pending' forever and it never showed up as real commission anywhere.
+    if (newStatus === 'delivered') finalizeDistributorCommissionForOrder(orderId, 'approved');
     updateStatus(newStatus === 'delivered' ? '✅ Marked delivered' : '🚚 Delivery started — auto-tracking distance');
   } catch (e) {
     console.error('Driver status update error:', e);
