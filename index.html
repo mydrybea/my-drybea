@@ -331,16 +331,19 @@
   nav.app-nav .tab-btn.nav-primary{
     display:flex !important; flex-direction:column !important;
     align-items:center !important; justify-content:center !important;
-    gap:3px !important; flex:1 1 0; min-width:0;
+    gap:3px !important; flex:1 1 0; min-width:0; min-height:50px;
     padding:6px 2px !important; margin:0 !important; border-radius:12px !important;
     background:transparent !important; border:none !important;
     color:var(--bn-mut) !important; font-size:10px !important; font-weight:600;
-    position:relative; transition:color .15s ease;
+    position:relative; transition:color .15s ease, transform .12s ease;
   }
-  nav.app-nav .tab-btn.nav-primary i{width:21px;height:21px;}
+  nav.app-nav .tab-btn.nav-primary:active{ transform:scale(.93); }
+  nav.app-nav .tab-btn.nav-primary i{width:21px;height:21px;flex-shrink:0;}
   nav.app-nav .tab-btn.nav-primary span{
-    font-size:9.5px !important; letter-spacing:.01em; line-height:1.1;
-    max-width:66px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+    font-size:9.3px !important; letter-spacing:.01em; line-height:1.15;
+    width:100%; max-width:100%; padding:0 1px; box-sizing:border-box;
+    overflow:hidden; text-align:center; white-space:normal; word-break:break-word;
+    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
   }
   nav.app-nav .tab-btn.nav-primary .nav-badge{top:2px;right:14px;}
   nav.app-nav .tab-btn.nav-primary.active{color:var(--bn-accent-ink) !important;}
@@ -352,6 +355,31 @@
 
 /* ---- Header profile icon (replaces the old Profile nav tab) ---- */
 #headerProfileBtn{ position:relative; }
+
+/* ---- Quick Actions card grid — fixes cards overflowing past the
+   right edge of the screen on narrow phones (a classic CSS Grid
+   trap: without minmax(0,1fr), a grid track won't shrink below its
+   content's natural width, so long text like "Browse the product
+   catalogue" pushes the whole card off-screen instead of wrapping).
+   Scoped to override style.css without touching that file. ---- */
+.staff-launch-grid, .home-actions{
+  display:grid !important;
+  grid-template-columns:repeat(2, minmax(0,1fr)) !important;
+  width:100% !important; max-width:100% !important;
+  box-sizing:border-box !important;
+}
+.staff-launch, .home-action{
+  min-width:0 !important; width:100% !important; box-sizing:border-box !important;
+  overflow:hidden !important; transition:transform .12s ease, box-shadow .12s ease;
+}
+.staff-launch:active, .home-action:active{ transform:scale(.97); }
+.staff-launch b, .staff-launch small, .staff-launch em,
+.home-action strong, .home-action small{
+  max-width:100%; overflow-wrap:break-word; word-break:break-word;
+}
+@media (max-width:430px){
+  .staff-launch-grid, .home-actions{ grid-template-columns:1fr !important; }
+}
 </style>
 </head>
 <body>
