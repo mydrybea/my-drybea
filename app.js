@@ -183,14 +183,26 @@ async function loadUserProfile() {
     businessId = currentUser.id;
   }
   applyRoleUI();
+  // PERFORMANCE: these role-specific data loads (staff tasks/notices/
+  // performance/commission, or driver deliveries, or distributor claims)
+  // used to be awaited right here, which blocked the ENTIRE rest of login
+  // — including the main dashboard's own data — on a whole extra network
+  // round trip for panels the user isn't even looking at yet. Each of
+  // these functions already renders its own UI the moment its data
+  // arrives and already catches its own errors internally, so there's
+  // nothing unsafe about letting them run in the background: we fire
+  // them off here without awaiting, so they load *concurrently* with the
+  // main dashboard data instead of *before* it. This alone removes one
+  // full sequential network wave from every login, which is where most
+  // of the mobile-perceived lag was coming from.
   if (userRole === 'driver') {
-    await loadMyDeliveries();
+    loadMyDeliveries();
     startDriverDeliveriesRealtime();
     updateDriverNotifyPermUI();
   } else if (userRole === 'distributor') {
-    await loadDistributorCommissionClaims();
+    loadDistributorCommissionClaims();
   } else {
-    await loadMyStaffData(false);
+    loadMyStaffData(false);
     startAppNotifyRealtime();
   }
 }
@@ -2565,8 +2577,12 @@ async function generateDueRecurringExpenses() {
   );
   if (!due.length) return;
 
-  for (const r of due) {
-    if (!(await ensureFreshSession())) return;
+  // PERFORMANCE: these rules are independent of one another, so on a day
+  // with several due at once (e.g. after being offline a while) they used
+  // to go one full insert+update round trip at a time. One session check
+  // up front, then all rules together — same idea as the main login batch.
+  if (!(await ensureFreshSession())) return;
+  await Promise.all(due.map(async (r) => {
   try {
       const { data, error } = await supabase.from('expenses').insert({
         expense_date: today,
@@ -2587,7 +2603,7 @@ async function generateDueRecurringExpenses() {
     } catch (e) {
       console.error('Auto-generate recurring expense failed:', e);
     }
-  }
+  }));
   renderExpenses();
   renderRecurringExpenses();
   updateMonthlySummary();
@@ -8468,10 +8484,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   updateMonthlySummary();
 
   // ---- RECURRING DAILY EXPENSES: auto-add today's due ones ----
-  // Must run AFTER loadExpensesFromCloud() above (it appends straight into
-  // the local `expenses` array), so this one stays sequential on purpose.
-  await generateDueRecurringExpenses();
-  renderRecurringExpenses();
+  // Must START after loadExpensesFromCloud() above (it appends straight
+  // into the local `expenses` array) — but it doesn't need to FINISH
+  // before the rest of login does. Most logins have nothing due at all
+  // (single early-return), and on the rare day something is due it
+  // re-renders its own panels the moment it's done, so there's no reason
+  // to make the user wait on it before the app is usable.
+  generateDueRecurringExpenses();
 
   // ---- APPLY THE APP_DATA RESULT FETCHED IN PARALLEL ABOVE ----
   // app_data holds: state (pricing/production settings), history, snapshots.
