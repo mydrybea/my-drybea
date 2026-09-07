@@ -210,6 +210,19 @@ const DRIVER_ALLOWED_TABS = ['driver-home','my-deliveries','my-earnings','my-rev
 // from it — distributors land on Home first, then tap into My Income.
 const DISTRIBUTOR_ALLOWED_TABS = ['distributor-home','my-income','orders','expenses','products','profile'];
 
+// ---- Bottom/top nav bar visibility — exactly 5 tabs per role, no "More" ----
+// These are separate from the *_ALLOWED_TABS above (which still govern what
+// each role is actually permitted to open via activateAppTab/quick actions).
+// Profile is deliberately left out of all four lists: it now lives in the
+// dedicated header icon (#headerProfileBtn) instead of taking a nav slot.
+// Anything else a role can reach but that isn't one of its 5 nav tabs still
+// works exactly as before — it's just reached via a quick-action tile
+// (Dashboard for Owner, Staff Home for Staff, etc.) rather than the bar.
+const OWNER_NAV_TABS = ['dashboard','orders','sales','income','products'];
+const STAFF_NAV_TABS = ['staff-home','orders','my-salary','expenses','products'];
+const DRIVER_NAV_TABS = ['driver-home','my-deliveries','my-earnings','my-reviews','products'];
+const DISTRIBUTOR_NAV_TABS = ['distributor-home','my-income','orders','expenses','products'];
+
 function applyRoleUI() {
   const isStaff = userRole === 'staff';
   const isDriver = userRole === 'driver';
@@ -244,15 +257,19 @@ function applyRoleUI() {
     el.style.display = (isDistributor && (!tab || DISTRIBUTOR_ALLOWED_TABS.includes(tab))) ? 'flex' : 'none';
   });
 
-  // Every nav tab button: lock down to exactly the tabs each role may see.
+  // Every nav tab button: lock down to exactly the 5 nav tabs each role
+  // sees in the bar (Profile and everything else still work — they just
+  // live behind the header profile icon / quick-action tiles instead).
   document.querySelectorAll('.tab-btn').forEach(el => {
     const tab = el.getAttribute('data-tab');
     if (isStaff) {
-      el.style.display = STAFF_ALLOWED_TABS.includes(tab) ? 'flex' : 'none';
+      el.style.display = STAFF_NAV_TABS.includes(tab) ? 'flex' : 'none';
     } else if (isDriver) {
-      el.style.display = DRIVER_ALLOWED_TABS.includes(tab) ? 'flex' : 'none';
+      el.style.display = DRIVER_NAV_TABS.includes(tab) ? 'flex' : 'none';
     } else if (isDistributor) {
-      el.style.display = DISTRIBUTOR_ALLOWED_TABS.includes(tab) ? 'flex' : 'none';
+      el.style.display = DISTRIBUTOR_NAV_TABS.includes(tab) ? 'flex' : 'none';
+    } else {
+      el.style.display = OWNER_NAV_TABS.includes(tab) ? 'flex' : 'none';
     }
   });
 
@@ -8678,118 +8695,31 @@ if ('serviceWorker' in navigator) {
 })();
 
 /* ================================================================
-   BOTTOM NAV — PROFESSIONAL 5-BUTTON MOBILE REDESIGN + "MORE" SHEET
+   BOTTOM NAV — PROFESSIONAL 5-BUTTON REDESIGN, NO "MORE" BUTTON
    ------------------------------------------------------------------
-   Purely additive. Does not change any existing tab, onclick, role
-   check, or the activateAppTab()/applyRoleUI() logic already defined
-   above — it only:
-     1) Tags up to 5 role-appropriate .tab-btn elements with
-        .nav-primary so the CSS in index.html can show just those
-        5 in the fixed bottom bar on mobile.
-     2) Mirrors every OTHER currently-visible nav tab into the
-        #navMoreSheet as a clickable tile that simply calls the
-        real activateAppTab() — nothing is duplicated or moved.
-     3) Wraps applyRoleUI() and activateAppTab() (after they're
-        fully defined above) so the bottom nav + sheet content stay
-        in sync automatically whenever the role or active tab
-        changes, without editing either function's own body.
+   Every role now gets exactly 5 real nav tabs (see OWNER_NAV_TABS /
+   STAFF_NAV_TABS / DRIVER_NAV_TABS / DISTRIBUTOR_NAV_TABS above,
+   applied inside applyRoleUI()) — there is no overflow sheet and
+   nothing else to route into one. This script's only remaining job
+   is to tag every currently role-visible .tab-btn with .nav-primary
+   so the CSS in index.html lays those 5 out evenly along the bar,
+   and to keep that tagging in sync whenever the role or active tab
+   changes — without editing applyRoleUI()/activateAppTab() bodies.
    ================================================================ */
 (function(){
-  // Exactly 4 real tabs per role + the "More" button makes 5 visible slots
-  // in the bar. Everything else that role can reach (Profile, Expenses,
-  // etc.) still works fine — it just lives one tap away in the "More" sheet
-  // instead of taking a primary slot.
-  var NAV_PRIMARY_BY_ROLE = {
-    owner:       ['dashboard','sales','orders','income'],
-    staff:       ['staff-home','my-salary','orders','my-tasks'],
-    // Driver: real Home overview (separate from the My Deliveries list),
-    // My Deliveries, My Earnings, Products — Reviews/Profile live in "More".
-    driver:      ['driver-home','my-deliveries','my-earnings','products'],
-    // Distributor: real Home overview, Product, Order, and My Income (the
-    // commission/earnings page split out from the old Product Agent tab)
-    // — Expenses/Profile live in "More".
-    distributor: ['distributor-home','products','orders','my-income']
-  };
-
-  function currentPrimaryList(){
-    var role = (typeof userRole !== 'undefined' && userRole) ? userRole : 'owner';
-    return NAV_PRIMARY_BY_ROLE[role] || NAV_PRIMARY_BY_ROLE.owner;
-  }
-
-  function openMoreSheet(){
-    var overlay = document.getElementById('navMoreOverlay');
-    if (overlay) overlay.classList.add('open');
-  }
-  function closeMoreSheet(){
-    var overlay = document.getElementById('navMoreOverlay');
-    if (overlay) overlay.classList.remove('open');
-  }
-  window.closeNavMoreSheet = closeMoreSheet;
-
   function refreshBottomNav(){
     var navRoot = document.querySelector('nav.app-nav');
-    var moreList = document.getElementById('navMoreList');
-    var moreBtn = document.getElementById('navMoreBtn');
-    if (!navRoot || !moreList || !moreBtn) return;
-
+    if (!navRoot) return;
     var allTabBtns = Array.prototype.slice.call(navRoot.querySelectorAll('.tab-btn'));
-    var primary = currentPrimaryList();
-
-    moreList.innerHTML = '';
-    var secondaryCount = 0;
-    var activeIsSecondary = false;
-
     allTabBtns.forEach(function(btn){
-      btn.classList.remove('nav-primary');
-      var tab = btn.getAttribute('data-tab');
-      // Respect whatever role-visibility app.js already applied. IMPORTANT:
-      // this must read the INLINE style that applyRoleUI() itself sets
-      // (btn.style.display), NOT the computed style. On mobile (<=820px)
-      // the CSS already forces every plain .tab-btn to display:none
-      // !important, and .nav-primary is the ONLY thing that overrides it —
-      // but we just stripped .nav-primary one line above, so a computed-
-      // style check would ALWAYS read back "none" here on mobile (self-
-      // defeating: it can never see a button as visible, so it could never
-      // tag anything as primary — this was the root cause of the bottom
-      // nav appearing completely empty on phones). Inline style is set
-      // directly by applyRoleUI() and is unaffected by the nav-primary
-      // class or the viewport width, so it reflects true role-visibility.
-      if (btn.style.display === 'none') return;
-
-      if (primary.indexOf(tab) !== -1) {
-        btn.classList.add('nav-primary');
-        return;
-      }
-      secondaryCount++;
-      var tile = document.createElement('button');
-      tile.type = 'button';
-      tile.className = 'nms-item';
-      tile.innerHTML = btn.innerHTML;
-      tile.addEventListener('click', function(){
-        closeMoreSheet();
-        if (typeof activateAppTab === 'function') activateAppTab(tab);
-      });
-      moreList.appendChild(tile);
-      if (btn.classList.contains('active')) activeIsSecondary = true;
+      // Inline style is what applyRoleUI() itself sets, so it reflects true
+      // role-visibility regardless of viewport width or existing classes.
+      if (btn.style.display === 'none') { btn.classList.remove('nav-primary'); return; }
+      btn.classList.add('nav-primary');
     });
-
-    moreBtn.classList.toggle('has-active', activeIsSecondary);
-    moreBtn.style.visibility = secondaryCount > 0 ? 'visible' : 'hidden';
     if (window.lucide) lucide.createIcons({ attrs: { 'stroke-width': 1.9, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' } });
   }
   window.refreshBottomNav = refreshBottomNav;
-
-  function wireStaticControls(){
-    var moreBtn = document.getElementById('navMoreBtn');
-    var overlay = document.getElementById('navMoreOverlay');
-    var closeBtn = document.getElementById('navMoreCloseBtn');
-    if (moreBtn && !moreBtn.__drybeaBound) { moreBtn.addEventListener('click', openMoreSheet); moreBtn.__drybeaBound = true; }
-    if (overlay && !overlay.__drybeaBound) {
-      overlay.addEventListener('click', function(e){ if (e.target === overlay) closeMoreSheet(); });
-      overlay.__drybeaBound = true;
-    }
-    if (closeBtn && !closeBtn.__drybeaBound) { closeBtn.addEventListener('click', closeMoreSheet); closeBtn.__drybeaBound = true; }
-  }
 
   // Wrap applyRoleUI / activateAppTab once both are defined (they're plain
   // function declarations above, hoisted to this same script's top-level
@@ -8810,7 +8740,6 @@ if ('serviceWorker' in navigator) {
       var origActivateAppTab = activateAppTab;
       var wrappedActivateAppTab = function(tabId){
         var r = origActivateAppTab.apply(this, arguments);
-        closeMoreSheet();
         refreshBottomNav();
         return r;
       };
@@ -8832,7 +8761,6 @@ if ('serviceWorker' in navigator) {
 
   document.addEventListener('DOMContentLoaded', function(){
     try {
-      wireStaticControls();
       wrapWhenReady();
       refreshBottomNav();
     } catch (e) { console.error('Bottom nav init error:', e); }
