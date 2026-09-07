@@ -3677,6 +3677,18 @@ function renderOrders() {
     </tr>`;
   }).join('');
   if (window.lucide) lucide.createIcons({ attrs: { 'stroke-width': 1.9, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' } });
+  updateOrdersNewBadge(visibleOrders);
+}
+
+// "New" here = orders still sitting at 'pending' (not yet shipped/actioned) —
+// same idea as the My Staff advance-request badge: a count of things that
+// still need someone's attention, shown right on the nav tab.
+function updateOrdersNewBadge(visibleOrders) {
+  const badge = $('ordersNewBadge');
+  if (!badge) return;
+  const count = (visibleOrders || []).filter(o => o.status === 'pending').length;
+  if (count > 0) { badge.textContent = count > 99 ? '99+' : String(count); badge.style.display = 'inline-block'; }
+  else { badge.style.display = 'none'; }
 }
 
 function getStatusBadge(status) {
@@ -4251,6 +4263,18 @@ function renderMyDeliveries() {
       : '<tr><td colspan="5" style="text-align:center;opacity:.5;padding:20px;">No deliveries completed yet.</td></tr>';
   }
   if (window.lucide) lucide.createIcons({ attrs: { 'stroke-width': 1.9, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' } });
+  updateMyDeliveriesNewBadge();
+}
+
+// "New" here = deliveries assigned to this driver that are still 'pending'
+// (i.e. not started yet — driver hasn't tapped "Start Delivery"). Mirrors the
+// Orders tab's badge and the My Staff advance-request badge.
+function updateMyDeliveriesNewBadge() {
+  const badge = $('myDeliveriesNewBadge');
+  if (!badge) return;
+  const count = (myDeliveries || []).filter(o => o.status === 'pending').length;
+  if (count > 0) { badge.textContent = count > 99 ? '99+' : String(count); badge.style.display = 'inline-block'; }
+  else { badge.style.display = 'none'; }
 }
 
 // ==================== DRIVER: MY REVIEWS (customer feedback per order, self view) ====================
