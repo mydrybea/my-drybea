@@ -2399,20 +2399,34 @@ function renderOrderProductPicker() {
   if (!wrap || !holder) return;
   if (products.length === 0) { wrap.style.display = 'none'; holder.innerHTML = ''; return; }
   wrap.style.display = 'block';
-  holder.innerHTML = products.map(p => `
-    <div onclick="selectOrderProduct('${p.id}')" style="flex:0 0 auto;width:88px;text-align:center;cursor:pointer;border:1px solid var(--border-color,#3333);border-radius:10px;padding:6px;">
-      ${p.imageUrl ? `<img src="${p.imageUrl}" style="width:100%;height:56px;object-fit:cover;border-radius:6px;">` : `<div style="width:100%;height:56px;border-radius:6px;background:#f0f0f0;"></div>`}
+  const selectedId = $('orderProductId') ? $('orderProductId').value : '';
+  holder.innerHTML = products.map(p => {
+    const isSelected = String(selectedId) === String(p.id) && String(selectedId) !== '';
+    return `
+    <div class="om-catalog-card" data-pid="${p.id}" onclick="selectOrderProduct('${p.id}')" style="flex:0 0 auto;width:96px;text-align:center;cursor:pointer;border:2px solid ${isSelected ? '#0ea472' : 'var(--border-color,#3333)'};background:${isSelected ? 'rgba(14,164,114,.08)' : 'transparent'};border-radius:10px;padding:6px;position:relative;transition:border-color .15s,background .15s;">
+      ${isSelected ? `<div style="position:absolute;top:4px;right:4px;width:16px;height:16px;border-radius:50%;background:#0ea472;color:#fff;font-size:11px;line-height:16px;">✓</div>` : ''}
+      ${p.imageUrl
+        ? `<div style="width:100%;height:80px;border-radius:6px;background:#f5f5f5;display:flex;align-items:center;justify-content:center;overflow:hidden;"><img src="${p.imageUrl}" style="max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;"></div>`
+        : `<div style="width:100%;height:80px;border-radius:6px;background:#f0f0f0;"></div>`}
       <div style="font-size:.62rem;margin-top:4px;line-height:1.2;">${p.name}</div>
       <div style="font-size:.62rem;opacity:.7;">Rs. ${p.retailPrice.toLocaleString()}</div>
     </div>
-  `).join('');
+  `;
+  }).join('');
 }
 
 function selectOrderProduct(id) {
   const p = products.find(x => String(x.id) === String(id));
   if (!p) return;
-  $('orderProductId').value = p.id;
-  $('orderUnitPrice').value = p.retailPrice;
+  const already = String($('orderProductId')?.value || '') === String(p.id);
+  // Tapping the already-selected catalog item again removes it from the order.
+  if (already) {
+    $('orderProductId').value = '';
+  } else {
+    $('orderProductId').value = p.id;
+    $('orderUnitPrice').value = p.retailPrice;
+  }
+  renderOrderProductPicker();
   if (typeof updateOrderTotal === 'function') updateOrderTotal();
 }
 
