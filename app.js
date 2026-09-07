@@ -7810,12 +7810,24 @@ async function refreshCommissionRealtime(){
     await loadOrdersFromCloud();
     try{ await loadStaffList(); }catch(e){}
     try{ await loadMyStaffData(false); }catch(e){}
+    // A distributor placing (or being marked delivered for) an order from
+    // their OWN Distributor app page writes straight to
+    // distributor_commission_claims — it never touches staff_commission_claims
+    // or orders in a way the two calls above would catch. Without this, the
+    // owner's "Product Distributors" panel and the Distributor Activity Hub
+    // (Sales tab) only ever updated when the OWNER themselves created/finalized
+    // a distributor-attributed order — never when the distributor did it.
+    try{ await loadDistributorCommissionClaims(); }catch(e){}
     renderOwnerStaffPerformance();
     renderOwnerStaffManagement();
     renderOrders();
     updateOrderStats();
     calcAll(); calcDashboard(); calcProduction(); updateMonthlySummary();
     refreshStaffHome(); refreshMyCommission();
+    // Keep the Distributor Activity Hub (Sales tab) in sync too, if it's
+    // the tab currently open — these are all null-safe no-ops otherwise.
+    if (typeof renderDistActivityOverview === 'function') renderDistActivityOverview();
+    if (typeof renderDistActivityCommission === 'function') renderDistActivityCommission();
   }catch(e){ console.warn('Commission realtime refresh:',e); }
   finally{ commissionRefreshBusy=false; }
 }
@@ -7827,6 +7839,10 @@ function startCommissionRealtime(){
     commissionRealtimeChannel = supabase.channel('mydrybea-commission-live')
       .on('postgres_changes',{event:'*',schema:'public',table:'staff_commission_claims',filter:`owner_id=eq.${currentUser.id}`},()=>refreshCommissionRealtime())
       .on('postgres_changes',{event:'*',schema:'public',table:'orders',filter:`user_id=eq.${currentUser.id}`},()=>refreshCommissionRealtime())
+      // NEW: an order (and its commission claim) created or finalized from the
+      // Distributor app page — by the distributor themselves — now reaches
+      // the owner's screen the same way a staff sale already did.
+      .on('postgres_changes',{event:'*',schema:'public',table:'distributor_commission_claims',filter:`owner_id=eq.${currentUser.id}`},()=>refreshCommissionRealtime())
       .subscribe((status)=>{ if(status==='SUBSCRIBED') console.log('MY DRYBEA commission realtime: connected'); });
     if(commissionRealtimeTimer) clearInterval(commissionRealtimeTimer);
     // Realtime channel above already pushes instant updates; this is just a safety-net
