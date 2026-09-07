@@ -2212,8 +2212,8 @@ function renderProducts() {
   const isOwner = userRole === 'owner';
   grid.innerHTML = products.map(p => `
     <div class="card" style="padding:10px;">
-      <img src="${p.imageUrl || ''}" onerror="this.style.display='none'" style="width:100%;height:100px;object-fit:cover;border-radius:8px;background:#f0f0f0;${p.imageUrl ? '' : 'display:none;'}">
-      ${p.imageUrl ? '' : '<div style="width:100%;height:100px;border-radius:8px;background:#f0f0f0;display:flex;align-items:center;justify-content:center;opacity:.4;font-size:.7rem;">No image</div>'}
+      <img src="${p.imageUrl || ''}" onerror="this.style.display='none'" style="width:100%;max-width:250px;height:250px;object-fit:contain;border-radius:8px;background:#f8f8f8;margin:0 auto;display:${p.imageUrl ? 'block' : 'none'};">
+      ${p.imageUrl ? '' : '<div style="width:100%;max-width:250px;height:250px;border-radius:8px;background:#f8f8f8;display:flex;align-items:center;justify-content:center;opacity:.4;font-size:.7rem;margin:0 auto;">No image</div>'}
       <div style="font-weight:700;margin-top:8px;font-size:.85rem;">${p.name}</div>
       <div style="font-size:.72rem;opacity:.7;margin-top:4px;">Wholesale: Rs. ${p.wholesalePrice.toLocaleString()}</div>
       <div style="font-size:.72rem;opacity:.7;">Retail: Rs. ${p.retailPrice.toLocaleString()}</div>
@@ -2261,31 +2261,38 @@ function openEditProduct(id) {
 
 // FIX: product photos straight from a phone camera can be several MB, which
 // made uploads slow and made the Products page slow to load (every card
-// fetches a huge full-size image). We now resize/compress the image on the
-// device (canvas) to a sensible max size before it's ever uploaded, so the
-// stored file is a small, fast-loading JPEG instead of the raw camera photo.
-function compressImageFile(file, maxWidth = 900, maxHeight = 900, quality = 0.72) {
+// fetches a huge full-size image). We now resize the image on the device
+// (canvas) into a fixed 250x250 square JPEG before it's ever uploaded — the
+// FULL photo is scaled down to fit inside the square (never cropped) and
+// centered on a white background, so every product's image is a small,
+// fast-loading 250x250 file that shows the entire picture. Because every
+// stored image is already exactly 250x250, it looks identical (fully
+// visible, not cropped) everywhere it's shown — to the owner in the
+// Products tab and to every other app member (staff/distributor/driver)
+// who views the same catalog.
+function compressImageFile(file, targetSize = 250, quality = 0.85) {
   return new Promise((resolve, reject) => {
     if (!file.type || !file.type.startsWith('image/')) { resolve(file); return; }
     const img = new Image();
     const objectUrl = URL.createObjectURL(file);
     img.onload = () => {
-      let { width, height } = img;
-      if (width > maxWidth || height > maxHeight) {
-        const ratio = Math.min(maxWidth / width, maxHeight / height);
-        width = Math.round(width * ratio);
-        height = Math.round(height * ratio);
-      }
       const canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
+      canvas.width = targetSize;
+      canvas.height = targetSize;
       const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0, width, height);
+      // White backdrop so the letterboxed edges (and transparent PNGs) don't turn black in JPEG.
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, targetSize, targetSize);
+      // Scale the FULL image (never cropped) to fit inside the 250x250 square, centered.
+      const ratio = Math.min(targetSize / img.width, targetSize / img.height);
+      const drawW = Math.round(img.width * ratio);
+      const drawH = Math.round(img.height * ratio);
+      const dx = Math.round((targetSize - drawW) / 2);
+      const dy = Math.round((targetSize - drawH) / 2);
+      ctx.drawImage(img, dx, dy, drawW, drawH);
       URL.revokeObjectURL(objectUrl);
       canvas.toBlob((blob) => {
         if (!blob) { resolve(file); return; }
-        // If compression somehow made it bigger (rare, e.g. tiny PNGs), keep the original.
-        if (blob.size >= file.size) { resolve(file); return; }
         const baseName = (file.name || 'photo').replace(/\.[^./\\]+$/, '');
         resolve(new File([blob], `${baseName}.jpg`, { type: 'image/jpeg' }));
       }, 'image/jpeg', quality);

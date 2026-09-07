@@ -2170,7 +2170,7 @@
         <button class="btn btn-primary btn-sm" onclick="openNewProduct()"><i class="business-icon icon-inline" data-lucide="plus" aria-hidden="true"></i> Add Product</button>
       </div>
       <div class="notice" style="margin-bottom:14px;font-size:.75rem;">This catalog is shared with the team. Only the owner can add, edit or remove products.</div>
-      <div id="productsGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px;">
+      <div id="productsGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px;">
         <div style="grid-column:1/-1;text-align:center;opacity:.5;padding:20px;">Loading…</div>
       </div>
     </div>
@@ -2185,7 +2185,7 @@
       <div class="field">
         <label>Product Image</label>
         <input type="file" id="productImageFile" accept="image/*" onchange="previewProductImage()">
-        <img id="productImagePreview" style="display:none;width:100px;height:100px;object-fit:cover;border-radius:10px;margin-top:8px;">
+        <img id="productImagePreview" style="display:none;width:250px;height:250px;max-width:100%;object-fit:contain;border-radius:10px;background:#f8f8f8;margin-top:8px;">
       </div>
       <div class="field">
         <label>Product Name</label>
