@@ -707,21 +707,29 @@
             <option value="approved">Earned</option>
             <option value="rejected">Cancelled</option>
           </select>
+          <select id="distActCommPayoutFilter" onchange="renderDistActivityCommission()" style="max-width:140px;">
+            <option value="">All Payout</option>
+            <option value="unpaid">Unpaid</option>
+            <option value="paid">Paid</option>
+          </select>
           <input type="date" id="distActCommFrom" onchange="renderDistActivityCommission()" style="max-width:145px;">
           <span style="align-self:center;opacity:.5;">to</span>
           <input type="date" id="distActCommTo" onchange="renderDistActivityCommission()" style="max-width:145px;">
           <button class="btn btn-sm" onclick="clearDistActivityCommissionFilter()">Clear</button>
           <button class="btn btn-sm" onclick="exportDistActivityCommissionCSV()">📊 Export CSV</button>
+          <button class="btn btn-sm btn-primary" onclick="markFilteredDistributorCommissionsPaid()"><i class="business-icon icon-inline" data-lucide="hand-coins" aria-hidden="true"></i> Mark Filtered as Paid</button>
         </div>
         <div class="stat-grid" style="margin-bottom:12px;">
           <div class="stat"><div class="k">Filtered Sales</div><div class="v" id="distActCommFilteredCount">0</div></div>
           <div class="stat"><div class="k">Filtered Order Total</div><div class="v" id="distActCommFilteredTotal">Rs. 0</div></div>
           <div class="stat accent"><div class="k">Filtered Commission</div><div class="v" id="distActCommFilteredCommission">Rs. 0</div></div>
+          <div class="stat bad"><div class="k">Unpaid (Owed)</div><div class="v" id="distActCommFilteredUnpaid">Rs. 0</div></div>
+          <div class="stat good"><div class="k">Paid Out</div><div class="v" id="distActCommFilteredPaid">Rs. 0</div></div>
         </div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>Date</th><th>Distributor</th><th>Order Ref</th><th>Order Total</th><th>Rate</th><th>Commission</th><th>Status</th></tr></thead>
-            <tbody id="distActCommissionBody"><tr><td colspan="7" style="text-align:center;opacity:.5;padding:14px;">No commission claims yet.</td></tr></tbody>
+            <thead><tr><th>Date</th><th>Distributor</th><th>Order Ref</th><th>Order Total</th><th>Rate</th><th>Commission</th><th>Status</th><th>Payout</th><th>Action</th></tr></thead>
+            <tbody id="distActCommissionBody"><tr><td colspan="9" style="text-align:center;opacity:.5;padding:14px;">No commission claims yet.</td></tr></tbody>
           </table>
         </div>
       </div>
@@ -2418,13 +2426,16 @@
         <div class="stat"><div class="k">Total Sales Volume</div><div class="v" id="distTotalVolume">Rs. 0</div></div>
         <div class="stat"><div class="k">Sales Count</div><div class="v" id="distSalesCount">0</div></div>
         <div class="stat good"><div class="k">Total Commission Earned</div><div class="v" id="distTotalCommission">Rs. 0</div></div>
+        <div class="stat bad"><div class="k">Unpaid (Owed to Me)</div><div class="v" id="distTotalUnpaid">Rs. 0</div></div>
+        <div class="stat good"><div class="k">Already Paid</div><div class="v" id="distTotalPaid">Rs. 0</div></div>
       </div>
       <div class="table-wrap" style="margin-top:14px;">
         <table>
-          <thead><tr><th>Date</th><th>Order</th><th>Sale</th><th>Rate</th><th>Commission</th><th>Status</th></tr></thead>
-          <tbody id="distCommissionHistoryBody"><tr><td colspan="6" style="text-align:center;opacity:.5;padding:14px;">No commission earned yet.</td></tr></tbody>
+          <thead><tr><th>Date</th><th>Order</th><th>Sale</th><th>Rate</th><th>Commission</th><th>Status</th><th>Payout</th></tr></thead>
+          <tbody id="distCommissionHistoryBody"><tr><td colspan="7" style="text-align:center;opacity:.5;padding:14px;">No commission earned yet.</td></tr></tbody>
         </table>
       </div>
+      <div class="notice" style="margin-top:10px;margin-bottom:0;font-size:.75rem;"><i class="business-icon icon-inline" data-lucide="info"></i> "Payout" shows whether the owner has actually paid out an earned commission yet — this is separate from the sale being "Earned" (which just means the order was delivered).</div>
     </div>
   </section>
 

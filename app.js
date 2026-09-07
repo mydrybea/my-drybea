@@ -7593,6 +7593,11 @@ function computeDistributorStats(distributorId){
   const totalVolume = claims.reduce((s,c)=>s+(Number(c.order_total)||0),0);
   const totalCommission = claims.reduce((s,c)=>s+(Number(c.commission_amount)||0),0);
   const salesCount = claims.length;
+  // Payout tracking: of the commission actually earned (status='approved'), how
+  // much has the owner marked as paid out vs. still owed. payout_status defaults
+  // to 'unpaid' (via DB default) for every row until the owner marks it 'paid'.
+  const totalPaid = claims.filter(c => c.payout_status === 'paid').reduce((s,c)=>s+(Number(c.commission_amount)||0),0);
+  const totalUnpaid = totalCommission - totalPaid;
 
   const { tier, nextTier, remainingToNext, intoTier } = resolveDistributorTier(totalVolume);
   const marketingLevel = tier.label;
@@ -7613,6 +7618,7 @@ function computeDistributorStats(distributorId){
     totalVolume, totalCommission, salesCount, marketingLevel, businessQuality,
     currentRate, nextTierLabel: nextTier ? nextTier.label : null,
     nextTierRate: nextTier ? nextTier.rate : null, remainingToNext, tierProgressPct,
+    totalPaid, totalUnpaid,
   };
 }
 
@@ -7663,6 +7669,56 @@ async function loadDistributorCommissionClaims(){
     return [];
   }
 }
+
+// Owner marks an earned (status='approved') distributor commission claim as
+// paid out / not-yet-paid. Only the owner can touch payout — distributors can
+// see their payout status but never set it themselves.
+async function markDistributorCommissionPaid(claimId, note){
+  if (userRole !== 'owner') { alert('Only the owner can mark a commission as paid.'); return; }
+  if (!claimId) return;
+  try{
+    const update = { payout_status: 'paid', paid_at: new Date().toISOString() };
+    if (note !== undefined) update.paid_note = note || null;
+    const { error } = await withSessionRetry(() => supabase.from('distributor_commission_claims')
+      .update(update).eq('id', String(claimId)).eq('status', 'approved'));
+    if (error) { console.error('Mark distributor commission paid failed:', error); alert('❌ Could not mark as paid: ' + error.message); return; }
+    await loadDistributorCommissionClaims();
+    updateStatus('💰 Commission marked as paid');
+  }catch(e){ console.error('Mark distributor commission paid error:', e); alert('❌ Could not mark as paid: ' + e.message); }
+}
+window.markDistributorCommissionPaid = markDistributorCommissionPaid;
+
+// Reverts a claim back to unpaid — for correcting an accidental "Mark Paid" tap.
+async function markDistributorCommissionUnpaid(claimId){
+  if (userRole !== 'owner') { alert('Only the owner can change payout status.'); return; }
+  if (!claimId) return;
+  try{
+    const { error } = await withSessionRetry(() => supabase.from('distributor_commission_claims')
+      .update({ payout_status: 'unpaid', paid_at: null }).eq('id', String(claimId)));
+    if (error) { console.error('Mark distributor commission unpaid failed:', error); alert('❌ Could not undo payout: ' + error.message); return; }
+    await loadDistributorCommissionClaims();
+    updateStatus('↩️ Commission reverted to unpaid');
+  }catch(e){ console.error('Mark distributor commission unpaid error:', e); alert('❌ Could not undo payout: ' + e.message); }
+}
+window.markDistributorCommissionUnpaid = markDistributorCommissionUnpaid;
+
+// Bulk action: marks every currently-filtered, earned-but-unpaid claim as paid
+// in one go (e.g. "pay out everything owed to this distributor this month").
+async function markFilteredDistributorCommissionsPaid(){
+  if (userRole !== 'owner') { alert('Only the owner can mark commissions as paid.'); return; }
+  const claims = getFilteredDistActivityCommissionClaims().filter(c => c.status === 'approved' && c.payout_status !== 'paid');
+  if (!claims.length) { alert('Nothing unpaid in the current filter.'); return; }
+  if (!confirm(`Mark ${claims.length} earned commission(s) totalling Rs. ${fmt(claims.reduce((s,c)=>s+(Number(c.commission_amount)||0),0))} as paid?`)) return;
+  try{
+    const ids = claims.map(c => String(c.id));
+    const { error } = await withSessionRetry(() => supabase.from('distributor_commission_claims')
+      .update({ payout_status: 'paid', paid_at: new Date().toISOString() }).in('id', ids).eq('status', 'approved'));
+    if (error) { console.error('Bulk mark paid failed:', error); alert('❌ Could not mark as paid: ' + error.message); return; }
+    await loadDistributorCommissionClaims();
+    updateStatus(`💰 ${ids.length} commission(s) marked as paid`);
+  }catch(e){ console.error('Bulk mark paid error:', e); alert('❌ Could not mark as paid: ' + e.message); }
+}
+window.markFilteredDistributorCommissionsPaid = markFilteredDistributorCommissionsPaid;
 
 function renderDistributorsPanel(){
   const tbody = $('distributorsBody');
@@ -7727,18 +7783,27 @@ function renderProductAgentPage(){
   if ($('distTotalVolume')) $('distTotalVolume').textContent = fmt(stats.totalVolume);
   if ($('distTotalCommission')) $('distTotalCommission').textContent = fmt(stats.totalCommission);
   if ($('distSalesCount')) $('distSalesCount').textContent = stats.salesCount;
+  if ($('distTotalPaid')) $('distTotalPaid').textContent = fmt(stats.totalPaid);
+  if ($('distTotalUnpaid')) $('distTotalUnpaid').textContent = fmt(stats.totalUnpaid);
   renderDistributorTierProgress(stats, 'distTierProgress');
   const body = $('distCommissionHistoryBody');
   if (body) {
     const claims = window.distributorCommissionClaims || [];
-    body.innerHTML = claims.map(c => `<tr>
+    body.innerHTML = claims.map(c => {
+      const isPaid = (c.payout_status || 'unpaid') === 'paid';
+      const payoutCell = c.status !== 'approved'
+        ? '<span style="opacity:.4;">—</span>'
+        : (isPaid ? '<span class="status-pill approved">✅ Paid</span>' : '<span class="status-pill pending">Unpaid</span>');
+      return `<tr>
         <td>${new Date(c.submitted_at || Date.now()).toLocaleDateString()}</td>
         <td>${escapeHtmlSafe(c.order_ref_no || '-')}</td>
         <td>${fmt(Number(c.order_total) || 0)}</td>
         <td>${((Number(c.commission_rate) || 0) * 100).toFixed(1)}%</td>
         <td>${fmt(Number(c.commission_amount) || 0)}</td>
         <td><span class="status-pill ${c.status === 'approved' ? 'approved' : c.status === 'rejected' ? 'rejected' : 'pending'}">${c.status === 'approved' ? 'Earned' : c.status === 'rejected' ? 'Cancelled' : 'Pending delivery'}</span></td>
-      </tr>`).join('') || '<tr><td colspan="6" style="text-align:center;opacity:.5;padding:14px;">No commission earned yet.</td></tr>';
+        <td>${payoutCell}</td>
+      </tr>`;
+    }).join('') || '<tr><td colspan="7" style="text-align:center;opacity:.5;padding:14px;">No commission earned yet.</td></tr>';
   }
 }
 window.renderProductAgentPage = renderProductAgentPage;
@@ -7765,12 +7830,16 @@ function renderDistributorHome() {
   const body = $('distHomeRecentBody');
   if (body) {
     const claims = (window.distributorCommissionClaims || []).slice(0, 5);
-    body.innerHTML = claims.length ? claims.map(c => `<tr>
+    body.innerHTML = claims.length ? claims.map(c => {
+      const isPaid = (c.payout_status || 'unpaid') === 'paid';
+      const payoutBadge = c.status !== 'approved' ? '' : (isPaid ? ' <span class="status-pill approved" style="font-size:.65rem;">Paid</span>' : ' <span class="status-pill pending" style="font-size:.65rem;">Unpaid</span>');
+      return `<tr>
         <td>${new Date(c.submitted_at || Date.now()).toLocaleDateString()}</td>
         <td>${escapeHtmlSafe(c.order_ref_no || '-')}</td>
         <td>${fmt(Number(c.commission_amount) || 0)}</td>
-        <td><span class="status-pill ${c.status === 'approved' ? 'approved' : c.status === 'rejected' ? 'rejected' : 'pending'}">${c.status === 'approved' ? 'Earned' : c.status === 'rejected' ? 'Cancelled' : 'Pending'}</span></td>
-      </tr>`).join('') : '<tr><td colspan="4" style="text-align:center;opacity:.5;padding:14px;">No commission earned yet.</td></tr>';
+        <td><span class="status-pill ${c.status === 'approved' ? 'approved' : c.status === 'rejected' ? 'rejected' : 'pending'}">${c.status === 'approved' ? 'Earned' : c.status === 'rejected' ? 'Cancelled' : 'Pending'}</span>${payoutBadge}</td>
+      </tr>`;
+    }).join('') : '<tr><td colspan="4" style="text-align:center;opacity:.5;padding:14px;">No commission earned yet.</td></tr>';
   }
   if (window.lucide) lucide.createIcons({ attrs: { 'stroke-width': 1.9, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' } });
 }
@@ -7933,6 +8002,24 @@ function stopDistributorCommissionRealtime(){
 // Until that table exists, the Activity Log tab still renders (empty) and shows
 // a clear error on save instead of silently failing — Overview and Commission
 // tabs work immediately since they only read data that already exists.
+//
+// ==================== DISTRIBUTOR COMMISSION PAYOUT TRACKING (Paid/Unpaid) ====================
+// Separate from `status` (pending/approved/rejected — whether the commission was
+// EARNED). `payout_status` tracks whether the owner has actually PAID OUT an
+// earned (status='approved') commission to the distributor. Only earned claims
+// are ever payable; pending/rejected claims are never marked paid.
+//
+// REQUIRED ONE-TIME SUPABASE SETUP (run once in the SQL editor):
+//
+//   alter table public.distributor_commission_claims
+//     add column if not exists payout_status text not null default 'unpaid'
+//       check (payout_status in ('unpaid','paid')),
+//     add column if not exists paid_at timestamptz,
+//     add column if not exists paid_note text;
+//
+// Until these columns exist, every claim is treated as 'unpaid' in the UI (the
+// column read simply comes back undefined), and the "Mark Paid" action will
+// fail with a clear Supabase error instead of silently doing nothing.
 
 const DIST_ACTIVITY_TYPES = {
   visit: '🚶 Field Visit', call: '📞 Phone Call', sample_drop: '📦 Sample Drop',
@@ -8068,29 +8155,60 @@ function jumpToDistActivityLog(distId){
 }
 window.jumpToDistActivityLog = jumpToDistActivityLog;
 
-function renderDistActivityCommission(){
-  const body = $('distActCommissionBody');
-  if (!body) return;
+// Shared filter logic for the Commission tab — used by the render function,
+// the bulk "mark paid" action and the CSV export, so all three always agree
+// on what's currently in view.
+function getFilteredDistActivityCommissionClaims(){
   const distFilter = $('distActCommDistFilter')?.value || '';
   const statusFilter = $('distActCommStatusFilter')?.value || '';
+  const payoutFilter = $('distActCommPayoutFilter')?.value || '';
   const from = $('distActCommFrom')?.value ? new Date($('distActCommFrom').value) : null;
   const to = $('distActCommTo')?.value ? new Date($('distActCommTo').value + 'T23:59:59') : null;
   let claims = (window.distributorCommissionClaims || []).slice();
   if (distFilter) claims = claims.filter(c => String(c.distributor_id) === String(distFilter));
   if (statusFilter) claims = claims.filter(c => c.status === statusFilter);
+  if (payoutFilter) claims = claims.filter(c => (c.payout_status || 'unpaid') === payoutFilter);
   if (from) claims = claims.filter(c => c.submitted_at && new Date(c.submitted_at) >= from);
   if (to) claims = claims.filter(c => c.submitted_at && new Date(c.submitted_at) <= to);
+  return claims;
+}
+
+function renderDistActivityCommission(){
+  const body = $('distActCommissionBody');
+  if (!body) return;
+  const claims = getFilteredDistActivityCommissionClaims();
 
   const totalCount = claims.length;
   const totalOrder = claims.reduce((s,c) => s + (Number(c.order_total)||0), 0);
-  const totalCommission = claims.filter(c => c.status === 'approved').reduce((s,c) => s + (Number(c.commission_amount)||0), 0);
+  const earnedClaims = claims.filter(c => c.status === 'approved');
+  const totalCommission = earnedClaims.reduce((s,c) => s + (Number(c.commission_amount)||0), 0);
+  const totalUnpaid = earnedClaims.filter(c => (c.payout_status||'unpaid') !== 'paid').reduce((s,c) => s + (Number(c.commission_amount)||0), 0);
+  const totalPaidOut = totalCommission - totalUnpaid;
   if ($('distActCommFilteredCount')) $('distActCommFilteredCount').textContent = totalCount;
   if ($('distActCommFilteredTotal')) $('distActCommFilteredTotal').textContent = fmt(totalOrder);
   if ($('distActCommFilteredCommission')) $('distActCommFilteredCommission').textContent = fmt(totalCommission);
+  if ($('distActCommFilteredUnpaid')) $('distActCommFilteredUnpaid').textContent = fmt(totalUnpaid);
+  if ($('distActCommFilteredPaid')) $('distActCommFilteredPaid').textContent = fmt(totalPaidOut);
 
   const nameFor = (id) => { const d = (distributorListCache||[]).find(x => String(x.id)===String(id)); return d ? (d.display_name || 'Distributor') : 'Distributor'; };
 
-  body.innerHTML = claims.map(c => `<tr>
+  body.innerHTML = claims.map(c => {
+    const isPaid = (c.payout_status || 'unpaid') === 'paid';
+    let payoutCell;
+    if (c.status !== 'approved') {
+      payoutCell = '<span style="opacity:.4;">—</span>';
+    } else if (isPaid) {
+      payoutCell = `<span class="status-pill approved">✅ Paid</span>${c.paid_at ? `<br><small style="opacity:.6;">${new Date(c.paid_at).toLocaleDateString()}</small>` : ''}`;
+    } else {
+      payoutCell = '<span class="status-pill pending">Unpaid</span>';
+    }
+    let actionCell = '—';
+    if (c.status === 'approved') {
+      actionCell = isPaid
+        ? `<button type="button" class="btn btn-xs" onclick="markDistributorCommissionUnpaid('${c.id}')">Undo</button>`
+        : `<button type="button" class="btn btn-xs btn-primary" onclick="markDistributorCommissionPaid('${c.id}')"><i class="business-icon icon-inline" data-lucide="hand-coins" aria-hidden="true"></i> Mark Paid</button>`;
+    }
+    return `<tr>
       <td>${new Date(c.submitted_at || Date.now()).toLocaleDateString()}</td>
       <td>${escapeHtmlSafe(nameFor(c.distributor_id))}</td>
       <td>${escapeHtmlSafe(c.order_ref_no || '-')}</td>
@@ -8098,12 +8216,16 @@ function renderDistActivityCommission(){
       <td>${((Number(c.commission_rate)||0)*100).toFixed(1)}%</td>
       <td>${fmt(Number(c.commission_amount)||0)}</td>
       <td><span class="status-pill ${c.status==='approved'?'approved':c.status==='rejected'?'rejected':'pending'}">${c.status==='approved'?'Earned':c.status==='rejected'?'Cancelled':'Pending delivery'}</span></td>
-    </tr>`).join('') || '<tr><td colspan="7" style="text-align:center;opacity:.5;padding:14px;">No commission claims match this filter.</td></tr>';
+      <td>${payoutCell}</td>
+      <td>${actionCell}</td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="9" style="text-align:center;opacity:.5;padding:14px;">No commission claims match this filter.</td></tr>';
+  if (window.lucide) lucide.createIcons({ attrs: { 'stroke-width': 1.9, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' } });
 }
 window.renderDistActivityCommission = renderDistActivityCommission;
 
 function clearDistActivityCommissionFilter(){
-  ['distActCommDistFilter','distActCommStatusFilter','distActCommFrom','distActCommTo'].forEach(id => { if ($(id)) $(id).value=''; });
+  ['distActCommDistFilter','distActCommStatusFilter','distActCommPayoutFilter','distActCommFrom','distActCommTo'].forEach(id => { if ($(id)) $(id).value=''; });
   renderDistActivityCommission();
 }
 window.clearDistActivityCommissionFilter = clearDistActivityCommissionFilter;
@@ -8111,10 +8233,12 @@ window.clearDistActivityCommissionFilter = clearDistActivityCommissionFilter;
 function exportDistActivityCommissionCSV(){
   const claims = window.distributorCommissionClaims || [];
   const nameFor = (id) => { const d = (distributorListCache||[]).find(x => String(x.id)===String(id)); return d ? (d.display_name || 'Distributor') : 'Distributor'; };
-  const rows = [['Date','Distributor','Order Ref','Order Total','Rate','Commission','Status']];
+  const rows = [['Date','Distributor','Order Ref','Order Total','Rate','Commission','Status','Payout Status','Paid Date']];
   claims.forEach(c => rows.push([
     new Date(c.submitted_at || Date.now()).toLocaleDateString(), nameFor(c.distributor_id), c.order_ref_no||'-',
-    Number(c.order_total)||0, (((Number(c.commission_rate)||0)*100).toFixed(1))+'%', Number(c.commission_amount)||0, c.status
+    Number(c.order_total)||0, (((Number(c.commission_rate)||0)*100).toFixed(1))+'%', Number(c.commission_amount)||0, c.status,
+    c.status === 'approved' ? ((c.payout_status||'unpaid')) : '-',
+    c.paid_at ? new Date(c.paid_at).toLocaleDateString() : '-'
   ]));
   const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
   const blob = new Blob([csv], { type:'text/csv' });
