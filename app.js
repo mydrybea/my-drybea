@@ -289,6 +289,11 @@ function applyRoleUI() {
     el.style.display = isDriver ? '' : 'none';
   });
 
+  // Distributor-only block-level cards (not nav buttons, so must not be forced to flex).
+  document.querySelectorAll('[data-distributor-only-card]').forEach(el => {
+    el.style.display = isDistributor ? '' : 'none';
+  });
+
   // Distributor-only elements (nav tabs + inline blocks) — visible only for distributors.
   document.querySelectorAll('[data-distributor-only]').forEach(el => {
     const tab = el.getAttribute('data-tab');
@@ -323,6 +328,23 @@ function applyRoleUI() {
     const icon = isDriver ? 'truck' : (isStaff ? 'user-round' : (isDistributor ? 'badge-percent' : 'crown'));
     const label = isDriver ? 'Driver' : (isStaff ? 'Staff' : (isDistributor ? 'Distributor' : 'Owner'));
     roleBadge.innerHTML = `<i class="business-icon icon-inline" data-lucide="${icon}" aria-hidden="true"></i> ${label}`;
+  }
+
+  // Profile tab: for staff/driver/distributor accounts, show the real name the
+  // owner registered them under (userProfile.display_name) instead of the
+  // generic email-derived name updateAuthUI() sets at login (before this
+  // profile data has loaded). Distributors additionally get their Agent
+  // Reference shown automatically here — no lookup or selection needed.
+  if (currentUser) {
+    const profileNameEl = $('profileName');
+    if (profileNameEl) {
+      const emailName = ((currentUser.email || 'Business Owner').split('@')[0].replace(/[._-]+/g, ' ').trim() || 'Business Owner').replace(/\b\w/g, c => c.toUpperCase());
+      profileNameEl.textContent = (isRestricted && userProfile && userProfile.display_name) ? userProfile.display_name : emailName;
+    }
+    if (isDistributor) {
+      const refId = (userProfile && userProfile.distributor_reference) || ('AGT-' + currentUser.id.slice(0,8).toUpperCase());
+      if ($('profileDistRefIdValue')) $('profileDistRefIdValue').textContent = refId;
+    }
   }
   if (window.lucide) lucide.createIcons({ attrs: { 'stroke-width': 1.9, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' } });
 
@@ -7616,6 +7638,8 @@ function renderDistributorHome() {
   if (!$('distHomeLevel')) return; // panel not on this page
   const name = (userProfile && userProfile.display_name) || currentUser.email?.split('@')[0] || 'Agent';
   if ($('distHomeName')) $('distHomeName').textContent = name;
+  const refId = (userProfile && userProfile.distributor_reference) || ('AGT-' + currentUser.id.slice(0,8).toUpperCase());
+  if ($('distHomeRefId')) $('distHomeRefId').textContent = refId;
 
   const stats = computeDistributorStats(currentUser.id);
   if ($('distHomeLevel')) $('distHomeLevel').textContent = stats.marketingLevel;

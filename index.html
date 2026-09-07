@@ -1423,6 +1423,7 @@
       <h2 id="profileName">Business Owner</h2>
       <p id="profileEmail">Not signed in</p>
       <p id="roleBadge" style="margin-top:6px;font-size:12px;font-weight:800;color:var(--gold2, #d6b45a);"><i class="business-icon icon-inline" data-lucide="crown" aria-hidden="true"></i> Owner</p>
+      <p id="profileDistRefId" data-distributor-only-card style="display:none;margin-top:4px;font-size:12px;font-weight:700;opacity:.75;">Agent Reference: <span id="profileDistRefIdValue">—</span></p>
       <div class="profile-actions">
         <button class="btn btn-primary" id="profileAuthAction" data-ribbon="true" onclick="openAuthModal()">Login</button>
         <button class="btn lock-btn" data-ribbon="true" onclick="lockApp()"><i class="business-icon" data-lucide="lock-keyhole" aria-hidden="true"></i> Lock App</button>
@@ -2349,6 +2350,7 @@
     <div class="staff-suite-hero">
       <span class="eyebrow">PRODUCT AGENT OVERVIEW</span>
       <h2 style="margin:4px 0 4px;">Welcome, <span id="distHomeName">Agent</span></h2>
+      <p style="margin:0 0 4px;color:var(--text-muted);font-size:.82rem;font-weight:700;">Agent Reference: <span id="distHomeRefId">—</span></p>
       <p style="margin:0;color:var(--text-muted);">Your standing, sales and commission at a glance.</p>
       <div class="staff-suite-grid">
         <div class="staff-mini"><div class="mini-icon"><i class="business-icon" data-lucide="gauge"></i></div><strong id="distHomeLevel">Bronze</strong><span>Marketing level</span></div>
