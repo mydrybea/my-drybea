@@ -7745,6 +7745,312 @@ function stopDistributorCommissionRealtime(){
   distributorCommissionRealtimeChannel=null;
 }
 
+// ==================== DISTRIBUTOR ACTIVITY HUB (Sales tab, owner-only) ====================
+// A separate owner-facing workspace for managing distributors' field activity,
+// commission and performance, built inside the Sales tab. This is intentionally
+// NOT merged with, and does not move, the "Product Distributors" add/list panel
+// that lives in Profile → Manage Staff (#distributorsBody / renderDistributorsPanel) —
+// that panel stays exactly where it is and is still how distributor accounts get
+// added. This hub reuses the same distributorListCache + distributor_commission_claims
+// data already loaded for that panel, and adds a new distributor_activities table
+// for manual field-activity logging (visits, calls, samples, follow-ups, notes).
+//
+// REQUIRED ONE-TIME SUPABASE SETUP (run once in the SQL editor):
+//
+//   create table if not exists public.distributor_activities (
+//     id uuid primary key default gen_random_uuid(),
+//     owner_id uuid not null references auth.users(id) on delete cascade,
+//     distributor_id uuid not null references auth.users(id) on delete cascade,
+//     activity_type text not null check (activity_type in ('visit','call','sample_drop','order_followup','payment_followup','note','other')),
+//     activity_date date not null default current_date,
+//     notes text,
+//     outcome text check (outcome in ('positive','neutral','negative','no_response')),
+//     next_followup_date date,
+//     created_by uuid not null references auth.users(id),
+//     created_at timestamptz not null default now()
+//   );
+//   alter table public.distributor_activities enable row level security;
+//   create policy "Owner can manage own distributor activities"
+//     on public.distributor_activities for all
+//     using (owner_id = auth.uid())
+//     with check (owner_id = auth.uid());
+//   create index if not exists distributor_activities_owner_idx on public.distributor_activities(owner_id);
+//   create index if not exists distributor_activities_dist_idx on public.distributor_activities(distributor_id);
+//
+// Until that table exists, the Activity Log tab still renders (empty) and shows
+// a clear error on save instead of silently failing — Overview and Commission
+// tabs work immediately since they only read data that already exists.
+
+const DIST_ACTIVITY_TYPES = {
+  visit: '🚶 Field Visit', call: '📞 Phone Call', sample_drop: '📦 Sample Drop',
+  order_followup: '🧾 Order Follow-up', payment_followup: '💰 Payment Follow-up',
+  note: '📝 Note', other: '• Other'
+};
+const DIST_ACTIVITY_OUTCOMES = {
+  positive: '🟢 Positive', neutral: '🟡 Neutral', negative: '🔴 Negative', no_response: '⚪ No Response'
+};
+const DIST_FOLLOWUP_DUE_DAYS = 14; // no logged activity within this many days => "due"
+
+let distributorActivitiesCache = [];
+
+function populateDistActivityDistSelects(){
+  const list = distributorListCache || [];
+  const logOpts = '<option value="">-- Select distributor --</option>' + list.map(d =>
+    `<option value="${d.id}">${escapeHtmlSafe(d.display_name || 'Distributor')} — ${escapeHtmlSafe(d.distributor_reference || ('AGT-' + String(d.id).slice(0,8).toUpperCase()))}</option>`
+  ).join('');
+  const filterOpts = '<option value="">All Distributors</option>' + list.map(d =>
+    `<option value="${d.id}">${escapeHtmlSafe(d.display_name || 'Distributor')}</option>`
+  ).join('');
+  if ($('distActLogDistSelect')) { const cur=$('distActLogDistSelect').value; $('distActLogDistSelect').innerHTML = logOpts; $('distActLogDistSelect').value = cur; }
+  if ($('distActLogFilterDist')) { const cur=$('distActLogFilterDist').value; $('distActLogFilterDist').innerHTML = filterOpts; $('distActLogFilterDist').value = cur; }
+  if ($('distActCommDistFilter')) { const cur=$('distActCommDistFilter').value; $('distActCommDistFilter').innerHTML = filterOpts; $('distActCommDistFilter').value = cur; }
+  if ($('distActLogFilterType') && !$('distActLogFilterType').dataset.filled) {
+    $('distActLogFilterType').innerHTML = '<option value="">All Types</option>' +
+      Object.entries(DIST_ACTIVITY_TYPES).map(([k,v]) => `<option value="${k}">${v}</option>`).join('');
+    $('distActLogFilterType').dataset.filled = '1';
+  }
+}
+
+function switchDistActivityView(view){
+  document.querySelectorAll('.dist-act-switch button[data-dist-act-tab]').forEach(b => b.classList.toggle('is-active', b.dataset.distActTab === view));
+  document.querySelectorAll('.dist-act-view[data-dist-act-view]').forEach(p => p.classList.toggle('is-active', p.dataset.distActView === view));
+}
+window.switchDistActivityView = switchDistActivityView;
+
+async function loadDistributorActivities(){
+  if (!currentUser || userRole !== 'owner') return [];
+  try{
+    const { data, error } = await withSessionRetry(() => supabase.from('distributor_activities')
+      .select('*').eq('owner_id', currentUser.id).order('activity_date', { ascending: false }).order('created_at', { ascending: false }));
+    if (error) throw error;
+    distributorActivitiesCache = data || [];
+    return distributorActivitiesCache;
+  }catch(e){
+    // Quiet failure (e.g. the SQL setup above hasn't been run yet) — Overview
+    // and Commission tabs still work fine without this data.
+    console.warn('Distributor activities load skipped:', e?.message || e);
+    distributorActivitiesCache = [];
+    return [];
+  }
+}
+
+async function initDistributorActivityPanel(){
+  if (userRole !== 'owner' || !currentUser) return;
+  populateDistActivityDistSelects();
+  if ($('distActLogDate') && !$('distActLogDate').value) $('distActLogDate').value = new Date().toISOString().slice(0,10);
+  await Promise.all([ loadDistributorCommissionClaims(), loadDistributorActivities() ]);
+  populateDistActivityDistSelects(); // distributorListCache may have just finished loading in parallel
+  renderDistActivityOverview();
+  renderDistActivityCommission();
+  renderDistActivityLog();
+}
+window.initDistributorActivityPanel = initDistributorActivityPanel;
+
+function lastActivityForDistributor(distId){
+  const rows = distributorActivitiesCache.filter(a => String(a.distributor_id) === String(distId));
+  if (!rows.length) return null;
+  return rows.reduce((latest, r) => (!latest || new Date(r.activity_date) > new Date(latest.activity_date)) ? r : latest, null);
+}
+
+function distFollowupBadge(distId){
+  const today = new Date(); today.setHours(0,0,0,0);
+  const upcoming = distributorActivitiesCache
+    .filter(a => String(a.distributor_id) === String(distId) && a.next_followup_date)
+    .sort((a,b) => new Date(a.next_followup_date) - new Date(b.next_followup_date))[0];
+  if (upcoming) {
+    const due = new Date(upcoming.next_followup_date);
+    const diffDays = Math.round((due - today) / 86400000);
+    if (diffDays <= 0) return { cls:'due', label:'Follow-up due' };
+    if (diffDays <= 3) return { cls:'soon', label:`Follow-up in ${diffDays}d` };
+    return { cls:'ok', label:`Follow-up ${due.toLocaleDateString()}` };
+  }
+  const last = lastActivityForDistributor(distId);
+  if (!last) return { cls:'due', label:'No activity yet' };
+  const daysSince = Math.round((today - new Date(last.activity_date)) / 86400000);
+  if (daysSince >= DIST_FOLLOWUP_DUE_DAYS) return { cls:'due', label:`${daysSince}d since last activity` };
+  if (daysSince >= DIST_FOLLOWUP_DUE_DAYS - 5) return { cls:'soon', label:`${daysSince}d since last activity` };
+  return { cls:'ok', label:`${daysSince}d since last activity` };
+}
+
+function renderDistActivityOverview(){
+  const body = $('distActOverviewBody');
+  const list = distributorListCache || [];
+  if ($('distActStatCount')) $('distActStatCount').textContent = list.length;
+  const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0,0,0,0);
+  const activeThisMonth = new Set(distributorActivitiesCache.filter(a => new Date(a.activity_date) >= monthStart).map(a => String(a.distributor_id)));
+  if ($('distActStatActive')) $('distActStatActive').textContent = activeThisMonth.size;
+  const claims = window.distributorCommissionClaims || [];
+  const commissionThisMonth = claims.filter(c => c.status === 'approved' && c.submitted_at && new Date(c.submitted_at) >= monthStart)
+    .reduce((s,c) => s + (Number(c.commission_amount)||0), 0);
+  if ($('distActStatCommission')) $('distActStatCommission').textContent = fmt(commissionThisMonth);
+  const followupsDue = list.filter(d => distFollowupBadge(d.id).cls === 'due').length;
+  if ($('distActStatFollowup')) $('distActStatFollowup').textContent = followupsDue;
+
+  if (!body) return;
+  if (!list.length) {
+    body.innerHTML = '<tr><td colspan="8" style="text-align:center;opacity:.5;padding:14px;">No product distributors added yet. Add one from Profile → Manage Staff.</td></tr>';
+    return;
+  }
+  body.innerHTML = list.map(d => {
+    const stats = computeDistributorStats(d.id);
+    const badge = distFollowupBadge(d.id);
+    const last = lastActivityForDistributor(d.id);
+    return `<tr>
+      <td>${escapeHtmlSafe(d.display_name || '(no name)')}</td>
+      <td>${escapeHtmlSafe(d.distributor_reference || ('AGT-' + String(d.id).slice(0,8).toUpperCase()))}</td>
+      <td>${stats.marketingLevel}</td>
+      <td>${fmt(stats.totalVolume)}</td>
+      <td>${fmt(stats.totalCommission)}</td>
+      <td>${last ? new Date(last.activity_date).toLocaleDateString() : '—'}</td>
+      <td><span class="dist-act-followup-badge ${badge.cls}">${badge.label}</span></td>
+      <td><button type="button" class="btn btn-xs" onclick="jumpToDistActivityLog('${d.id}')">Log Activity</button></td>
+    </tr>`;
+  }).join('');
+}
+window.renderDistActivityOverview = renderDistActivityOverview;
+
+function jumpToDistActivityLog(distId){
+  switchDistActivityView('log');
+  if ($('distActLogDistSelect')) $('distActLogDistSelect').value = distId;
+}
+window.jumpToDistActivityLog = jumpToDistActivityLog;
+
+function renderDistActivityCommission(){
+  const body = $('distActCommissionBody');
+  if (!body) return;
+  const distFilter = $('distActCommDistFilter')?.value || '';
+  const statusFilter = $('distActCommStatusFilter')?.value || '';
+  const from = $('distActCommFrom')?.value ? new Date($('distActCommFrom').value) : null;
+  const to = $('distActCommTo')?.value ? new Date($('distActCommTo').value + 'T23:59:59') : null;
+  let claims = (window.distributorCommissionClaims || []).slice();
+  if (distFilter) claims = claims.filter(c => String(c.distributor_id) === String(distFilter));
+  if (statusFilter) claims = claims.filter(c => c.status === statusFilter);
+  if (from) claims = claims.filter(c => c.submitted_at && new Date(c.submitted_at) >= from);
+  if (to) claims = claims.filter(c => c.submitted_at && new Date(c.submitted_at) <= to);
+
+  const totalCount = claims.length;
+  const totalOrder = claims.reduce((s,c) => s + (Number(c.order_total)||0), 0);
+  const totalCommission = claims.filter(c => c.status === 'approved').reduce((s,c) => s + (Number(c.commission_amount)||0), 0);
+  if ($('distActCommFilteredCount')) $('distActCommFilteredCount').textContent = totalCount;
+  if ($('distActCommFilteredTotal')) $('distActCommFilteredTotal').textContent = fmt(totalOrder);
+  if ($('distActCommFilteredCommission')) $('distActCommFilteredCommission').textContent = fmt(totalCommission);
+
+  const nameFor = (id) => { const d = (distributorListCache||[]).find(x => String(x.id)===String(id)); return d ? (d.display_name || 'Distributor') : 'Distributor'; };
+
+  body.innerHTML = claims.map(c => `<tr>
+      <td>${new Date(c.submitted_at || Date.now()).toLocaleDateString()}</td>
+      <td>${escapeHtmlSafe(nameFor(c.distributor_id))}</td>
+      <td>${escapeHtmlSafe(c.order_ref_no || '-')}</td>
+      <td>${fmt(Number(c.order_total)||0)}</td>
+      <td>${((Number(c.commission_rate)||0)*100).toFixed(1)}%</td>
+      <td>${fmt(Number(c.commission_amount)||0)}</td>
+      <td><span class="status-pill ${c.status==='approved'?'approved':c.status==='rejected'?'rejected':'pending'}">${c.status==='approved'?'Earned':c.status==='rejected'?'Cancelled':'Pending delivery'}</span></td>
+    </tr>`).join('') || '<tr><td colspan="7" style="text-align:center;opacity:.5;padding:14px;">No commission claims match this filter.</td></tr>';
+}
+window.renderDistActivityCommission = renderDistActivityCommission;
+
+function clearDistActivityCommissionFilter(){
+  ['distActCommDistFilter','distActCommStatusFilter','distActCommFrom','distActCommTo'].forEach(id => { if ($(id)) $(id).value=''; });
+  renderDistActivityCommission();
+}
+window.clearDistActivityCommissionFilter = clearDistActivityCommissionFilter;
+
+function exportDistActivityCommissionCSV(){
+  const claims = window.distributorCommissionClaims || [];
+  const nameFor = (id) => { const d = (distributorListCache||[]).find(x => String(x.id)===String(id)); return d ? (d.display_name || 'Distributor') : 'Distributor'; };
+  const rows = [['Date','Distributor','Order Ref','Order Total','Rate','Commission','Status']];
+  claims.forEach(c => rows.push([
+    new Date(c.submitted_at || Date.now()).toLocaleDateString(), nameFor(c.distributor_id), c.order_ref_no||'-',
+    Number(c.order_total)||0, (((Number(c.commission_rate)||0)*100).toFixed(1))+'%', Number(c.commission_amount)||0, c.status
+  ]));
+  const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type:'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = 'distributor-commission.csv'; document.body.appendChild(a); a.click(); a.remove();
+}
+window.exportDistActivityCommissionCSV = exportDistActivityCommissionCSV;
+
+async function addDistributorActivity(){
+  if (userRole !== 'owner') { alert('Only the owner can log distributor activity.'); return; }
+  const distId = $('distActLogDistSelect')?.value;
+  if (!distId) { alert('Select a distributor first.'); return; }
+  const type = $('distActLogType')?.value || 'note';
+  const date = $('distActLogDate')?.value || new Date().toISOString().slice(0,10);
+  const outcome = $('distActLogOutcome')?.value || null;
+  const nextFollowup = $('distActLogNextFollowup')?.value || null;
+  const notes = ($('distActLogNotes')?.value || '').trim();
+  if (!(await ensureFreshSession())) return;
+  const btn = document.querySelector('#distActivityCard .dist-act-view[data-dist-act-view="log"] .btn-primary');
+  if (btn) { btn.disabled = true; btn.dataset.originalText = btn.textContent; btn.textContent = 'Saving…'; }
+  try{
+    const row = {
+      owner_id: currentUser.id, distributor_id: distId, activity_type: type, activity_date: date,
+      notes: notes || null, outcome: outcome || null, next_followup_date: nextFollowup || null, created_by: currentUser.id
+    };
+    const { data, error } = await withSessionRetry(() => supabase.from('distributor_activities').insert(row).select().single());
+    if (error) throw error;
+    distributorActivitiesCache.unshift(data);
+    if ($('distActLogNotes')) $('distActLogNotes').value = '';
+    if ($('distActLogOutcome')) $('distActLogOutcome').value = '';
+    if ($('distActLogNextFollowup')) $('distActLogNextFollowup').value = '';
+    renderDistActivityLog(); renderDistActivityOverview();
+    updateStatus('✅ Distributor activity logged');
+  }catch(e){
+    console.error('Add distributor activity failed:', e);
+    const missingTable = /relation .* does not exist/i.test(e?.message || '');
+    alert('❌ Could not log activity:\n' + (e?.message || String(e)) + (missingTable ? '\n\nThe distributor_activities table hasn\'t been created in Supabase yet — see the SQL setup comment above initDistributorActivityPanel() in app.js.' : ''));
+  }finally{
+    if (btn) { btn.disabled = false; btn.textContent = btn.dataset.originalText || 'Log Activity'; }
+  }
+}
+window.addDistributorActivity = addDistributorActivity;
+
+async function deleteDistributorActivity(id){
+  if (userRole !== 'owner') return;
+  if (!confirm('Delete this activity entry?')) return;
+  if (!(await ensureFreshSession())) return;
+  try{
+    const { error } = await withSessionRetry(() => supabase.from('distributor_activities').delete().eq('id', id).eq('owner_id', currentUser.id));
+    if (error) throw error;
+    distributorActivitiesCache = distributorActivitiesCache.filter(a => String(a.id) !== String(id));
+    renderDistActivityLog(); renderDistActivityOverview();
+  }catch(e){
+    console.error('Delete distributor activity failed:', e);
+    alert('❌ Could not delete:\n' + (e?.message || String(e)));
+  }
+}
+window.deleteDistributorActivity = deleteDistributorActivity;
+
+function renderDistActivityLog(){
+  const body = $('distActLogBody');
+  if (!body) return;
+  const distFilter = $('distActLogFilterDist')?.value || '';
+  const typeFilter = $('distActLogFilterType')?.value || '';
+  let rows = distributorActivitiesCache.slice();
+  if (distFilter) rows = rows.filter(a => String(a.distributor_id) === String(distFilter));
+  if (typeFilter) rows = rows.filter(a => a.activity_type === typeFilter);
+
+  const nameFor = (id) => { const d = (distributorListCache||[]).find(x => String(x.id)===String(id)); return d ? (d.display_name || 'Distributor') : 'Distributor'; };
+
+  body.innerHTML = rows.map(a => `<tr>
+      <td>${new Date(a.activity_date).toLocaleDateString()}</td>
+      <td>${escapeHtmlSafe(nameFor(a.distributor_id))}</td>
+      <td>${DIST_ACTIVITY_TYPES[a.activity_type] || escapeHtmlSafe(a.activity_type||'-')}</td>
+      <td>${a.outcome ? (DIST_ACTIVITY_OUTCOMES[a.outcome]||escapeHtmlSafe(a.outcome)) : '—'}</td>
+      <td style="max-width:220px;white-space:normal;">${escapeHtmlSafe(a.notes || '—')}</td>
+      <td>${a.next_followup_date ? new Date(a.next_followup_date).toLocaleDateString() : '—'}</td>
+      <td>${a.created_by === currentUser?.id ? 'You' : 'Owner'}</td>
+      <td><button type="button" class="btn btn-xs btn-danger" onclick="deleteDistributorActivity('${a.id}')">Delete</button></td>
+    </tr>`).join('') || '<tr><td colspan="8" style="text-align:center;opacity:.5;padding:14px;">No activity logged yet.</td></tr>';
+}
+window.renderDistActivityLog = renderDistActivityLog;
+
+function clearDistActivityLogFilter(){
+  ['distActLogFilterDist','distActLogFilterType'].forEach(id => { if ($(id)) $(id).value=''; });
+  renderDistActivityLog();
+}
+window.clearDistActivityLogFilter = clearDistActivityLogFilter;
+
 // ==================== ADVANCE REQUESTS: LIVE SYNC FOR OWNER ====================
 // The moment staff submit/edit an advance request, the owner sees it instantly
 // (table + pending badge) without needing to open MY STAFF or click Refresh.
@@ -8433,7 +8739,7 @@ function activateAppTab(tabId){
   if (tabId === 'products') { loadProductsFromCloud().then(renderProducts); }
   if (tabId === 'distributor-home') { showSkeletons('distributor-home'); loadDistributorCommissionClaims().then(renderDistributorHome); }
   if (tabId === 'my-income') { loadDistributorCommissionClaims().then(renderProductAgentPage); }
-  if (tabId === 'sales') { loadSalesFromCloud().then(renderSales); }
+  if (tabId === 'sales') { loadSalesFromCloud().then(renderSales); if (userRole === 'owner') { loadStaffList().then(() => initDistributorActivityPanel()); } }
   if (tabId === 'my-salary') {
     if (userRole === 'owner') {
       loadStaffList();
