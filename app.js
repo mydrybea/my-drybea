@@ -2157,14 +2157,51 @@ function openEditProduct(id) {
   $('productModal').classList.add('active');
 }
 
-function previewProductImage() {
+// FIX: product photos straight from a phone camera can be several MB, which
+// made uploads slow and made the Products page slow to load (every card
+// fetches a huge full-size image). We now resize/compress the image on the
+// device (canvas) to a sensible max size before it's ever uploaded, so the
+// stored file is a small, fast-loading JPEG instead of the raw camera photo.
+function compressImageFile(file, maxWidth = 900, maxHeight = 900, quality = 0.72) {
+  return new Promise((resolve, reject) => {
+    if (!file.type || !file.type.startsWith('image/')) { resolve(file); return; }
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(file);
+    img.onload = () => {
+      let { width, height } = img;
+      if (width > maxWidth || height > maxHeight) {
+        const ratio = Math.min(maxWidth / width, maxHeight / height);
+        width = Math.round(width * ratio);
+        height = Math.round(height * ratio);
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, width, height);
+      URL.revokeObjectURL(objectUrl);
+      canvas.toBlob((blob) => {
+        if (!blob) { resolve(file); return; }
+        // If compression somehow made it bigger (rare, e.g. tiny PNGs), keep the original.
+        if (blob.size >= file.size) { resolve(file); return; }
+        const baseName = (file.name || 'photo').replace(/\.[^./\\]+$/, '');
+        resolve(new File([blob], `${baseName}.jpg`, { type: 'image/jpeg' }));
+      }, 'image/jpeg', quality);
+    };
+    img.onerror = () => { URL.revokeObjectURL(objectUrl); resolve(file); };
+    img.src = objectUrl;
+  });
+}
+
+async function previewProductImage() {
   const file = $('productImageFile').files && $('productImageFile').files[0];
   const preview = $('productImagePreview');
   if (!file) { productImageFile = null; return; }
-  productImageFile = file;
+  const compressed = await compressImageFile(file);
+  productImageFile = compressed;
   const reader = new FileReader();
   reader.onload = (e) => { if (preview) { preview.src = e.target.result; preview.style.display = 'block'; } };
-  reader.readAsDataURL(file);
+  reader.readAsDataURL(compressed);
 }
 
 async function saveProduct() {
