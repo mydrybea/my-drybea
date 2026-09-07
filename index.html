@@ -345,6 +345,7 @@
     <button class="tab-btn" data-tab="income" role="tab" aria-label="Income" data-owner-only><i class="business-icon" data-lucide="trending-up" aria-hidden="true"></i><span>Income</span></button>
     <button class="tab-btn" data-tab="calculator" role="tab" aria-label="Cost" data-owner-only><i class="business-icon" data-lucide="calculator" aria-hidden="true"></i><span>Cost</span></button>
     <button class="tab-btn" data-tab="expenses" role="tab" aria-label="Daily Expenses"><i class="business-icon" data-lucide="receipt" aria-hidden="true"></i><span>Daily Expenses</span></button>
+    <button class="tab-btn" data-tab="products" role="tab" aria-label="Products" data-owner-only><i class="business-icon" data-lucide="package" aria-hidden="true"></i><span>Products</span></button>
     <button class="tab-btn" data-tab="daily-pay" role="tab" aria-label="Daily Pay" data-staff-only><i class="business-icon" data-lucide="calendar-days" aria-hidden="true"></i><span>Daily Pay</span></button>
     <button class="tab-btn" data-tab="work-update" role="tab" aria-label="Work Update" data-staff-only><i class="business-icon" data-lucide="notebook-pen" aria-hidden="true"></i><span>Work Update</span></button>
     <button class="tab-btn" data-tab="attendance" role="tab" aria-label="Attendance" data-staff-only><i class="business-icon" data-lucide="clock-3" aria-hidden="true"></i><span>Attendance</span></button>
@@ -1639,6 +1640,11 @@
             <span class="home-action-copy"><strong>Expenses</strong><small>Track monthly business costs</small></span>
             <span class="quick-status" aria-hidden="true"></span>
           </button>
+          <button class="home-action" data-home-tab="products" data-ribbon="true" aria-label="Open Products">
+            <span class="home-icon"><i class="business-icon" data-lucide="package" aria-hidden="true"></i></span>
+            <span class="home-action-copy"><strong>Products</strong><small>Catalog, images &amp; pricing</small></span>
+            <span class="quick-status" aria-hidden="true"></span>
+          </button>
           <button class="home-action" data-home-tab="delivery" data-ribbon="true" aria-label="Open Delivery">
             <span class="home-icon"><i class="business-icon" data-lucide="truck" aria-hidden="true"></i></span>
             <span class="home-action-copy"><strong>Delivery</strong><small>Driver map, assignment & pay</small></span>
@@ -1954,6 +1960,53 @@
     </div>
   </section>
 
+  <!-- ============ PRODUCTS TAB (owner-only) ============ -->
+  <section id="products" class="tab-panel" style="display:none;" role="tabpanel">
+    <div class="mobile-greeting no-print" style="padding:0 0 8px;">
+      <div><span class="eyebrow">CATALOG</span><h2><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="package" aria-hidden="true"></i></span><span>Products</span></h2><p class="pro-subtitle green">Product images, wholesale &amp; retail pricing — auto-fills into Sales &amp; Orders.</p></div>
+    </div>
+    <div class="card">
+      <div class="btn-row" style="margin-bottom:14px;">
+        <button class="btn btn-primary btn-sm" onclick="openNewProduct()"><i class="business-icon icon-inline" data-lucide="plus" aria-hidden="true"></i> Add Product</button>
+      </div>
+      <div id="productsGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px;">
+        <div style="grid-column:1/-1;text-align:center;opacity:.5;padding:20px;">Loading…</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- New / Edit Product Modal -->
+  <div class="modal-backdrop" id="productModal">
+    <div class="modal">
+      <h3><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="package" aria-hidden="true"></i></span><span id="productModalTitle">New Product</span></h3><p class="pro-subtitle green">Image, wholesale &amp; retail price for this product.</p>
+      <input type="hidden" id="productEditId" value="">
+      <input type="hidden" id="productExistingImageUrl" value="">
+      <div class="field">
+        <label>Product Image</label>
+        <input type="file" id="productImageFile" accept="image/*" onchange="previewProductImage()">
+        <img id="productImagePreview" style="display:none;width:100px;height:100px;object-fit:cover;border-radius:10px;margin-top:8px;">
+      </div>
+      <div class="field">
+        <label>Product Name</label>
+        <input type="text" id="productName" placeholder="e.g. 500g Fish Floss Pack">
+      </div>
+      <div class="grid-2">
+        <div class="field">
+          <label>Wholesale Price (Rs.)</label>
+          <input type="number" id="productWholesalePrice" value="0" min="0">
+        </div>
+        <div class="field">
+          <label>Retail Price (Rs.)</label>
+          <input type="number" id="productRetailPrice" value="0" min="0">
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="productSaveBtn" onclick="saveProduct()"><i class="business-icon icon-inline" data-lucide="save" aria-hidden="true"></i> Save Product</button>
+        <button class="btn" onclick="closeModal('productModal')">Cancel</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ============ HISTORY TAB ============ -->
   <section id="history" class="tab-panel" style="display:none;" role="tabpanel">
     <div class="card">
@@ -2134,12 +2187,18 @@
         <option value="500">500g Pack</option>
         <option value="1000">1kg Pack</option>
       </select>
+      <input type="hidden" id="orderProductId" value="">
 
       <div class="om-size-grid" id="orderSizeGrid" role="radiogroup" aria-label="Product size">
         <div class="om-size-chip" data-size="50" role="radio" onclick="selectOrderSize('50')"><span class="om-size-val">50g</span><span class="om-size-unit">Pack</span></div>
         <div class="om-size-chip" data-size="100" role="radio" onclick="selectOrderSize('100')"><span class="om-size-val">100g</span><span class="om-size-unit">Pack</span></div>
         <div class="om-size-chip" data-size="500" role="radio" onclick="selectOrderSize('500')"><span class="om-size-val">500g</span><span class="om-size-unit">Pack</span></div>
         <div class="om-size-chip" data-size="1000" role="radio" onclick="selectOrderSize('1000')"><span class="om-size-val">1kg</span><span class="om-size-unit">Pack</span></div>
+      </div>
+
+      <div id="orderProductPickerWrap" style="margin-top:12px;display:none;">
+        <label style="font-size:.72rem;opacity:.7;display:block;margin-bottom:6px;">Or pick from your Product Catalog (sets price automatically)</label>
+        <div id="orderProductPicker" style="display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;"></div>
       </div>
 
       <div class="grid-2" style="margin-top:14px;">
@@ -2240,7 +2299,8 @@
     </div>
     <div class="field">
       <label>Product</label>
-      <input type="text" id="saleProduct" placeholder="e.g. 100g Fish Floss Pack">
+      <input type="text" id="saleProduct" list="saleProductList" placeholder="e.g. 100g Fish Floss Pack" oninput="onSaleProductPick()">
+      <datalist id="saleProductList"></datalist>
     </div>
     <div class="field">
       <label>Customer (optional)</label>

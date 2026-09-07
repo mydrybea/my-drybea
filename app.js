@@ -1517,6 +1517,8 @@ let state = {
 let history = [];
 let orders = [];
 let customers = [];
+let products = [];
+let productImageFile = null;
 let snapshots = [];
 let lastSaveTime = null;
 let saveTimer = null;
@@ -2059,6 +2061,215 @@ async function loadOrdersFromCloud() {
   }
 }
 
+// ==================== SUPABASE-BACKED PRODUCTS (catalog) ====================
+// Owner-managed product catalog (image, wholesale & retail price) that
+// auto-fills pricing into the Sales diary and the Orders form. Visible
+// to staff too (read-only) so their Order form can auto-fill price;
+// only the owner can add/edit/delete (also enforced by RLS).
+
+function dbProductToLocal(p) {
+  return {
+    id: p.id,
+    name: p.name,
+    imageUrl: p.image_url || '',
+    wholesalePrice: Number(p.wholesale_price) || 0,
+    retailPrice: Number(p.retail_price) || 0,
+    active: p.active !== false,
+    createdAt: p.created_at || new Date().toISOString(),
+  };
+}
+
+async function loadProductsFromCloud() {
+  if (!currentUser) return;
+  try {
+    const { data, error } = await supabase
+      .from('products')
+      .select('*')
+      .eq('user_id', businessId)
+      .eq('active', true)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    products = (data || []).map(dbProductToLocal);
+    populateSaleProductDatalist();
+    renderOrderProductPicker();
+  } catch (e) {
+    console.error('Load products error:', e);
+  }
+}
+
+function renderProducts() {
+  const grid = $('productsGrid');
+  if (!grid) return;
+  if (userRole !== 'owner') {
+    grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;opacity:.5;padding:20px;">Product catalog is owner-only.</div>';
+    return;
+  }
+  if (products.length === 0) {
+    grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;opacity:.5;padding:20px;">No products yet — tap "Add Product" to build your catalog.</div>';
+    return;
+  }
+  grid.innerHTML = products.map(p => `
+    <div class="card" style="padding:10px;">
+      <img src="${p.imageUrl || ''}" onerror="this.style.display='none'" style="width:100%;height:100px;object-fit:cover;border-radius:8px;background:#f0f0f0;${p.imageUrl ? '' : 'display:none;'}">
+      ${p.imageUrl ? '' : '<div style="width:100%;height:100px;border-radius:8px;background:#f0f0f0;display:flex;align-items:center;justify-content:center;opacity:.4;font-size:.7rem;">No image</div>'}
+      <div style="font-weight:700;margin-top:8px;font-size:.85rem;">${p.name}</div>
+      <div style="font-size:.72rem;opacity:.7;margin-top:4px;">Wholesale: Rs. ${p.wholesalePrice.toLocaleString()}</div>
+      <div style="font-size:.72rem;opacity:.7;">Retail: Rs. ${p.retailPrice.toLocaleString()}</div>
+      <div class="btn-row" style="margin-top:8px;">
+        <button class="btn btn-sm" onclick="openEditProduct('${p.id}')">✏️</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteProduct('${p.id}')">🗑️</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function openNewProduct() {
+  if (userRole !== 'owner') { alert('Only the business owner can manage products.'); return; }
+  $('productModalTitle').textContent = 'New Product';
+  $('productEditId').value = '';
+  $('productExistingImageUrl').value = '';
+  $('productName').value = '';
+  $('productWholesalePrice').value = 0;
+  $('productRetailPrice').value = 0;
+  $('productImageFile').value = '';
+  productImageFile = null;
+  const preview = $('productImagePreview');
+  if (preview) { preview.style.display = 'none'; preview.src = ''; }
+  $('productModal').classList.add('active');
+}
+
+function openEditProduct(id) {
+  const p = products.find(x => String(x.id) === String(id));
+  if (!p) return;
+  $('productModalTitle').textContent = 'Edit Product';
+  $('productEditId').value = p.id;
+  $('productExistingImageUrl').value = p.imageUrl || '';
+  $('productName').value = p.name;
+  $('productWholesalePrice').value = p.wholesalePrice;
+  $('productRetailPrice').value = p.retailPrice;
+  $('productImageFile').value = '';
+  productImageFile = null;
+  const preview = $('productImagePreview');
+  if (preview) {
+    if (p.imageUrl) { preview.src = p.imageUrl; preview.style.display = 'block'; }
+    else { preview.style.display = 'none'; preview.src = ''; }
+  }
+  $('productModal').classList.add('active');
+}
+
+function previewProductImage() {
+  const file = $('productImageFile').files && $('productImageFile').files[0];
+  const preview = $('productImagePreview');
+  if (!file) { productImageFile = null; return; }
+  productImageFile = file;
+  const reader = new FileReader();
+  reader.onload = (e) => { if (preview) { preview.src = e.target.result; preview.style.display = 'block'; } };
+  reader.readAsDataURL(file);
+}
+
+async function saveProduct() {
+  if (userRole !== 'owner') { alert('Only the business owner can manage products.'); return; }
+  const editId = $('productEditId').value;
+  const name = $('productName').value.trim();
+  const wholesalePrice = Number($('productWholesalePrice').value) || 0;
+  const retailPrice = Number($('productRetailPrice').value) || 0;
+  if (!name) { alert('Product name is required!'); return; }
+  if (!currentUser) { alert('Please login first.'); return; }
+
+  const saveBtn = $('productSaveBtn');
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving...'; }
+  if (!(await ensureFreshSession())) { if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save Product'; } return; }
+
+  try {
+    let imageUrl = $('productExistingImageUrl').value || null;
+    if (productImageFile) {
+      const ext = (productImageFile.name && productImageFile.name.includes('.')) ? productImageFile.name.split('.').pop() : 'jpg';
+      const path = `${businessId}/${Date.now()}.${ext}`;
+      const { error: upErr } = await supabase.storage.from('product-images').upload(path, productImageFile, { upsert: true, contentType: productImageFile.type || 'image/jpeg' });
+      if (upErr) throw upErr;
+      const { data: pub } = supabase.storage.from('product-images').getPublicUrl(path);
+      imageUrl = pub?.publicUrl || imageUrl;
+    }
+
+    const row = { user_id: businessId, name, image_url: imageUrl, wholesale_price: wholesalePrice, retail_price: retailPrice, active: true };
+
+    if (editId) {
+      const { error } = await supabase.from('products').update(row).eq('id', editId).eq('user_id', businessId);
+      if (error) throw error;
+    } else {
+      const { error } = await supabase.from('products').insert(row);
+      if (error) throw error;
+    }
+  } catch (e) {
+    console.error('Save product error:', e);
+    alert('❌ Could not save product: ' + e.message);
+    if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save Product'; }
+    return;
+  }
+  if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save Product'; }
+  closeModal('productModal');
+  updateStatus('✅ Product saved');
+  await loadProductsFromCloud();
+  renderProducts();
+}
+
+async function deleteProduct(id) {
+  if (userRole !== 'owner') { alert('Only the business owner can manage products.'); return; }
+  if (!confirm('Delete this product? Existing sales/orders keep their recorded price.')) return;
+  if (!(await ensureFreshSession())) return;
+  try {
+    const { error } = await supabase.from('products').update({ active: false }).eq('id', id).eq('user_id', businessId);
+    if (error) throw error;
+  } catch (e) {
+    console.error('Delete product error:', e);
+    alert('❌ Could not delete product: ' + e.message);
+    return;
+  }
+  await loadProductsFromCloud();
+  renderProducts();
+  updateStatus('🗑️ Product removed');
+}
+
+// ---- Sales modal: type-ahead product datalist, auto-fills Unit Price ----
+function populateSaleProductDatalist() {
+  const dl = $('saleProductList');
+  if (!dl) return;
+  dl.innerHTML = products.map(p => `<option value="${p.name.replace(/"/g, '&quot;')}">`).join('');
+}
+
+function onSaleProductPick() {
+  const val = ($('saleProduct').value || '').trim();
+  const match = products.find(p => p.name === val);
+  if (match) {
+    $('saleUnitPrice').value = match.retailPrice;
+    recalcSaleModal();
+  }
+}
+
+// ---- Orders modal: catalog quick-pick chips, auto-fills Unit Price ----
+function renderOrderProductPicker() {
+  const wrap = $('orderProductPickerWrap');
+  const holder = $('orderProductPicker');
+  if (!wrap || !holder) return;
+  if (products.length === 0) { wrap.style.display = 'none'; holder.innerHTML = ''; return; }
+  wrap.style.display = 'block';
+  holder.innerHTML = products.map(p => `
+    <div onclick="selectOrderProduct('${p.id}')" style="flex:0 0 auto;width:88px;text-align:center;cursor:pointer;border:1px solid var(--border-color,#3333);border-radius:10px;padding:6px;">
+      ${p.imageUrl ? `<img src="${p.imageUrl}" style="width:100%;height:56px;object-fit:cover;border-radius:6px;">` : `<div style="width:100%;height:56px;border-radius:6px;background:#f0f0f0;"></div>`}
+      <div style="font-size:.62rem;margin-top:4px;line-height:1.2;">${p.name}</div>
+      <div style="font-size:.62rem;opacity:.7;">Rs. ${p.retailPrice.toLocaleString()}</div>
+    </div>
+  `).join('');
+}
+
+function selectOrderProduct(id) {
+  const p = products.find(x => String(x.id) === String(id));
+  if (!p) return;
+  $('orderProductId').value = p.id;
+  $('orderUnitPrice').value = p.retailPrice;
+  if (typeof updateOrderTotal === 'function') updateOrderTotal();
+}
+
 // ==================== SUPABASE-BACKED EXPENSES ====================
 let expenses = [];
 
@@ -2367,6 +2578,7 @@ function openNewSale() {
   $('saleEditId').value = '';
   $('saleDate').value = new Date().toISOString().slice(0, 10);
   $('saleProduct').value = '';
+  populateSaleProductDatalist();
   $('saleCustomer').value = '';
   $('saleQty').value = 1;
   $('saleUnitPrice').value = 0;
@@ -2475,10 +2687,12 @@ async function saveSale() {
   if (paid > 0 && paymentMethod === 'cheque' && !chequeNumber) { alert('Enter the cheque number!'); return; }
   if (paid > 0 && paymentMethod === 'deposit' && !depositRef) { alert('Enter the deposit slip / reference number!'); return; }
 
+  const matchedProduct = products.find(p => p.name === product);
   const row = {
     user_id: businessId,
     sale_date: date,
     product_name: product,
+    product_id: matchedProduct ? matchedProduct.id : null,
     customer_name: customer || null,
     quantity: qty,
     unit_price: unitPrice,
@@ -2503,12 +2717,20 @@ async function saveSale() {
   if (!(await ensureFreshSession())) return;
   try {
     if (editId) {
-      const { data, error } = await supabase.from('sales').update(row).eq('id', editId).select().single();
+      let { data, error } = await supabase.from('sales').update(row).eq('id', editId).select().single();
+      if (error && /column|schema|does not exist/i.test(error.message||'')) {
+        const fallback = {...row}; delete fallback.product_id;
+        ({ data, error } = await supabase.from('sales').update(fallback).eq('id', editId).select().single());
+      }
       if (error) throw error;
       const idx = sales.findIndex(s => s.id === editId);
       if (idx !== -1) sales[idx] = dbSaleToLocal(data);
     } else {
-      const { data, error } = await supabase.from('sales').insert(row).select().single();
+      let { data, error } = await supabase.from('sales').insert(row).select().single();
+      if (error && /column|schema|does not exist/i.test(error.message||'')) {
+        const fallback = {...row}; delete fallback.product_id;
+        ({ data, error } = await supabase.from('sales').insert(fallback).select().single());
+      }
       if (error) throw error;
       sales.unshift(dbSaleToLocal(data));
     }
@@ -3135,7 +3357,9 @@ function openNewOrder() {
   $('orderUnitPrice').value = 350;
   if ($('orderPaymentMethod')) $('orderPaymentMethod').value = 'cod';
   if ($('orderProduct')) $('orderProduct').value = '50';
+  if ($('orderProductId')) $('orderProductId').value = '';
   syncOrderSizeChips();
+  renderOrderProductPicker();
   updateOrderTotal();
   $('orderModal').classList.add('active');
   if(window.lucide) lucide.createIcons({attrs:{'stroke-width':1.9,'stroke-linecap':'round','stroke-linejoin':'round'}});
@@ -3225,9 +3449,15 @@ async function createOrder() {
   }
   const total = qty * unitPrice;
   const paymentMethod = $('orderPaymentMethod')?.value === 'prepaid' ? 'prepaid' : 'cod';
-  const row = { id: generateOrderId(), user_id: businessId, customer_id: customerId, product_size_g: Number(product)||0, qty, unit_price:unitPrice, total, address, notes, status:'pending', created_by:currentUser.id, referral_staff_id:referralStaffId, referral_staff_reference:referralStaffReference, referral_status:referralStaffId?'pending_verification':'none', payment_method:paymentMethod };
+  const productId = $('orderProductId') ? $('orderProductId').value || null : null;
+  const row = { id: generateOrderId(), user_id: businessId, customer_id: customerId, product_size_g: Number(product)||0, product_id: productId, qty, unit_price:unitPrice, total, address, notes, status:'pending', created_by:currentUser.id, referral_staff_id:referralStaffId, referral_staff_reference:referralStaffReference, referral_status:referralStaffId?'pending_verification':'none', payment_method:paymentMethod };
   try {
-    const { data, error } = await withSessionRetry(() => supabase.from('orders').insert(row).select().single());
+    let { data, error } = await withSessionRetry(() => supabase.from('orders').insert(row).select().single());
+    if (error && /column|schema|does not exist/i.test(error.message||'')) {
+      // products-feature-setup.sql not run yet on this project — retry without product_id.
+      const fallback = {...row}; delete fallback.product_id;
+      ({ data, error } = await withSessionRetry(() => supabase.from('orders').insert(fallback).select().single()));
+    }
     if (error) throw error;
     if (referralStaffId) {
       const claim = { owner_id: businessId, staff_id:String(referralStaffId), staff_reference:referralStaffReference||'', order_id:String(data.id), customer_id:String(customerId), customer_name:customer?.name||'', customer_phone:customer?.phone||'', order_total:total, commission_rate:STAFF_COMMISSION_RATE, commission_amount:0, status:'pending', order_ref_no:data.order_ref_no||null, order_snapshot:{order_id:data.id,order_ref_no:data.order_ref_no||null,customer_id:customerId,customer_name:customer?.name||'',product_size_g:Number(product)||0,qty,unit_price:unitPrice,total,address,notes,created_by:currentUser.id,referral_staff_id:String(referralStaffId),referral_staff_reference:referralStaffReference} };
@@ -3240,6 +3470,7 @@ async function createOrder() {
   $('orderQty').value=1; $('orderUnitPrice').value=350; $('orderAddress').value=''; $('orderNotes').value='';
   if ($('orderPaymentMethod')) $('orderPaymentMethod').value = 'cod';
   if ($('orderProduct')) $('orderProduct').value = '50';
+  if ($('orderProductId')) $('orderProductId').value = '';
   syncOrderSizeChips(); updateOrderTotal();
   updateStatus(referralStaffId ? '📨 Sale sent to owner for commission verification' : '✅ Order created');
 }
@@ -5949,7 +6180,7 @@ async function cloudLoad() {
     renderHistory();
     saveAll();
     // customers/orders/expenses live in their own tables — refresh those too
-    await Promise.all([userRole==='owner'?loadCustomersFromCloud():Promise.resolve(), loadOrdersFromCloud(), loadExpensesFromCloud()]);
+    await Promise.all([userRole==='owner'?loadCustomersFromCloud():Promise.resolve(), loadOrdersFromCloud(), loadExpensesFromCloud(), loadProductsFromCloud()]);
     renderOrders();
     renderCustomers();
     renderDelivery();
@@ -7586,7 +7817,7 @@ document.querySelectorAll('[data-ribbon="true"]').forEach(btn => {
   });
 });
 
-const OWNER_ONLY_TABS = ['dashboard', 'my-staff', 'delivery', 'calculator', 'production', 'history', 'data', 'monthly-summary', 'income', 'analytics', 'sales'];
+const OWNER_ONLY_TABS = ['dashboard', 'my-staff', 'delivery', 'calculator', 'production', 'history', 'data', 'monthly-summary', 'income', 'analytics', 'sales', 'products'];
 const STAFF_ONLY_TABS = ['staff-home', 'daily-pay', 'work-update', 'attendance', 'advance', 'my-commission', 'my-tasks', 'announcements'];
 const DRIVER_ONLY_TABS = ['my-deliveries','my-earnings','my-reviews'];
 
@@ -7597,7 +7828,7 @@ async function refreshStaffWorkspaceData(tabId){
   try{
     if(['staff-home','orders','my-commission','my-tasks','announcements'].includes(tabId)){
       await loadCommissionClaims();
-      await Promise.all([userRole==='owner'?loadCustomersFromCloud():Promise.resolve(),loadOrdersFromCloud(),cloudLoadStaffTasks(),cloudLoadNotices(),cloudLoadReferralUploads(),cloudLoadPerformance(new Date().toISOString().slice(0,7)),cloudLoadCommission()]);
+      await Promise.all([userRole==='owner'?loadCustomersFromCloud():Promise.resolve(),loadOrdersFromCloud(),cloudLoadStaffTasks(),cloudLoadNotices(),cloudLoadReferralUploads(),cloudLoadPerformance(new Date().toISOString().slice(0,7)),cloudLoadCommission(),loadProductsFromCloud()]);
     }
     if(seq!==staffWorkspaceLoadSeq) return;
     renderStaffTasks(); renderStaffAnnouncements(); refreshMyCommission(); refreshStaffHome();
@@ -7668,6 +7899,7 @@ function activateAppTab(tabId){
   if (tabId === 'my-reviews') { loadMyDeliveries().then(() => renderMyReviews()); }
   if (tabId === 'my-staff') { refreshMyStaffPage(); loadMyStaffOwnerData(); }
   if (tabId === 'expenses') { renderExpenses(); renderRecurringExpenses(); }
+  if (tabId === 'products') { loadProductsFromCloud().then(renderProducts); }
   if (tabId === 'sales') { loadSalesFromCloud().then(renderSales); }
   if (tabId === 'my-salary') {
     if (userRole === 'owner') {
@@ -7828,7 +8060,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // ---- LOAD CUSTOMERS/ORDERS/EXPENSES FROM THEIR OWN SUPABASE TABLES ----
   // (source of truth — same data across every device/browser)
-  await Promise.all([userRole==='owner'?loadCustomersFromCloud():Promise.resolve(), loadOrdersFromCloud(), loadExpensesFromCloud()]);
+  await Promise.all([userRole==='owner'?loadCustomersFromCloud():Promise.resolve(), loadOrdersFromCloud(), loadExpensesFromCloud(), loadProductsFromCloud()]);
   renderOrders();
   renderCustomers();
   renderDelivery();
