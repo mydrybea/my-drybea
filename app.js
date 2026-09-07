@@ -223,6 +223,32 @@ const STAFF_NAV_TABS = ['staff-home','orders','my-salary','expenses','products']
 const DRIVER_NAV_TABS = ['driver-home','my-deliveries','my-earnings','my-reviews','products'];
 const DISTRIBUTOR_NAV_TABS = ['distributor-home','my-income','orders','expenses','products'];
 
+// ---- Skeleton loading — grey shimmer placeholders while a Home page's
+// data is still being fetched, instead of showing "Rs. 0" / "—" for a
+// beat before the real numbers arrive. showSkeletons(tabId) is called
+// right before that tab's async load kicks off; each tab's own render
+// function (renderDriverHome, refreshStaffHome, renderDistributorHome)
+// calls hideSkeletons(tabId) once it has set the real text — a version
+// counter guards against a slow older load clearing skeletons a newer,
+// faster one already filled in.
+const SKELETON_IDS_BY_TAB = {
+  'driver-home': ['driverHomeActive', 'driverHomeDeliveredToday', 'driverHomeTodayPay', 'driverHomeRating'],
+  'staff-home': ['staffHomeOrders', 'staffHomeCommission', 'staffHomeTasks', 'staffHomeHours'],
+  'distributor-home': ['distHomeLevel', 'distHomeRate', 'distHomeSalesCount', 'distHomeCommission']
+};
+function showSkeletons(tabId) {
+  const ids = SKELETON_IDS_BY_TAB[tabId];
+  if (!ids) return;
+  ids.forEach(id => { const el = $(id); if (el) el.classList.add('skel-on'); });
+}
+function hideSkeletons(tabId) {
+  const ids = SKELETON_IDS_BY_TAB[tabId];
+  if (!ids) return;
+  ids.forEach(id => { const el = $(id); if (el) el.classList.remove('skel-on'); });
+}
+window.showSkeletons = showSkeletons;
+window.hideSkeletons = hideSkeletons;
+
 function applyRoleUI() {
   const isStaff = userRole === 'staff';
   const isDriver = userRole === 'driver';
@@ -4279,6 +4305,7 @@ function renderDriverHome() {
   const rated = list.filter(o => o.status === 'delivered' && o.customer_rating != null);
   const avg = rated.length ? (rated.reduce((s, o) => s + Number(o.customer_rating), 0) / rated.length) : null;
   if ($('driverHomeRating')) $('driverHomeRating').textContent = avg != null ? `⭐ ${avg.toFixed(1)}` : '—';
+  hideSkeletons('driver-home');
 
   const hasFullRoute = active.length > 0 && active.every(o => o.route_sequence != null);
   const ordered = hasFullRoute ? [...active].sort((a, b) => (a.route_sequence || 0) - (b.route_sequence || 0)) : active;
@@ -7445,6 +7472,7 @@ function renderDistributorHome() {
   if ($('distHomeRate')) $('distHomeRate').textContent = currentBandMin + '% – ' + currentBandMax + '%';
   if ($('distHomeSalesCount')) $('distHomeSalesCount').textContent = stats.salesCount;
   if ($('distHomeCommission')) $('distHomeCommission').textContent = fmt(stats.totalCommission);
+  hideSkeletons('distributor-home');
 
   const body = $('distHomeRecentBody');
   if (body) {
@@ -8101,7 +8129,7 @@ function refreshStaffHome(){
   if(!currentUser)return;const name=(userProfile&&userProfile.display_name)||currentUser.email?.split('@')[0]||'Staff Member';if($('staffHomeName'))$('staffHomeName').textContent=name;
   const now=new Date(),y=now.getFullYear(),m=now.getMonth(),monthOrders=(orders||[]).filter(o=>o.createdBy===currentUser.id&&new Date(o.createdAt||o.date||0).getFullYear()===y&&new Date(o.createdAt||o.date||0).getMonth()===m&&o.status!=='cancelled');
   const sales=monthOrders.reduce((s,o)=>s+(Number(o.total)||0),0);if($('staffHomeOrders'))$('staffHomeOrders').textContent=monthOrders.length;if($('staffHomeCommission'))$('staffHomeCommission').textContent=fmt(getCommissionForStaffMonth(currentUser.id,now.toISOString().slice(0,7)));const tasks=getStaffLocalTasks();if($('staffHomeTasks'))$('staffHomeTasks').textContent=tasks.filter(x=>!taskDone(x)).length;
-  let hours=0;try{const raw=JSON.parse(localStorage.getItem('mydrybea_attendance_cache')||'[]');hours=raw.filter(x=>x.staffId===currentUser.id&&x.hours).reduce((s,x)=>s+Number(x.hours||0),0);}catch(e){}if($('staffHomeHours'))$('staffHomeHours').textContent=hours.toFixed(1)+'h';renderStaffTasks();renderStaffAnnouncements();refreshMyCommission();
+  let hours=0;try{const raw=JSON.parse(localStorage.getItem('mydrybea_attendance_cache')||'[]');hours=raw.filter(x=>x.staffId===currentUser.id&&x.hours).reduce((s,x)=>s+Number(x.hours||0),0);}catch(e){}if($('staffHomeHours'))$('staffHomeHours').textContent=hours.toFixed(1)+'h';renderStaffTasks();renderStaffAnnouncements();refreshMyCommission();hideSkeletons('staff-home');
 }
 
 // ==================== TABS ====================
@@ -8185,6 +8213,7 @@ function activateAppTab(tabId){
   document.querySelectorAll('.tab-panel').forEach(p => p.style.display = 'none');
   panel.style.display = 'block';
   panel.style.animation = 'none'; panel.offsetHeight; panel.style.animation = 'fadeIn 0.3s ease';
+  if (tabId === 'staff-home') showSkeletons('staff-home');
   if(userRole==='staff') refreshStaffWorkspaceData(tabId);
   if (tabId === 'dashboard') { calcDashboard(); calcSensitivity(); calcBulk(); }
   if (tabId === 'income') { calcDashboard(); }
@@ -8203,14 +8232,14 @@ function activateAppTab(tabId){
     renderDelPayPreview();
   }
   if (tabId !== 'delivery' && driverLocationPollTimer) { clearInterval(driverLocationPollTimer); driverLocationPollTimer = null; }
-  if (tabId === 'driver-home') { loadMyDeliveries().then(() => { renderMyEarnings(); renderDriverHome(); }); loadDriverHandovers(); }
+  if (tabId === 'driver-home') { showSkeletons('driver-home'); loadMyDeliveries().then(() => { renderMyEarnings(); renderDriverHome(); }); loadDriverHandovers(); }
   if (tabId === 'my-deliveries') { loadMyDeliveries(); updateDriverNotifyPermUI(); }
   if (tabId === 'my-earnings') { loadMyDeliveries().then(() => renderMyEarnings()); loadDriverHandovers(); }
   if (tabId === 'my-reviews') { loadMyDeliveries().then(() => renderMyReviews()); }
   if (tabId === 'my-staff') { refreshMyStaffPage(); loadMyStaffOwnerData(); }
   if (tabId === 'expenses') { renderExpenses(); renderRecurringExpenses(); }
   if (tabId === 'products') { loadProductsFromCloud().then(renderProducts); }
-  if (tabId === 'distributor-home') { loadDistributorCommissionClaims().then(renderDistributorHome); }
+  if (tabId === 'distributor-home') { showSkeletons('distributor-home'); loadDistributorCommissionClaims().then(renderDistributorHome); }
   if (tabId === 'my-income') { loadDistributorCommissionClaims().then(renderProductAgentPage); }
   if (tabId === 'sales') { loadSalesFromCloud().then(renderSales); }
   if (tabId === 'my-salary') {

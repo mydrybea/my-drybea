@@ -356,6 +356,27 @@
 /* ---- Header profile icon (replaces the old Profile nav tab) ---- */
 #headerProfileBtn{ position:relative; }
 
+/* ---- Skeleton loading — grey shimmer placeholder for stat numbers on
+   Home pages while their data is still being fetched, instead of an
+   empty-looking "Rs. 0" / "—" flashing up for a moment. Toggled by
+   .skel-on via showSkeletons()/hideSkeletons() in app.js. ---- */
+.skel-on{
+  color:transparent !important; -webkit-text-fill-color:transparent !important;
+  background:linear-gradient(100deg, rgba(148,163,184,.25) 30%, rgba(148,163,184,.45) 50%, rgba(148,163,184,.25) 70%);
+  background-size:250% 100%;
+  animation:skelShine 1.3s ease-in-out infinite;
+  border-radius:6px; display:inline-block; min-width:44px;
+  box-shadow:none !important;
+}
+.skel-on i, .skel-on svg{ visibility:hidden !important; }
+@keyframes skelShine{
+  0%{ background-position:200% 0; }
+  100%{ background-position:-50% 0; }
+}
+@media (prefers-color-scheme:dark){
+  .skel-on{ background:linear-gradient(100deg, rgba(100,116,139,.35) 30%, rgba(148,163,184,.5) 50%, rgba(100,116,139,.35) 70%); background-size:250% 100%; }
+}
+
 /* ---- Quick Actions card grid — fixes cards overflowing past the
    right edge of the screen on narrow phones (a classic CSS Grid
    trap: without minmax(0,1fr), a grid track won't shrink below its
