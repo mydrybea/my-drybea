@@ -196,14 +196,19 @@ async function loadUserProfile() {
 }
 
 const STAFF_ALLOWED_TABS = ['staff-home','orders','my-salary','profile','expenses','products'];
-const DRIVER_ALLOWED_TABS = ['my-deliveries','my-earnings','my-reviews','profile','products'];
+// 'driver-home' is a real overview page, separate from the 'my-deliveries'
+// list — drivers land here first, then tap into My Deliveries / My Earnings.
+const DRIVER_ALLOWED_TABS = ['driver-home','my-deliveries','my-earnings','my-reviews','profile','products'];
 // Distributor previously had only 2 tabs (product-agent, profile), so their
 // bottom nav could never fill out to 5 buttons like Staff and Driver do.
 // Added 'orders', 'expenses' and 'products' — the same three generic,
 // business-scoped tabs Staff accounts already use safely (they're
 // businessId-scoped, not owner-only). Distributors will now see the same
 // shared orders/expenses/products views a staff account sees.
-const DISTRIBUTOR_ALLOWED_TABS = ['product-agent','orders','expenses','products','profile'];
+// 'product-agent' was renamed to 'my-income' (a dedicated Commission/Income
+// page) and 'distributor-home' was added as a real overview page, separate
+// from it — distributors land on Home first, then tap into My Income.
+const DISTRIBUTOR_ALLOWED_TABS = ['distributor-home','my-income','orders','expenses','products','profile'];
 
 function applyRoleUI() {
   const isStaff = userRole === 'staff';
@@ -272,12 +277,12 @@ function applyRoleUI() {
   const ownerSalaryEditor = $('salaryPanel');
   if (ownerSalaryEditor && isRestricted) ownerSalaryEditor.style.display = 'none';
 
-  // Staff lands on the dedicated operations home; drivers land on their delivery list;
-  // distributors land on their Product Agent commission dashboard.
+  // Staff, drivers and distributors all land on their own dedicated overview
+  // (Home) page first, separate from their operational list/detail pages.
   if (typeof activateAppTab === 'function') {
     if (isStaff) activateAppTab('staff-home');
-    else if (isDriver) activateAppTab('my-deliveries');
-    else if (isDistributor) activateAppTab('product-agent');
+    else if (isDriver) activateAppTab('driver-home');
+    else if (isDistributor) activateAppTab('distributor-home');
   }
 }
 
@@ -4236,6 +4241,40 @@ function renderMyReviews() {
 }
 window.renderMyReviews = renderMyReviews;
 
+// ==================== DRIVER: HOME (rider overview, separate from My Deliveries) ====================
+// Lightweight dashboard a driver lands on first. Reuses the same `myDeliveries`
+// array already loaded for My Deliveries / My Earnings — no extra fetch needed.
+function renderDriverHome() {
+  if (!$('driverHomeActive')) return; // panel not on this page / not a driver
+  const name = (userProfile && userProfile.display_name) || currentUser?.email?.split('@')[0] || 'Rider';
+  if ($('driverHomeName')) $('driverHomeName').textContent = name;
+
+  const list = myDeliveries || [];
+  const today = todayStr();
+  const active = list.filter(o => o.status === 'pending' || o.status === 'shipped' || o.status === 'failed');
+  const deliveredToday = list.filter(o => o.status === 'delivered' && (o.delivered_at || o.created_at || '').slice(0, 10) === today);
+  const todayPay = deliveredToday.reduce((s, o) => s + calculateDriverPay(o.delivery_km).pay, 0);
+
+  if ($('driverHomeActive')) $('driverHomeActive').textContent = String(active.length);
+  if ($('driverHomeDeliveredToday')) $('driverHomeDeliveredToday').textContent = String(deliveredToday.length);
+  if ($('driverHomeTodayPay')) $('driverHomeTodayPay').textContent = 'Rs. ' + Math.round(todayPay).toLocaleString();
+
+  const rated = list.filter(o => o.status === 'delivered' && o.customer_rating != null);
+  const avg = rated.length ? (rated.reduce((s, o) => s + Number(o.customer_rating), 0) / rated.length) : null;
+  if ($('driverHomeRating')) $('driverHomeRating').textContent = avg != null ? `⭐ ${avg.toFixed(1)}` : '—';
+
+  const hasFullRoute = active.length > 0 && active.every(o => o.route_sequence != null);
+  const ordered = hasFullRoute ? [...active].sort((a, b) => (a.route_sequence || 0) - (b.route_sequence || 0)) : active;
+  const nextStops = $('driverHomeNextStops');
+  if (nextStops) {
+    nextStops.innerHTML = ordered.length
+      ? ordered.slice(0, 4).map((o, i) => `<div class="task-row"><div class="task-main"><strong>${i + 1}. ${o.order_ref_no || String(o.id).slice(0, 8)}</strong><small>${escapeHtmlSafe(o.address || '-')}</small></div>${getStatusBadge(o.status)}</div>`).join('')
+      : '<div class="notice">No deliveries assigned to you right now.</div>';
+  }
+  if (window.lucide) lucide.createIcons({ attrs: { 'stroke-width': 1.9, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' } });
+}
+window.renderDriverHome = renderDriverHome;
+
 // ==================== OWNER: RIDER FEEDBACK (per-driver customer reviews) ====================
 // Owner picks a rider from the Delivery page and sees every order that rider
 // delivered with the customer's rating + written feedback. Reuses the same
@@ -7321,7 +7360,7 @@ async function loadDistributorCommissionClaims(){
     if (error) throw error;
     window.distributorCommissionClaims = data || [];
     if (userRole === 'owner') renderDistributorsPanel();
-    if (userRole === 'distributor') renderProductAgentPage();
+    if (userRole === 'distributor') { renderProductAgentPage(); renderDistributorHome(); }
     return window.distributorCommissionClaims;
   } catch (e) {
     console.error('Distributor commission claims load:', e);
@@ -7372,6 +7411,36 @@ function renderProductAgentPage(){
   }
 }
 window.renderProductAgentPage = renderProductAgentPage;
+
+// ==================== DISTRIBUTOR: HOME (Product Agent overview, separate from My Income) ====================
+// Lightweight dashboard a distributor lands on first. Reuses the same stats
+// and claims already loaded for My Income — no extra fetch needed.
+function renderDistributorHome() {
+  if (userRole !== 'distributor' || !currentUser) return;
+  if (!$('distHomeLevel')) return; // panel not on this page
+  const name = (userProfile && userProfile.display_name) || currentUser.email?.split('@')[0] || 'Agent';
+  if ($('distHomeName')) $('distHomeName').textContent = name;
+
+  const stats = computeDistributorStats(currentUser.id);
+  const currentBandMin = ((DISTRIBUTOR_COMMISSION_MIN + stats.levelBonus + stats.qualityBonus) * 100).toFixed(1);
+  const currentBandMax = (DISTRIBUTOR_COMMISSION_MAX * 100).toFixed(0);
+  if ($('distHomeLevel')) $('distHomeLevel').textContent = stats.marketingLevel;
+  if ($('distHomeRate')) $('distHomeRate').textContent = currentBandMin + '% – ' + currentBandMax + '%';
+  if ($('distHomeSalesCount')) $('distHomeSalesCount').textContent = stats.salesCount;
+  if ($('distHomeCommission')) $('distHomeCommission').textContent = fmt(stats.totalCommission);
+
+  const body = $('distHomeRecentBody');
+  if (body) {
+    const claims = (window.distributorCommissionClaims || []).slice(0, 5);
+    body.innerHTML = claims.length ? claims.map(c => `<tr>
+        <td>${new Date(c.submitted_at || Date.now()).toLocaleDateString()}</td>
+        <td>${escapeHtmlSafe(c.order_ref_no || '-')}</td>
+        <td>${fmt(Number(c.commission_amount) || 0)}</td>
+      </tr>`).join('') : '<tr><td colspan="3" style="text-align:center;opacity:.5;padding:14px;">No commission earned yet.</td></tr>';
+  }
+  if (window.lucide) lucide.createIcons({ attrs: { 'stroke-width': 1.9, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' } });
+}
+window.renderDistributorHome = renderDistributorHome;
 
 async function loadCommissionClaims(){
   if(currentUser && userRole==='owner' && !commissionRealtimeChannel) startCommissionRealtime();
@@ -8033,8 +8102,8 @@ document.querySelectorAll('[data-ribbon="true"]').forEach(btn => {
 
 const OWNER_ONLY_TABS = ['dashboard', 'my-staff', 'delivery', 'calculator', 'production', 'history', 'data', 'monthly-summary', 'income', 'analytics', 'sales'];
 const STAFF_ONLY_TABS = ['staff-home', 'daily-pay', 'work-update', 'attendance', 'advance', 'my-commission', 'my-tasks', 'announcements'];
-const DRIVER_ONLY_TABS = ['my-deliveries','my-earnings','my-reviews'];
-const DISTRIBUTOR_ONLY_TABS = ['product-agent'];
+const DRIVER_ONLY_TABS = ['driver-home','my-deliveries','my-earnings','my-reviews'];
+const DISTRIBUTOR_ONLY_TABS = ['distributor-home','my-income'];
 
 let staffWorkspaceLoadSeq = 0;
 async function refreshStaffWorkspaceData(tabId){
@@ -8068,11 +8137,11 @@ function activateAppTab(tabId){
     return;
   }
   if (userRole === 'driver' && !DRIVER_ALLOWED_TABS.includes(tabId)) {
-    alert('🔒 Driver access: use your delivery list and profile.');
+    alert('🔒 Driver access: use your Home, My Deliveries, My Earnings and Profile pages.');
     return;
   }
   if (userRole === 'distributor' && !DISTRIBUTOR_ALLOWED_TABS.includes(tabId)) {
-    alert('🔒 Distributor access: use your Product Agent, Orders, Expenses, Products and Profile pages.');
+    alert('🔒 Distributor access: use your Home, My Income, Orders, Expenses, Products and Profile pages.');
     return;
   }
   if (OWNER_ONLY_TABS.includes(tabId) && userRole === 'staff') {
@@ -8117,13 +8186,15 @@ function activateAppTab(tabId){
     renderDelPayPreview();
   }
   if (tabId !== 'delivery' && driverLocationPollTimer) { clearInterval(driverLocationPollTimer); driverLocationPollTimer = null; }
+  if (tabId === 'driver-home') { loadMyDeliveries().then(() => { renderMyEarnings(); renderDriverHome(); }); loadDriverHandovers(); }
   if (tabId === 'my-deliveries') { loadMyDeliveries(); updateDriverNotifyPermUI(); }
   if (tabId === 'my-earnings') { loadMyDeliveries().then(() => renderMyEarnings()); loadDriverHandovers(); }
   if (tabId === 'my-reviews') { loadMyDeliveries().then(() => renderMyReviews()); }
   if (tabId === 'my-staff') { refreshMyStaffPage(); loadMyStaffOwnerData(); }
   if (tabId === 'expenses') { renderExpenses(); renderRecurringExpenses(); }
   if (tabId === 'products') { loadProductsFromCloud().then(renderProducts); }
-  if (tabId === 'product-agent') { loadDistributorCommissionClaims().then(renderProductAgentPage); }
+  if (tabId === 'distributor-home') { loadDistributorCommissionClaims().then(renderDistributorHome); }
+  if (tabId === 'my-income') { loadDistributorCommissionClaims().then(renderProductAgentPage); }
   if (tabId === 'sales') { loadSalesFromCloud().then(renderSales); }
   if (tabId === 'my-salary') {
     if (userRole === 'owner') {
@@ -8631,11 +8702,13 @@ if ('serviceWorker' in navigator) {
   var NAV_PRIMARY_BY_ROLE = {
     owner:       ['dashboard','sales','orders','income'],
     staff:       ['staff-home','my-salary','orders','my-tasks'],
-    // Driver and Distributor left as-is for now — see chat, one detail
-    // needs confirming before these change (does "Home" mean the existing
-    // landing tab relabeled, or a genuinely new overview tab?).
-    driver:      ['my-deliveries','my-earnings','my-reviews','products','profile'],
-    distributor: ['product-agent','orders','expenses','products','profile']
+    // Driver: real Home overview (separate from the My Deliveries list),
+    // My Deliveries, My Earnings, Products — Reviews/Profile live in "More".
+    driver:      ['driver-home','my-deliveries','my-earnings','products'],
+    // Distributor: real Home overview, Product, Order, and My Income (the
+    // commission/earnings page split out from the old Product Agent tab)
+    // — Expenses/Profile live in "More".
+    distributor: ['distributor-home','products','orders','my-income']
   };
 
   function currentPrimaryList(){
