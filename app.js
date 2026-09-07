@@ -197,7 +197,13 @@ async function loadUserProfile() {
 
 const STAFF_ALLOWED_TABS = ['staff-home','orders','my-salary','profile','expenses','products'];
 const DRIVER_ALLOWED_TABS = ['my-deliveries','my-earnings','my-reviews','profile','products'];
-const DISTRIBUTOR_ALLOWED_TABS = ['product-agent','profile'];
+// Distributor previously had only 2 tabs (product-agent, profile), so their
+// bottom nav could never fill out to 5 buttons like Staff and Driver do.
+// Added 'orders', 'expenses' and 'products' — the same three generic,
+// business-scoped tabs Staff accounts already use safely (they're
+// businessId-scoped, not owner-only). Distributors will now see the same
+// shared orders/expenses/products views a staff account sees.
+const DISTRIBUTOR_ALLOWED_TABS = ['product-agent','orders','expenses','products','profile'];
 
 function applyRoleUI() {
   const isStaff = userRole === 'staff';
@@ -2135,10 +2141,10 @@ async function loadProductsFromCloud() {
 function renderProducts() {
   const grid = $('productsGrid');
   if (!grid) return;
-  if (userRole === 'distributor') {
-    grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;opacity:.5;padding:20px;">Product catalog is not shown here — see your Product Agent page for commission details.</div>';
-    return;
-  }
+  // Distributors now get a real Products tab (one of their 5 bottom-nav
+  // buttons) instead of the old placeholder message — they see the same
+  // read-only catalog view Staff already sees (edit/delete buttons below
+  // only render for the owner either way).
   if (products.length === 0) {
     grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;opacity:.5;padding:20px;">No products yet — tap "Add Product" to build your catalog.</div>';
     return;
@@ -8066,7 +8072,7 @@ function activateAppTab(tabId){
     return;
   }
   if (userRole === 'distributor' && !DISTRIBUTOR_ALLOWED_TABS.includes(tabId)) {
-    alert('🔒 Distributor access: use your Product Agent page and profile.');
+    alert('🔒 Distributor access: use your Product Agent, Orders, Expenses, Products and Profile pages.');
     return;
   }
   if (OWNER_ONLY_TABS.includes(tabId) && userRole === 'staff') {
@@ -8276,9 +8282,42 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Re-apply role visibility after the initial UI render.
   applyRoleUI();
 
-  // ---- LOAD CUSTOMERS/ORDERS/EXPENSES FROM THEIR OWN SUPABASE TABLES ----
+  // ---- LOAD CUSTOMERS/ORDERS/EXPENSES/PRODUCTS + RECURRING RULES + APP DATA ----
   // (source of truth — same data across every device/browser)
-  await Promise.all([userRole==='owner'?loadCustomersFromCloud():Promise.resolve(), loadOrdersFromCloud(), loadExpensesFromCloud(), loadProductsFromCloud()]);
+  // PERFORMANCE: these five reads are all independent of one another (none of
+  // them needs another one's result), so they're fired together instead of
+  // one-after-another. On a fast desktop connection the difference is barely
+  // noticeable, but on a higher-latency mobile connection each sequential
+  // round trip used to add its own full delay on top of the last one — five
+  // of them back-to-back is what made login feel slow specifically on
+  // mobile. Running them in parallel means the whole batch only takes as
+  // long as the SLOWEST single call, not the sum of all of them. Each of
+  // these functions already catches its own errors internally, so
+  // Promise.all here is safe — one failing table read won't abort the rest.
+  const __appDataPromise = (async () => {
+    try {
+      const { data, error } = await supabase
+        .from('app_data')
+        .select('data')
+        .eq('user_id', currentUser.id)
+        .order('updated_at', { ascending: false })
+        .limit(1);
+      if (error) throw error;
+      return data;
+    } catch (e) {
+      console.error('Cloud load error:', e);
+      updateStatus('⚠️ Cloud load failed — using local');
+      return null;
+    }
+  })();
+
+  await Promise.all([
+    userRole==='owner' ? loadCustomersFromCloud() : Promise.resolve(),
+    loadOrdersFromCloud(),
+    loadExpensesFromCloud(),
+    loadProductsFromCloud(),
+    loadRecurringExpenses()
+  ]);
   renderOrders();
   renderCustomers();
   renderDelivery();
@@ -8287,22 +8326,17 @@ document.addEventListener('DOMContentLoaded', async () => {
   renderExpenses();
   updateMonthlySummary();
 
-  // ---- RECURRING DAILY EXPENSES: load rules, then auto-add today's due ones ----
-  await loadRecurringExpenses();
+  // ---- RECURRING DAILY EXPENSES: auto-add today's due ones ----
+  // Must run AFTER loadExpensesFromCloud() above (it appends straight into
+  // the local `expenses` array), so this one stays sequential on purpose.
   await generateDueRecurringExpenses();
   renderRecurringExpenses();
 
-  // ---- LOAD CLOUD DATA (silent, no alert on empty) ----
-  // app_data still holds: state (pricing/production settings), history, snapshots.
-  // customers/orders are NOT read from here anymore — they come from their own tables above.
+  // ---- APPLY THE APP_DATA RESULT FETCHED IN PARALLEL ABOVE ----
+  // app_data holds: state (pricing/production settings), history, snapshots.
+  // customers/orders are NOT read from here — they come from their own tables above.
   try {
-    const { data, error } = await supabase
-      .from('app_data')
-      .select('data')
-      .eq('user_id', currentUser.id)
-      .order('updated_at', { ascending: false })
-      .limit(1);
-    if (error) throw error;
+    const data = await __appDataPromise;
     if (data && data.length > 0 && data[0].data && data[0].data.state) {
       const payload = data[0].data;
       takeSnapshot();
@@ -8314,14 +8348,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       renderHistory();
       saveAll();
       updateStatus('☁️ Cloud data loaded');
-    } else {
+    } else if (data !== null) {
       // First time user — save initial state to cloud
       await cloudSaveSilent();
       updateStatus('☁️ Initial cloud save');
     }
   } catch (e) {
-    console.error('Cloud load error:', e);
-    updateStatus('⚠️ Cloud load failed — using local');
+    console.error('Cloud load apply error:', e);
   }
 
   appInitialized = true;
@@ -8595,7 +8628,7 @@ if ('serviceWorker' in navigator) {
     owner:       ['dashboard','sales','orders','income','profile'],
     staff:       ['staff-home','orders','my-salary','expenses','profile'],
     driver:      ['my-deliveries','my-earnings','my-reviews','products','profile'],
-    distributor: ['product-agent','profile']
+    distributor: ['product-agent','orders','expenses','products','profile']
   };
 
   function currentPrimaryList(){
@@ -8629,10 +8662,19 @@ if ('serviceWorker' in navigator) {
     allTabBtns.forEach(function(btn){
       btn.classList.remove('nav-primary');
       var tab = btn.getAttribute('data-tab');
-      // Respect whatever role-visibility app.js already applied (display:none
-      // for tabs this role can't use) — a nav tab that's hidden for this role
-      // should not appear as primary OR inside the More sheet.
-      if (window.getComputedStyle(btn).display === 'none') return;
+      // Respect whatever role-visibility app.js already applied. IMPORTANT:
+      // this must read the INLINE style that applyRoleUI() itself sets
+      // (btn.style.display), NOT the computed style. On mobile (<=820px)
+      // the CSS already forces every plain .tab-btn to display:none
+      // !important, and .nav-primary is the ONLY thing that overrides it —
+      // but we just stripped .nav-primary one line above, so a computed-
+      // style check would ALWAYS read back "none" here on mobile (self-
+      // defeating: it can never see a button as visible, so it could never
+      // tag anything as primary — this was the root cause of the bottom
+      // nav appearing completely empty on phones). Inline style is set
+      // directly by applyRoleUI() and is unaffected by the nav-primary
+      // class or the viewport width, so it reflects true role-visibility.
+      if (btn.style.display === 'none') return;
 
       if (primary.indexOf(tab) !== -1) {
         btn.classList.add('nav-primary');
@@ -8698,14 +8740,28 @@ if ('serviceWorker' in navigator) {
     }
   }
 
-  document.addEventListener('DOMContentLoaded', function(){
-    wireStaticControls();
-    wrapWhenReady();
-    setTimeout(refreshBottomNav, 300);
-  });
-  setTimeout(wrapWhenReady, 0);
-  setTimeout(wrapWhenReady, 500);
-  setTimeout(refreshBottomNav, 800);
+  // Call the wrap immediately (synchronously), right here, not just on a
+  // timer. applyRoleUI and activateAppTab are plain `function` declarations
+  // defined earlier in this same file, so they already exist by the time
+  // this line runs — wrapping them now, before any async login/auth code
+  // gets a chance to run, guarantees the very first real call to either
+  // one (even from a fast/cached mobile session that resolves almost
+  // instantly) goes through the wrapped version and refreshes the bottom
+  // nav. The timers below are just extra safety nets, not the primary path.
+  try { wrapWhenReady(); } catch (e) { console.error('Bottom nav wrap error:', e); }
 
-  window.addEventListener('resize', refreshBottomNav);
+  document.addEventListener('DOMContentLoaded', function(){
+    try {
+      wireStaticControls();
+      wrapWhenReady();
+      refreshBottomNav();
+    } catch (e) { console.error('Bottom nav init error:', e); }
+    setTimeout(function(){ try { refreshBottomNav(); } catch(e){ console.error('Bottom nav refresh error:', e); } }, 300);
+  });
+  setTimeout(function(){ try { wrapWhenReady(); } catch(e){ console.error('Bottom nav wrap error:', e); } }, 0);
+  setTimeout(function(){ try { wrapWhenReady(); } catch(e){ console.error('Bottom nav wrap error:', e); } }, 500);
+  setTimeout(function(){ try { refreshBottomNav(); } catch(e){ console.error('Bottom nav refresh error:', e); } }, 800);
+  window.addEventListener('load', function(){ try { refreshBottomNav(); } catch(e){ console.error('Bottom nav refresh error:', e); } });
+
+  window.addEventListener('resize', function(){ try { refreshBottomNav(); } catch(e){ console.error('Bottom nav resize error:', e); } });
 })();
