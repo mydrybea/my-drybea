@@ -3645,11 +3645,14 @@ async function createOrder() {
         business_quality: distStats.businessQuality,
         commission_rate: distRate,
         commission_amount: Math.round(total * distRate),
-        status: 'approved',
-        verified_at: new Date().toISOString(),
+        // Held as 'pending' until the order is actually delivered — see
+        // finalizeDistributorCommissionForOrder(), called from cycleStatus(),
+        // confirmDelivery() and confirmBatchDelivery() once status becomes
+        // 'delivered' (or 'rejected' if the order is cancelled first).
+        status: 'pending',
         order_snapshot: { order_id: data.id, order_ref_no: data.order_ref_no || null, product_size_g: Number(product)||0, qty, unit_price: unitPrice, total }
       };
-      const { error: dce } = await supabase.from('distributor_commission_claims').insert(distClaim);
+      const { error: dce } = await withSessionRetry(() => supabase.from('distributor_commission_claims').insert(distClaim));
       if (dce) console.error('Distributor commission claim create failed:', dce);
       else loadDistributorCommissionClaims();
     }
@@ -3747,7 +3750,7 @@ async function cycleStatus(index) {
   const newStatus = cycle[(cycle.indexOf(order.status) + 1) % cycle.length];
   if (!(await ensureFreshSession())) return;
   try {
-    const { error } = await supabase.from('orders').update({ status: newStatus }).eq('id', order.id).eq('user_id', businessId);
+    const { error } = await withSessionRetry(() => supabase.from('orders').update({ status: newStatus }).eq('id', order.id).eq('user_id', businessId));
     if (error) throw error;
   } catch (e) {
     console.error('Update order status error:', e);
@@ -3760,6 +3763,10 @@ async function cycleStatus(index) {
   renderDelivery();
   updateOrderStats();
   updateMonthlySummary();
+  // Commission only becomes real once delivery actually happens, and never
+  // happens if the order gets cancelled first — see finalizeDistributorCommissionForOrder().
+  if (newStatus === 'delivered') finalizeDistributorCommissionForOrder(order.id, 'approved');
+  else if (newStatus === 'cancelled') finalizeDistributorCommissionForOrder(order.id, 'rejected');
   updateStatus('🔄 Order status updated');
 }
 
@@ -4709,8 +4716,9 @@ async function confirmBatchDelivery() {
         if (activeTrip && String(activeTrip.orderId) === String(o.id)) {
           update.delivery_km = Number(activeTrip.km.toFixed(2));
         }
-        const { error } = await supabase.from('orders').update(update).eq('id', o.id).eq('assigned_driver_id', currentUser.id);
+        const { error } = await withSessionRetry(() => supabase.from('orders').update(update).eq('id', o.id).eq('assigned_driver_id', currentUser.id));
         if (error) throw error;
+        finalizeDistributorCommissionForOrder(o.id, 'approved');
         if (activeTrip && String(activeTrip.orderId) === String(o.id)) activeTrip = null;
         Object.assign(o, update);
         return { id: o.id, ok: true };
@@ -5107,9 +5115,9 @@ async function driverMarkStatus(orderId, newStatus) {
     // Stamp the moment the trip actually starts — this is what the owner's
     // Delivery Performance dashboard uses for on-time % and average delivery time.
     if (newStatus === 'shipped') update.shipped_at = new Date().toISOString();
-    const { error } = await supabase.from('orders')
+    const { error } = await withSessionRetry(() => supabase.from('orders')
       .update(update)
-      .eq('id', orderId).eq('assigned_driver_id', currentUser.id);
+      .eq('id', orderId).eq('assigned_driver_id', currentUser.id));
     if (error) throw error;
     const o = myDeliveries.find(x => String(x.id) === String(orderId));
     if (o) Object.assign(o, update);
@@ -5254,8 +5262,9 @@ async function confirmDelivery() {
     if (activeTrip && String(activeTrip.orderId) === String(o.id)) {
       update.delivery_km = Number(activeTrip.km.toFixed(2));
     }
-    const { error } = await supabase.from('orders').update(update).eq('id', o.id).eq('assigned_driver_id', currentUser.id);
+    const { error } = await withSessionRetry(() => supabase.from('orders').update(update).eq('id', o.id).eq('assigned_driver_id', currentUser.id));
     if (error) throw error;
+    finalizeDistributorCommissionForOrder(o.id, 'approved');
 
     if (activeTrip && String(activeTrip.orderId) === String(o.id)) { activeTrip = null; updateLiveTripKmUI(); }
     Object.assign(o, update);
@@ -6506,6 +6515,7 @@ async function authAction() {
 
 async function logout() {
   stopCommissionRealtime();
+  stopDistributorCommissionRealtime();
   stopAdvanceRealtime();
   stopAppNotifyRealtime();
   if (typeof stopDriverLocationSharing === 'function') stopDriverLocationSharing();
@@ -7415,8 +7425,11 @@ async function populateStaffReferralSelectors(){
 //   2) Business Quality — auto-calculated from their average order size / consistency.
 //   3) Order Volume     — the value of this specific order.
 // The owner is the one who records the sale and picks the distributor (like the existing
-// staff-referral flow), so the claim is created already-approved — no separate verification
-// step is needed, same trust boundary as any other order the owner enters themselves.
+// staff-referral flow), so no separate owner-verification step is needed — but the
+// commission itself is only real once the order is actually delivered. The claim is
+// created 'pending' at order time and flipped to 'approved' (or 'rejected' if the
+// order is cancelled first) by finalizeDistributorCommissionForOrder(), called from
+// cycleStatus(), confirmDelivery() and confirmBatchDelivery().
 const DISTRIBUTOR_COMMISSION_MIN = 0.06;
 const DISTRIBUTOR_COMMISSION_MAX = 0.12;
 
@@ -7455,8 +7468,30 @@ function computeDistributorCommissionRate(distributorId, orderTotal){
   return Math.min(DISTRIBUTOR_COMMISSION_MAX, Math.max(DISTRIBUTOR_COMMISSION_MIN, rate));
 }
 
+// Called once an order's fate is known — delivered (commission becomes real)
+// or cancelled (commission never happens). Matches on order_id and only
+// touches claims still 'pending', so it's safe to call for every order status
+// change even when that order never had a distributor attached (no-op) or its
+// claim was already finalized (no-op).
+async function finalizeDistributorCommissionForOrder(orderId, outcome){
+  if (!orderId) return;
+  try {
+    const update = outcome === 'approved'
+      ? { status: 'approved', verified_at: new Date().toISOString() }
+      : { status: 'rejected' };
+    const { error } = await withSessionRetry(() => supabase.from('distributor_commission_claims')
+      .update(update)
+      .eq('order_id', String(orderId))
+      .eq('status', 'pending'));
+    if (error) { console.error('Distributor commission finalize failed:', error); return; }
+    loadDistributorCommissionClaims();
+  } catch (e) { console.error('Distributor commission finalize error:', e); }
+}
+window.finalizeDistributorCommissionForOrder = finalizeDistributorCommissionForOrder;
+
 async function loadDistributorCommissionClaims(){
   if (!currentUser || (userRole !== 'owner' && userRole !== 'distributor')) return [];
+  if (userRole === 'distributor' && !distributorCommissionRealtimeChannel) startDistributorCommissionRealtime();
   try {
     const query = userRole === 'owner'
       ? supabase.from('distributor_commission_claims').select('*').eq('owner_id', currentUser.id).order('submitted_at', { ascending: false })
@@ -7512,7 +7547,8 @@ function renderProductAgentPage(){
         <td>${fmt(Number(c.order_total) || 0)}</td>
         <td>${((Number(c.commission_rate) || 0) * 100).toFixed(1)}%</td>
         <td>${fmt(Number(c.commission_amount) || 0)}</td>
-      </tr>`).join('') || '<tr><td colspan="5" style="text-align:center;opacity:.5;padding:14px;">No commission earned yet.</td></tr>';
+        <td><span class="status-pill ${c.status === 'approved' ? 'approved' : c.status === 'rejected' ? 'rejected' : 'pending'}">${c.status === 'approved' ? 'Earned' : c.status === 'rejected' ? 'Cancelled' : 'Pending delivery'}</span></td>
+      </tr>`).join('') || '<tr><td colspan="6" style="text-align:center;opacity:.5;padding:14px;">No commission earned yet.</td></tr>';
   }
 }
 window.renderProductAgentPage = renderProductAgentPage;
@@ -7542,7 +7578,8 @@ function renderDistributorHome() {
         <td>${new Date(c.submitted_at || Date.now()).toLocaleDateString()}</td>
         <td>${escapeHtmlSafe(c.order_ref_no || '-')}</td>
         <td>${fmt(Number(c.commission_amount) || 0)}</td>
-      </tr>`).join('') : '<tr><td colspan="3" style="text-align:center;opacity:.5;padding:14px;">No commission earned yet.</td></tr>';
+        <td><span class="status-pill ${c.status === 'approved' ? 'approved' : c.status === 'rejected' ? 'rejected' : 'pending'}">${c.status === 'approved' ? 'Earned' : c.status === 'rejected' ? 'Cancelled' : 'Pending'}</span></td>
+      </tr>`).join('') : '<tr><td colspan="4" style="text-align:center;opacity:.5;padding:14px;">No commission earned yet.</td></tr>';
   }
   if (window.lucide) lucide.createIcons({ attrs: { 'stroke-width': 1.9, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' } });
 }
@@ -7612,6 +7649,46 @@ function stopCommissionRealtime(){
   commissionRealtimeTimer=null;
   try{ if(commissionRealtimeChannel) supabase.removeChannel(commissionRealtimeChannel); }catch(e){}
   commissionRealtimeChannel=null;
+}
+
+// ==================== DISTRIBUTOR: LIVE COMMISSION SYNC ====================
+// Mirrors startCommissionRealtime()/stopCommissionRealtime() above, but for the
+// distributor role. Without this, a distributor's commission claim being
+// created (order placed) or flipped to 'approved' (order delivered) never
+// reached their screen until they manually refreshed the page.
+let distributorCommissionRealtimeChannel = null;
+let distributorCommissionRealtimeTimer = null;
+let distributorCommissionRefreshBusy = false;
+
+async function refreshDistributorCommissionRealtime(){
+  if(!currentUser || userRole!=='distributor' || distributorCommissionRefreshBusy) return;
+  if(document.hidden) return; // skip background work while the app tab isn't visible
+  distributorCommissionRefreshBusy = true;
+  try{
+    await loadDistributorCommissionClaims();
+  }catch(e){ console.warn('Distributor commission realtime refresh:',e); }
+  finally{ distributorCommissionRefreshBusy=false; }
+}
+
+function startDistributorCommissionRealtime(){
+  if(!currentUser || userRole!=='distributor' || !window.supabase) return;
+  try{
+    if(distributorCommissionRealtimeChannel){ supabase.removeChannel(distributorCommissionRealtimeChannel); distributorCommissionRealtimeChannel=null; }
+    distributorCommissionRealtimeChannel = supabase.channel('mydrybea-distributor-commission-live-'+currentUser.id)
+      .on('postgres_changes',{event:'*',schema:'public',table:'distributor_commission_claims',filter:`distributor_id=eq.${currentUser.id}`},()=>refreshDistributorCommissionRealtime())
+      .subscribe((status)=>{ if(status==='SUBSCRIBED') console.log('MY DRYBEA distributor commission realtime: connected'); });
+    if(distributorCommissionRealtimeTimer) clearInterval(distributorCommissionRealtimeTimer);
+    // Realtime channel above already pushes instant updates; this is just a safety-net
+    // fallback in case a websocket event is missed (e.g. app was backgrounded on mobile).
+    distributorCommissionRealtimeTimer=setInterval(()=>refreshDistributorCommissionRealtime(),45000);
+  }catch(e){ console.warn('Distributor commission realtime setup:',e); }
+}
+
+function stopDistributorCommissionRealtime(){
+  try{ if(distributorCommissionRealtimeTimer) clearInterval(distributorCommissionRealtimeTimer); }catch(e){}
+  distributorCommissionRealtimeTimer=null;
+  try{ if(distributorCommissionRealtimeChannel) supabase.removeChannel(distributorCommissionRealtimeChannel); }catch(e){}
+  distributorCommissionRealtimeChannel=null;
 }
 
 // ==================== ADVANCE REQUESTS: LIVE SYNC FOR OWNER ====================
