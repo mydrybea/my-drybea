@@ -3512,6 +3512,11 @@ function openNewOrder() {
     if(paymentBlock) paymentBlock.style.display='';
     updateCustomerSelect();
     populateStaffReferralSelectors();
+    // Distributor dropdown previously relied on loadStaffList() having already run
+    // from some other tab (Orders/My Staff) earlier in the session — if New Order
+    // was opened before that, the "Product Distributor" field showed no options at
+    // all beyond the placeholder. Force a fresh load here so it's always populated.
+    loadStaffList();
     const f=document.querySelector('[data-owner-order-referral]'); if(f) f.style.display='';
     const c=customers.find(x=>String(x.id)===String($('orderCustomer').value)); if($('orderReferralStaffSelect') && c?.referralStaffId) $('orderReferralStaffSelect').value=c.referralStaffId;
   }
