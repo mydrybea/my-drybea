@@ -417,7 +417,18 @@ function populateDistributorSelects(distributors) {
   distributorListCache = distributors || [];
   const sel = $('orderReferralDistributorSelect');
   if (sel) {
-    sel.innerHTML = '<option value="">No distributor</option>' + distributorListCache.map(d =>
+    // Owners who also do their own distribution/marketing couldn't attribute a
+    // sale's commission to themselves, since this list only ever contained
+    // accounts with role='distributor'. Pin a "Me (Owner)" option to the top
+    // — same commission-tier logic applies, tracked under the owner's own id.
+    const selfOption = (userRole === 'owner' && currentUser)
+      ? (() => {
+          const selfName = (userProfile && userProfile.display_name) || (currentUser.email ? currentUser.email.split('@')[0] : 'Me');
+          const selfRef = (userProfile && userProfile.distributor_reference) || ('AGT-' + currentUser.id.slice(0,8).toUpperCase());
+          return `<option value="${currentUser.id}">⭐ Me (${escapeHtmlSafe(selfName)}) — ${escapeHtmlSafe(selfRef)}</option>`;
+        })()
+      : '';
+    sel.innerHTML = '<option value="">No distributor</option>' + selfOption + distributorListCache.map(d =>
       `<option value="${d.id}">${escapeHtmlSafe(d.display_name || 'Distributor')} — ${escapeHtmlSafe(d.distributor_reference || ('AGT-' + String(d.id).slice(0,8).toUpperCase()))}</option>`
     ).join('');
   }
@@ -3462,11 +3473,15 @@ async function deleteCustomer(id) {
 function updateCustomerSelect() {
   const select = $('orderCustomer');
   if (userRole === 'staff') { if(select) select.innerHTML = '<option value="">Staff sale — customer details entered in this order</option>'; return; }
+  // A distributor-attributed sale doesn't require a customer on the master
+  // list, so "no customer" is always a valid, selectable choice here — not
+  // just a dead end shown when the list happens to be empty.
+  const noCustomerOption = '<option value="">— No customer (optional) —</option>';
   if (customers.length === 0) {
-    select.innerHTML = '<option value="">— Add customer first —</option>';
+    select.innerHTML = noCustomerOption;
     return;
   }
-  select.innerHTML = customers.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+  select.innerHTML = noCustomerOption + customers.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
 }
 
 function syncOrderSizeChips() {
@@ -3502,6 +3517,42 @@ function updateOrderTotal() {
   const subEl = $('orderTotalSub');
   if (totalEl) totalEl.textContent = (typeof fmt === 'function') ? fmt(total) : ('Rs. ' + total);
   if (subEl) subEl.textContent = qty + ' × ' + ((typeof fmt === 'function') ? fmt(price) : ('Rs. ' + price));
+  updateDistributorCommissionPreview();
+}
+
+// Keeps the Customer field's hint text honest: a distributor-attributed sale
+// doesn't need a customer, so say so as soon as a distributor is picked.
+function updateOrderCustomerHint() {
+  const hint = $('orderCustomerHint');
+  if (!hint) return;
+  const distId = userRole === 'distributor' ? currentUser?.id : ($('orderReferralDistributorSelect')?.value || '');
+  hint.textContent = distId
+    ? 'Optional for a distributor sale — pick one only if this order also has a specific customer.'
+    : 'Select the customer for this order.';
+}
+
+// Live estimate of the commission a picked distributor (or the owner
+// themselves, via the "Me" option) would earn on this order, using the same
+// tier-rate logic as the real commission claim created on submit.
+function updateDistributorCommissionPreview() {
+  const box = $('orderDistCommissionPreview');
+  if (!box) return;
+  const distId = userRole === 'distributor' ? currentUser?.id : ($('orderReferralDistributorSelect')?.value || '');
+  if (!distId || typeof computeDistributorCommissionRate !== 'function') { box.style.display = 'none'; return; }
+  const qty = Math.max(0, Number($('orderQty')?.value) || 0);
+  const price = Math.max(0, Number($('orderUnitPrice')?.value) || 0);
+  const total = qty * price;
+  const rate = computeDistributorCommissionRate(distId, total);
+  const amount = Math.round(total * rate);
+  const fmtVal = (v) => (typeof fmt === 'function') ? fmt(v) : ('Rs. ' + v);
+  box.style.display = '';
+  box.innerHTML = `<i class="business-icon icon-inline" data-lucide="badge-percent" aria-hidden="true"></i> Estimated commission at current tier: <strong>${(rate*100).toFixed(0)}%</strong> of ${fmtVal(total)} = <strong>${fmtVal(amount)}</strong>`;
+  if (window.lucide) lucide.createIcons({attrs:{'stroke-width':1.9,'stroke-linecap':'round','stroke-linejoin':'round'}});
+}
+
+function onOrderDistributorChange() {
+  updateOrderCustomerHint();
+  updateDistributorCommissionPreview();
 }
 
 // Owner convenience: auto-fill delivery address from the selected customer
@@ -3580,6 +3631,7 @@ function openNewOrder() {
   if ($('orderProductId')) $('orderProductId').value = '';
   syncOrderSizeChips();
   renderOrderProductPicker();
+  updateOrderCustomerHint();
   updateOrderTotal();
   $('orderModal').classList.add('active');
   if(window.lucide) lucide.createIcons({attrs:{'stroke-width':1.9,'stroke-linecap':'round','stroke-linejoin':'round'}});
@@ -3659,7 +3711,11 @@ async function createOrder() {
   // OWNER MODE: existing customer master workflow remains available.
   const customerId = $('orderCustomer').value;
   const address = $('orderAddress').value.trim() || getCustomerAddress(customerId);
-  if (!customerId) { alert('Select a customer!'); return; }
+  // A distributor-attributed sale doesn't need a customer on the master list —
+  // the distributor is what drives the commission, so only ONE of
+  // customer / distributor needs to be set, not both.
+  const referralDistributorId = userRole === 'distributor' ? currentUser.id : ($('orderReferralDistributorSelect')?.value || null);
+  if (!customerId && !referralDistributorId) { alert('Select a customer, or pick a distributor for this sale.'); return; }
   const customer = customers.find(c=>String(c.id)===String(customerId));
   let referralStaffId = customer?.referralStaffId || null;
   let referralStaffReference = customer?.referralStaffReference || null;
@@ -3670,7 +3726,7 @@ async function createOrder() {
   const total = qty * unitPrice;
   const paymentMethod = $('orderPaymentMethod')?.value === 'prepaid' ? 'prepaid' : 'cod';
   const productId = $('orderProductId') ? $('orderProductId').value || null : null;
-  const row = { id: generateOrderId(), user_id: businessId, customer_id: customerId, product_size_g: Number(product)||0, product_id: productId, qty, unit_price:unitPrice, total, address, notes, status:'pending', created_by:currentUser.id, referral_staff_id:referralStaffId, referral_staff_reference:referralStaffReference, referral_status:referralStaffId?'pending_verification':'none', payment_method:paymentMethod };
+  const row = { id: generateOrderId(), user_id: businessId, customer_id: customerId || null, product_size_g: Number(product)||0, product_id: productId, qty, unit_price:unitPrice, total, address, notes, status:'pending', created_by:currentUser.id, referral_staff_id:referralStaffId, referral_staff_reference:referralStaffReference, referral_status:referralStaffId?'pending_verification':'none', payment_method:paymentMethod };
   try {
     let { data, error } = await withSessionRetry(() => supabase.from('orders').insert(row).select().single());
     if (error && /column|schema|does not exist/i.test(error.message||'')) {
@@ -3684,12 +3740,16 @@ async function createOrder() {
       const { error: ce } = await supabase.from('staff_commission_claims').insert(claim);
       if (ce) console.error('Owner referral claim create failed:',ce);
     }
-    const referralDistributorId = userRole === 'distributor' ? currentUser.id : ($('orderReferralDistributorSelect')?.value || null);
     if (referralDistributorId) {
       const distStats = computeDistributorStats(referralDistributorId);
       const distRate = computeDistributorCommissionRate(referralDistributorId, total);
       const distributor = (distributorListCache||[]).find(d=>String(d.id)===String(referralDistributorId));
-      const distReference = distributor?.distributor_reference || (userRole === 'distributor' ? ((userProfile && userProfile.distributor_reference) || ('AGT-' + currentUser.id.slice(0,8).toUpperCase())) : '');
+      // Covers both: (a) a distributor-role user placing their own order, and
+      // (b) the owner picking the "Me (Owner)" option in the dropdown — in
+      // both cases the selected id is the current account's own id, and there
+      // is no distributorListCache entry for it, so fall back to the
+      // account's own distributor_reference (or a generated one).
+      const distReference = distributor?.distributor_reference || (String(referralDistributorId) === String(currentUser.id) ? ((userProfile && userProfile.distributor_reference) || ('AGT-' + currentUser.id.slice(0,8).toUpperCase())) : '');
       const distClaim = {
         owner_id: businessId,
         distributor_id: String(referralDistributorId),
@@ -3721,8 +3781,9 @@ async function createOrder() {
   if ($('orderProduct')) $('orderProduct').value = '50';
   if ($('orderProductId')) $('orderProductId').value = '';
   if ($('orderReferralDistributorSelect')) $('orderReferralDistributorSelect').value = '';
+  updateOrderCustomerHint();
   syncOrderSizeChips(); updateOrderTotal();
-  updateStatus(referralStaffId ? '📨 Sale sent to owner for commission verification' : '✅ Order created');
+  updateStatus(referralStaffId ? '📨 Sale sent to owner for commission verification' : (referralDistributorId ? '✅ Order created · distributor commission recorded' : '✅ Order created'));
 }
 function renderOrders() {
   const tbody = $('ordersBody');
@@ -7599,11 +7660,26 @@ async function loadDistributorCommissionClaims(){
 function renderDistributorsPanel(){
   const tbody = $('distributorsBody');
   if (!tbody) return;
+  // The owner can now attribute sales to themselves via the "Me (Owner)"
+  // option in New Order, so their own commission tier/earnings need a row
+  // here too — otherwise there'd be no way to see it once they start using it.
+  const selfRow = (userRole === 'owner' && currentUser) ? (() => {
+    const stats = computeDistributorStats(currentUser.id);
+    const selfName = (userProfile && userProfile.display_name) || (currentUser.email ? currentUser.email.split('@')[0] : 'Me');
+    const selfRef = (userProfile && userProfile.distributor_reference) || ('AGT-' + currentUser.id.slice(0,8).toUpperCase());
+    return `<tr style="background:var(--surface-2,#f6fef9);">
+      <td>⭐ ${escapeHtmlSafe(selfName)} <span style="font-size:.68rem;color:var(--text-muted);">(Me)</span></td>
+      <td>${escapeHtmlSafe(selfRef)}</td>
+      <td>${stats.marketingLevel}</td>
+      <td>${stats.businessQuality}</td>
+      <td>${fmt(stats.totalCommission)}</td>
+    </tr>`;
+  })() : '';
   if (!distributorListCache.length) {
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;opacity:.5;padding:14px;">No product distributors added yet.</td></tr>';
+    tbody.innerHTML = selfRow || '<tr><td colspan="5" style="text-align:center;opacity:.5;padding:14px;">No product distributors added yet.</td></tr>';
     return;
   }
-  tbody.innerHTML = distributorListCache.map(d => {
+  tbody.innerHTML = selfRow + distributorListCache.map(d => {
     const stats = computeDistributorStats(d.id);
     return `<tr>
       <td>${escapeHtmlSafe(d.display_name || '(no name)')}</td>

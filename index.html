@@ -2576,9 +2576,10 @@
 
     <div class="om-section" data-owner-order-customer>
       <div class="om-section-title"><i class="business-icon" data-lucide="user-round" aria-hidden="true"></i> Customer</div>
-      <div class="field" style="margin-bottom:0;">
+      <div class="field" style="margin-bottom:4px;">
         <select id="orderCustomer" onchange="onOrderCustomerChange()"></select>
       </div>
+      <small id="orderCustomerHint" style="display:block;color:var(--text-muted);font-size:.72rem;">Select the customer for this order.</small>
     </div>
 
     <div class="om-section" data-staff-order-customer style="display:none;">
@@ -2603,9 +2604,10 @@
       <div data-owner-dist-select-block>
         <div class="field" style="margin-bottom:8px;">
           <label>Product Distributor for this Order <span class="hint">(optional)</span></label>
-          <select id="orderReferralDistributorSelect"><option value="">No distributor</option></select>
+          <select id="orderReferralDistributorSelect" onchange="onOrderDistributorChange()"><option value="">No distributor</option></select>
         </div>
-        <div class="notice" style="margin:0;padding:9px 12px;font-size:.72rem;"><i class="business-icon icon-inline" data-lucide="badge-percent" aria-hidden="true"></i> Picking a distributor adds a commission for them automatically — the rate (6%–12%) is set by their current lifetime sales tier, and only becomes real once this order is delivered.</div>
+        <div class="notice" style="margin:0 0 8px;padding:9px 12px;font-size:.72rem;"><i class="business-icon icon-inline" data-lucide="badge-percent" aria-hidden="true"></i> Picking a distributor adds a commission for them automatically — the rate (6%–12%) is set by their current lifetime sales tier, and only becomes real once this order is delivered.</div>
+        <div class="notice" id="orderDistCommissionPreview" style="display:none;margin:0;padding:9px 12px;font-size:.75rem;background:#eafaf0;border-color:#b7ebc9;"></div>
       </div>
 
       <!-- Distributor role creating their own order: no dropdown to fill in —
