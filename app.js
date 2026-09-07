@@ -8674,6 +8674,8 @@ window.showAppNotification = showAppNotification;
 // bell, owner attendance refresh, smart salary month picker) silently failed with
 // "is not defined" and did nothing when tapped.
 window.selectOrderSize = selectOrderSize;
+window.selectOrderProduct = selectOrderProduct;
+window.renderOrderProductPicker = renderOrderProductPicker;
 window.stepOrderQty = stepOrderQty;
 window.updateOrderTotal = updateOrderTotal;
 window.onOrderCustomerChange = onOrderCustomerChange;
