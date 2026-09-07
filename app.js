@@ -7420,18 +7420,46 @@ async function populateStaffReferralSelectors(){
 
 // ==================== PRODUCT DISTRIBUTOR (PRODUCT AGENT) COMMISSION ====================
 // Distributors are a separate account role (see profiles.role = 'distributor').
-// Commission on a distributor-attributed sale is 6%–12%, computed from three factors:
-//   1) Marketing Level  — auto-calculated from the distributor's lifetime approved sales volume.
-//   2) Business Quality — auto-calculated from their average order size / consistency.
-//   3) Order Volume     — the value of this specific order.
+// Commission on a distributor-attributed sale is a flat rate set entirely by the
+// distributor's lifetime APPROVED sales volume tier (not per-order factors):
+//   Rs. 1 – 100,000      → 6%
+//   Rs. 100,001 – 200,000 → 7%
+//   Rs. 200,001 – 300,000 → 8%
+//   Rs. 300,001 – 400,000 → 9%
+//   Rs. 400,001 – 500,000 → 10%
+//   Rs. 500,001+          → 12%
+// The tier used for a new order is based on the distributor's volume BEFORE that
+// order (i.e. their current standing) — the rate then locks in on that claim even
+// as their lifetime volume keeps climbing afterward.
 // The owner is the one who records the sale and picks the distributor (like the existing
 // staff-referral flow), so no separate owner-verification step is needed — but the
 // commission itself is only real once the order is actually delivered. The claim is
 // created 'pending' at order time and flipped to 'approved' (or 'rejected' if the
 // order is cancelled first) by finalizeDistributorCommissionForOrder(), called from
 // cycleStatus(), confirmDelivery() and confirmBatchDelivery().
-const DISTRIBUTOR_COMMISSION_MIN = 0.06;
-const DISTRIBUTOR_COMMISSION_MAX = 0.12;
+const DISTRIBUTOR_COMMISSION_TIERS = [
+  { max: 100000,   rate: 0.06, label: 'Bronze'   },
+  { max: 200000,   rate: 0.07, label: 'Silver'   },
+  { max: 300000,   rate: 0.08, label: 'Gold'     },
+  { max: 400000,   rate: 0.09, label: 'Platinum' },
+  { max: 500000,   rate: 0.10, label: 'Diamond'  },
+  { max: Infinity, rate: 0.12, label: 'Elite'    },
+];
+const DISTRIBUTOR_COMMISSION_MIN = DISTRIBUTOR_COMMISSION_TIERS[0].rate;
+const DISTRIBUTOR_COMMISSION_MAX = DISTRIBUTOR_COMMISSION_TIERS[DISTRIBUTOR_COMMISSION_TIERS.length - 1].rate;
+
+// Given a lifetime approved-volume figure, returns { index, tier, nextTier, intoTier, remainingToNext }.
+function resolveDistributorTier(totalVolume){
+  const vol = Number(totalVolume) || 0;
+  let idx = DISTRIBUTOR_COMMISSION_TIERS.findIndex(t => vol <= t.max);
+  if (idx === -1) idx = DISTRIBUTOR_COMMISSION_TIERS.length - 1;
+  const tier = DISTRIBUTOR_COMMISSION_TIERS[idx];
+  const nextTier = DISTRIBUTOR_COMMISSION_TIERS[idx + 1] || null;
+  const prevCap = idx === 0 ? 0 : DISTRIBUTOR_COMMISSION_TIERS[idx - 1].max;
+  const intoTier = vol - prevCap;
+  const remainingToNext = nextTier ? Math.max(0, tier.max - vol) : 0;
+  return { index: idx, tier, nextTier, intoTier, remainingToNext };
+}
 
 function computeDistributorStats(distributorId){
   const claims = (window.distributorCommissionClaims || []).filter(c =>
@@ -7441,31 +7469,34 @@ function computeDistributorStats(distributorId){
   const totalCommission = claims.reduce((s,c)=>s+(Number(c.commission_amount)||0),0);
   const salesCount = claims.length;
 
-  let marketingLevel = 'Bronze', levelBonus = 0;
-  if (totalVolume >= 500000) { marketingLevel = 'Platinum'; levelBonus = 0.04; }
-  else if (totalVolume >= 200000) { marketingLevel = 'Gold'; levelBonus = 0.03; }
-  else if (totalVolume >= 50000) { marketingLevel = 'Silver'; levelBonus = 0.015; }
+  const { tier, nextTier, remainingToNext, intoTier } = resolveDistributorTier(totalVolume);
+  const marketingLevel = tier.label;
+  const currentRate = tier.rate;
+  const tierSpan = tier.max === Infinity ? 0 : tier.max - (DISTRIBUTOR_COMMISSION_TIERS[DISTRIBUTOR_COMMISSION_TIERS.indexOf(tier) - 1]?.max || 0);
+  const tierProgressPct = nextTier ? Math.min(100, Math.max(0, tierSpan ? (intoTier / tierSpan) * 100 : 100)) : 100;
 
-  let businessQuality = 'New', qualityBonus = 0;
+  // Kept for backward-compat display only (not used in rate calculation anymore).
+  let businessQuality = 'New';
   if (salesCount >= 3) {
     const avgOrder = totalVolume / salesCount;
-    if (avgOrder >= 15000) { businessQuality = 'Excellent'; qualityBonus = 0.02; }
-    else if (avgOrder >= 8000) { businessQuality = 'Good'; qualityBonus = 0.01; }
-    else { businessQuality = 'Standard'; qualityBonus = 0.005; }
+    if (avgOrder >= 15000) businessQuality = 'Excellent';
+    else if (avgOrder >= 8000) businessQuality = 'Good';
+    else businessQuality = 'Standard';
   }
 
-  return { totalVolume, totalCommission, salesCount, marketingLevel, levelBonus, businessQuality, qualityBonus };
+  return {
+    totalVolume, totalCommission, salesCount, marketingLevel, businessQuality,
+    currentRate, nextTierLabel: nextTier ? nextTier.label : null,
+    nextTierRate: nextTier ? nextTier.rate : null, remainingToNext, tierProgressPct,
+  };
 }
 
+// Flat tier-based rate — the distributor's CURRENT standing (lifetime approved
+// volume before this order) decides the rate for the whole order. orderTotal is
+// accepted for call-site compatibility but no longer affects the rate.
 function computeDistributorCommissionRate(distributorId, orderTotal){
   const stats = computeDistributorStats(distributorId);
-  const ot = Number(orderTotal) || 0;
-  let orderBonus = 0;
-  if (ot >= 30000) orderBonus = 0.015;
-  else if (ot >= 15000) orderBonus = 0.01;
-  else if (ot >= 5000) orderBonus = 0.005;
-  const rate = DISTRIBUTOR_COMMISSION_MIN + stats.levelBonus + stats.qualityBonus + orderBonus;
-  return Math.min(DISTRIBUTOR_COMMISSION_MAX, Math.max(DISTRIBUTOR_COMMISSION_MIN, rate));
+  return stats.currentRate;
 }
 
 // Called once an order's fate is known — delivered (commission becomes real)
@@ -7527,17 +7558,36 @@ function renderDistributorsPanel(){
   }).join('');
 }
 
+function renderDistributorTierProgress(stats, elId){
+  const el = $(elId);
+  if (!el) return;
+  if (!stats.nextTierLabel) {
+    el.innerHTML = `<div class="notice" style="margin:10px 0 0;font-size:.75rem;color:#15803d;"><i class="business-icon icon-inline" data-lucide="trophy"></i> You've reached <b>Elite</b> — the top commission tier (12%). Every future approved sale earns the maximum rate.</div>`;
+  } else {
+    el.innerHTML = `
+      <div style="margin-top:12px;">
+        <div style="display:flex;justify-content:space-between;font-size:.72rem;color:var(--text-muted);margin-bottom:4px;">
+          <span><b>${escapeHtmlSafe(stats.marketingLevel)}</b> — ${(stats.currentRate*100).toFixed(0)}% now</span>
+          <span>Rs. ${fmt(stats.remainingToNext)} to <b>${escapeHtmlSafe(stats.nextTierLabel)}</b> (${(stats.nextTierRate*100).toFixed(0)}%)</span>
+        </div>
+        <div style="background:var(--surface-2,#eee);border-radius:99px;height:8px;overflow:hidden;">
+          <div style="background:var(--accent-green,#1a9c5b);height:100%;border-radius:99px;width:${stats.tierProgressPct}%;transition:width .4s ease;"></div>
+        </div>
+      </div>`;
+  }
+  if (window.lucide) lucide.createIcons({ attrs: { 'stroke-width': 1.9, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' } });
+}
+
 function renderProductAgentPage(){
   if (userRole !== 'distributor' || !currentUser) return;
   const stats = computeDistributorStats(currentUser.id);
-  const currentBandMin = ((DISTRIBUTOR_COMMISSION_MIN + stats.levelBonus + stats.qualityBonus) * 100).toFixed(1);
-  const currentBandMax = (DISTRIBUTOR_COMMISSION_MAX * 100).toFixed(0);
   if ($('distMarketingLevel')) $('distMarketingLevel').textContent = stats.marketingLevel;
   if ($('distBusinessQuality')) $('distBusinessQuality').textContent = stats.businessQuality;
-  if ($('distCurrentRateRange')) $('distCurrentRateRange').textContent = currentBandMin + '% – ' + currentBandMax + '%';
+  if ($('distCurrentRateRange')) $('distCurrentRateRange').textContent = (stats.currentRate * 100).toFixed(0) + '%';
   if ($('distTotalVolume')) $('distTotalVolume').textContent = fmt(stats.totalVolume);
   if ($('distTotalCommission')) $('distTotalCommission').textContent = fmt(stats.totalCommission);
   if ($('distSalesCount')) $('distSalesCount').textContent = stats.salesCount;
+  renderDistributorTierProgress(stats, 'distTierProgress');
   const body = $('distCommissionHistoryBody');
   if (body) {
     const claims = window.distributorCommissionClaims || [];
@@ -7563,12 +7613,11 @@ function renderDistributorHome() {
   if ($('distHomeName')) $('distHomeName').textContent = name;
 
   const stats = computeDistributorStats(currentUser.id);
-  const currentBandMin = ((DISTRIBUTOR_COMMISSION_MIN + stats.levelBonus + stats.qualityBonus) * 100).toFixed(1);
-  const currentBandMax = (DISTRIBUTOR_COMMISSION_MAX * 100).toFixed(0);
   if ($('distHomeLevel')) $('distHomeLevel').textContent = stats.marketingLevel;
-  if ($('distHomeRate')) $('distHomeRate').textContent = currentBandMin + '% – ' + currentBandMax + '%';
+  if ($('distHomeRate')) $('distHomeRate').textContent = (stats.currentRate * 100).toFixed(0) + '%';
   if ($('distHomeSalesCount')) $('distHomeSalesCount').textContent = stats.salesCount;
   if ($('distHomeCommission')) $('distHomeCommission').textContent = fmt(stats.totalCommission);
+  renderDistributorTierProgress(stats, 'distHomeTierProgress');
   hideSkeletons('distributor-home');
 
   const body = $('distHomeRecentBody');

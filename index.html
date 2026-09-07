@@ -2216,10 +2216,11 @@
       <p style="margin:0;color:var(--text-muted);">Your standing, sales and commission at a glance.</p>
       <div class="staff-suite-grid">
         <div class="staff-mini"><div class="mini-icon"><i class="business-icon" data-lucide="gauge"></i></div><strong id="distHomeLevel">Bronze</strong><span>Marketing level</span></div>
-        <div class="staff-mini"><div class="mini-icon"><i class="business-icon" data-lucide="badge-percent"></i></div><strong id="distHomeRate">6.0% – 12%</strong><span>Your rate band</span></div>
+        <div class="staff-mini"><div class="mini-icon"><i class="business-icon" data-lucide="badge-percent"></i></div><strong id="distHomeRate">6%</strong><span>Your current rate</span></div>
         <div class="staff-mini"><div class="mini-icon"><i class="business-icon" data-lucide="shopping-bag"></i></div><strong id="distHomeSalesCount">0</strong><span>Sales attributed</span></div>
         <div class="staff-mini"><div class="mini-icon"><i class="business-icon" data-lucide="wallet-cards"></i></div><strong id="distHomeCommission">Rs. 0</strong><span>Commission earned</span></div>
       </div>
+      <div id="distHomeTierProgress"></div>
     </div>
 
     <div class="card" style="margin-top:16px;">
@@ -2245,18 +2246,32 @@
   <!-- ============ MY INCOME TAB (distributor-only) — Commission dashboard, split out from Product Agent ============ -->
   <section id="my-income" class="tab-panel" style="display:none;" role="tabpanel">
     <div class="mobile-greeting no-print" style="padding:0 0 8px;">
-      <div><span class="eyebrow">MY INCOME</span><h2><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="badge-percent" aria-hidden="true"></i></span><span>My Income (Commission)</span></h2><p class="pro-subtitle gold">Your commission on product sales attributed to you — 6%–12%, calculated automatically.</p></div>
+      <div><span class="eyebrow">MY INCOME</span><h2><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="badge-percent" aria-hidden="true"></i></span><span>My Income (Commission)</span></h2><p class="pro-subtitle gold">Your commission on product sales attributed to you — 6%–12%, calculated automatically from your lifetime sales volume.</p></div>
     </div>
 
     <div class="card">
       <h2><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="gauge" aria-hidden="true"></i></span><span>Your Standing</span></h2>
-      <p class="pro-subtitle gold">These are calculated automatically from your approved sales — they are not set manually.</p>
+      <p class="pro-subtitle gold">Calculated automatically from your approved sales — not set manually.</p>
       <div class="stat-grid">
         <div class="stat accent"><div class="k">Marketing Level</div><div class="v" id="distMarketingLevel">Bronze</div></div>
         <div class="stat"><div class="k">Business Quality</div><div class="v" id="distBusinessQuality">New</div></div>
-        <div class="stat good"><div class="k">Your Current Rate Band</div><div class="v" id="distCurrentRateRange">6.0% – 12%</div></div>
+        <div class="stat good"><div class="k">Your Current Rate</div><div class="v" id="distCurrentRateRange">6%</div></div>
       </div>
-      <div class="notice" style="margin-top:10px;margin-bottom:0;font-size:.75rem;"><i class="business-icon icon-inline" data-lucide="info"></i> Marketing Level rises with your total sales volume (Silver ≥ Rs. 50,000, Gold ≥ Rs. 200,000, Platinum ≥ Rs. 500,000). Business Quality rises with your average order size once you have 3+ sales. The exact rate for each order also depends on that order's own value.</div>
+      <div id="distTierProgress"></div>
+      <div class="table-wrap" style="margin-top:14px;">
+        <table>
+          <thead><tr><th>Tier</th><th>Lifetime Sales Volume</th><th>Rate</th></tr></thead>
+          <tbody>
+            <tr><td>Bronze</td><td>Rs. 1 – 100,000</td><td>6%</td></tr>
+            <tr><td>Silver</td><td>Rs. 100,001 – 200,000</td><td>7%</td></tr>
+            <tr><td>Gold</td><td>Rs. 200,001 – 300,000</td><td>8%</td></tr>
+            <tr><td>Platinum</td><td>Rs. 300,001 – 400,000</td><td>9%</td></tr>
+            <tr><td>Diamond</td><td>Rs. 400,001 – 500,000</td><td>10%</td></tr>
+            <tr><td>Elite</td><td>Rs. 500,001+</td><td>12%</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="notice" style="margin-top:10px;margin-bottom:0;font-size:.75rem;"><i class="business-icon icon-inline" data-lucide="info"></i> The rate for each new sale locks in based on your lifetime approved-sales volume at the time that sale is delivered. As your total grows past each threshold, every sale after that point earns the higher rate.</div>
     </div>
 
     <div class="card" style="margin-top:16px;">
