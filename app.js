@@ -220,7 +220,7 @@ const DRIVER_ALLOWED_TABS = ['driver-home','my-deliveries','my-earnings','my-rev
 // 'product-agent' was renamed to 'my-income' (a dedicated Commission/Income
 // page) and 'distributor-home' was added as a real overview page, separate
 // from it — distributors land on Home first, then tap into My Income.
-const DISTRIBUTOR_ALLOWED_TABS = ['distributor-home','my-income','orders','expenses','products','profile'];
+const DISTRIBUTOR_ALLOWED_TABS = ['distributor-home','my-income','commission-summary','orders','expenses','products','profile'];
 
 // ---- Bottom/top nav bar visibility — exactly 5 tabs per role, no "More" ----
 // These are separate from the *_ALLOWED_TABS above (which still govern what
@@ -7808,6 +7808,183 @@ function renderProductAgentPage(){
 }
 window.renderProductAgentPage = renderProductAgentPage;
 
+// ==================== DISTRIBUTOR: COMMISSION EARNED SUMMARY (advanced report) ====================
+// A dedicated, print/export-friendly analytics page for a distributor's own
+// commission history — month-by-month trend, status mix, payout history and
+// a "best month" callout. Reuses the same distributorCommissionClaims cache
+// already loaded for Home/My Income, so opening this tab needs no extra fetch
+// beyond the usual loadDistributorCommissionClaims() refresh.
+let distCommTrendChart = null, distCommStatusChart = null;
+
+function distCommMonthKey(dateStr){
+  const d = new Date(dateStr || Date.now());
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+}
+function distCommMonthLabel(key){
+  const [y,m] = key.split('-').map(Number);
+  return new Date(y, m-1, 1).toLocaleDateString(undefined, { month: 'short', year: 'numeric' });
+}
+function distCommMonthShortLabel(key){
+  const [y,m] = key.split('-').map(Number);
+  return new Date(y, m-1, 1).toLocaleDateString(undefined, { month: 'short' }) + " '" + String(y).slice(-2);
+}
+
+function renderDistCommissionSummary(){
+  if (userRole !== 'distributor' || !currentUser) return;
+  const allClaims = window.distributorCommissionClaims || [];
+  const earned = allClaims.filter(c => c.status === 'approved');
+  const stats = computeDistributorStats(currentUser.id);
+  const colors = (typeof getChartColors === 'function') ? getChartColors() : { text:'#334155', grid:'rgba(0,0,0,.08)' };
+
+  // ---- Group EARNED claims into calendar-month buckets (all-time) ----
+  const buckets = {}; // key -> { count, volume, commission, paid, unpaid }
+  earned.forEach(c => {
+    const key = distCommMonthKey(c.submitted_at);
+    if (!buckets[key]) buckets[key] = { count:0, volume:0, commission:0, paid:0, unpaid:0 };
+    const b = buckets[key];
+    b.count++;
+    b.volume += Number(c.order_total)||0;
+    const amt = Number(c.commission_amount)||0;
+    b.commission += amt;
+    if ((c.payout_status||'unpaid') === 'paid') b.paid += amt; else b.unpaid += amt;
+  });
+  const allKeys = Object.keys(buckets).sort(); // chronological, oldest first
+
+  // ---- This month vs last month (for the growth indicator) ----
+  const now = new Date();
+  const thisKey = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
+  const lastMonthDate = new Date(now.getFullYear(), now.getMonth()-1, 1);
+  const lastKey = lastMonthDate.getFullYear() + '-' + String(lastMonthDate.getMonth()+1).padStart(2,'0');
+  const thisMonthCommission = buckets[thisKey]?.commission || 0;
+  const lastMonthCommission = buckets[lastKey]?.commission || 0;
+  let growthText = '—', growthGood = true;
+  if (lastMonthCommission > 0) {
+    const pct = ((thisMonthCommission - lastMonthCommission) / lastMonthCommission) * 100;
+    growthGood = pct >= 0;
+    growthText = (pct >= 0 ? '▲ ' : '▼ ') + Math.abs(pct).toFixed(1) + '% vs last month';
+  } else if (thisMonthCommission > 0) {
+    growthText = '✨ First earnings this month'; growthGood = true;
+  } else {
+    growthText = 'No earnings yet this month'; growthGood = false;
+  }
+
+  // ---- Best month, all-time ----
+  let bestKey = null, bestAmt = -1;
+  allKeys.forEach(k => { if (buckets[k].commission > bestAmt) { bestAmt = buckets[k].commission; bestKey = k; } });
+
+  // ---- Populate hero + stat grid ----
+  if ($('commSummaryPeriod')) $('commSummaryPeriod').textContent = now.toLocaleDateString(undefined,{month:'long',year:'numeric'});
+  if ($('commSummaryThisMonth')) $('commSummaryThisMonth').textContent = fmt(thisMonthCommission);
+  if ($('commSummaryGrowth')) { $('commSummaryGrowth').textContent = growthText; $('commSummaryGrowth').style.color = growthGood ? '#15803d' : '#b91c1c'; }
+  if ($('commSummaryLifetime')) $('commSummaryLifetime').textContent = fmt(stats.totalCommission);
+  if ($('commSummaryUnpaid')) $('commSummaryUnpaid').textContent = fmt(stats.totalUnpaid);
+  if ($('commSummaryPaid')) $('commSummaryPaid').textContent = fmt(stats.totalPaid);
+  if ($('commSummaryAvgPerSale')) $('commSummaryAvgPerSale').textContent = fmt(stats.salesCount ? Math.round(stats.totalCommission/stats.salesCount) : 0);
+  if ($('commSummarySalesCount')) $('commSummarySalesCount').textContent = stats.salesCount;
+  if ($('commSummaryBestMonth')) $('commSummaryBestMonth').textContent = bestKey ? distCommMonthLabel(bestKey) : '—';
+  if ($('commSummaryBestMonthAmt')) $('commSummaryBestMonthAmt').textContent = bestKey ? ('Rs. ' + fmt(bestAmt) + ' earned') : 'No earnings recorded yet';
+  if ($('commSummaryTierLabel')) $('commSummaryTierLabel').textContent = stats.marketingLevel + ' — ' + (stats.currentRate*100).toFixed(0) + '%';
+  renderDistributorTierProgress(stats, 'commSummaryTierProgress');
+
+  // ---- Monthly trend chart: last 12 calendar months, zero-filled ----
+  const last12Keys = [];
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth()-i, 1);
+    last12Keys.push(d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0'));
+  }
+  const trendCanvas = $('distCommTrendChart');
+  if (trendCanvas && window.Chart) {
+    const data = {
+      labels: last12Keys.map(k => distCommMonthShortLabel(k)),
+      datasets: [{
+        label: 'Commission Earned',
+        data: last12Keys.map(k => buckets[k]?.commission || 0),
+        backgroundColor: last12Keys.map(k => k === thisKey ? '#d4af37' : 'rgba(16,185,129,.65)'),
+        borderRadius: 6, maxBarThickness: 34
+      }]
+    };
+    const opts = {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: { x: { ticks: { color: colors.text, maxRotation: 0 }, grid: { display: false } }, y: { ticks: { color: colors.text }, grid: { color: colors.grid } } }
+    };
+    if (distCommTrendChart) { distCommTrendChart.data = data; distCommTrendChart.options = opts; distCommTrendChart.update(); }
+    else distCommTrendChart = new Chart(trendCanvas.getContext('2d'), { type: 'bar', data, options: opts });
+  }
+
+  // ---- Status mix donut: all-time claim counts by status ----
+  const statusCanvas = $('distCommStatusChart');
+  if (statusCanvas && window.Chart) {
+    const pendingCount = allClaims.filter(c => c.status === 'pending').length;
+    const approvedCount = earned.length;
+    const rejectedCount = allClaims.filter(c => c.status === 'rejected').length;
+    const data = {
+      labels: ['Earned', 'Pending Delivery', 'Cancelled'],
+      datasets: [{ data: [approvedCount, pendingCount, rejectedCount], backgroundColor: ['#10b981','#f59e0b','#ef4444'], borderWidth: 0, hoverOffset: 6 }]
+    };
+    const opts = { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: colors.text, boxWidth: 12 } } } };
+    if (distCommStatusChart) { distCommStatusChart.data = data; distCommStatusChart.update(); }
+    else distCommStatusChart = new Chart(statusCanvas.getContext('2d'), { type: 'doughnut', data, options: opts });
+  }
+
+  // ---- Monthly breakdown table: most recent first ----
+  const tbody = $('commSummaryMonthlyBody');
+  if (tbody) {
+    const rows = allKeys.slice().reverse();
+    tbody.innerHTML = rows.map(k => {
+      const b = buckets[k];
+      return `<tr${k===thisKey ? ' style="background:var(--surface-2,#f6fef9);"' : ''}>
+        <td><strong>${distCommMonthLabel(k)}</strong></td>
+        <td>${b.count}</td>
+        <td>${fmt(b.volume)}</td>
+        <td>${fmt(b.commission)}</td>
+        <td>${fmt(b.paid)}</td>
+        <td>${b.unpaid > 0 ? `<span class="status-pill pending">${fmt(b.unpaid)}</span>` : fmt(0)}</td>
+      </tr>`;
+    }).join('') || '<tr><td colspan="6" style="text-align:center;opacity:.5;padding:14px;">No commission earned yet.</td></tr>';
+  }
+
+  // ---- Recent payouts: last 8 claims the owner has marked paid ----
+  const payoutBody = $('commSummaryPayoutsBody');
+  if (payoutBody) {
+    const paidClaims = earned.filter(c => (c.payout_status||'unpaid') === 'paid' && c.paid_at)
+      .sort((a,b) => new Date(b.paid_at) - new Date(a.paid_at)).slice(0, 8);
+    payoutBody.innerHTML = paidClaims.map(c => `<tr>
+        <td>${new Date(c.paid_at).toLocaleDateString()}</td>
+        <td>${escapeHtmlSafe(c.order_ref_no || '-')}</td>
+        <td>${fmt(Number(c.commission_amount)||0)}</td>
+        <td>${escapeHtmlSafe(c.paid_note || '-')}</td>
+      </tr>`).join('') || '<tr><td colspan="4" style="text-align:center;opacity:.5;padding:14px;">No payouts recorded yet.</td></tr>';
+  }
+
+  if (window.lucide) lucide.createIcons({ attrs: { 'stroke-width': 1.9, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' } });
+}
+window.renderDistCommissionSummary = renderDistCommissionSummary;
+
+function exportDistCommissionSummaryCSV(){
+  const allClaims = window.distributorCommissionClaims || [];
+  const earned = allClaims.filter(c => c.status === 'approved');
+  const buckets = {};
+  earned.forEach(c => {
+    const key = distCommMonthKey(c.submitted_at);
+    if (!buckets[key]) buckets[key] = { count:0, volume:0, commission:0, paid:0, unpaid:0 };
+    const b = buckets[key];
+    b.count++; b.volume += Number(c.order_total)||0;
+    const amt = Number(c.commission_amount)||0; b.commission += amt;
+    if ((c.payout_status||'unpaid') === 'paid') b.paid += amt; else b.unpaid += amt;
+  });
+  const rows = [['Month','Sales Count','Order Volume','Commission Earned','Paid','Unpaid']];
+  Object.keys(buckets).sort().forEach(k => {
+    const b = buckets[k];
+    rows.push([distCommMonthLabel(k), b.count, b.volume, b.commission, b.paid, b.unpaid]);
+  });
+  const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type:'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = 'my-commission-summary.csv'; document.body.appendChild(a); a.click(); a.remove();
+}
+window.exportDistCommissionSummaryCSV = exportDistCommissionSummaryCSV;
+
 // ==================== DISTRIBUTOR: HOME (Product Agent overview, separate from My Income) ====================
 // Lightweight dashboard a distributor lands on first. Reuses the same stats
 // and claims already loaded for My Income — no extra fetch needed.
@@ -8923,7 +9100,7 @@ document.querySelectorAll('[data-ribbon="true"]').forEach(btn => {
 const OWNER_ONLY_TABS = ['dashboard', 'my-staff', 'delivery', 'calculator', 'production', 'history', 'data', 'monthly-summary', 'income', 'analytics', 'sales'];
 const STAFF_ONLY_TABS = ['staff-home', 'daily-pay', 'work-update', 'attendance', 'advance', 'my-commission', 'my-tasks', 'announcements'];
 const DRIVER_ONLY_TABS = ['driver-home','my-deliveries','my-earnings','my-reviews'];
-const DISTRIBUTOR_ONLY_TABS = ['distributor-home','my-income'];
+const DISTRIBUTOR_ONLY_TABS = ['distributor-home','my-income','commission-summary'];
 
 let staffWorkspaceLoadSeq = 0;
 async function refreshStaffWorkspaceData(tabId){
@@ -8961,7 +9138,7 @@ function activateAppTab(tabId){
     return;
   }
   if (userRole === 'distributor' && !DISTRIBUTOR_ALLOWED_TABS.includes(tabId)) {
-    alert('🔒 Distributor access: use your Home, My Income, Orders, Expenses, Products and Profile pages.');
+    alert('🔒 Distributor access: use your Home, My Income, Commission Summary, Orders, Expenses, Products and Profile pages.');
     return;
   }
   if (OWNER_ONLY_TABS.includes(tabId) && userRole === 'staff') {
@@ -9016,6 +9193,7 @@ function activateAppTab(tabId){
   if (tabId === 'products') { loadProductsFromCloud().then(renderProducts); }
   if (tabId === 'distributor-home') { showSkeletons('distributor-home'); loadDistributorCommissionClaims().then(renderDistributorHome); }
   if (tabId === 'my-income') { loadDistributorCommissionClaims().then(renderProductAgentPage); }
+  if (tabId === 'commission-summary') { loadDistributorCommissionClaims().then(renderDistCommissionSummary); }
   if (tabId === 'sales') { loadSalesFromCloud().then(renderSales); if (userRole === 'owner') { loadStaffList().then(() => initDistributorActivityPanel()); } }
   if (tabId === 'my-salary') {
     if (userRole === 'owner') {

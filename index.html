@@ -2373,6 +2373,7 @@
       <h2><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="zap" aria-hidden="true"></i></span><span>Quick Actions</span></h2>
       <div class="staff-launch-grid">
         <button type="button" class="staff-launch primary" onclick="activateAppTab('my-income')"><span class="launch-icon"><i class="business-icon" data-lucide="badge-percent"></i></span><span><b>My Income</b><small>Standing, earnings and commission history</small></span><em>INCOME</em></button>
+        <button type="button" class="staff-launch gold" onclick="activateAppTab('commission-summary')"><span class="launch-icon"><i class="business-icon" data-lucide="file-chart-column"></i></span><span><b>Commission Summary</b><small>Monthly trend, paid vs unpaid, best month</small></span><em>REPORT</em></button>
         <button type="button" class="staff-launch gold" onclick="activateAppTab('products')"><span class="launch-icon"><i class="business-icon" data-lucide="package"></i></span><span><b>Products</b><small>Browse the product catalogue</small></span><em>CATALOG</em></button>
         <button type="button" class="staff-launch" onclick="activateAppTab('orders')"><span class="launch-icon"><i class="business-icon" data-lucide="shopping-bag"></i></span><span><b>Orders</b><small>See orders attributed to you</small></span><em>ORDERS</em></button>
       </div>
@@ -2393,6 +2394,9 @@
   <section id="my-income" class="tab-panel" style="display:none;" role="tabpanel">
     <div class="mobile-greeting no-print" style="padding:0 0 8px;">
       <div><span class="eyebrow">MY INCOME</span><h2><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="badge-percent" aria-hidden="true"></i></span><span>My Income (Commission)</span></h2><p class="pro-subtitle gold">Your commission on product sales attributed to you — 6%–12%, calculated automatically from your lifetime sales volume.</p></div>
+    </div>
+    <div class="btn-row no-print" style="margin:0 0 12px;">
+      <button class="btn btn-primary" onclick="activateAppTab('commission-summary')"><i class="business-icon icon-inline" data-lucide="file-chart-column" aria-hidden="true"></i> View Full Commission Summary</button>
     </div>
 
     <div class="card">
@@ -2436,6 +2440,82 @@
         </table>
       </div>
       <div class="notice" style="margin-top:10px;margin-bottom:0;font-size:.75rem;"><i class="business-icon icon-inline" data-lucide="info"></i> "Payout" shows whether the owner has actually paid out an earned commission yet — this is separate from the sale being "Earned" (which just means the order was delivered).</div>
+    </div>
+  </section>
+
+  <!-- ============ COMMISSION EARNED SUMMARY TAB (distributor-only, advanced report) ============ -->
+  <section id="commission-summary" class="tab-panel" style="display:none;" role="tabpanel">
+    <div class="mobile-greeting no-print" style="padding:0 0 8px;">
+      <div><span class="eyebrow">COMMISSION REPORT</span><h2><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="file-chart-column" aria-hidden="true"></i></span><span>Commission Earned Summary</span></h2><p class="pro-subtitle gold">A full breakdown of everything you've earned — month by month, paid vs unpaid, all in one report.</p></div>
+      <div class="profile-dot"><i class="business-icon" data-lucide="file-chart-column" aria-hidden="true"></i></div>
+    </div>
+
+    <div class="monthly-summary-hero">
+      <div class="monthly-summary-period">
+        <span class="eyebrow">THIS MONTH</span>
+        <h2 id="commSummaryPeriod">—</h2>
+        <p style="font-size:1.4rem;font-weight:800;margin:2px 0 0;">Rs. <span id="commSummaryThisMonth">0</span></p>
+        <div class="monthly-summary-live"><span class="live-dot"></span><span id="commSummaryGrowth">—</span></div>
+      </div>
+      <div class="monthly-summary-mini">
+        <span>Lifetime Commission Earned</span>
+        <strong>Rs. <span id="commSummaryLifetime">0</span></strong>
+        <span style="margin-top:5px;text-transform:none;letter-spacing:0;font-size:.62rem;font-weight:600;">Across every approved sale, all-time</span>
+      </div>
+    </div>
+
+    <div class="monthly-summary-grid">
+      <div class="monthly-stat gold"><div class="ms-icon"><i class="business-icon" data-lucide="hand-coins" aria-hidden="true"></i></div><div class="ms-label">Unpaid (Owed to Me)</div><div class="ms-value" id="commSummaryUnpaid">Rs. 0</div><div class="ms-sub">Earned, not yet paid out</div></div>
+      <div class="monthly-stat"><div class="ms-icon"><i class="business-icon" data-lucide="circle-check" aria-hidden="true"></i></div><div class="ms-label">Already Paid</div><div class="ms-value" id="commSummaryPaid">Rs. 0</div><div class="ms-sub">Paid out by the owner so far</div></div>
+      <div class="monthly-stat blue"><div class="ms-icon"><i class="business-icon" data-lucide="calculator" aria-hidden="true"></i></div><div class="ms-label">Avg Commission / Sale</div><div class="ms-value" id="commSummaryAvgPerSale">Rs. 0</div><div class="ms-sub"><span id="commSummarySalesCount">0</span> sales, lifetime</div></div>
+      <div class="monthly-stat red"><div class="ms-icon"><i class="business-icon" data-lucide="star" aria-hidden="true"></i></div><div class="ms-label">Best Month</div><div class="ms-value" id="commSummaryBestMonth">—</div><div class="ms-sub" id="commSummaryBestMonthAmt">No earnings recorded yet</div></div>
+    </div>
+
+    <div class="card">
+      <h2><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="gauge" aria-hidden="true"></i></span><span>Current Standing</span></h2>
+      <p class="pro-subtitle gold" id="commSummaryTierLabel">Bronze — 6%</p>
+      <div id="commSummaryTierProgress"></div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <h2><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="trending-up" aria-hidden="true"></i></span><span>Commission Trend</span></h2>
+        <p class="pro-subtitle green">Last 12 months — this month highlighted in gold.</p>
+        <div class="chart-wrap"><canvas id="distCommTrendChart"></canvas></div>
+      </div>
+      <div class="card">
+        <h2><span class="pro-title-icon blue" aria-hidden="true"><i class="business-icon" data-lucide="pie-chart" aria-hidden="true"></i></span><span>Claim Status Mix</span></h2>
+        <p class="pro-subtitle blue">All sales ever attributed to you, all-time.</p>
+        <div class="chart-wrap" style="height:220px;"><canvas id="distCommStatusChart"></canvas></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="btn-row no-print" style="justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:4px;">
+        <h2 style="margin:0;"><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="calendar-range" aria-hidden="true"></i></span><span>Monthly Breakdown</span></h2>
+        <div class="btn-row" style="gap:8px;">
+          <button class="btn btn-sm" onclick="exportDistCommissionSummaryCSV()">📊 Export CSV</button>
+          <button class="btn btn-sm" onclick="window.print()">🖨️ Print Report</button>
+        </div>
+      </div>
+      <p class="pro-subtitle gold">Every month you've earned commission, most recent first.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Month</th><th>Sales</th><th>Order Volume</th><th>Commission Earned</th><th>Paid</th><th>Unpaid</th></tr></thead>
+          <tbody id="commSummaryMonthlyBody"><tr><td colspan="6" style="text-align:center;opacity:.5;padding:14px;">No commission earned yet.</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="receipt-text" aria-hidden="true"></i></span><span>Recent Payouts</span></h2>
+      <p class="pro-subtitle green">The last payments the owner has marked as paid.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Date Paid</th><th>Order Ref</th><th>Amount</th><th>Note</th></tr></thead>
+          <tbody id="commSummaryPayoutsBody"><tr><td colspan="4" style="text-align:center;opacity:.5;padding:14px;">No payouts recorded yet.</td></tr></tbody>
+        </table>
+      </div>
     </div>
   </section>
 
