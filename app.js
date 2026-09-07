@@ -8572,3 +8572,140 @@ if ('serviceWorker' in navigator) {
   });
   window.addEventListener('offline', () => window.markDrybeaSyncOffline());
 })();
+
+/* ================================================================
+   BOTTOM NAV — PROFESSIONAL 5-BUTTON MOBILE REDESIGN + "MORE" SHEET
+   ------------------------------------------------------------------
+   Purely additive. Does not change any existing tab, onclick, role
+   check, or the activateAppTab()/applyRoleUI() logic already defined
+   above — it only:
+     1) Tags up to 5 role-appropriate .tab-btn elements with
+        .nav-primary so the CSS in index.html can show just those
+        5 in the fixed bottom bar on mobile.
+     2) Mirrors every OTHER currently-visible nav tab into the
+        #navMoreSheet as a clickable tile that simply calls the
+        real activateAppTab() — nothing is duplicated or moved.
+     3) Wraps applyRoleUI() and activateAppTab() (after they're
+        fully defined above) so the bottom nav + sheet content stay
+        in sync automatically whenever the role or active tab
+        changes, without editing either function's own body.
+   ================================================================ */
+(function(){
+  var NAV_PRIMARY_BY_ROLE = {
+    owner:       ['dashboard','sales','orders','income','profile'],
+    staff:       ['staff-home','orders','my-salary','expenses','profile'],
+    driver:      ['my-deliveries','my-earnings','my-reviews','products','profile'],
+    distributor: ['product-agent','profile']
+  };
+
+  function currentPrimaryList(){
+    var role = (typeof userRole !== 'undefined' && userRole) ? userRole : 'owner';
+    return NAV_PRIMARY_BY_ROLE[role] || NAV_PRIMARY_BY_ROLE.owner;
+  }
+
+  function openMoreSheet(){
+    var overlay = document.getElementById('navMoreOverlay');
+    if (overlay) overlay.classList.add('open');
+  }
+  function closeMoreSheet(){
+    var overlay = document.getElementById('navMoreOverlay');
+    if (overlay) overlay.classList.remove('open');
+  }
+  window.closeNavMoreSheet = closeMoreSheet;
+
+  function refreshBottomNav(){
+    var navRoot = document.querySelector('nav.app-nav');
+    var moreList = document.getElementById('navMoreList');
+    var moreBtn = document.getElementById('navMoreBtn');
+    if (!navRoot || !moreList || !moreBtn) return;
+
+    var allTabBtns = Array.prototype.slice.call(navRoot.querySelectorAll('.tab-btn'));
+    var primary = currentPrimaryList();
+
+    moreList.innerHTML = '';
+    var secondaryCount = 0;
+    var activeIsSecondary = false;
+
+    allTabBtns.forEach(function(btn){
+      btn.classList.remove('nav-primary');
+      var tab = btn.getAttribute('data-tab');
+      // Respect whatever role-visibility app.js already applied (display:none
+      // for tabs this role can't use) — a nav tab that's hidden for this role
+      // should not appear as primary OR inside the More sheet.
+      if (window.getComputedStyle(btn).display === 'none') return;
+
+      if (primary.indexOf(tab) !== -1) {
+        btn.classList.add('nav-primary');
+        return;
+      }
+      secondaryCount++;
+      var tile = document.createElement('button');
+      tile.type = 'button';
+      tile.className = 'nms-item';
+      tile.innerHTML = btn.innerHTML;
+      tile.addEventListener('click', function(){
+        closeMoreSheet();
+        if (typeof activateAppTab === 'function') activateAppTab(tab);
+      });
+      moreList.appendChild(tile);
+      if (btn.classList.contains('active')) activeIsSecondary = true;
+    });
+
+    moreBtn.classList.toggle('has-active', activeIsSecondary);
+    moreBtn.style.visibility = secondaryCount > 0 ? 'visible' : 'hidden';
+    if (window.lucide) lucide.createIcons({ attrs: { 'stroke-width': 1.9, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' } });
+  }
+  window.refreshBottomNav = refreshBottomNav;
+
+  function wireStaticControls(){
+    var moreBtn = document.getElementById('navMoreBtn');
+    var overlay = document.getElementById('navMoreOverlay');
+    var closeBtn = document.getElementById('navMoreCloseBtn');
+    if (moreBtn && !moreBtn.__drybeaBound) { moreBtn.addEventListener('click', openMoreSheet); moreBtn.__drybeaBound = true; }
+    if (overlay && !overlay.__drybeaBound) {
+      overlay.addEventListener('click', function(e){ if (e.target === overlay) closeMoreSheet(); });
+      overlay.__drybeaBound = true;
+    }
+    if (closeBtn && !closeBtn.__drybeaBound) { closeBtn.addEventListener('click', closeMoreSheet); closeBtn.__drybeaBound = true; }
+  }
+
+  // Wrap applyRoleUI / activateAppTab once both are defined (they're plain
+  // function declarations above, hoisted to this same script's top-level
+  // scope, so no window.* prefix is required to read or reassign them).
+  function wrapWhenReady(){
+    if (typeof applyRoleUI === 'function' && !applyRoleUI.__drybeaNavWrapped) {
+      var origApplyRoleUI = applyRoleUI;
+      var wrappedApplyRoleUI = function(){
+        var r = origApplyRoleUI.apply(this, arguments);
+        refreshBottomNav();
+        return r;
+      };
+      wrappedApplyRoleUI.__drybeaNavWrapped = true;
+      applyRoleUI = wrappedApplyRoleUI;
+      window.applyRoleUI = wrappedApplyRoleUI;
+    }
+    if (typeof activateAppTab === 'function' && !activateAppTab.__drybeaNavWrapped) {
+      var origActivateAppTab = activateAppTab;
+      var wrappedActivateAppTab = function(tabId){
+        var r = origActivateAppTab.apply(this, arguments);
+        closeMoreSheet();
+        refreshBottomNav();
+        return r;
+      };
+      wrappedActivateAppTab.__drybeaNavWrapped = true;
+      activateAppTab = wrappedActivateAppTab;
+      window.activateAppTab = wrappedActivateAppTab;
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', function(){
+    wireStaticControls();
+    wrapWhenReady();
+    setTimeout(refreshBottomNav, 300);
+  });
+  setTimeout(wrapWhenReady, 0);
+  setTimeout(wrapWhenReady, 500);
+  setTimeout(refreshBottomNav, 800);
+
+  window.addEventListener('resize', refreshBottomNav);
+})();

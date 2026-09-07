@@ -271,6 +271,124 @@
 #setPinModal #setPinMap, #ownerPickupModal #ownerPickupMap{
   box-shadow:0 1px 2px rgba(15,23,42,.05), 0 12px 26px -12px rgba(15,23,42,.25);
 }
+
+/* ============================================================
+   BOTTOM NAVIGATION — PROFESSIONAL 5-BUTTON MOBILE REDESIGN
+   ------------------------------------------------------------
+   Design + behavior layer only. Every original .tab-btn button
+   (its id-free structure, data-tab attribute, onclick binding
+   and the role-visibility logic already in app.js) is left
+   completely untouched — this block only changes how the SAME
+   buttons are arranged and styled on small screens, and adds a
+   brand-new "More" launcher + slide-up sheet for anything that
+   doesn't fit in the 5 primary slots. See the matching JS block
+   appended to the end of app.js for the logic that decides
+   which 5 buttons are primary per role.
+   ============================================================ */
+:root{
+  --bn-bg:rgba(255,255,255,.97);
+  --bn-ink:#0f172a;
+  --bn-mut:#64748b;
+  --bn-accent:#10b981;
+  --bn-accent-ink:#047857;
+  --bn-accent-soft:#e6f7f1;
+  --bn-border:rgba(15,23,42,.08);
+  --bn-shadow:0 -10px 32px -14px rgba(15,23,42,.28);
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bn-bg:rgba(15,23,42,.97);
+    --bn-ink:#f1f5f9;
+    --bn-mut:#94a3b8;
+    --bn-accent-soft:rgba(16,185,129,.16);
+    --bn-border:rgba(255,255,255,.09);
+  }
+}
+
+/* ---- Sales ⇄ Products quick-switch pill (used on both tabs) ---- */
+.diary-switch{display:flex;gap:6px;background:var(--bn-accent-soft);padding:5px;border-radius:14px;margin:0 0 14px;}
+.diary-switch button{flex:1;border:none;background:transparent;padding:9px 8px;border-radius:10px;font-weight:700;font-size:.78rem;color:var(--bn-accent-ink);display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;transition:.15s ease;font-family:inherit;}
+.diary-switch button i{width:15px;height:15px;}
+.diary-switch button.is-active{background:#fff;color:#065f46;box-shadow:0 2px 10px rgba(15,23,42,.14);}
+.diary-switch button:not(.is-active):hover{background:rgba(255,255,255,.55);}
+
+/* ---- Mobile bottom nav: reduce to 5 primary + 1 "More" ---- */
+@media (max-width:820px){
+  body{padding-bottom:calc(72px + env(safe-area-inset-bottom)) !important;}
+
+  nav.app-nav{
+    position:fixed !important; left:0; right:0; bottom:0; top:auto !important;
+    display:flex !important; flex-wrap:nowrap !important;
+    justify-content:space-around !important; align-items:stretch !important;
+    gap:0 !important; margin:0 !important;
+    padding:6px 4px calc(6px + env(safe-area-inset-bottom)) !important;
+    background:var(--bn-bg) !important;
+    backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px);
+    border-top:1px solid var(--bn-border);
+    box-shadow:var(--bn-shadow);
+    z-index:600; overflow:visible !important; height:auto !important; width:auto !important;
+  }
+  nav.app-nav .tab-btn{display:none !important;}
+  nav.app-nav .tab-btn.nav-primary{
+    display:flex !important; flex-direction:column !important;
+    align-items:center !important; justify-content:center !important;
+    gap:3px !important; flex:1 1 0; min-width:0;
+    padding:6px 2px !important; margin:0 !important; border-radius:12px !important;
+    background:transparent !important; border:none !important;
+    color:var(--bn-mut) !important; font-size:10px !important; font-weight:600;
+    position:relative; transition:color .15s ease;
+  }
+  nav.app-nav .tab-btn.nav-primary i{width:21px;height:21px;}
+  nav.app-nav .tab-btn.nav-primary span{
+    font-size:9.5px !important; letter-spacing:.01em; line-height:1.1;
+    max-width:66px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+  nav.app-nav .tab-btn.nav-primary .nav-badge{top:2px;right:14px;}
+  nav.app-nav .tab-btn.nav-primary.active{color:var(--bn-accent-ink) !important;}
+  nav.app-nav .tab-btn.nav-primary.active::before{
+    content:""; position:absolute; top:-6px; left:50%; transform:translateX(-50%);
+    width:22px; height:3px; border-radius:99px; background:var(--bn-accent);
+  }
+
+  #navMoreBtn{
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:3px; flex:1 1 0; min-width:0; padding:6px 2px; border-radius:12px; border:none;
+    background:transparent; color:var(--bn-mut); font-size:9.5px; font-weight:700;
+    cursor:pointer; font-family:inherit; visibility:hidden;
+  }
+  #navMoreBtn i{width:21px;height:21px;}
+  #navMoreBtn.has-active{color:var(--bn-accent-ink);}
+}
+@media (min-width:821px){ #navMoreBtn{display:none !important;} }
+
+/* ---- "More" slide-up sheet ---- */
+#navMoreOverlay{position:fixed;inset:0;background:rgba(15,23,42,.45);backdrop-filter:blur(2px);z-index:650;display:none;}
+#navMoreOverlay.open{display:block;animation:fadeIn .18s ease;}
+#navMoreSheet{
+  position:fixed; left:0; right:0; bottom:0; z-index:651;
+  background:var(--bn-bg); color:var(--bn-ink);
+  border-radius:22px 22px 0 0; box-shadow:0 -20px 50px rgba(15,23,42,.3);
+  padding:10px 16px calc(18px + env(safe-area-inset-bottom));
+  transform:translateY(100%); transition:transform .25s cubic-bezier(.32,.72,0,1);
+  max-height:72vh; overflow-y:auto;
+}
+#navMoreOverlay.open #navMoreSheet{transform:translateY(0);}
+#navMoreSheet .nms-handle{width:38px;height:4px;border-radius:99px;background:var(--bn-border);margin:2px auto 12px;}
+#navMoreSheet .nms-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+#navMoreSheet .nms-head strong{font-size:1.02rem;color:var(--bn-ink);}
+#navMoreSheet .nms-close{border:none;background:var(--bn-accent-soft);color:var(--bn-accent-ink);width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;}
+#navMoreSheet .nms-close i{width:16px;height:16px;}
+#navMoreList{display:grid;grid-template-columns:repeat(4,1fr);gap:10px 8px;}
+#navMoreList .nms-item{
+  display:flex; flex-direction:column; align-items:center; gap:6px; padding:12px 4px;
+  border-radius:16px; border:1px solid var(--bn-border); background:transparent;
+  color:var(--bn-ink); font-size:10.5px; font-weight:600; cursor:pointer; transition:.15s ease;
+  font-family:inherit; position:relative;
+}
+#navMoreList .nms-item:active{transform:scale(.96);background:var(--bn-accent-soft);}
+#navMoreList .nms-item i{width:22px;height:22px;color:var(--bn-accent-ink);}
+#navMoreList .nms-item span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+@media (min-width:481px){ #navMoreList{grid-template-columns:repeat(5,1fr);} }
 </style>
 </head>
 <body>
@@ -342,6 +460,7 @@
     <button class="tab-btn" data-tab="my-reviews" role="tab" aria-label="My Reviews" data-driver-only><i class="business-icon" data-lucide="star" aria-hidden="true"></i><span>Reviews</span></button>
     <button class="tab-btn" data-tab="my-salary" role="tab" aria-label="My Salary" data-staff-only><i class="business-icon" data-lucide="wallet-cards" aria-hidden="true"></i><span>My Salary</span></button>
     <button class="tab-btn" data-tab="orders" role="tab" aria-label="Orders"><i class="business-icon" data-lucide="shopping-bag" aria-hidden="true"></i><span>Orders</span></button>
+    <button class="tab-btn" data-tab="sales" role="tab" aria-label="Sales" data-owner-only><i class="business-icon" data-lucide="store" aria-hidden="true"></i><span>Sales</span></button>
     <button class="tab-btn" data-tab="income" role="tab" aria-label="Income" data-owner-only><i class="business-icon" data-lucide="trending-up" aria-hidden="true"></i><span>Income</span></button>
     <button class="tab-btn" data-tab="calculator" role="tab" aria-label="Cost" data-owner-only><i class="business-icon" data-lucide="calculator" aria-hidden="true"></i><span>Cost</span></button>
     <button class="tab-btn" data-tab="expenses" role="tab" aria-label="Daily Expenses"><i class="business-icon" data-lucide="receipt" aria-hidden="true"></i><span>Daily Expenses</span></button>
@@ -355,6 +474,13 @@
     <button class="tab-btn" data-tab="my-tasks" role="tab" aria-label="My Tasks" data-staff-only><i class="business-icon" data-lucide="list-checks" aria-hidden="true"></i><span>Tasks</span></button>
     <button class="tab-btn" data-tab="announcements" role="tab" aria-label="Announcements" data-staff-only><i class="business-icon" data-lucide="megaphone" aria-hidden="true"></i><span>Notices</span></button>
     <button class="tab-btn" data-tab="profile" role="tab" aria-label="Profile"><i class="business-icon" data-lucide="user-round" aria-hidden="true"></i><span>Profile</span></button>
+    <!-- "More" launcher: mobile-only 6th slot that opens #navMoreOverlay.
+         Deliberately NOT a .tab-btn — it must stay untouched by the
+         existing role-visibility / activateAppTab click-binding loops
+         in app.js. Wiring lives in the bottom-nav script at the end
+         of app.js (opens/closes the sheet, populates it, no changes
+         to any existing tab logic). -->
+    <button type="button" id="navMoreBtn" aria-label="More" aria-haspopup="true"><i class="business-icon" data-lucide="grid-2x2" aria-hidden="true"></i><span>More</span></button>
   </nav>
 
   <!-- ============ INCOME TAB ============ -->
@@ -381,6 +507,12 @@
 
   <!-- ============ SALES / DAILY BUSINESS DIARY TAB (owner-only) ============ -->
   <section id="sales" class="tab-panel" role="tabpanel" style="display:none;">
+    <!-- Sales ⇄ Products quick-switch: keeps Products one tap away from
+         Sales without needing its own primary nav slot. -->
+    <div class="diary-switch no-print" data-owner-only>
+      <button type="button" class="is-active" aria-current="page"><i class="business-icon" data-lucide="store" aria-hidden="true"></i> Sales</button>
+      <button type="button" onclick="activateAppTab('products')"><i class="business-icon" data-lucide="package" aria-hidden="true"></i> Products</button>
+    </div>
     <div class="mobile-greeting no-print" style="padding:0 0 8px;">
       <div><span class="eyebrow">DAILY BUSINESS DIARY</span><h2><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="store" aria-hidden="true"></i></span><span>Sales</span></h2><p class="pro-subtitle green">Every sale, its price, profit, wage and what's still owed — in one diary.</p></div>
       <div class="profile-dot"><i class="business-icon" data-lucide="store" aria-hidden="true"></i></div>
@@ -1975,6 +2107,12 @@
 
   <!-- ============ PRODUCTS TAB (owner-only) ============ -->
   <section id="products" class="tab-panel" style="display:none;" role="tabpanel">
+    <!-- Sales ⇄ Products quick-switch: mirrors the one on the Sales tab
+         so the two pages feel like one connected workflow. -->
+    <div class="diary-switch no-print" data-owner-only>
+      <button type="button" onclick="activateAppTab('sales')"><i class="business-icon" data-lucide="store" aria-hidden="true"></i> Sales</button>
+      <button type="button" class="is-active" aria-current="page"><i class="business-icon" data-lucide="package" aria-hidden="true"></i> Products</button>
+    </div>
     <div class="mobile-greeting no-print" style="padding:0 0 8px;">
       <div><span class="eyebrow">CATALOG</span><h2><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="package" aria-hidden="true"></i></span><span>Products</span></h2><p class="pro-subtitle green">Product images, wholesale &amp; retail pricing — auto-fills into Sales &amp; Orders.</p></div>
     </div>
@@ -2703,6 +2841,25 @@
   </div>
 </div>
 
+
+<!-- ============================================================
+     MOBILE "MORE" NAVIGATION SHEET — additive only.
+     Populated at runtime (see the bottom-nav script appended to
+     app.js) with clones of whichever nav tabs aren't one of the
+     5 primary bottom-bar buttons for the current role. Clicking
+     a clone just calls the app's own activateAppTab(); nothing
+     about the original nav buttons is modified or moved.
+     ============================================================ -->
+<div id="navMoreOverlay" role="dialog" aria-modal="true" aria-label="More menu">
+  <div id="navMoreSheet">
+    <div class="nms-handle" aria-hidden="true"></div>
+    <div class="nms-head">
+      <strong>More</strong>
+      <button type="button" id="navMoreCloseBtn" class="nms-close" aria-label="Close"><i class="business-icon" data-lucide="x" aria-hidden="true"></i></button>
+    </div>
+    <div id="navMoreList"></div>
+  </div>
+</div>
 
 <script src="app.js"></script>
 
