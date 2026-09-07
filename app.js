@@ -8262,6 +8262,14 @@ window.editSale = editSale;
 window.deleteSale = deleteSale;
 window.markSalePaid = markSalePaid;
 window.updateChequeStatus = updateChequeStatus;
+// FIX: Products catalog buttons (Add Product, edit, delete, image preview,
+// save) are also called from onclick/onchange attributes in the HTML but
+// were never exposed — same IIFE scope issue as above.
+window.openNewProduct = openNewProduct;
+window.openEditProduct = openEditProduct;
+window.deleteProduct = deleteProduct;
+window.previewProductImage = previewProductImage;
+window.saveProduct = saveProduct;
 
 })();
 
