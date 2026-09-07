@@ -150,7 +150,7 @@ window.withSessionRetry = withSessionRetry;
 
 let currentUser = null;
 let userProfile = null;
-let userRole = 'owner';   // 'owner' | 'staff' | 'driver'
+let userRole = 'owner';   // 'owner' | 'staff' | 'driver' | 'distributor'
 let businessId = null;    // the effective account whose data everyone on the team shares
 
 async function loadUserProfile() {
@@ -174,8 +174,8 @@ async function loadUserProfile() {
       userProfile = data;
     }
 
-    userRole = userProfile.role === 'staff' ? 'staff' : (userProfile.role === 'driver' ? 'driver' : 'owner');
-    businessId = (userRole === 'staff' || userRole === 'driver') ? userProfile.owner_id : currentUser.id;
+    userRole = userProfile.role === 'staff' ? 'staff' : (userProfile.role === 'driver' ? 'driver' : (userProfile.role === 'distributor' ? 'distributor' : 'owner'));
+    businessId = (userRole === 'staff' || userRole === 'driver' || userRole === 'distributor') ? userProfile.owner_id : currentUser.id;
   } catch (e) {
     console.error('Load profile error:', e);
     // Fail safe: treat as an independent owner of their own data.
@@ -187,19 +187,23 @@ async function loadUserProfile() {
     await loadMyDeliveries();
     startDriverDeliveriesRealtime();
     updateDriverNotifyPermUI();
+  } else if (userRole === 'distributor') {
+    await loadDistributorCommissionClaims();
   } else {
     await loadMyStaffData(false);
     startAppNotifyRealtime();
   }
 }
 
-const STAFF_ALLOWED_TABS = ['staff-home','orders','my-salary','profile','expenses'];
-const DRIVER_ALLOWED_TABS = ['my-deliveries','my-earnings','my-reviews','profile'];
+const STAFF_ALLOWED_TABS = ['staff-home','orders','my-salary','profile','expenses','products'];
+const DRIVER_ALLOWED_TABS = ['my-deliveries','my-earnings','my-reviews','profile','products'];
+const DISTRIBUTOR_ALLOWED_TABS = ['product-agent','profile'];
 
 function applyRoleUI() {
   const isStaff = userRole === 'staff';
   const isDriver = userRole === 'driver';
-  const isRestricted = isStaff || isDriver; // anyone who isn't the owner
+  const isDistributor = userRole === 'distributor';
+  const isRestricted = isStaff || isDriver || isDistributor; // anyone who isn't the owner
 
   // Owner-only controls: hidden for both staff and driver.
   document.querySelectorAll('[data-owner-only]').forEach(el => {
@@ -223,6 +227,12 @@ function applyRoleUI() {
     el.style.display = isDriver ? '' : 'none';
   });
 
+  // Distributor-only elements (nav tabs + inline blocks) — visible only for distributors.
+  document.querySelectorAll('[data-distributor-only]').forEach(el => {
+    const tab = el.getAttribute('data-tab');
+    el.style.display = (isDistributor && (!tab || DISTRIBUTOR_ALLOWED_TABS.includes(tab))) ? 'flex' : 'none';
+  });
+
   // Every nav tab button: lock down to exactly the tabs each role may see.
   document.querySelectorAll('.tab-btn').forEach(el => {
     const tab = el.getAttribute('data-tab');
@@ -230,6 +240,8 @@ function applyRoleUI() {
       el.style.display = STAFF_ALLOWED_TABS.includes(tab) ? 'flex' : 'none';
     } else if (isDriver) {
       el.style.display = DRIVER_ALLOWED_TABS.includes(tab) ? 'flex' : 'none';
+    } else if (isDistributor) {
+      el.style.display = DISTRIBUTOR_ALLOWED_TABS.includes(tab) ? 'flex' : 'none';
     }
   });
 
@@ -237,12 +249,13 @@ function applyRoleUI() {
   if (navEl) {
     navEl.classList.toggle('staff-nav', isStaff);
     navEl.classList.toggle('driver-nav', isDriver);
+    navEl.classList.toggle('distributor-nav', isDistributor);
   }
 
   const roleBadge = $('roleBadge');
   if (roleBadge) {
-    const icon = isDriver ? 'truck' : (isStaff ? 'user-round' : 'crown');
-    const label = isDriver ? 'Driver' : (isStaff ? 'Staff' : 'Owner');
+    const icon = isDriver ? 'truck' : (isStaff ? 'user-round' : (isDistributor ? 'badge-percent' : 'crown'));
+    const label = isDriver ? 'Driver' : (isStaff ? 'Staff' : (isDistributor ? 'Distributor' : 'Owner'));
     roleBadge.innerHTML = `<i class="business-icon icon-inline" data-lucide="${icon}" aria-hidden="true"></i> ${label}`;
   }
   if (window.lucide) lucide.createIcons({ attrs: { 'stroke-width': 1.9, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' } });
@@ -253,10 +266,12 @@ function applyRoleUI() {
   const ownerSalaryEditor = $('salaryPanel');
   if (ownerSalaryEditor && isRestricted) ownerSalaryEditor.style.display = 'none';
 
-  // Staff lands on the dedicated operations home; drivers land on their delivery list.
+  // Staff lands on the dedicated operations home; drivers land on their delivery list;
+  // distributors land on their Product Agent commission dashboard.
   if (typeof activateAppTab === 'function') {
     if (isStaff) activateAppTab('staff-home');
     else if (isDriver) activateAppTab('my-deliveries');
+    else if (isDistributor) activateAppTab('product-agent');
   }
 }
 
@@ -284,17 +299,22 @@ function renderStaffList(list) {
   }
   tbody.innerHTML = list.map(s => {
     const isDrv = s.role === 'driver';
+    const isDist = s.role === 'distributor';
+    const badge = isDrv
+      ? '<span style="background:#eef;color:#334;padding:2px 7px;border-radius:6px;font-size:11px;font-weight:700;">🚚 Driver</span>'
+      : (isDist ? '<span style="background:#fef3e0;color:#7a4d00;padding:2px 7px;border-radius:6px;font-size:11px;font-weight:700;">🏷️ Distributor</span>' : '');
     return `
     <tr>
-      <td>${s.display_name || '(no name)'} ${isDrv ? '<span style="background:#eef;color:#334;padding:2px 7px;border-radius:6px;font-size:11px;font-weight:700;">🚚 Driver</span>' : ''}</td>
-      <td style="font-size:11px;word-break:break-all;">${s.id}</td>
+      <td>${s.display_name || '(no name)'} ${badge}</td>
+      <td style="font-size:11px;word-break:break-all;">${isDist ? (s.distributor_reference || ('AGT-' + String(s.id).slice(0,8).toUpperCase())) : s.id}</td>
       <td data-owner-only><button class="btn btn-sm btn-danger" aria-label="Remove" onclick="removeStaffMember('${s.id}')"><i class="business-icon" data-lucide="trash-2" aria-hidden="true"></i></button></td>
     </tr>
   `;
   }).join('');
-  // Only actual staff (not drivers) go into salary/commission pickers.
-  populateSalaryStaffSelect(list.filter(s => s.role !== 'driver'));
+  // Only actual staff (not drivers/distributors) go into salary/commission pickers.
+  populateSalaryStaffSelect(list.filter(s => s.role !== 'driver' && s.role !== 'distributor'));
   populateDriverSelects(list.filter(s => s.role === 'driver'));
+  populateDistributorSelects(list.filter(s => s.role === 'distributor'));
   if (window.lucide) lucide.createIcons({ attrs: { 'stroke-width': 1.9, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' } });
 }
 
@@ -304,12 +324,25 @@ function populateDriverSelects(drivers) {
   renderDelivery();
 }
 
+let distributorListCache = [];
+function populateDistributorSelects(distributors) {
+  distributorListCache = distributors || [];
+  const sel = $('orderReferralDistributorSelect');
+  if (sel) {
+    sel.innerHTML = '<option value="">No distributor</option>' + distributorListCache.map(d =>
+      `<option value="${d.id}">${escapeHtmlSafe(d.display_name || 'Distributor')} — ${escapeHtmlSafe(d.distributor_reference || ('AGT-' + String(d.id).slice(0,8).toUpperCase()))}</option>`
+    ).join('');
+  }
+  renderDistributorsPanel();
+}
+
 async function addStaffMember() {
   if (userRole !== 'owner') { alert('Only the business owner can add staff.'); return; }
   const uid = $('staffUid').value.trim();
   const name = $('staffName').value.trim();
   const roleSelect = $('staffRoleSelect');
-  const role = (roleSelect && roleSelect.value === 'driver') ? 'driver' : 'staff';
+  const roleVal = roleSelect ? roleSelect.value : 'staff';
+  const role = roleVal === 'driver' ? 'driver' : (roleVal === 'distributor' ? 'distributor' : 'staff');
   if (!uid) { alert("Enter the team member's Supabase User ID."); return; }
   if (uid === currentUser.id) { alert('That is your own account.'); return; }
 
@@ -324,6 +357,8 @@ async function addStaffMember() {
     if (error) throw error;
     alert(role === 'driver'
       ? '✅ Driver added. They can now log in and see their assigned deliveries.'
+      : role === 'distributor'
+      ? '✅ Product Distributor added. They can now log in and see their Product Agent commission dashboard.'
       : '✅ Staff member added. They can now log in and see your shared Orders, Customers & Expenses.');
     $('staffUid').value = '';
     $('staffName').value = '';
@@ -2100,14 +2135,15 @@ async function loadProductsFromCloud() {
 function renderProducts() {
   const grid = $('productsGrid');
   if (!grid) return;
-  if (userRole !== 'owner') {
-    grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;opacity:.5;padding:20px;">Product catalog is owner-only.</div>';
+  if (userRole === 'distributor') {
+    grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;opacity:.5;padding:20px;">Product catalog is not shown here — see your Product Agent page for commission details.</div>';
     return;
   }
   if (products.length === 0) {
     grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;opacity:.5;padding:20px;">No products yet — tap "Add Product" to build your catalog.</div>';
     return;
   }
+  const isOwner = userRole === 'owner';
   grid.innerHTML = products.map(p => `
     <div class="card" style="padding:10px;">
       <img src="${p.imageUrl || ''}" onerror="this.style.display='none'" style="width:100%;height:100px;object-fit:cover;border-radius:8px;background:#f0f0f0;${p.imageUrl ? '' : 'display:none;'}">
@@ -2115,10 +2151,10 @@ function renderProducts() {
       <div style="font-weight:700;margin-top:8px;font-size:.85rem;">${p.name}</div>
       <div style="font-size:.72rem;opacity:.7;margin-top:4px;">Wholesale: Rs. ${p.wholesalePrice.toLocaleString()}</div>
       <div style="font-size:.72rem;opacity:.7;">Retail: Rs. ${p.retailPrice.toLocaleString()}</div>
-      <div class="btn-row" style="margin-top:8px;">
+      ${isOwner ? `<div class="btn-row" style="margin-top:8px;">
         <button class="btn btn-sm" onclick="openEditProduct('${p.id}')">✏️</button>
         <button class="btn btn-sm btn-danger" onclick="deleteProduct('${p.id}')">🗑️</button>
-      </div>
+      </div>` : ''}
     </div>
   `).join('');
 }
@@ -3501,6 +3537,31 @@ async function createOrder() {
       const { error: ce } = await supabase.from('staff_commission_claims').insert(claim);
       if (ce) console.error('Owner referral claim create failed:',ce);
     }
+    const referralDistributorId = $('orderReferralDistributorSelect')?.value || null;
+    if (referralDistributorId) {
+      const distStats = computeDistributorStats(referralDistributorId);
+      const distRate = computeDistributorCommissionRate(referralDistributorId, total);
+      const distributor = (distributorListCache||[]).find(d=>String(d.id)===String(referralDistributorId));
+      const distClaim = {
+        owner_id: businessId,
+        distributor_id: String(referralDistributorId),
+        distributor_reference: distributor?.distributor_reference || '',
+        order_id: String(data.id),
+        order_ref_no: data.order_ref_no || null,
+        customer_name: customer?.name || '',
+        order_total: total,
+        marketing_level: distStats.marketingLevel,
+        business_quality: distStats.businessQuality,
+        commission_rate: distRate,
+        commission_amount: Math.round(total * distRate),
+        status: 'approved',
+        verified_at: new Date().toISOString(),
+        order_snapshot: { order_id: data.id, order_ref_no: data.order_ref_no || null, product_size_g: Number(product)||0, qty, unit_price: unitPrice, total }
+      };
+      const { error: dce } = await supabase.from('distributor_commission_claims').insert(distClaim);
+      if (dce) console.error('Distributor commission claim create failed:', dce);
+      else loadDistributorCommissionClaims();
+    }
   } catch (e) { console.error('Create order error:',e); alert('❌ Could not save order: '+e.message); return; }
   orders.unshift({id:row.id,customerId,product,qty,unitPrice,total,address,notes,status:'pending',createdBy:currentUser.id,createdAt:new Date().toISOString(),referralStaffId,referralStaffReference,referralStatus:referralStaffId?'pending_verification':'none',orderRefNo:row.order_ref_no||null,paymentMethod});
   saveOrders(); renderOrders(); renderDelivery(); updateOrderStats(); closeModal('orderModal');
@@ -3508,6 +3569,7 @@ async function createOrder() {
   if ($('orderPaymentMethod')) $('orderPaymentMethod').value = 'cod';
   if ($('orderProduct')) $('orderProduct').value = '50';
   if ($('orderProductId')) $('orderProductId').value = '';
+  if ($('orderReferralDistributorSelect')) $('orderReferralDistributorSelect').value = '';
   syncOrderSizeChips(); updateOrderTotal();
   updateStatus(referralStaffId ? '📨 Sale sent to owner for commission verification' : '✅ Order created');
 }
@@ -7196,6 +7258,115 @@ async function populateStaffReferralSelectors(){
   }catch(e){console.error('Staff reference selector error',e);}
 }
 
+// ==================== PRODUCT DISTRIBUTOR (PRODUCT AGENT) COMMISSION ====================
+// Distributors are a separate account role (see profiles.role = 'distributor').
+// Commission on a distributor-attributed sale is 6%–12%, computed from three factors:
+//   1) Marketing Level  — auto-calculated from the distributor's lifetime approved sales volume.
+//   2) Business Quality — auto-calculated from their average order size / consistency.
+//   3) Order Volume     — the value of this specific order.
+// The owner is the one who records the sale and picks the distributor (like the existing
+// staff-referral flow), so the claim is created already-approved — no separate verification
+// step is needed, same trust boundary as any other order the owner enters themselves.
+const DISTRIBUTOR_COMMISSION_MIN = 0.06;
+const DISTRIBUTOR_COMMISSION_MAX = 0.12;
+
+function computeDistributorStats(distributorId){
+  const claims = (window.distributorCommissionClaims || []).filter(c =>
+    String(c.distributor_id) === String(distributorId) && c.status === 'approved'
+  );
+  const totalVolume = claims.reduce((s,c)=>s+(Number(c.order_total)||0),0);
+  const totalCommission = claims.reduce((s,c)=>s+(Number(c.commission_amount)||0),0);
+  const salesCount = claims.length;
+
+  let marketingLevel = 'Bronze', levelBonus = 0;
+  if (totalVolume >= 500000) { marketingLevel = 'Platinum'; levelBonus = 0.04; }
+  else if (totalVolume >= 200000) { marketingLevel = 'Gold'; levelBonus = 0.03; }
+  else if (totalVolume >= 50000) { marketingLevel = 'Silver'; levelBonus = 0.015; }
+
+  let businessQuality = 'New', qualityBonus = 0;
+  if (salesCount >= 3) {
+    const avgOrder = totalVolume / salesCount;
+    if (avgOrder >= 15000) { businessQuality = 'Excellent'; qualityBonus = 0.02; }
+    else if (avgOrder >= 8000) { businessQuality = 'Good'; qualityBonus = 0.01; }
+    else { businessQuality = 'Standard'; qualityBonus = 0.005; }
+  }
+
+  return { totalVolume, totalCommission, salesCount, marketingLevel, levelBonus, businessQuality, qualityBonus };
+}
+
+function computeDistributorCommissionRate(distributorId, orderTotal){
+  const stats = computeDistributorStats(distributorId);
+  const ot = Number(orderTotal) || 0;
+  let orderBonus = 0;
+  if (ot >= 30000) orderBonus = 0.015;
+  else if (ot >= 15000) orderBonus = 0.01;
+  else if (ot >= 5000) orderBonus = 0.005;
+  const rate = DISTRIBUTOR_COMMISSION_MIN + stats.levelBonus + stats.qualityBonus + orderBonus;
+  return Math.min(DISTRIBUTOR_COMMISSION_MAX, Math.max(DISTRIBUTOR_COMMISSION_MIN, rate));
+}
+
+async function loadDistributorCommissionClaims(){
+  if (!currentUser || (userRole !== 'owner' && userRole !== 'distributor')) return [];
+  try {
+    const query = userRole === 'owner'
+      ? supabase.from('distributor_commission_claims').select('*').eq('owner_id', currentUser.id).order('submitted_at', { ascending: false })
+      : supabase.from('distributor_commission_claims').select('*').eq('distributor_id', currentUser.id).order('submitted_at', { ascending: false });
+    const { data, error } = await query;
+    if (error) throw error;
+    window.distributorCommissionClaims = data || [];
+    if (userRole === 'owner') renderDistributorsPanel();
+    if (userRole === 'distributor') renderProductAgentPage();
+    return window.distributorCommissionClaims;
+  } catch (e) {
+    console.error('Distributor commission claims load:', e);
+    return [];
+  }
+}
+
+function renderDistributorsPanel(){
+  const tbody = $('distributorsBody');
+  if (!tbody) return;
+  if (!distributorListCache.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;opacity:.5;padding:14px;">No product distributors added yet.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = distributorListCache.map(d => {
+    const stats = computeDistributorStats(d.id);
+    return `<tr>
+      <td>${escapeHtmlSafe(d.display_name || '(no name)')}</td>
+      <td>${escapeHtmlSafe(d.distributor_reference || ('AGT-' + String(d.id).slice(0,8).toUpperCase()))}</td>
+      <td>${stats.marketingLevel}</td>
+      <td>${stats.businessQuality}</td>
+      <td>${fmt(stats.totalCommission)}</td>
+    </tr>`;
+  }).join('');
+}
+
+function renderProductAgentPage(){
+  if (userRole !== 'distributor' || !currentUser) return;
+  const stats = computeDistributorStats(currentUser.id);
+  const currentBandMin = ((DISTRIBUTOR_COMMISSION_MIN + stats.levelBonus + stats.qualityBonus) * 100).toFixed(1);
+  const currentBandMax = (DISTRIBUTOR_COMMISSION_MAX * 100).toFixed(0);
+  if ($('distMarketingLevel')) $('distMarketingLevel').textContent = stats.marketingLevel;
+  if ($('distBusinessQuality')) $('distBusinessQuality').textContent = stats.businessQuality;
+  if ($('distCurrentRateRange')) $('distCurrentRateRange').textContent = currentBandMin + '% – ' + currentBandMax + '%';
+  if ($('distTotalVolume')) $('distTotalVolume').textContent = fmt(stats.totalVolume);
+  if ($('distTotalCommission')) $('distTotalCommission').textContent = fmt(stats.totalCommission);
+  if ($('distSalesCount')) $('distSalesCount').textContent = stats.salesCount;
+  const body = $('distCommissionHistoryBody');
+  if (body) {
+    const claims = window.distributorCommissionClaims || [];
+    body.innerHTML = claims.map(c => `<tr>
+        <td>${new Date(c.submitted_at || Date.now()).toLocaleDateString()}</td>
+        <td>${escapeHtmlSafe(c.order_ref_no || '-')}</td>
+        <td>${fmt(Number(c.order_total) || 0)}</td>
+        <td>${((Number(c.commission_rate) || 0) * 100).toFixed(1)}%</td>
+        <td>${fmt(Number(c.commission_amount) || 0)}</td>
+      </tr>`).join('') || '<tr><td colspan="5" style="text-align:center;opacity:.5;padding:14px;">No commission earned yet.</td></tr>';
+  }
+}
+window.renderProductAgentPage = renderProductAgentPage;
+
 async function loadCommissionClaims(){
   if(currentUser && userRole==='owner' && !commissionRealtimeChannel) startCommissionRealtime();
   if(!currentUser) return [];
@@ -7854,9 +8025,10 @@ document.querySelectorAll('[data-ribbon="true"]').forEach(btn => {
   });
 });
 
-const OWNER_ONLY_TABS = ['dashboard', 'my-staff', 'delivery', 'calculator', 'production', 'history', 'data', 'monthly-summary', 'income', 'analytics', 'sales', 'products'];
+const OWNER_ONLY_TABS = ['dashboard', 'my-staff', 'delivery', 'calculator', 'production', 'history', 'data', 'monthly-summary', 'income', 'analytics', 'sales'];
 const STAFF_ONLY_TABS = ['staff-home', 'daily-pay', 'work-update', 'attendance', 'advance', 'my-commission', 'my-tasks', 'announcements'];
 const DRIVER_ONLY_TABS = ['my-deliveries','my-earnings','my-reviews'];
+const DISTRIBUTOR_ONLY_TABS = ['product-agent'];
 
 let staffWorkspaceLoadSeq = 0;
 async function refreshStaffWorkspaceData(tabId){
@@ -7885,12 +8057,16 @@ function safeStaffQuickAction(tabId){
 }
 
 function activateAppTab(tabId){
-  if (userRole === 'staff' && !['staff-home', 'orders', 'my-salary', 'expenses', 'daily-pay', 'work-update', 'attendance', 'advance', 'my-commission', 'my-tasks', 'announcements', 'profile'].includes(tabId)) {
+  if (userRole === 'staff' && !['staff-home', 'orders', 'my-salary', 'expenses', 'daily-pay', 'work-update', 'attendance', 'advance', 'my-commission', 'my-tasks', 'announcements', 'profile', 'products'].includes(tabId)) {
     alert('🔒 Staff access: use your staff workspace and assigned business sections.');
     return;
   }
   if (userRole === 'driver' && !DRIVER_ALLOWED_TABS.includes(tabId)) {
     alert('🔒 Driver access: use your delivery list and profile.');
+    return;
+  }
+  if (userRole === 'distributor' && !DISTRIBUTOR_ALLOWED_TABS.includes(tabId)) {
+    alert('🔒 Distributor access: use your Product Agent page and profile.');
     return;
   }
   if (OWNER_ONLY_TABS.includes(tabId) && userRole === 'staff') {
@@ -7903,6 +8079,10 @@ function activateAppTab(tabId){
   }
   if (DRIVER_ONLY_TABS.includes(tabId) && userRole !== 'driver') {
     alert('🔒 This section is only available to driver accounts.');
+    return;
+  }
+  if (DISTRIBUTOR_ONLY_TABS.includes(tabId) && userRole !== 'distributor') {
+    alert('🔒 This section is only available to product distributor accounts.');
     return;
   }
   const panel = document.getElementById(tabId);
@@ -7937,6 +8117,7 @@ function activateAppTab(tabId){
   if (tabId === 'my-staff') { refreshMyStaffPage(); loadMyStaffOwnerData(); }
   if (tabId === 'expenses') { renderExpenses(); renderRecurringExpenses(); }
   if (tabId === 'products') { loadProductsFromCloud().then(renderProducts); }
+  if (tabId === 'product-agent') { loadDistributorCommissionClaims().then(renderProductAgentPage); }
   if (tabId === 'sales') { loadSalesFromCloud().then(renderSales); }
   if (tabId === 'my-salary') {
     if (userRole === 'owner') {

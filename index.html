@@ -346,6 +346,7 @@
     <button class="tab-btn" data-tab="calculator" role="tab" aria-label="Cost" data-owner-only><i class="business-icon" data-lucide="calculator" aria-hidden="true"></i><span>Cost</span></button>
     <button class="tab-btn" data-tab="expenses" role="tab" aria-label="Daily Expenses"><i class="business-icon" data-lucide="receipt" aria-hidden="true"></i><span>Daily Expenses</span></button>
     <button class="tab-btn" data-tab="products" role="tab" aria-label="Products" data-owner-only><i class="business-icon" data-lucide="package" aria-hidden="true"></i><span>Products</span></button>
+    <button class="tab-btn" data-tab="product-agent" role="tab" aria-label="Product Agent" data-distributor-only><i class="business-icon" data-lucide="badge-percent" aria-hidden="true"></i><span>Product Agent</span></button>
     <button class="tab-btn" data-tab="daily-pay" role="tab" aria-label="Daily Pay" data-staff-only><i class="business-icon" data-lucide="calendar-days" aria-hidden="true"></i><span>Daily Pay</span></button>
     <button class="tab-btn" data-tab="work-update" role="tab" aria-label="Work Update" data-staff-only><i class="business-icon" data-lucide="notebook-pen" aria-hidden="true"></i><span>Work Update</span></button>
     <button class="tab-btn" data-tab="attendance" role="tab" aria-label="Attendance" data-staff-only><i class="business-icon" data-lucide="clock-3" aria-hidden="true"></i><span>Attendance</span></button>
@@ -1193,6 +1194,7 @@
         <select id="staffRoleSelect">
           <option value="staff">Staff (Orders, Customers, Expenses)</option>
           <option value="driver">Driver (Delivery list only)</option>
+          <option value="distributor">Product Distributor (Product Agent — commission only)</option>
         </select>
       </div>
       <div class="btn-row">
@@ -1211,6 +1213,17 @@
       <p class="pro-subtitle gold">Global staff referral rate is fixed at <strong>12%</strong>. Staff sales are attributed from their account and shown in My Commission.</p>
       <div class="stat-grid"><div class="stat accent"><div class="k">Commission Rate</div><div class="v">12%</div></div><div class="stat"><div class="k">Rule</div><div class="v" style="font-size:.95rem;">Sale × 12%</div></div></div>
       <div class="notice" style="margin-bottom:0;"><i class="business-icon icon-inline" data-lucide="shield-check"></i> Cancelled/refunded orders are excluded. Commission is an additional earning and can be included in final salary approval.</div>
+    </div>
+
+    <div class="card" data-owner-only style="margin-top:16px;">
+      <h2><span class="pro-title-icon gold"><i class="business-icon" data-lucide="store"></i></span><span>Product Distributors</span></h2>
+      <p class="pro-subtitle gold">Product Agents earn a <strong>6%–12%</strong> commission on orders you attribute to them. The rate is calculated automatically from their Marketing Level (total sales volume), Business Quality (average order size) and this order's value — pick a distributor in the Orders → New Order screen to add it.</p>
+      <div class="table-wrap" style="margin-top:10px;">
+        <table>
+          <thead><tr><th>Name</th><th>Agent Reference</th><th>Marketing Level</th><th>Business Quality</th><th>Total Commission</th></tr></thead>
+          <tbody id="distributorsBody"><tr><td colspan="5" style="text-align:center;opacity:.5;padding:14px;">No product distributors added yet.</td></tr></tbody>
+        </table>
+      </div>
     </div>
 
     <div class="card" data-owner-only style="margin-top:16px;">
@@ -1966,9 +1979,10 @@
       <div><span class="eyebrow">CATALOG</span><h2><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="package" aria-hidden="true"></i></span><span>Products</span></h2><p class="pro-subtitle green">Product images, wholesale &amp; retail pricing — auto-fills into Sales &amp; Orders.</p></div>
     </div>
     <div class="card">
-      <div class="btn-row" style="margin-bottom:14px;">
+      <div class="btn-row" style="margin-bottom:14px;" data-owner-only>
         <button class="btn btn-primary btn-sm" onclick="openNewProduct()"><i class="business-icon icon-inline" data-lucide="plus" aria-hidden="true"></i> Add Product</button>
       </div>
+      <div class="notice" style="margin-bottom:14px;font-size:.75rem;">This catalog is shared with the team. Only the owner can add, edit or remove products.</div>
       <div id="productsGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px;">
         <div style="grid-column:1/-1;text-align:center;opacity:.5;padding:20px;">Loading…</div>
       </div>
@@ -2006,6 +2020,39 @@
       </div>
     </div>
   </div>
+
+  <!-- ============ PRODUCT AGENT TAB (distributor-only) ============ -->
+  <section id="product-agent" class="tab-panel" style="display:none;" role="tabpanel">
+    <div class="mobile-greeting no-print" style="padding:0 0 8px;">
+      <div><span class="eyebrow">PRODUCT AGENT</span><h2><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="badge-percent" aria-hidden="true"></i></span><span>My Commission</span></h2><p class="pro-subtitle gold">Your commission on product sales attributed to you — 6%–12%, calculated automatically.</p></div>
+    </div>
+
+    <div class="card">
+      <h2><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="gauge" aria-hidden="true"></i></span><span>Your Standing</span></h2>
+      <p class="pro-subtitle gold">These are calculated automatically from your approved sales — they are not set manually.</p>
+      <div class="stat-grid">
+        <div class="stat accent"><div class="k">Marketing Level</div><div class="v" id="distMarketingLevel">Bronze</div></div>
+        <div class="stat"><div class="k">Business Quality</div><div class="v" id="distBusinessQuality">New</div></div>
+        <div class="stat good"><div class="k">Your Current Rate Band</div><div class="v" id="distCurrentRateRange">6.0% – 12%</div></div>
+      </div>
+      <div class="notice" style="margin-top:10px;margin-bottom:0;font-size:.75rem;"><i class="business-icon icon-inline" data-lucide="info"></i> Marketing Level rises with your total sales volume (Silver ≥ Rs. 50,000, Gold ≥ Rs. 200,000, Platinum ≥ Rs. 500,000). Business Quality rises with your average order size once you have 3+ sales. The exact rate for each order also depends on that order's own value.</div>
+    </div>
+
+    <div class="card" style="margin-top:16px;">
+      <h2><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="wallet-cards" aria-hidden="true"></i></span><span>Earnings</span></h2>
+      <div class="stat-grid">
+        <div class="stat"><div class="k">Total Sales Volume</div><div class="v" id="distTotalVolume">Rs. 0</div></div>
+        <div class="stat"><div class="k">Sales Count</div><div class="v" id="distSalesCount">0</div></div>
+        <div class="stat good"><div class="k">Total Commission Earned</div><div class="v" id="distTotalCommission">Rs. 0</div></div>
+      </div>
+      <div class="table-wrap" style="margin-top:14px;">
+        <table>
+          <thead><tr><th>Date</th><th>Order</th><th>Sale</th><th>Rate</th><th>Commission</th></tr></thead>
+          <tbody id="distCommissionHistoryBody"><tr><td colspan="5" style="text-align:center;opacity:.5;padding:14px;">No commission earned yet.</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
 
   <!-- ============ HISTORY TAB ============ -->
   <section id="history" class="tab-panel" style="display:none;" role="tabpanel">
@@ -2175,7 +2222,13 @@
         <select id="orderReferralStaffSelect"><option value="">Auto from customer / No referral</option></select>
       </div>
       <small style="display:block;margin-bottom:8px;color:var(--text-muted);font-size:.72rem;">Owner verification control. The selected reference is attached to this order before commission review.</small>
-      <div class="notice" style="margin:0;padding:9px 12px;font-size:.72rem;"><i class="business-icon icon-inline" data-lucide="badge-percent"></i> If you create the sale as a staff user, it is automatically attributed to your 12% commission.</div>
+      <div class="notice" style="margin:0 0 12px;padding:9px 12px;font-size:.72rem;"><i class="business-icon icon-inline" data-lucide="badge-percent"></i> If you create the sale as a staff user, it is automatically attributed to your 12% commission.</div>
+
+      <div class="field" style="margin-bottom:8px;">
+        <label>Product Distributor for this Order <span class="hint">(optional)</span></label>
+        <select id="orderReferralDistributorSelect"><option value="">No distributor</option></select>
+      </div>
+      <div class="notice" style="margin:0;padding:9px 12px;font-size:.72rem;"><i class="business-icon icon-inline" data-lucide="badge-percent"></i> Picking a distributor adds a 6%–12% commission for them automatically, based on their marketing level, business quality and this order's value.</div>
     </div>
 
     <div class="om-section">
