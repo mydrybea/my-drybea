@@ -8786,8 +8786,20 @@ if ('serviceWorker' in navigator) {
     allTabBtns.forEach(function(btn){
       // Inline style is what applyRoleUI() itself sets, so it reflects true
       // role-visibility regardless of viewport width or existing classes.
-      if (btn.style.display === 'none') { btn.classList.remove('nav-primary'); return; }
-      btn.classList.add('nav-primary');
+      //
+      // FIX: only tag a button as nav-primary once applyRoleUI() has
+      // EXPLICITLY shown it (style.display === 'flex'). Before the user's
+      // role is known (profile still loading from Supabase), no button has
+      // display set yet — btn.style.display is '' (empty string), not
+      // 'none'. The old check (`!== 'none'` counts as visible) treated that
+      // unresolved state as "show it", so on first paint / slow networks
+      // ALL ~24 tabs across every role got tagged nav-primary at once,
+      // producing the squeezed, single-letter bottom-nav flash. Requiring
+      // an explicit 'flex' means untouched buttons stay hidden (matching
+      // the CSS default `.tab-btn{display:none}`) until the real role
+      // resolves and applyRoleUI() sets 'flex' on just that role's tabs.
+      if (btn.style.display === 'flex') { btn.classList.add('nav-primary'); }
+      else { btn.classList.remove('nav-primary'); }
     });
     if (window.lucide) lucide.createIcons({ attrs: { 'stroke-width': 1.9, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' } });
   }
