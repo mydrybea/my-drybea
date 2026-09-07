@@ -2591,18 +2591,35 @@
     </div>
 
     <div class="om-section" data-owner-order-referral style="display:none;">
-      <div class="field" style="margin-bottom:8px;">
-        <label>Staff Reference for this Order</label>
-        <select id="orderReferralStaffSelect"><option value="">Auto from customer / No referral</option></select>
+      <div data-owner-staff-referral-block>
+        <div class="field" style="margin-bottom:8px;">
+          <label>Staff Reference for this Order</label>
+          <select id="orderReferralStaffSelect"><option value="">Auto from customer / No referral</option></select>
+        </div>
+        <small style="display:block;margin-bottom:8px;color:var(--text-muted);font-size:.72rem;">Owner verification control. The selected reference is attached to this order before commission review.</small>
+        <div class="notice" style="margin:0 0 12px;padding:9px 12px;font-size:.72rem;"><i class="business-icon icon-inline" data-lucide="badge-percent" aria-hidden="true"></i> If you create the sale as a staff user, it is automatically attributed to your 12% commission.</div>
       </div>
-      <small style="display:block;margin-bottom:8px;color:var(--text-muted);font-size:.72rem;">Owner verification control. The selected reference is attached to this order before commission review.</small>
-      <div class="notice" style="margin:0 0 12px;padding:9px 12px;font-size:.72rem;"><i class="business-icon icon-inline" data-lucide="badge-percent"></i> If you create the sale as a staff user, it is automatically attributed to your 12% commission.</div>
 
-      <div class="field" style="margin-bottom:8px;">
-        <label>Product Distributor for this Order <span class="hint">(optional)</span></label>
-        <select id="orderReferralDistributorSelect"><option value="">No distributor</option></select>
+      <div data-owner-dist-select-block>
+        <div class="field" style="margin-bottom:8px;">
+          <label>Product Distributor for this Order <span class="hint">(optional)</span></label>
+          <select id="orderReferralDistributorSelect"><option value="">No distributor</option></select>
+        </div>
+        <div class="notice" style="margin:0;padding:9px 12px;font-size:.72rem;"><i class="business-icon icon-inline" data-lucide="badge-percent" aria-hidden="true"></i> Picking a distributor adds a commission for them automatically — the rate (6%–12%) is set by their current lifetime sales tier, and only becomes real once this order is delivered.</div>
       </div>
-      <div class="notice" style="margin:0;padding:9px 12px;font-size:.72rem;"><i class="business-icon icon-inline" data-lucide="badge-percent"></i> Picking a distributor adds a commission for them automatically — the rate (6%–12%) is set by their current lifetime sales tier, and only becomes real once this order is delivered.</div>
+
+      <!-- Distributor role creating their own order: no dropdown to fill in —
+           this order is always attributed to them, so their name, reference
+           and current commission tier are shown here automatically. -->
+      <div data-distributor-self-block style="display:none;">
+        <div class="field" style="margin-bottom:0;">
+          <label>Product Distributor for this Order</label>
+          <div class="notice" style="margin:0;padding:10px 12px;font-size:.78rem;display:flex;align-items:center;gap:8px;">
+            <i class="business-icon icon-inline" data-lucide="badge-percent" aria-hidden="true"></i>
+            <span>Attributed to <strong id="orderDistSelfName">You</strong> (<span id="orderDistSelfRef">—</span>) — <strong id="orderDistSelfRate">6%</strong> commission at your current tier, added once this order is delivered.</span>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div class="om-section">

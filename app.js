@@ -3521,6 +3521,9 @@ function openNewOrder() {
   const staffBlock=document.querySelector('[data-staff-order-customer]');
   const ownerBlock=document.querySelector('[data-owner-order-customer]');
   const paymentBlock=document.querySelector('[data-owner-order-payment]');
+  const staffReferralBlock=document.querySelector('[data-owner-staff-referral-block]');
+  const distSelectBlock=document.querySelector('[data-owner-dist-select-block]');
+  const distSelfBlock=document.querySelector('[data-distributor-self-block]');
   if(userRole==='staff'){
     if(staffBlock) staffBlock.style.display='';
     if(ownerBlock) ownerBlock.style.display='none';
@@ -3533,14 +3536,40 @@ function openNewOrder() {
     if(ownerBlock) ownerBlock.style.display='';
     if(paymentBlock) paymentBlock.style.display='';
     updateCustomerSelect();
-    populateStaffReferralSelectors();
-    // Distributor dropdown previously relied on loadStaffList() having already run
-    // from some other tab (Orders/My Staff) earlier in the session — if New Order
-    // was opened before that, the "Product Distributor" field showed no options at
-    // all beyond the placeholder. Force a fresh load here so it's always populated.
-    loadStaffList();
     const f=document.querySelector('[data-owner-order-referral]'); if(f) f.style.display='';
-    const c=customers.find(x=>String(x.id)===String($('orderCustomer').value)); if($('orderReferralStaffSelect') && c?.referralStaffId) $('orderReferralStaffSelect').value=c.referralStaffId;
+    if(userRole==='distributor'){
+      // A distributor placing their own order is always the one earning the
+      // commission on it — no dropdown to fill in. Hide the owner-only staff
+      // referral picker and the "pick any distributor" select, and show a
+      // locked, auto-filled summary of this distributor's own name,
+      // reference and current commission tier instead.
+      if(staffReferralBlock) staffReferralBlock.style.display='none';
+      if(distSelectBlock) distSelectBlock.style.display='none';
+      if(distSelfBlock) distSelfBlock.style.display='';
+      const myName=(userProfile && userProfile.display_name) || currentUser.email?.split('@')[0] || 'You';
+      const myRef=(userProfile && userProfile.distributor_reference) || ('AGT-' + currentUser.id.slice(0,8).toUpperCase());
+      const myStats=computeDistributorStats(currentUser.id);
+      if($('orderDistSelfName')) $('orderDistSelfName').textContent=myName;
+      if($('orderDistSelfRef')) $('orderDistSelfRef').textContent=myRef;
+      if($('orderDistSelfRate')) $('orderDistSelfRate').textContent=(myStats.currentRate*100).toFixed(0)+'%';
+      // Refresh from the latest commission claims in case they weren't loaded
+      // yet this session, so the displayed tier/rate is never stale.
+      loadDistributorCommissionClaims().then(() => {
+        const freshStats=computeDistributorStats(currentUser.id);
+        if($('orderDistSelfRate')) $('orderDistSelfRate').textContent=(freshStats.currentRate*100).toFixed(0)+'%';
+      });
+    } else {
+      if(staffReferralBlock) staffReferralBlock.style.display='';
+      if(distSelectBlock) distSelectBlock.style.display='';
+      if(distSelfBlock) distSelfBlock.style.display='none';
+      populateStaffReferralSelectors();
+      // Distributor dropdown previously relied on loadStaffList() having already run
+      // from some other tab (Orders/My Staff) earlier in the session — if New Order
+      // was opened before that, the "Product Distributor" field showed no options at
+      // all beyond the placeholder. Force a fresh load here so it's always populated.
+      loadStaffList();
+      const c=customers.find(x=>String(x.id)===String($('orderCustomer').value)); if($('orderReferralStaffSelect') && c?.referralStaffId) $('orderReferralStaffSelect').value=c.referralStaffId;
+    }
   }
   $('orderAddress').value = '';
   $('orderNotes').value = '';
@@ -3655,15 +3684,16 @@ async function createOrder() {
       const { error: ce } = await supabase.from('staff_commission_claims').insert(claim);
       if (ce) console.error('Owner referral claim create failed:',ce);
     }
-    const referralDistributorId = $('orderReferralDistributorSelect')?.value || null;
+    const referralDistributorId = userRole === 'distributor' ? currentUser.id : ($('orderReferralDistributorSelect')?.value || null);
     if (referralDistributorId) {
       const distStats = computeDistributorStats(referralDistributorId);
       const distRate = computeDistributorCommissionRate(referralDistributorId, total);
       const distributor = (distributorListCache||[]).find(d=>String(d.id)===String(referralDistributorId));
+      const distReference = distributor?.distributor_reference || (userRole === 'distributor' ? ((userProfile && userProfile.distributor_reference) || ('AGT-' + currentUser.id.slice(0,8).toUpperCase())) : '');
       const distClaim = {
         owner_id: businessId,
         distributor_id: String(referralDistributorId),
-        distributor_reference: distributor?.distributor_reference || '',
+        distributor_reference: distReference,
         order_id: String(data.id),
         order_ref_no: data.order_ref_no || null,
         customer_name: customer?.name || '',
