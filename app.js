@@ -8624,9 +8624,16 @@ if ('serviceWorker' in navigator) {
         changes, without editing either function's own body.
    ================================================================ */
 (function(){
+  // Exactly 4 real tabs per role + the "More" button makes 5 visible slots
+  // in the bar. Everything else that role can reach (Profile, Expenses,
+  // etc.) still works fine — it just lives one tap away in the "More" sheet
+  // instead of taking a primary slot.
   var NAV_PRIMARY_BY_ROLE = {
-    owner:       ['dashboard','sales','orders','income','profile'],
-    staff:       ['staff-home','orders','my-salary','expenses','profile'],
+    owner:       ['dashboard','sales','orders','income'],
+    staff:       ['staff-home','my-salary','orders','my-tasks'],
+    // Driver and Distributor left as-is for now — see chat, one detail
+    // needs confirming before these change (does "Home" mean the existing
+    // landing tab relabeled, or a genuinely new overview tab?).
     driver:      ['my-deliveries','my-earnings','my-reviews','products','profile'],
     distributor: ['product-agent','orders','expenses','products','profile']
   };
