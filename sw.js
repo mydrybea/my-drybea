@@ -1,3 +1,8 @@
+// Merged with OneSignal's push service worker (same '/my-drybea/' scope
+// can only host one active SW — see CACHE_VERSION note below for why this
+// import must stay the very first statement in the file).
+importScripts('https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js');
+
 // MY DRYBEA — real caching service worker.
 //
 // Strategy (deliberately different per resource type, not one blanket rule):
@@ -33,7 +38,7 @@
 // returning users' phones "throw away every old cached copy and fetch
 // fresh." Forgetting to bump it means users can get stuck on an old cached
 // version even though you've updated the live site.
-const CACHE_VERSION = 'v4';
+const CACHE_VERSION = 'v5';
 const CACHE_NAME = `mydrybea-${CACHE_VERSION}`;
 
 // Files that make up the installable "app shell" — network-first.
