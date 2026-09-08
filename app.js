@@ -1,3 +1,18 @@
+/* ==================== PERFORMANCE: VISIBILITY-AWARE POLLING ====================
+   Wraps a polling callback so it's skipped whenever the browser tab is hidden
+   (phone locked, user switched to another app/tab). The setInterval itself
+   keeps ticking on schedule — this just no-ops the expensive part (network
+   request + render) while nobody can see it, then resumes automatically on
+   the next tick once the tab is visible again. No behavior change while the
+   tab is open and visible; existing start/stop-on-tab-switch logic elsewhere
+   in this file is untouched. */
+function skipWhenHidden(fn) {
+  return function (...args) {
+    if (document.hidden) return;
+    return fn.apply(this, args);
+  };
+}
+
 /* ==================== EVENT DELEGATION (PHASE 1 REFACTOR) ====================
    Pilot: Staff / Salary / Attendance / Advance sections only.
    Replaces inline onclick="fn(args)" with data-action / data-id / data-args
@@ -1236,7 +1251,7 @@ function renderTodayAttendanceStatus() {
     const inTime = new Date(todayAttendanceRow.check_in);
     const tick = () => { box.textContent = '🟢 Checked in at ' + inTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' — ' + formatDuration(Date.now() - inTime.getTime()) + ' so far.'; };
     tick();
-    attendanceTickTimer = setInterval(tick, 30000);
+    attendanceTickTimer = setInterval(skipWhenHidden(tick), 30000);
     box.className = 'notice';
     setAttendBtnState(startBtn, 'done', 'play', 'Started');
     setAttendBtnState(endBtn, 'active', 'square', 'End Day');
@@ -5696,7 +5711,7 @@ function startDriverLocationPolling() {
   // driver_locations table (a common setup step people forget), the realtime channel
   // subscribes successfully but never actually fires, and the map silently goes stale.
   // Polling every 15s guarantees the map keeps updating either way.
-  driverLocationPollTimer = setInterval(loadDriverLocations, 15000);
+  driverLocationPollTimer = setInterval(skipWhenHidden(loadDriverLocations), 15000);
 }
 
 async function loadDriverLocations() {
@@ -5708,7 +5723,13 @@ async function loadDriverLocations() {
   // every single poll.
   if (!(await ensureFreshSession())) return;
   try {
-    const { data, error } = await supabase.from('driver_locations').select('*').eq('owner_id', currentUser.id);
+    // PERFORMANCE: narrowed from select('*') — only these columns are ever read
+    // by renderOwnerDriverMarkers() below. This runs every 15s while the
+    // Delivery tab is open, so trimming the payload here has an outsized effect
+    // versus a one-off query elsewhere.
+    const { data, error } = await supabase.from('driver_locations')
+      .select('driver_id, latitude, longitude, updated_at, accuracy, shift_start_at, active_seconds_today')
+      .eq('owner_id', currentUser.id);
     if (error) throw error;
     renderOwnerDriverMarkers(data || []);
   } catch (e) {

@@ -59,8 +59,15 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Noto+Sans+Sinhala:wght@300;400;500;600;700&family=Playfair+Display:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- PERFORMANCE: defer instead of blocking parse. `defer` scripts download in
+     parallel with HTML parsing (no more render-blocking) but still execute,
+     in this exact order, right before DOMContentLoaded fires — which is
+     exactly when app.js's DOMContentLoaded handlers first need `Chart`,
+     `supabase`, `lucide` and `L` to exist. Nothing about execution order or
+     timing changes from app.js's point of view; only the render-blocking
+     download stalls at the top of <head> are removed. -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
 
 <!-- ============================================================
      REAL PUSH NOTIFICATIONS (OneSignal Web Push)
@@ -91,10 +98,16 @@
     });
   });
 </script>
-<script src="https://unpkg.com/lucide@latest"></script>
+<!-- NOTE: @latest is intentionally left as-is here — pinning it to a specific
+     version number requires checking the current release (e.g. at
+     unpkg.com/browse/lucide) so the pinned version still contains every
+     icon name this app already calls with data-lucide="...". Pin it once
+     you've confirmed that; a guessed version number could silently drop
+     icons the app relies on. -->
+<script src="https://unpkg.com/lucide@latest" defer></script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-<script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="" defer></script>
+<script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js" defer></script>
 
 
 <link rel="stylesheet" href="style.css">
