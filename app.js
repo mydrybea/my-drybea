@@ -8806,6 +8806,16 @@ function nbDistCommissionDecided(r){
   ]}];
 }
 
+// Mirrors nbDistCommissionDecided but for a staff member's own commission
+// claim (staff_commission_claims) being approved/rejected by the owner via
+// verifyCommissionClaim()/verify_staff_commission_claim.
+function nbStaffCommissionDecided(r){
+  return [r.status==='approved'?'✅ Commission approved':'❌ Commission rejected', `Your commission claim was ${r.status}`, r.status==='approved'?'info':'warn', { tab:'my-income', details:[
+    {label:'Order', value: r.order_ref_no || '-'}, {label:'Status', value: r.status},
+    {label:'Note', value: r.owner_note || '-'}
+  ]}];
+}
+
 // ---- Distributor-claim change detection ----
 // distributor_commission_claims is refreshed via a plain reload (see
 // refreshCommissionRealtime / refreshDistributorCommissionRealtime), not via
@@ -8948,6 +8958,9 @@ function startAppNotifyRealtime(){
       ch.on('postgres_changes',{event:'INSERT',schema:'public',table:'attendance_corrections',filter:`owner_id=eq.${currentUser.id}`},(p)=> showAppNotification(...nbCorrectionRequested(p.new||{})));
       ch.on('postgres_changes',{event:'INSERT',schema:'public',table:'staff_commission_claims',filter:`owner_id=eq.${currentUser.id}`},(p)=> showAppNotification(...nbNewSaleToVerify(p.new||{})));
       ch.on('postgres_changes',{event:'INSERT',schema:'public',table:'driver_cod_handovers',filter:`owner_id=eq.${currentUser.id}`},(p)=> showAppNotification(...nbCodHandover(p.new||{})));
+      // A distributor submitting a sale for commission — same "needs owner
+      // verification" shape as a staff sale, just a different source table.
+      ch.on('postgres_changes',{event:'INSERT',schema:'public',table:'distributor_commission_claims',filter:`owner_id=eq.${currentUser.id}`},(p)=> showAppNotification(...nbDistSaleToVerify(p.new||{})));
     } else if(userRole === 'staff'){
       ch.on('postgres_changes',{event:'UPDATE',schema:'public',table:'advance_requests',filter:`staff_id=eq.${currentUser.id}`},(p)=>{
         const r=p.new||{}, o=p.old||{};
@@ -8960,6 +8973,22 @@ function startAppNotifyRealtime(){
       ch.on('postgres_changes',{event:'UPDATE',schema:'public',table:'attendance_corrections',filter:`staff_id=eq.${currentUser.id}`},(p)=>{
         const r=p.new||{}, o=p.old||{};
         if(r.status!==o.status && r.status!=='pending') showAppNotification(...nbCorrectionDecided(r));
+      });
+      // Owner approved/rejected this staff member's own commission claim.
+      // Guard on status actually changing (not e.g. an unrelated column
+      // update) and skip the initial pending->pending no-op.
+      ch.on('postgres_changes',{event:'UPDATE',schema:'public',table:'staff_commission_claims',filter:`staff_id=eq.${currentUser.id}`},(p)=>{
+        const r=p.new||{}, o=p.old||{};
+        if(r.status!==o.status && r.status!=='pending') showAppNotification(...nbStaffCommissionDecided(r));
+      });
+    } else if(userRole === 'distributor'){
+      // Owner approved/rejected this distributor's commission claim. Note:
+      // markDistributorCommissionPaid()/markDistributorCommissionUnpaid() also
+      // UPDATE this row (payout_status only) — the status!==o.status guard
+      // means those payout-only updates correctly do NOT re-fire this.
+      ch.on('postgres_changes',{event:'UPDATE',schema:'public',table:'distributor_commission_claims',filter:`distributor_id=eq.${currentUser.id}`},(p)=>{
+        const r=p.new||{}, o=p.old||{};
+        if(r.status!==o.status && r.status!=='pending') showAppNotification(...nbDistCommissionDecided(r));
       });
     }
 
@@ -9005,12 +9034,13 @@ async function catchUpMissedNotifications(){
   catchUpBusy = true;
   try{
     if(userRole === 'owner'){
-      const [advs, att, corr, claims, handovers] = await Promise.all([
+      const [advs, att, corr, claims, handovers, distClaims] = await Promise.all([
         supabase.from('advance_requests').select('*').eq('owner_id',currentUser.id).gt('requested_at',lastSeen).order('requested_at',{ascending:true}),
         supabase.from('attendance').select('*').eq('owner_id',currentUser.id).or(`check_in.gt.${lastSeen},check_out.gt.${lastSeen}`).order('work_date',{ascending:true}),
         supabase.from('attendance_corrections').select('*').eq('owner_id',currentUser.id).gt('requested_at',lastSeen).order('requested_at',{ascending:true}),
         supabase.from('staff_commission_claims').select('*').eq('owner_id',currentUser.id).gt('submitted_at',lastSeen).order('submitted_at',{ascending:true}),
-        supabase.from('driver_cod_handovers').select('*').eq('owner_id',currentUser.id).gt('created_at',lastSeen).order('created_at',{ascending:true})
+        supabase.from('driver_cod_handovers').select('*').eq('owner_id',currentUser.id).gt('created_at',lastSeen).order('created_at',{ascending:true}),
+        supabase.from('distributor_commission_claims').select('*').eq('owner_id',currentUser.id).gt('submitted_at',lastSeen).order('submitted_at',{ascending:true})
       ]);
       (advs.data||[]).forEach(r=> showAppNotification(...nbAdvanceRequested(r)));
       (att.data||[]).forEach(r=>{
@@ -9020,6 +9050,7 @@ async function catchUpMissedNotifications(){
       (corr.data||[]).forEach(r=> showAppNotification(...nbCorrectionRequested(r)));
       (claims.data||[]).forEach(r=> showAppNotification(...nbNewSaleToVerify(r)));
       (handovers.data||[]).forEach(r=> showAppNotification(...nbCodHandover(r)));
+      (distClaims.data||[]).forEach(r=> showAppNotification(...nbDistSaleToVerify(r)));
     } else if(userRole === 'staff'){
       const queries = [
         supabase.from('advance_requests').select('*').eq('staff_id',currentUser.id).not('decided_at','is',null).gt('decided_at',lastSeen).order('decided_at',{ascending:true}),
@@ -9030,9 +9061,16 @@ async function catchUpMissedNotifications(){
       (advs.data||[]).forEach(r=> showAppNotification(...nbAdvanceDecided(r)));
       (tasks.data||[]).forEach(r=> showAppNotification(...nbNewTask(r)));
       if(notices) (notices.data||[]).forEach(r=> showAppNotification(...nbNewNotice(r)));
-      // NOTE: attendance-correction decisions aren't caught up here — the
-      // decided_at column on that table isn't confirmed to exist, and a bad
-      // filter would abort the whole Promise.all above. Live-only for now.
+      // NOTE: attendance-correction decisions AND staff commission-claim
+      // decisions aren't caught up here — neither table has a confirmed
+      // decided-at timestamp column to filter on, and a bad filter would
+      // abort the whole Promise.all above. Live-only for now (see the
+      // matching UPDATE handler in startAppNotifyRealtime).
+    } else if(userRole === 'distributor'){
+      // Same gap as staff commission decisions above: distributor_commission_claims
+      // only reliably has verified_at set on approval, not on rejection, so a
+      // single "decided since lastSeen" filter can't cover both outcomes.
+      // Live-only for now (see the UPDATE handler in startAppNotifyRealtime).
     }
   }catch(e){ console.warn('Notification catch-up failed:', e); }
   finally{ catchUpBusy = false; bumpAppNotifyLastSeen(); }
