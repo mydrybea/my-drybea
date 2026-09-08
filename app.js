@@ -1,3 +1,38 @@
+/* ==================== EVENT DELEGATION (PHASE 1 REFACTOR) ====================
+   Pilot: Staff / Salary / Attendance / Advance sections only.
+   Replaces inline onclick="fn(args)" with data-action / data-id / data-args
+   attributes, handled by ONE delegated listener below. No business logic
+   changed — this only changes how the click reaches the same functions.
+   data-id      -> passed as the 1st argument (e.g. a row's ${row.id})
+   data-args    -> JSON array of any further literal arguments
+   Example: <button data-action="decideAdvance" data-id="${r.id}" data-args='["approved"]'>
+            -> calls decideAdvance(r.id, "approved") exactly like the old onclick did. */
+document.addEventListener('click', function (e) {
+  const el = e.target.closest('[data-action]');
+  if (!el) return;
+  const action = el.dataset.action;
+  const fn = window[action];
+  if (typeof fn !== 'function') {
+    console.warn('[data-action] no function found for:', action);
+    return;
+  }
+  const args = [];
+  if (el.dataset.id !== undefined) args.push(el.dataset.id);
+  if (el.dataset.args !== undefined) {
+    try { args.push(...JSON.parse(el.dataset.args)); }
+    catch (err) { console.warn('[data-action] bad data-args on', action, err); }
+  }
+  fn.apply(null, args);
+});
+
+// Extracted from a repeated inline onclick (was: activateAppTab('profile') then
+// scroll salaryStaffSelect into view after a short delay). Same behavior, named.
+function focusSalaryStaffSelect() {
+  activateAppTab('profile');
+  setTimeout(() => document.getElementById('salaryStaffSelect')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 120);
+}
+window.focusSalaryStaffSelect = focusSalaryStaffSelect;
+
 /* BUSINESS-CLASS ICON SYSTEM — VISUAL ONLY.
    No database, auth, Supabase, calculations or business logic changed. */
 document.addEventListener('DOMContentLoaded', function () {
@@ -396,7 +431,7 @@ function renderStaffList(list) {
     <tr>
       <td>${s.display_name || '(no name)'} ${badge}</td>
       <td style="font-size:11px;word-break:break-all;">${isDist ? (s.distributor_reference || ('AGT-' + String(s.id).slice(0,8).toUpperCase())) : s.id}</td>
-      <td data-owner-only><button class="btn btn-sm btn-danger" aria-label="Remove" onclick="removeStaffMember('${s.id}')"><i class="business-icon" data-lucide="trash-2" aria-hidden="true"></i></button></td>
+      <td data-owner-only><button class="btn btn-sm btn-danger" aria-label="Remove" data-action="removeStaffMember" data-id="${s.id}"><i class="business-icon" data-lucide="trash-2" aria-hidden="true"></i></button></td>
     </tr>
   `;
   }).join('');
@@ -816,7 +851,7 @@ function renderSalaryHistory() {
         <td>${SAL_TYPE_LABEL[s.entry_type] || s.entry_type}</td>
         <td>${fmt(s.amount)}</td>
         <td>${s.note || '-'}</td>
-        <td><button class="btn btn-sm btn-danger" onclick="deleteSalaryEntry('${s.id}')">🗑️</button></td>
+        <td><button class="btn btn-sm btn-danger" data-action="deleteSalaryEntry" data-id="${s.id}">🗑️</button></td>
       </tr>
     `).join('');
   }
@@ -1434,7 +1469,7 @@ async function submitAdvanceRequest() {
   const amount = Number($('advAmount').value) || 0;
   const reason = $('advReason').value.trim();
   if (amount <= 0) { alert('Enter an amount greater than 0!'); return; }
-  const btn = document.querySelector('button[onclick="submitAdvanceRequest()"]');
+  const btn = document.querySelector('button[data-action="submitAdvanceRequest"]');
   if (btn) { btn.disabled = true; btn.dataset.originalText = btn.textContent; btn.textContent = 'Sending…'; }
   if (!(await ensureFreshSession())) return;
   try {
@@ -1580,8 +1615,8 @@ function renderOwnerAdvanceRequests(list) {
         <td>${r.reason || '-'}</td>
         <td><span class="status-pill ${r.status}">${r.status}</span></td>
         <td>${r.status === 'pending' ? `
-          <button class="btn btn-sm btn-primary" onclick="decideAdvance('${r.id}','approved')">✅</button>
-          <button class="btn btn-sm btn-danger" onclick="decideAdvance('${r.id}','rejected')">❌</button>
+          <button class="btn btn-sm btn-primary" data-action="decideAdvance" data-id="${r.id}" data-args='["approved"]'>✅</button>
+          <button class="btn btn-sm btn-danger" data-action="decideAdvance" data-id="${r.id}" data-args='["rejected"]'>❌</button>
         ` : '-'}</td>
       </tr>
     `).join('') : '<tr><td colspan="6" style="text-align:center;opacity:.5;padding:14px;">No advance requests yet.</td></tr>';
@@ -4037,7 +4072,7 @@ function renderDeliveryDriverStats() {
       <td>Rs. ${Math.round(todayPay).toLocaleString()}</td>
       <td>${workingPctCell}</td>
       <td>Rs. ${Math.round(monthPay).toLocaleString()}</td>
-      <td><button class="btn btn-sm btn-danger" onclick="removeStaffMember('${d.id}')" aria-label="Remove driver"><i class="business-icon icon-inline" data-lucide="trash-2" aria-hidden="true"></i></button></td>
+      <td><button class="btn btn-sm btn-danger" data-action="removeStaffMember" data-id="${d.id}" aria-label="Remove driver"><i class="business-icon icon-inline" data-lucide="trash-2" aria-hidden="true"></i></button></td>
     </tr>`;
   }).join('');
   if (onlineCountEl) onlineCountEl.textContent = String(onlineCount);
@@ -7446,7 +7481,7 @@ async function deleteStaffTask(id){
 
 function renderStaffTasks(){
   const list=getStaffLocalTasks(),el=$('staffTaskList');if(!el)return;
-  const rows=list.length?list.map(x=>`<div class="task-row"><div class="task-main ${taskDone(x)?'task-done':''}"><strong>${escapeHtmlSafe(x.title)}</strong><small><span class="priority-pill ${x.priority==='high'?'high':'normal'}">${x.priority==='high'?'HIGH':'NORMAL'}</span> · ${new Date(x.created_at||Date.now()).toLocaleDateString()}</small></div><div style="display:flex;gap:6px;"><button class="btn btn-sm ${taskDone(x)?'':'btn-primary'}" onclick="toggleStaffTask('${x.id}')"><i class="business-icon" data-lucide="${taskDone(x)?'rotate-ccw':'check'}"></i><span>${taskDone(x)?'Reopen':'Done'}</span></button></div></div>`).join(''):'<div class="notice">No assigned tasks yet.</div>';
+  const rows=list.length?list.map(x=>`<div class="task-row"><div class="task-main ${taskDone(x)?'task-done':''}"><strong>${escapeHtmlSafe(x.title)}</strong><small><span class="priority-pill ${x.priority==='high'?'high':'normal'}">${x.priority==='high'?'HIGH':'NORMAL'}</span> · ${new Date(x.created_at||Date.now()).toLocaleDateString()}</small></div><div style="display:flex;gap:6px;"><button class="btn btn-sm ${taskDone(x)?'':'btn-primary'}" data-action="toggleStaffTask" data-id="${x.id}"><i class="business-icon" data-lucide="${taskDone(x)?'rotate-ccw':'check'}"></i><span>${taskDone(x)?'Reopen':'Done'}</span></button></div></div>`).join(''):'<div class="notice">No assigned tasks yet.</div>';
   el.innerHTML=rows;if(window.lucide)lucide.createIcons();
   const home=$('staffHomeTasksList');if(home)home.innerHTML=list.filter(x=>!taskDone(x)).slice(0,4).map(x=>`<div class="task-row"><div class="task-main"><strong>${escapeHtmlSafe(x.title)}</strong><small>${x.priority==='high'?'High priority':'Normal'}</small></div><i class="business-icon" data-lucide="chevron-right"></i></div>`).join('')||'<div class="notice">No open tasks.</div>';if(window.lucide)lucide.createIcons();
 }
@@ -7516,7 +7551,7 @@ function renderOwnerStaffPerformance(){
     const eligible=claims.filter(c=>String(c.staff_id)===String(st.id));
     const sales=eligible.reduce((a,c)=>a+(Number(c.order_total)||0),0),commission=eligible.reduce((a,c)=>a+(Number(c.commission_amount)||0),0);totalSales+=sales;totalCommission+=commission;
     const open=(getMyStaffDataState().tasks||[]).filter(t=>String(t.staff_id)===String(st.id)&&!taskDone(t)).length,p=perf[st.id]||{};
-    return `<tr><td><strong>${escapeHtmlSafe(st.display_name||'(no name)')}</strong><br><small>${escapeHtmlSafe(st.staff_reference||st.id||'')}</small></td><td><select id="staffStatus_${st.id}" class="staff-edit-input"><option value="active" ${(p.status||'active')==='active'?'selected':''}>Active</option><option value="paused" ${p.status==='paused'?'selected':''}>Paused</option></select></td><td>${eligible.length}</td><td>${fmt(sales)}</td><td><strong>12%</strong><br><small>Owner verified</small></td><td>${fmt(commission)}</td><td>${open}</td><td><input id="staffTarget_${st.id}" class="staff-edit-input" type="number" min="0" value="${Number(p.target)||0}" placeholder="Rs."></td><td><input id="staffNote_${st.id}" class="staff-edit-input" value="${escapeHtmlSafe(p.note||p.notes||'')}" placeholder="Owner note"></td><td><button class="btn btn-sm btn-primary" onclick="editOwnerStaffPerformance('${st.id}')"><i class="business-icon" data-lucide="save"></i></button></td></tr>`;
+    return `<tr><td><strong>${escapeHtmlSafe(st.display_name||'(no name)')}</strong><br><small>${escapeHtmlSafe(st.staff_reference||st.id||'')}</small></td><td><select id="staffStatus_${st.id}" class="staff-edit-input"><option value="active" ${(p.status||'active')==='active'?'selected':''}>Active</option><option value="paused" ${p.status==='paused'?'selected':''}>Paused</option></select></td><td>${eligible.length}</td><td>${fmt(sales)}</td><td><strong>12%</strong><br><small>Owner verified</small></td><td>${fmt(commission)}</td><td>${open}</td><td><input id="staffTarget_${st.id}" class="staff-edit-input" type="number" min="0" value="${Number(p.target)||0}" placeholder="Rs."></td><td><input id="staffNote_${st.id}" class="staff-edit-input" value="${escapeHtmlSafe(p.note||p.notes||'')}" placeholder="Owner note"></td><td><button class="btn btn-sm btn-primary" data-action="editOwnerStaffPerformance" data-id="${st.id}"><i class="business-icon" data-lucide="save"></i></button></td></tr>`;
   }).join('')||'<tr><td colspan="10" style="text-align:center;opacity:.5;padding:18px;">No staff added yet.</td></tr>';
   if($('ownerStaffPerformanceBody'))$('ownerStaffPerformanceBody').innerHTML=rows;if($('ownerStaffCount'))$('ownerStaffCount').textContent=list.length;if($('ownerStaffSales'))$('ownerStaffSales').textContent=fmt(totalSales);if($('ownerStaffCommission'))$('ownerStaffCommission').textContent=fmt(totalCommission);if($('ownerCommissionTotal2'))$('ownerCommissionTotal2').textContent=fmt(totalCommission);
   if($('ownerCommissionBody'))$('ownerCommissionBody').innerHTML=list.map(st=>{const cs=claims.filter(c=>String(c.staff_id)===String(st.id));const sales=cs.reduce((a,c)=>a+(Number(c.order_total)||0),0),commission=cs.reduce((a,c)=>a+(Number(c.commission_amount)||0),0);return `<tr><td>${escapeHtmlSafe(st.display_name||'(no name)')}</td><td>${fmt(sales)}</td><td>${fmt(commission)}</td></tr>`;}).join('')||'<tr><td colspan="3" style="text-align:center;opacity:.5;padding:18px;">No owner-verified commission sales this month.</td></tr>';
@@ -9313,8 +9348,8 @@ function renderOwnerPendingCorrections() {
     const reason = escapeHtmlSafe(c.reason || '-');
     return `<tr><td><strong>${name}</strong></td><td>${c.work_date}</td><td>${fieldLabel}</td><td>${reqTime}</td><td>${reason}</td>
       <td style="white-space:nowrap;">
-        <button class="btn btn-sm btn-primary" onclick="decideAttendanceCorrection('${c.id}', true)"><i class="business-icon icon-inline" data-lucide="check"></i> Approve</button>
-        <button class="btn btn-sm btn-danger" onclick="decideAttendanceCorrection('${c.id}', false)"><i class="business-icon icon-inline" data-lucide="x"></i> Reject</button>
+        <button class="btn btn-sm btn-primary" data-action="decideAttendanceCorrection" data-id="${c.id}" data-args='[true]'><i class="business-icon icon-inline" data-lucide="check"></i> Approve</button>
+        <button class="btn btn-sm btn-danger" data-action="decideAttendanceCorrection" data-id="${c.id}" data-args='[false]'><i class="business-icon icon-inline" data-lucide="x"></i> Reject</button>
       </td></tr>`;
   }).join('');
   if (window.lucide) lucide.createIcons({ attrs: { 'stroke-width': 1.9, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' } });
