@@ -8768,6 +8768,18 @@ function nbNewSaleToVerify(r){
     {label:'Commission (12%)', value: 'Rs. '+fmt(Number(r.order_total)*0.12||0)}
   ]}];
 }
+// Mirrors notifyDriverNewDelivery() (the in-tab/native-Notification version
+// used by startDriverDeliveriesRealtime) but returns the same [title,message,
+// type,opts] shape as every other nb* builder, so it can also be shown via
+// showAppNotification() and reach a closed tab through the send-push webhook.
+function nbNewDelivery(r){
+  const label = r.order_ref_no || String(r.id||'').slice(0,8);
+  return ['🚚 New Delivery Assigned', `${label} — ${r.address || 'Check My Deliveries'}`, 'info', { tab:'my-deliveries', details:[
+    {label:'Order', value: label}, {label:'Address', value: r.address || '-'},
+    {label:'Total', value: 'Rs. '+fmt(Number(r.total||0))}
+  ]}];
+}
+
 function nbCodHandover(r){
   return ['💰 Cash handed over', `${r.driver_name||'A driver'} handed over Rs. ${fmt(r.amount)}`, 'info', { tab:'delivery', details:[
     {label:'Driver', value: r.driver_name || '-'}, {label:'Amount', value: 'Rs. '+fmt(r.amount)},
@@ -8990,6 +9002,18 @@ function startAppNotifyRealtime(){
         const r=p.new||{}, o=p.old||{};
         if(r.status!==o.status && r.status!=='pending') showAppNotification(...nbDistCommissionDecided(r));
       });
+    } else if(userRole === 'driver'){
+      // Same "new assignment" shape as startDriverDeliveriesRealtime's own
+      // channel (which stays in charge of loadMyDeliveries()) — this one
+      // only adds the notification-center/toast/push entry. INSERT covers an
+      // order created pre-assigned to this driver; UPDATE covers a dispatcher
+      // assigning an existing order, guarded so re-saving an already-assigned
+      // order (address edit etc.) doesn't re-fire.
+      ch.on('postgres_changes',{event:'INSERT',schema:'public',table:'orders',filter:`assigned_driver_id=eq.${currentUser.id}`},(p)=> showAppNotification(...nbNewDelivery(p.new||{})));
+      ch.on('postgres_changes',{event:'UPDATE',schema:'public',table:'orders',filter:`assigned_driver_id=eq.${currentUser.id}`},(p)=>{
+        const r=p.new||{}, o=p.old||{};
+        if(String(o.assigned_driver_id||'')!==String(currentUser.id)) showAppNotification(...nbNewDelivery(r));
+      });
     }
 
     ch.subscribe((status)=>{
@@ -9071,6 +9095,11 @@ async function catchUpMissedNotifications(){
       // only reliably has verified_at set on approval, not on rejection, so a
       // single "decided since lastSeen" filter can't cover both outcomes.
       // Live-only for now (see the UPDATE handler in startAppNotifyRealtime).
+    } else if(userRole === 'driver'){
+      // orders has no confirmed "assigned_at" timestamp column to filter a
+      // "assigned since lastSeen" catch-up query on, same limitation as
+      // above. Live-only for now (see the INSERT/UPDATE handlers in
+      // startAppNotifyRealtime and the pre-existing startDriverDeliveriesRealtime).
     }
   }catch(e){ console.warn('Notification catch-up failed:', e); }
   finally{ catchUpBusy = false; bumpAppNotifyLastSeen(); }
