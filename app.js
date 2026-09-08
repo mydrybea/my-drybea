@@ -8930,7 +8930,12 @@ function requestPushPermission(){
     try{
       await OneSignal.Notifications.requestPermission();
       updatePushEnableButton();
-      if(OneSignal.Notifications.permission === true){
+      // Same iOS PWA lag as updatePushEnableButton() above: trust the
+      // browser's own Notification.permission first since it's accurate
+      // the instant the user taps Allow, instead of waiting on OneSignal's
+      // SDK-level flag which can take a few seconds to catch up.
+      const nativeGranted = (typeof Notification !== 'undefined' && Notification.permission === 'granted');
+      if(nativeGranted || OneSignal.Notifications.permission === true){
         updateStatus('🔔 Push notifications enabled');
         // Before permission is granted, this browser has no push subscription
         // yet, so the earlier OneSignal.login() call at app-login time has
@@ -8957,7 +8962,16 @@ function updatePushEnableButton(){
   if(!btn) return;
   pushOneSignalReady(function(OneSignal){
     try{
-      const granted = OneSignal.Notifications.permission === true;
+      // On iOS installed PWA, OneSignal's own Notifications.permission flag can
+      // lag behind reality for a few seconds right after the user grants
+      // permission (the push subscription is still registering in the
+      // background), which made this button flicker back to "Enable Push
+      // Notifications" even though permission really was granted. The
+      // browser's own Notification.permission is synchronous and always
+      // accurate, so check that first and only fall back to OneSignal's flag
+      // if the native API isn't available on this browser.
+      const nativeGranted = (typeof Notification !== 'undefined' && Notification.permission === 'granted');
+      const granted = nativeGranted || OneSignal.Notifications.permission === true;
       btn.innerHTML = granted
         ? '<i class="business-icon icon-inline" data-lucide="bell-check" aria-hidden="true"></i> Push Notifications On'
         : '<i class="business-icon icon-inline" data-lucide="bell-plus" aria-hidden="true"></i> Enable Push Notifications';
