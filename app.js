@@ -8900,7 +8900,15 @@ function initPushForCurrentUser(){
       if(businessId) await OneSignal.User.addTag('business_id', String(businessId));
       if(userRole) await OneSignal.User.addTag('role', userRole);
       updatePushEnableButton();
-    }catch(e){ console.warn('OneSignal login/tag failed:', e); }
+    }catch(e){
+      // Known OneSignal Web SDK v16 quirk: login() can throw an internal
+      // "Cannot read properties of undefined" error when called before this
+      // browser has a push subscription/permission yet (nothing to attach
+      // the external_id to). It's harmless here (caught, doesn't break the
+      // app) and gets retried once permission is actually granted via
+      // requestPushPermission() -> initPushForCurrentUser() again.
+      console.warn('OneSignal login/tag failed:', e);
+    }
   });
 }
 
@@ -8922,8 +8930,18 @@ function requestPushPermission(){
     try{
       await OneSignal.Notifications.requestPermission();
       updatePushEnableButton();
-      if(OneSignal.Notifications.permission === true) updateStatus('🔔 Push notifications enabled');
-      else updateStatus('🔕 Push permission not granted — check your browser/site settings');
+      if(OneSignal.Notifications.permission === true){
+        updateStatus('🔔 Push notifications enabled');
+        // Before permission is granted, this browser has no push subscription
+        // yet, so the earlier OneSignal.login() call at app-login time has
+        // nothing to attach the external_id to and silently fails inside the
+        // SDK (harmless "login/tag failed" warning in the console). Now that
+        // a real subscription exists, retry the login/tag linking so this
+        // device actually gets linked to the current user.
+        initPushForCurrentUser();
+      } else {
+        updateStatus('🔕 Push permission not granted — check your browser/site settings');
+      }
     }catch(e){
       console.warn('OneSignal permission request failed:', e);
       alert('Push notifications aren\'t supported on this device/browser.');
