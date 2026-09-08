@@ -127,6 +127,15 @@
      as before.
      ============================================================ -->
 <style>
+/* Double-submit guard visual feedback (see app.js data-action click handler):
+   any [data-action] button gets this while its async handler is in flight,
+   so the user sees it's working instead of thinking the tap didn't register. */
+button[data-action].is-busy,
+button[data-action]:disabled{
+  opacity:.6;
+  cursor:not-allowed;
+  pointer-events:none;
+}
 #delivery{
   --dv-green:#0ea472; --dv-green-ink:#047a56; --dv-green-soft:#e6f7f1;
   --dv-orange:#f97316; --dv-orange-ink:#c2410c; --dv-orange-soft:#fff1e6;

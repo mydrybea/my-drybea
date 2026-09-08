@@ -10,6 +10,11 @@
 document.addEventListener('click', function (e) {
   const el = e.target.closest('[data-action]');
   if (!el) return;
+  // DOUBLE-SUBMIT GUARD: if this button is already mid-request (e.g. a fast
+  // double-tap on mobile, or a slow network), ignore the extra click instead
+  // of firing a second insert/update. Applies to every [data-action] button
+  // automatically — no per-function changes needed.
+  if (el.disabled || el.classList.contains('is-busy')) return;
   const action = el.dataset.action;
   const fn = window[action];
   if (typeof fn !== 'function') {
@@ -22,7 +27,12 @@ document.addEventListener('click', function (e) {
     try { args.push(...JSON.parse(el.dataset.args)); }
     catch (err) { console.warn('[data-action] bad data-args on', action, err); }
   }
-  fn.apply(null, args);
+  el.classList.add('is-busy');
+  el.disabled = true;
+  Promise.resolve(fn.apply(null, args)).finally(() => {
+    el.classList.remove('is-busy');
+    el.disabled = false;
+  });
 });
 
 // Extracted from a repeated inline onclick (was: activateAppTab('profile') then
