@@ -8926,7 +8926,20 @@ function logoutPushForCurrentUser(){
 // so the browser's own permission prompt reliably shows instead of being
 // silently suppressed.
 function requestPushPermission(){
-  pushOneSignalReady(async function(OneSignal){
+  // CRITICAL for iOS Safari: the permission prompt must be triggered
+  // synchronously from the click that started it. Routing this through
+  // pushOneSignalReady() pushes the call onto OneSignal's own queue, which
+  // gets drained on a later tick — by the time OneSignal actually calls
+  // requestPermission(), Safari no longer considers this a "live" user
+  // gesture, so it silently skips the native prompt entirely (no popup ever
+  // shows, permission stays stuck at "default" forever, and the app never
+  // even shows up in iPhone Settings > Notifications). OneSignal has almost
+  // always already finished loading by the time a logged-in user reaches
+  // this button (it starts loading at page load), so call it directly off
+  // window.OneSignal right here in the click handler to keep the gesture
+  // intact, and only fall back to the deferred queue in the rare case
+  // OneSignal genuinely isn't ready yet.
+  const run = async function(OneSignal){
     try{
       await OneSignal.Notifications.requestPermission();
       updatePushEnableButton();
@@ -8951,7 +8964,12 @@ function requestPushPermission(){
       console.warn('OneSignal permission request failed:', e);
       alert('Push notifications aren\'t supported on this device/browser.');
     }
-  });
+  };
+  if(window.OneSignal && window.OneSignal.Notifications){
+    run(window.OneSignal);
+  } else {
+    pushOneSignalReady(run);
+  }
 }
 window.requestPushPermission = requestPushPermission;
 
