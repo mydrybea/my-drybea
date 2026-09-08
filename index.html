@@ -80,7 +80,14 @@
     await OneSignal.init({
       appId: "b307ee15-de2d-4295-95c9-94731cdf9080",
       notifyButton: { enable: false }, // we use our own "Enable Push" button instead
-      allowLocalhostAsSecureOrigin: true // safe to leave on; only matters during local testing
+      allowLocalhostAsSecureOrigin: true, // safe to leave on; only matters during local testing
+      // This site is a GitHub Pages PROJECT page (mydrybea.github.io/my-drybea/),
+      // not the domain root — OneSignal's default assumes OneSignalSDKWorker.js
+      // lives at the domain root (mydrybea.github.io/OneSignalSDKWorker.js),
+      // which 404s here. The worker file actually lives next to this index.html,
+      // inside /my-drybea/, so we point the SDK there explicitly.
+      serviceWorkerParam: { scope: '/my-drybea/' },
+      serviceWorkerPath: 'OneSignalSDKWorker.js'
     });
   });
 </script>
