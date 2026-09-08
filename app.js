@@ -183,6 +183,7 @@ async function loadUserProfile() {
     businessId = currentUser.id;
   }
   applyRoleUI();
+  initPushForCurrentUser();
   // PERFORMANCE: these role-specific data loads (staff tasks/notices/
   // performance/commission, or driver deliveries, or distributor claims)
   // used to be awaited right here, which blocked the ENTIRE rest of login
@@ -6643,6 +6644,7 @@ async function logout() {
   stopDistributorCommissionRealtime();
   stopAdvanceRealtime();
   stopAppNotifyRealtime();
+  logoutPushForCurrentUser();
   if (typeof stopDriverLocationSharing === 'function') stopDriverLocationSharing();
   await supabase.auth.signOut();
   currentUser = null;
@@ -7661,6 +7663,12 @@ async function loadDistributorCommissionClaims(){
     const { data, error } = await query;
     if (error) throw error;
     window.distributorCommissionClaims = data || [];
+    // BUGFIX: this data refresh used to be completely silent — a new
+    // distributor sale (owner side) or a commission being approved/rejected
+    // (distributor side) updated the underlying arrays/UI but never fired a
+    // toast/sound/notification-center entry like every other event in the
+    // app does. See notifyDistributorClaimChanges() for the actual alert.
+    notifyDistributorClaimChanges(window.distributorCommissionClaims, userRole);
     if (userRole === 'owner') renderDistributorsPanel();
     if (userRole === 'distributor') { renderProductAgentPage(); renderDistributorHome(); }
     return window.distributorCommissionClaims;
@@ -8675,6 +8683,7 @@ function updateNotifyBadge(){
 function openNotifyCenter(){
   const list = $('notifyCenterList');
   if(!list) return;
+  updatePushEnableButton();
   // Keep the sound toggle inside the panel in sync with the stored
   // preference every time the panel opens (it may have changed in
   // another tab/session since we last rendered it).
@@ -8782,6 +8791,142 @@ function nbCorrectionDecided(r){
     {label:'Status', value: r.status}, {label:'Reason', value: r.reason || '-'}
   ]}];
 }
+
+function nbDistSaleToVerify(r){
+  return ['🧾 New distributor sale', `${r.distributor_reference||'A distributor'} · Rs. ${fmt(Number(r.order_total)||0)} — commission pending`, 'info', { tab:'delivery', details:[
+    {label:'Distributor', value: r.distributor_reference || '-'}, {label:'Order', value: r.order_ref_no || '-'},
+    {label:'Customer', value: r.customer_name || '-'}, {label:'Sale total', value: 'Rs. '+fmt(Number(r.order_total)||0)},
+    {label:'Commission', value: 'Rs. '+fmt(Number(r.commission_amount)||0)}
+  ]}];
+}
+function nbDistCommissionDecided(r){
+  return [r.status==='approved'?'✅ Commission approved':'❌ Commission rejected', `Rs. ${fmt(Number(r.commission_amount)||0)} commission was ${r.status}`, r.status==='approved'?'info':'warn', { tab:'my-income', details:[
+    {label:'Order', value: r.order_ref_no || '-'}, {label:'Commission', value: 'Rs. '+fmt(Number(r.commission_amount)||0)},
+    {label:'Status', value: r.status}
+  ]}];
+}
+
+// ---- Distributor-claim change detection ----
+// distributor_commission_claims is refreshed via a plain reload (see
+// refreshCommissionRealtime / refreshDistributorCommissionRealtime), not via
+// per-row postgres_changes handlers like the tables above, so there's no
+// natural INSERT/UPDATE payload to hand to showAppNotification. Instead we
+// remember what we've already surfaced and diff every reload against that:
+// - owner: notify once per claim id the first time it's ever seen (a new
+//   distributor sale waiting on verification/delivery).
+// - distributor: notify when a claim we'd already seen as 'pending' flips to
+//   'approved'/'rejected'.
+// _distClaimNotifyPrimed guards the very first load per role so existing
+// history isn't replayed as a flood of "new" notifications on login.
+let _distClaimNotifyPrimed = { owner:false, distributor:false };
+let _distClaimSeenIds = new Set();
+let _distClaimStatusCache = {};
+function notifyDistributorClaimChanges(list, role){
+  if(role !== 'owner' && role !== 'distributor') return;
+  try{
+    if(!_distClaimNotifyPrimed[role]){
+      (list||[]).forEach(c=>{
+        if(role==='owner') _distClaimSeenIds.add(String(c.id));
+        else _distClaimStatusCache[String(c.id)] = c.status;
+      });
+      _distClaimNotifyPrimed[role] = true;
+      return;
+    }
+    (list||[]).forEach(c=>{
+      const id = String(c.id);
+      if(role==='owner'){
+        if(!_distClaimSeenIds.has(id)){
+          _distClaimSeenIds.add(id);
+          showAppNotification(...nbDistSaleToVerify(c));
+        }
+      } else {
+        const prevStatus = _distClaimStatusCache[id];
+        if(prevStatus==='pending' && c.status && c.status!=='pending' && c.status!==prevStatus){
+          showAppNotification(...nbDistCommissionDecided(c));
+        }
+        _distClaimStatusCache[id] = c.status;
+      }
+    });
+  }catch(e){ console.warn('Distributor claim notify diff failed:', e); }
+}
+
+// ==================== PUSH NOTIFICATIONS (OneSignal) ====================
+// Everything above (showAppNotification, the notification center, the bell
+// badge) only fires while this tab is open — it's an in-page toast system,
+// not a real push. This block wires the OneSignal Web SDK (initialized in
+// index.html's <head>) to this app's own login state, so a SERVER-SIDE event
+// (Supabase Database Webhook -> the send-push Edge Function -> OneSignal's
+// REST API) can reach the person's phone/browser even with the tab closed or
+// the phone locked. The client's only job here is identity: "this browser
+// belongs to user X, in business Y, with role Z" — the actual sending always
+// happens from the server, never from another user's open tab.
+function pushOneSignalReady(fn){
+  window.OneSignalDeferred = window.OneSignalDeferred || [];
+  window.OneSignalDeferred.push(fn);
+}
+
+// Links this browser's push subscription to the logged-in Supabase user via
+// OneSignal's "External ID", and tags it with business_id/role so a
+// server-side broadcast (e.g. a staff announcement to everyone at once) can
+// target a whole business without needing every individual external_id.
+// Safe to call every login — OneSignal no-ops if already linked to this id.
+function initPushForCurrentUser(){
+  if(!currentUser) return;
+  pushOneSignalReady(async function(OneSignal){
+    try{
+      await OneSignal.login(String(currentUser.id));
+      if(businessId) await OneSignal.User.addTag('business_id', String(businessId));
+      if(userRole) await OneSignal.User.addTag('role', userRole);
+      updatePushEnableButton();
+    }catch(e){ console.warn('OneSignal login/tag failed:', e); }
+  });
+}
+
+// Unlinks the subscription so a shared/public device stops being treated as
+// this user once they log out (otherwise the next person to log in on the
+// same phone could keep receiving the previous person's pushes).
+function logoutPushForCurrentUser(){
+  pushOneSignalReady(async function(OneSignal){
+    try{ await OneSignal.logout(); }catch(e){}
+  });
+}
+
+// Triggered by the "Enable Push Notifications" button in the Notification
+// Center modal. Must be called from a real click (not auto-fired on login)
+// so the browser's own permission prompt reliably shows instead of being
+// silently suppressed.
+function requestPushPermission(){
+  pushOneSignalReady(async function(OneSignal){
+    try{
+      await OneSignal.Notifications.requestPermission();
+      updatePushEnableButton();
+      if(OneSignal.Notifications.permission === true) updateStatus('🔔 Push notifications enabled');
+      else updateStatus('🔕 Push permission not granted — check your browser/site settings');
+    }catch(e){
+      console.warn('OneSignal permission request failed:', e);
+      alert('Push notifications aren\'t supported on this device/browser.');
+    }
+  });
+}
+window.requestPushPermission = requestPushPermission;
+
+// Reflects current permission state on the button, e.g. when the
+// Notification Center is opened.
+function updatePushEnableButton(){
+  const btn = $('pushEnableBtn');
+  if(!btn) return;
+  pushOneSignalReady(function(OneSignal){
+    try{
+      const granted = OneSignal.Notifications.permission === true;
+      btn.innerHTML = granted
+        ? '<i class="business-icon icon-inline" data-lucide="bell-check" aria-hidden="true"></i> Push Notifications On'
+        : '<i class="business-icon icon-inline" data-lucide="bell-plus" aria-hidden="true"></i> Enable Push Notifications';
+      btn.disabled = granted;
+      if(window.lucide) lucide.createIcons({attrs:{'stroke-width':1.9,'stroke-linecap':'round','stroke-linejoin':'round'}});
+    }catch(e){}
+  });
+}
+window.updatePushEnableButton = updatePushEnableButton;
 
 let appNotifyChannel = null;
 let appNotifyHeartbeat = null;

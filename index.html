@@ -61,6 +61,29 @@
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<!-- ============================================================
+     REAL PUSH NOTIFICATIONS (OneSignal Web Push)
+     This is what makes an alert arrive even if the tab is closed
+     or the phone is locked — the in-app toast system in app.js
+     (showAppNotification) only fires while the page is open.
+     Replace ONESIGNAL_APP_ID below with the App ID from your
+     OneSignal dashboard (Settings → Keys & IDs). See app.js
+     (search "PUSH NOTIFICATIONS (OneSignal)") for how each logged
+     in user gets linked to their OneSignal subscription, and the
+     send-push Edge Function for how the server actually fires one.
+     ============================================================ -->
+<script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+<script>
+  window.OneSignalDeferred = window.OneSignalDeferred || [];
+  OneSignalDeferred.push(async function (OneSignal) {
+    await OneSignal.init({
+      appId: "b307ee15-de2d-4295-95c9-94731cdf9080",
+      notifyButton: { enable: false }, // we use our own "Enable Push" button instead
+      allowLocalhostAsSecureOrigin: true // safe to leave on; only matters during local testing
+    });
+  });
+</script>
 <script src="https://unpkg.com/lucide@latest"></script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
@@ -2615,6 +2638,13 @@
       </button>
     </div>
     <p class="pro-subtitle green">Latest updates for your business, newest first.</p>
+    <!-- Real push: these alerts only fire while this tab is open. Enabling
+         push means the same events reach the phone/browser even when the
+         app is closed or the phone is locked. See requestPushPermission()
+         and updatePushEnableButton() in app.js. -->
+    <button type="button" class="btn btn-sm" id="pushEnableBtn" onclick="requestPushPermission()" style="width:100%;margin-bottom:8px;">
+      <i class="business-icon icon-inline" data-lucide="bell-plus" aria-hidden="true"></i> Enable Push Notifications
+    </button>
     <div class="nc-list" id="notifyCenterList"></div>
     <div class="btn-row">
       <button class="btn" onclick="closeModal('notifyCenterModal')" style="flex:1;">Close</button>
