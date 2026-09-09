@@ -1902,6 +1902,27 @@
       <h2><span class="pro-title-icon orange" aria-hidden="true"><i class="business-icon" data-lucide="factory" aria-hidden="true"></i></span><span>Production Model</span></h2><p class="pro-subtitle orange">Translate raw fish yield into finished output.</p>
       <p class="sub">Compare buying finished Umbalakada vs producing from raw fish. Analyze yield, cost per kg, and profitability.</p>
 
+      <div class="card" style="background:rgba(16,185,129,.06);border:1px solid rgba(16,185,129,.25);margin-bottom:16px;">
+        <h3 style="color:var(--green);margin-bottom:4px;">📅 Today's Raw Fish → Expected Maldive Fish Output & Profit</h3>
+        <p class="sub" style="margin-top:0;">Auto-calculated from today's Daily Fish Purchases using the yield factors and market prices below.</p>
+        <div class="stat-grid" id="todayProdSummary">
+          <div class="stat"><div class="k">Today's Raw Fish Bought</div><div class="v">0 kg</div></div>
+          <div class="stat"><div class="k">Today's Raw Cost</div><div class="v">Rs. 0</div></div>
+          <div class="stat"><div class="k">Expected Umbalakada Output</div><div class="v">0 kg</div></div>
+          <div class="stat accent"><div class="k">Expected Profit Today</div><div class="v">Rs. 0</div></div>
+        </div>
+        <div class="table-wrap" style="margin-top:10px;">
+          <table>
+            <thead>
+              <tr><th>Fish Type</th><th class="num">Raw Bought</th><th class="num">Raw Cost</th><th class="num">Expected Finished</th><th class="num">Expected Revenue</th><th class="num">Expected Profit</th></tr>
+            </thead>
+            <tbody id="todayProdBody">
+              <tr><td colspan="6" style="text-align:center;opacity:.5;padding:16px;">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       <div class="grid-2">
         <div>
           <h3 style="color:var(--green);margin-bottom:8px;">🐟 Raw Fish Prices (Rs./kg)</h3>

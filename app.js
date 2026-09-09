@@ -2120,6 +2120,102 @@ function calcProduction() {
     prodOther: Number($('prodOther').value)||0,
     finLinna, finBalaya, finKawalam: finPremium
   };
+
+  renderTodayFishProduction({
+    yields: { Linna: yLinna, Balaya: yBalaya, Premium: yPremium },
+    finished: { Linna: finLinna, Balaya: finBalaya, Premium: finPremium },
+    fixedPerKg
+  });
+}
+
+// ==================== TODAY'S RAW FISH → EXPECTED OUTPUT & PROFIT ====================
+function classifyFishType(rawLabel) {
+  const t = String(rawLabel || '').trim().toLowerCase();
+  if (t.includes('linna')) return 'Linna';
+  if (t.includes('balaya')) return 'Balaya';
+  return 'Premium'; // Kawalam / anything else falls into the Premium Mix bucket
+}
+
+function renderTodayFishProduction(prod) {
+  const wrap = $('todayProdBody');
+  const summaryEl = $('todayProdSummary');
+  if (!wrap) return; // section not present in this build yet
+
+  if (!prod) {
+    // called before calcProduction has run (e.g. right after loading purchases) — reuse last known inputs
+    prod = {
+      yields: {
+        Linna: Number($('yieldLinna')?.value) || 1,
+        Balaya: Number($('yieldBalaya')?.value) || 1,
+        Premium: Number($('yieldKawalam')?.value) || 1
+      },
+      finished: {
+        Linna: Number($('finLinna')?.value) || 0,
+        Balaya: Number($('finBalaya')?.value) || 0,
+        Premium: Number($('finKawalam')?.value) || 0
+      },
+      fixedPerKg: Number($('prodFixedPerKg')?.textContent) || 0
+    };
+  }
+
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const todaysPurchases = (fishPurchases || []).filter(p => p.date === todayStr);
+
+  const buckets = {
+    Linna: { rawKg: 0, cost: 0 },
+    Balaya: { rawKg: 0, cost: 0 },
+    Premium: { rawKg: 0, cost: 0 }
+  };
+  todaysPurchases.forEach(p => {
+    const key = classifyFishType(p.fishType);
+    buckets[key].rawKg += p.quantityKg;
+    buckets[key].cost += p.totalAmount;
+  });
+
+  const labels = { Linna: 'Linna', Balaya: 'Balaya', Premium: 'Premium Mix (Kawalam/Other)' };
+  let totalRawKg = 0, totalRawCost = 0, totalFinishedKg = 0, totalRevenue = 0, totalProfit = 0;
+  let rowsHtml = '';
+
+  Object.keys(buckets).forEach(key => {
+    const b = buckets[key];
+    if (b.rawKg <= 0) return;
+    const yieldFactor = prod.yields[key] || 1;
+    const finishedKg = b.rawKg / yieldFactor;
+    const fixedCostShare = finishedKg * (prod.fixedPerKg || 0);
+    const totalCost = b.cost + fixedCostShare;
+    const revenue = finishedKg * (prod.finished[key] || 0);
+    const profit = revenue - totalCost;
+
+    totalRawKg += b.rawKg;
+    totalRawCost += b.cost;
+    totalFinishedKg += finishedKg;
+    totalRevenue += revenue;
+    totalProfit += profit;
+
+    rowsHtml += `<tr>
+      <td><strong>${labels[key]}</strong></td>
+      <td class="num">${b.rawKg.toFixed(1)} kg</td>
+      <td class="num">Rs. ${b.cost.toLocaleString()}</td>
+      <td class="num">${finishedKg.toFixed(1)} kg</td>
+      <td class="num">Rs. ${Math.round(revenue).toLocaleString()}</td>
+      <td class="num"><span class="badge ${profit>=0?'badge-good':'badge-bad'}">Rs. ${Math.round(profit).toLocaleString()}</span></td>
+    </tr>`;
+  });
+
+  if (!rowsHtml) {
+    wrap.innerHTML = '<tr><td colspan="6" style="text-align:center;opacity:.5;padding:16px;">No raw fish purchased today yet — log a purchase above to see today\'s expected Maldive fish output and profit.</td></tr>';
+  } else {
+    wrap.innerHTML = rowsHtml;
+  }
+
+  if (summaryEl) {
+    summaryEl.innerHTML = `
+      <div class="stat"><div class="k">Today's Raw Fish Bought</div><div class="v">${totalRawKg.toFixed(1)} kg</div></div>
+      <div class="stat"><div class="k">Today's Raw Cost</div><div class="v">Rs. ${totalRawCost.toLocaleString()}</div></div>
+      <div class="stat"><div class="k">Expected Umbalakada Output</div><div class="v">${totalFinishedKg.toFixed(1)} kg</div></div>
+      <div class="stat accent"><div class="k">Expected Profit Today</div><div class="v" style="color:${totalProfit>=0?'#10b981':'#f87171'};">Rs. ${Math.round(totalProfit).toLocaleString()}</div></div>
+    `;
+  }
 }
 
 // ==================== ORDERS / CUSTOMERS ====================
@@ -2601,6 +2697,7 @@ async function loadFishProductionData() {
   renderFishPurchases();
   renderFishPayments();
   populateFishPurchaseSellerSelect();
+  renderTodayFishProduction();
 }
 
 function fishSellerBalance(sellerId) {
@@ -2826,6 +2923,7 @@ async function saveFishPurchase() {
   await loadFishPurchasesFromCloud();
   renderFishPurchases();
   renderFishSellers();
+  renderTodayFishProduction();
 }
 async function deleteFishPurchase(id) {
   if (userRole !== 'owner') { alert('Only the business owner can manage purchases.'); return; }
@@ -2842,6 +2940,7 @@ async function deleteFishPurchase(id) {
   await loadFishPurchasesFromCloud();
   renderFishPurchases();
   renderFishSellers();
+  renderTodayFishProduction();
   updateStatus('🗑️ Purchase deleted');
 }
 
@@ -10178,6 +10277,17 @@ window.calcBulk = calcBulk;
 window.calcSensitivity = calcSensitivity;
 window.calcDashboard = calcDashboard;
 window.calcProduction = calcProduction;
+window.openNewFishSeller = openNewFishSeller;
+window.openEditFishSeller = openEditFishSeller;
+window.saveFishSeller = saveFishSeller;
+window.deleteFishSeller = deleteFishSeller;
+window.recalcFishPurchaseTotal = recalcFishPurchaseTotal;
+window.openNewFishPurchase = openNewFishPurchase;
+window.saveFishPurchase = saveFishPurchase;
+window.deleteFishPurchase = deleteFishPurchase;
+window.openFishPayment = openFishPayment;
+window.saveFishPayment = saveFishPayment;
+window.deleteFishPayment = deleteFishPayment;
 window.updateMonthlySummary = updateMonthlySummary;
 window.saveOrder = saveOrder;
 window.deleteHistoryEntry = deleteHistoryEntry;
