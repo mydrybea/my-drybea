@@ -2012,6 +2012,10 @@
 
       <div class="notice warn" id="ingVarianceAlert" style="display:none;margin-top:10px;"></div>
 
+      <div class="chart-wrap" id="ingBreakdownWrap" style="height:240px;margin-top:14px;display:none;">
+        <canvas id="ingBreakdownChart"></canvas>
+      </div>
+
       <div class="stat-grid" style="margin-top:16px;">
         <div class="stat"><div class="k">Monthly Raw Fish</div><div class="v" id="prodMonthlyRaw">0 kg</div></div>
         <div class="stat"><div class="k">Monthly Finished Output</div><div class="v" id="prodMonthlyFinished">0 kg</div></div>
@@ -2029,7 +2033,7 @@
         </table>
       </div>
 
-      <div class="chart-wrap" style="height:300px;"><canvas id="prodChart"></canvas></div>
+      <div class="chart-wrap" style="height:320px;"><canvas id="prodChart"></canvas></div>
 
       <div class="notice" style="margin-top:12px;">
         💡 <strong>Break-even volume:</strong> Produce at least <span id="breakEvenKg" style="font-weight:800;">0 kg</span> per month to cover fixed costs.
@@ -2087,7 +2091,8 @@
       <p class="sub" id="dpPriceSourceNote" style="margin:6px 0 0;"></p>
 
       <h3 style="color:var(--green);margin:16px 0 8px;">📈 Monthly Profit Trend</h3>
-      <div class="chart-wrap" style="height:280px;"><canvas id="dpMonthlyChart"></canvas></div>
+      <div class="chart-wrap" style="height:320px;"><canvas id="dpMonthlyChart"></canvas></div>
+      <p class="sub" style="margin:6px 0 0;">Bars = cumulative profit this month (right axis). Lines = per-kg cost/price/profit for each saved day (left axis).</p>
 
       <h3 style="color:var(--green);margin:16px 0 8px;">🗓️ Daily Summary (This Month)</h3>
       <div class="table-wrap">

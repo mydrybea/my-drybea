@@ -1835,7 +1835,7 @@ function getAllocatedOverheadPerPack() {
 }
 
 // ==================== CHARTS ====================
-let costChart = null, sensChart = null, prodChart = null, dpMonthlyChart = null;
+let costChart = null, sensChart = null, prodChart = null, dpMonthlyChart = null, ingBreakdownChart = null;
 let dailyProductionLogCache = [];
 let lastProdAvgRawCostPerKg = 0, lastProdIngredientsCostPerKg = 0, lastProdOverheadCostPerKg = 0;
 let lastProdAvgCostPerKg = 0, lastProdAvgMarketPrice = 0, lastProdAvgProfitPerKg = 0;
@@ -1883,7 +1883,56 @@ function safeRenderChart(canvasId, renderFn) {
   }
 }
 
-// ==================== CALCULATIONS ====================
+// Doughnut showing today's ingredient spend split by spice — only shown
+// once there's actually something to show, so it doesn't sit there empty
+// on a fresh/zeroed form.
+const ING_SLICE_COLORS = ['#38bdf8','#a78bfa','#fbbf24','#fb923c','#34d399','#f472b6'];
+function renderIngredientBreakdownChart(breakdown, totalCost) {
+  const wrap = $('ingBreakdownWrap');
+  if (!wrap) return;
+  const nonZero = (breakdown || []).filter(b => b.cost > 0);
+  if (!totalCost || totalCost <= 0 || nonZero.length === 0) {
+    wrap.style.display = 'none';
+    return;
+  }
+  wrap.style.display = 'block';
+  safeRenderChart('ingBreakdownChart', () => {
+    const colors = getChartColors();
+    const ctx = $('ingBreakdownChart').getContext('2d');
+    const chartData = {
+      labels: nonZero.map(b => b.label),
+      datasets: [{
+        data: nonZero.map(b => Math.round(b.cost)),
+        backgroundColor: nonZero.map((_, i) => ING_SLICE_COLORS[i % ING_SLICE_COLORS.length]),
+        borderColor: 'transparent',
+        hoverOffset: 8
+      }]
+    };
+    if (ingBreakdownChart) { ingBreakdownChart.data = chartData; ingBreakdownChart.update(); }
+    else {
+      ingBreakdownChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: chartData,
+        options: {
+          responsive: true, maintainAspectRatio: false, cutout: '62%',
+          plugins: {
+            legend: { position: 'right', labels: { boxWidth: 10, font: { size: 11, family: 'Inter' }, color: colors.text, usePointStyle: true, pointStyle: 'circle' } },
+            tooltip: {
+              callbacks: {
+                label: (item) => {
+                  const pct = totalCost > 0 ? (item.parsed / totalCost * 100).toFixed(1) : '0';
+                  return ` ${item.label}: Rs. ${item.parsed.toLocaleString()} (${pct}%)`;
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+  });
+}
+
+
 function calcAll() {
   state.linnaPrice = Number($('linnaPrice').value) || 0;
   state.balayaPrice = Number($('balayaPrice').value) || 0;
@@ -2168,11 +2217,13 @@ function calcProduction() {
     { key:'ingTamarind', label:'Tamarind' }
   ];
   let ingredientsCostToday = 0;
+  const ingBreakdown = []; // {label, cost} — feeds the ingredient cost breakdown doughnut
   INGREDIENTS.forEach(ing => {
     const price = Number($(ing.key + 'Price').value) || 0;
     const qty = Number($(ing.key + 'Grams').value) || 0; // holds "kg used today"
     const cost = price * qty;
     ingredientsCostToday += cost;
+    ingBreakdown.push({ label: ing.label, cost });
     const costEl = $(ing.key + 'Cost');
     if (costEl) costEl.textContent = fmt(cost);
   });
@@ -2184,6 +2235,7 @@ function calcProduction() {
     : `Enter Daily Raw Fish (kg) above to calculate Rs./kg`;
   $('prodIngredientsPerKg').textContent = fmt(ingredientsCostPerKg);
   updateIngredientVarianceAlert(ingredientsCostPerKg);
+  renderIngredientBreakdownChart(ingBreakdown, ingredientsCostToday);
 
   const monthlyRawKg = dailyRaw * days;
   $('prodMonthlyRaw').textContent = monthlyRawKg.toFixed(0) + ' kg';
@@ -2202,7 +2254,7 @@ function calcProduction() {
 
   let totalCostSum = 0, rawCostSum = 0;
   let html = '';
-  const labels = [], costs = [], prices = [], profitsData = [];
+  const labels = [], costs = [], prices = [], profitsData = [], marketPrices = [], margins = [];
   lastProdCostByType = {};
 
   fishTypes.forEach(ft => {
@@ -2222,6 +2274,8 @@ function calcProduction() {
     costs.push(Math.round(rawCostPerKg));
     prices.push(Math.round(totalCostPerKg));
     profitsData.push(Math.round(profitPerKg));
+    marketPrices.push(Math.round(ft.finPrice));
+    margins.push(Math.round(margin * 10) / 10);
 
     html += `<tr>
       <td><strong>${ft.name}</strong></td>
@@ -2265,9 +2319,11 @@ function calcProduction() {
     const chartData = {
       labels: labels,
       datasets: [
-        { label:'Raw Cost/kg', data: costs, backgroundColor: 'rgba(56,189,248,0.8)', borderRadius: 6 },
-        { label:'Total Cost/kg', data: prices, backgroundColor: 'rgba(16,185,129,0.8)', borderRadius: 6 },
-        { label:'Profit/kg', data: profitsData, backgroundColor: 'rgba(167,139,250,0.8)', borderRadius: 6 }
+        { type: 'bar', label:'Raw Cost/kg', data: costs, backgroundColor: 'rgba(56,189,248,0.85)', borderRadius: 6, yAxisID: 'y', order: 2 },
+        { type: 'bar', label:'Total Cost/kg', data: prices, backgroundColor: 'rgba(16,185,129,0.85)', borderRadius: 6, yAxisID: 'y', order: 2 },
+        { type: 'bar', label:'Market Price/kg', data: marketPrices, backgroundColor: 'rgba(251,191,36,0.85)', borderRadius: 6, yAxisID: 'y', order: 2 },
+        { type: 'bar', label:'Profit/kg', data: profitsData, backgroundColor: profitsData.map(p => p >= 0 ? 'rgba(167,139,250,0.85)' : 'rgba(248,113,113,0.85)'), borderRadius: 6, yAxisID: 'y', order: 2 },
+        { type: 'line', label:'Margin %', data: margins, borderColor: '#f472b6', backgroundColor: '#f472b6', borderWidth: 2, pointRadius: 4, pointHoverRadius: 6, tension: 0.3, yAxisID: 'y1', order: 1 }
       ]
     };
     if (prodChart) { prodChart.data = chartData; prodChart.update(); }
@@ -2277,13 +2333,26 @@ function calcProduction() {
         data: chartData,
         options: {
           responsive:true, maintainAspectRatio:false,
-          plugins:{legend:{position:'bottom',labels:{boxWidth:10,font:{size:11,family:'Inter'},color:colors.text,padding:12,usePointStyle:true,pointStyle:'circle'}}},
+          interaction: { mode: 'index', intersect: false },
+          plugins:{
+            legend:{position:'bottom',labels:{boxWidth:10,font:{size:11,family:'Inter'},color:colors.text,padding:12,usePointStyle:true,pointStyle:'circle'}},
+            tooltip:{
+              callbacks:{
+                label: (item) => {
+                  const suffix = item.dataset.label === 'Margin %' ? '%' : '/kg';
+                  const prefix = item.dataset.label === 'Margin %' ? '' : 'Rs. ';
+                  return ` ${item.dataset.label}: ${prefix}${item.parsed.y}${suffix}`;
+                }
+              }
+            }
+          },
           scales:{
-            y:{beginAtZero:true,grid:{color:colors.grid},ticks:{color:colors.text,font:{size:10}}},
+            y:{beginAtZero:true,grid:{color:colors.grid},ticks:{color:colors.text,font:{size:10},callback:(v)=>'Rs. '+v},title:{display:true,text:'Rs. per kg',color:colors.text,font:{size:10}}},
+            y1:{position:'right',beginAtZero:true,grid:{display:false},ticks:{color:colors.text,font:{size:10},callback:(v)=>v+'%'},title:{display:true,text:'Margin %',color:colors.text,font:{size:10}}},
             x:{grid:{display:false},ticks:{color:colors.text,font:{size:10}}}
           },
-          barPercentage: 0.7,
-          categoryPercentage: 0.8
+          barPercentage: 0.75,
+          categoryPercentage: 0.75
         }
       });
     }
@@ -2450,7 +2519,7 @@ function updateDailyProductionSummaryLive() {
   // sync here so the save always matches what's on screen.
   lastProdAvgCostPerKgForSave = costPerKg;
   lastProdAvgProfitPerKgForSave = profitPerKg;
-  lastProdIngredientsCostPerKgForSave = ingredientsPerKg;
+  lastProdIngredientsCostPerKgForSave = lastProdIngredientsCostPerKg;
   lastProdAvgMarketPriceForSave = marketPrice;
 }
 window.updateDailyProductionSummaryLive = updateDailyProductionSummaryLive;
@@ -2584,10 +2653,16 @@ function renderDailyProductionLog() {
   if (!$('dpMonthlyChart')) return;
   safeRenderChart('dpMonthlyChart', () => {
     const ctx = $('dpMonthlyChart').getContext('2d');
+    const sortedEntries = [...entries].sort((a, b) => a.log_date.localeCompare(b.log_date));
+    let running = 0;
+    const cumulativeProfit = sortedEntries.map(r => { running += Number(r.total_profit) || 0; return Math.round(running); });
     const chartData = {
-      labels: entries.map(r => r.log_date.slice(8, 10) + '/' + r.log_date.slice(5, 7)),
+      labels: sortedEntries.map(r => r.log_date.slice(8, 10) + '/' + r.log_date.slice(5, 7)),
       datasets: [
-        { label: 'Profit/kg', data: entries.map(r => Math.round(Number(r.profit_per_kg) || 0)), borderColor: 'rgba(16,185,129,1)', backgroundColor: 'rgba(16,185,129,0.15)', fill: true, tension: 0.3, pointRadius: 3 }
+        { type: 'bar', label: 'Cumulative Profit (Rs.)', data: cumulativeProfit, backgroundColor: 'rgba(16,185,129,0.25)', borderRadius: 4, yAxisID: 'y1', order: 3 },
+        { type: 'line', label: 'Profit/kg', data: sortedEntries.map(r => Math.round(Number(r.profit_per_kg) || 0)), borderColor: 'rgba(16,185,129,1)', backgroundColor: 'rgba(16,185,129,0.15)', fill: true, tension: 0.3, pointRadius: 3, yAxisID: 'y', order: 1 },
+        { type: 'line', label: 'Cost/kg', data: sortedEntries.map(r => Math.round(Number(r.total_cost_per_kg) || 0)), borderColor: 'rgba(248,113,113,1)', backgroundColor: 'rgba(248,113,113,0.08)', fill: false, tension: 0.3, pointRadius: 3, borderDash: [4,3], yAxisID: 'y', order: 2 },
+        { type: 'line', label: 'Selling Price/kg', data: sortedEntries.map(r => Math.round(Number(r.market_price_per_kg) || 0)), borderColor: 'rgba(251,191,36,1)', backgroundColor: 'rgba(251,191,36,0.08)', fill: false, tension: 0.3, pointRadius: 3, borderDash: [4,3], yAxisID: 'y', order: 2 }
       ]
     };
     if (dpMonthlyChart) { dpMonthlyChart.data = chartData; dpMonthlyChart.update(); }
@@ -2597,9 +2672,21 @@ function renderDailyProductionLog() {
         data: chartData,
         options: {
           responsive: true, maintainAspectRatio: false,
-          plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11, family: 'Inter' }, color: colors.text, padding: 12, usePointStyle: true, pointStyle: 'circle' } } },
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11, family: 'Inter' }, color: colors.text, padding: 12, usePointStyle: true, pointStyle: 'circle' } },
+            tooltip: {
+              callbacks: {
+                label: (item) => {
+                  const isMoney = true;
+                  return ` ${item.dataset.label}: ${isMoney ? 'Rs. ' : ''}${item.parsed.y.toLocaleString()}`;
+                }
+              }
+            }
+          },
           scales: {
-            y: { grid: { color: colors.grid }, ticks: { color: colors.text, font: { size: 10 } } },
+            y: { position: 'left', grid: { color: colors.grid }, ticks: { color: colors.text, font: { size: 10 } }, title: { display: true, text: 'Rs. per kg', color: colors.text, font: { size: 10 } } },
+            y1: { position: 'right', grid: { display: false }, ticks: { color: colors.text, font: { size: 10 } }, title: { display: true, text: 'Cumulative Rs.', color: colors.text, font: { size: 10 } } },
             x: { grid: { display: false }, ticks: { color: colors.text, font: { size: 10 } } }
           }
         }
@@ -8468,6 +8555,7 @@ function toggleTheme() {
   if (sensChart) { sensChart.destroy(); sensChart = null; }
   if (prodChart) { prodChart.destroy(); prodChart = null; }
   if (dpMonthlyChart) { dpMonthlyChart.destroy(); dpMonthlyChart = null; }
+  if (ingBreakdownChart) { ingBreakdownChart.destroy(); ingBreakdownChart = null; }
   if (trendChart) { trendChart.destroy(); trendChart = null; }
   if (orderStatusChart) { orderStatusChart.destroy(); orderStatusChart = null; }
   if (productMixChart) { productMixChart.destroy(); productMixChart = null; }
