@@ -2733,26 +2733,39 @@ function renderProductCosting() {
   set('costingTopCategory', topAmt > 0 ? `${topCat} (${fmt(topAmt)})` : '—');
 }
 
-// ==================== FISH PURCHASES & SELLER LEDGER (Products tab) ====================
-let fishPurchases = [];
-let fishPayments = [];
+// ==================== DAILY FISH PURCHASE BILLS (Production tab) ====================
+// Advanced version: one bill can hold several fish items bought from the
+// same seller on the same day. Each saved bill mirrors its total into the
+// `expenses` table (category "Raw Fish"), so Expenses + the Analytics
+// Profit chart update automatically with no extra wiring. Extra payments
+// made later against a seller's outstanding balance are tracked separately
+// in `fish_payments` (cash-flow only — never double-counted as a cost).
+let fishBills = [];      // [{id, billNo, date, sellerName, sellerPhone, items:[...], total, paidAmount, balance, method, reference, notes, linkedExpenseId, createdAt}]
+let fishPayments = [];   // [{id, date, sellerName, sellerPhone, amount, method, reference, notes, createdAt}]
+let fishBillItemRowSeq = 0;
+let currentViewedFishBillId = null;
 
-function dbFishPurchaseToLocal(p) {
+function dbFishBillToLocal(b, items) {
   return {
-    id: p.id,
-    date: p.purchase_date,
-    fishType: p.fish_type,
-    quantityKg: Number(p.quantity_kg) || 0,
-    pricePerKg: Number(p.price_per_kg) || 0,
-    total: Number(p.total_amount) || 0,
-    sellerName: p.seller_name,
-    sellerPhone: p.seller_phone,
-    paidAmount: Number(p.paid_amount) || 0,
-    method: p.payment_method || 'cash',
-    reference: p.payment_reference || '',
-    notes: p.notes || '',
-    linkedExpenseId: p.linked_expense_id || null,
-    createdAt: p.created_at
+    id: b.id,
+    billNo: b.bill_no,
+    date: b.bill_date,
+    sellerName: b.seller_name,
+    sellerPhone: b.seller_phone,
+    total: Number(b.total_amount) || 0,
+    paidAmount: Number(b.paid_amount) || 0,
+    balance: (Number(b.total_amount) || 0) - (Number(b.paid_amount) || 0),
+    method: b.payment_method || 'cash',
+    reference: b.payment_reference || '',
+    notes: b.notes || '',
+    linkedExpenseId: b.linked_expense_id || null,
+    createdAt: b.created_at,
+    items: (items || []).map(it => ({
+      fishType: it.fish_type,
+      quantityKg: Number(it.quantity_kg) || 0,
+      pricePerKg: Number(it.price_per_kg) || 0,
+      subtotal: Number(it.subtotal) || 0
+    }))
   };
 }
 function dbFishPaymentToLocal(p) {
@@ -2769,15 +2782,22 @@ function dbFishPaymentToLocal(p) {
   };
 }
 
-async function loadFishPurchasesFromCloud() {
+async function loadFishBillsFromCloud() {
   if (!currentUser) return;
   try {
-    const { data, error } = await supabase.from('fish_purchases').select('*').order('purchase_date', { ascending: false });
-    if (error) throw error;
-    fishPurchases = (data || []).map(dbFishPurchaseToLocal);
+    const { data: bills, error: billErr } = await supabase.from('fish_bills').select('*').order('bill_date', { ascending: false }).order('created_at', { ascending: false });
+    if (billErr) throw billErr;
+    const billIds = (bills || []).map(b => b.id);
+    let items = [];
+    if (billIds.length) {
+      const { data: itemRows, error: itemErr } = await supabase.from('fish_bill_items').select('*').in('bill_id', billIds);
+      if (itemErr) throw itemErr;
+      items = itemRows || [];
+    }
+    fishBills = (bills || []).map(b => dbFishBillToLocal(b, items.filter(it => it.bill_id === b.id)));
   } catch (e) {
-    console.error('Load fish purchases error:', e);
-    updateStatus('⚠️ Could not load fish purchases from cloud');
+    console.error('Load fish bills error:', e);
+    updateStatus('⚠️ Could not load fish bills from cloud');
   }
 }
 
@@ -2793,57 +2813,127 @@ async function loadFishPaymentsFromCloud() {
   }
 }
 
-function updateFishPurchaseTotal() {
-  const qty = Number($('fpQuantity').value) || 0;
-  const price = Number($('fpPricePerKg').value) || 0;
-  $('fpTotal').value = (qty * price).toFixed(2);
+function generateFishBillNo(dateStr) {
+  const d = (dateStr || new Date().toISOString().slice(0, 10)).replace(/-/g, '');
+  const countToday = fishBills.filter(b => b.billNo && b.billNo.includes(d)).length;
+  return `FB-${d}-${String(countToday + 1).padStart(3, '0')}`;
 }
 
-function openNewFishPurchase() {
-  if (userRole !== 'owner') { alert('Only the owner can add fish purchases.'); return; }
-  $('fpDate').value = new Date().toISOString().slice(0, 10);
-  $('fpFishType').value = '';
-  $('fpQuantity').value = 0;
-  $('fpPricePerKg').value = 0;
-  $('fpTotal').value = 0;
-  $('fpSellerName').value = '';
-  $('fpSellerPhone').value = '';
-  $('fpPaidAmount').value = 0;
-  $('fpPaymentMethod').value = 'cash';
-  $('fpPaymentReference').value = '';
-  $('fpNotes').value = '';
-  $('fishPurchaseModal').classList.add('active');
+function knownSellers() {
+  const map = {};
+  fishBills.forEach(b => { if (b.sellerPhone) map[b.sellerPhone] = b.sellerName; });
+  return map;
 }
 
-async function saveFishPurchase() {
-  const date = $('fpDate').value || new Date().toISOString().slice(0, 10);
-  const fishType = $('fpFishType').value.trim();
-  const quantityKg = Number($('fpQuantity').value) || 0;
-  const pricePerKg = Number($('fpPricePerKg').value) || 0;
-  const total = quantityKg * pricePerKg;
-  const sellerName = $('fpSellerName').value.trim();
-  const sellerPhone = $('fpSellerPhone').value.trim();
-  const paidAmount = Number($('fpPaidAmount').value) || 0;
-  const method = $('fpPaymentMethod').value;
-  const reference = $('fpPaymentReference').value.trim();
-  const notes = $('fpNotes').value.trim();
+function populateSellerDatalists() {
+  const map = knownSellers();
+  const phoneList = $('knownSellerPhones');
+  const nameList = $('knownSellerNames');
+  if (phoneList) phoneList.innerHTML = Object.keys(map).map(phone => `<option value="${phone}">`).join('');
+  if (nameList) nameList.innerHTML = Object.values(map).map(name => `<option value="${name}">`).join('');
+}
+
+function fillSellerNameFromPhone() {
+  const phone = $('fbSellerPhone').value.trim();
+  const map = knownSellers();
+  if (map[phone] && !$('fbSellerName').value.trim()) $('fbSellerName').value = map[phone];
+}
+
+function addFishBillItemRow(prefill) {
+  const tbody = $('fbItemsBody');
+  if (!tbody) return;
+  const rowId = 'fbi_' + (++fishBillItemRowSeq);
+  const tr = document.createElement('tr');
+  tr.id = rowId;
+  tr.innerHTML = `
+    <td><input type="text" class="fbi-type" placeholder="e.g. Skipjack Tuna" value="${prefill?.fishType || ''}" style="min-width:110px;"></td>
+    <td><input type="number" class="fbi-qty" min="0" step="0.1" value="${prefill?.quantityKg || 0}" style="width:80px;" oninput="recalcFishBillTotal()"></td>
+    <td><input type="number" class="fbi-price" min="0" value="${prefill?.pricePerKg || 0}" style="width:90px;" oninput="recalcFishBillTotal()"></td>
+    <td class="fbi-subtotal" style="white-space:nowrap;">Rs. 0</td>
+    <td><button type="button" class="btn btn-sm btn-danger" onclick="removeFishBillItemRow('${rowId}')">🗑️</button></td>
+  `;
+  tbody.appendChild(tr);
+  recalcFishBillTotal();
+}
+
+function removeFishBillItemRow(rowId) {
+  const tbody = $('fbItemsBody');
+  const row = document.getElementById(rowId);
+  if (row) row.remove();
+  if (tbody && tbody.children.length === 0) addFishBillItemRow();
+  recalcFishBillTotal();
+}
+
+function recalcFishBillTotal() {
+  const tbody = $('fbItemsBody');
+  if (!tbody) return;
+  let total = 0;
+  Array.from(tbody.children).forEach(row => {
+    const qty = Number(row.querySelector('.fbi-qty')?.value) || 0;
+    const price = Number(row.querySelector('.fbi-price')?.value) || 0;
+    const subtotal = qty * price;
+    total += subtotal;
+    const cell = row.querySelector('.fbi-subtotal');
+    if (cell) cell.textContent = fmt(subtotal);
+  });
+  $('fbTotal').value = total.toFixed(2);
+  const paid = Number($('fbPaidAmount').value) || 0;
+  $('fbBalance').value = Math.max(0, total - paid).toFixed(2);
+}
+
+function openNewFishBill() {
+  if (userRole !== 'owner') { alert('Only the owner can add a fish bill.'); return; }
+  const today = new Date().toISOString().slice(0, 10);
+  $('fbDate').value = today;
+  $('fbBillNoPreview').textContent = generateFishBillNo(today);
+  $('fbSellerName').value = '';
+  $('fbSellerPhone').value = '';
+  $('fbItemsBody').innerHTML = '';
+  addFishBillItemRow();
+  $('fbPaidAmount').value = 0;
+  $('fbPaymentMethod').value = 'cash';
+  $('fbPaymentReference').value = '';
+  $('fbNotes').value = '';
+  recalcFishBillTotal();
+  populateSellerDatalists();
+  $('fishBillModal').classList.add('active');
+}
+
+async function saveFishBill() {
+  const date = $('fbDate').value || new Date().toISOString().slice(0, 10);
+  const sellerName = $('fbSellerName').value.trim();
+  const sellerPhone = $('fbSellerPhone').value.trim();
+  const paidAmount = Number($('fbPaidAmount').value) || 0;
+  const method = $('fbPaymentMethod').value;
+  const reference = $('fbPaymentReference').value.trim();
+  const notes = $('fbNotes').value.trim();
+
+  const items = Array.from($('fbItemsBody').children).map(row => ({
+    fishType: row.querySelector('.fbi-type')?.value.trim() || '',
+    quantityKg: Number(row.querySelector('.fbi-qty')?.value) || 0,
+    pricePerKg: Number(row.querySelector('.fbi-price')?.value) || 0
+  })).filter(it => it.fishType && it.quantityKg > 0 && it.pricePerKg > 0)
+    .map(it => ({ ...it, subtotal: it.quantityKg * it.pricePerKg }));
+
+  const total = items.reduce((s, it) => s + it.subtotal, 0);
 
   if (!currentUser) { alert('Please login first.'); return; }
-  if (!fishType) { alert('Enter the fish type.'); return; }
-  if (quantityKg <= 0 || pricePerKg <= 0) { alert('Enter quantity and price per kg.'); return; }
   if (!sellerName || !sellerPhone) { alert('Enter the seller name and phone number.'); return; }
-  if (paidAmount > total) { alert('Amount paid cannot be more than the total cost.'); return; }
-
+  if (items.length === 0) { alert('Add at least one fish item with quantity and price.'); return; }
+  if (paidAmount > total) { alert('Amount given cannot be more than the bill total.'); return; }
   if (!(await ensureFreshSession())) return;
 
-  // 1) Mirror this purchase into `expenses` as a "Raw Fish" cost, so it
+  const billNo = generateFishBillNo(date);
+
+  // 1) Mirror the bill total into `expenses` (category "Raw Fish") so it
   //    flows into Expenses + the Profit chart automatically.
   let linkedExpenseId = null;
   try {
+    const itemSummary = items.map(it => `${it.fishType} ${it.quantityKg}kg`).join(', ');
     const { data: expData, error: expErr } = await supabase.from('expenses').insert({
       expense_date: date,
       category: 'Raw Fish',
-      description: `${fishType} — ${quantityKg}kg from ${sellerName}`,
+      description: `Bill ${billNo} — ${itemSummary} — ${sellerName}`,
       amount: total,
       created_by: currentUser.id
     }).select().single();
@@ -2851,111 +2941,136 @@ async function saveFishPurchase() {
     linkedExpenseId = expData.id;
     expenses.unshift(dbExpenseToLocal(expData));
   } catch (e) {
-    console.error('Mirror fish purchase to expenses error:', e);
+    console.error('Mirror fish bill to expenses error:', e);
     alert('❌ Could not save the cost record: ' + e.message);
     return;
   }
 
-  // 2) Save the purchase itself (with seller + payment detail).
-  const row = {
-    business_id: businessId,
-    purchase_date: date,
-    fish_type: fishType,
-    quantity_kg: quantityKg,
-    price_per_kg: pricePerKg,
-    total_amount: total,
-    seller_name: sellerName,
-    seller_phone: sellerPhone,
-    paid_amount: paidAmount,
-    payment_method: method,
-    payment_reference: reference,
-    notes,
-    linked_expense_id: linkedExpenseId,
-    created_by: currentUser.id
-  };
+  // 2) Save the bill header.
+  let savedBill = null;
   try {
-    const { data, error } = await supabase.from('fish_purchases').insert(row).select().single();
+    const { data, error } = await supabase.from('fish_bills').insert({
+      business_id: businessId,
+      bill_no: billNo,
+      bill_date: date,
+      seller_name: sellerName,
+      seller_phone: sellerPhone,
+      total_amount: total,
+      paid_amount: paidAmount,
+      payment_method: method,
+      payment_reference: reference,
+      notes,
+      linked_expense_id: linkedExpenseId,
+      created_by: currentUser.id
+    }).select().single();
     if (error) throw error;
-    fishPurchases.unshift(dbFishPurchaseToLocal(data));
+    savedBill = data;
   } catch (e) {
-    console.error('Save fish purchase error:', e);
-    alert('❌ Could not save the purchase: ' + e.message);
+    console.error('Save fish bill error:', e);
+    alert('❌ Could not save the bill: ' + e.message);
     return;
   }
 
-  renderFishPurchases();
+  // 3) Save the line items.
+  let savedItems = [];
+  try {
+    const itemRows = items.map(it => ({
+      bill_id: savedBill.id,
+      fish_type: it.fishType,
+      quantity_kg: it.quantityKg,
+      price_per_kg: it.pricePerKg,
+      subtotal: it.subtotal
+    }));
+    const { data, error } = await supabase.from('fish_bill_items').insert(itemRows).select();
+    if (error) throw error;
+    savedItems = data || [];
+  } catch (e) {
+    console.error('Save fish bill items error:', e);
+    alert('⚠️ Bill saved but items failed to save: ' + e.message);
+  }
+
+  fishBills.unshift(dbFishBillToLocal(savedBill, savedItems));
+  renderFishBills();
   renderSellerLedger();
   renderProductCosting();
   renderExpenses();
   updateMonthlySummary();
-  closeModal('fishPurchaseModal');
-  updateStatus('✅ Fish purchase saved');
+  closeModal('fishBillModal');
+  updateStatus(`✅ Fish bill ${billNo} saved`);
 }
 
-async function deleteFishPurchase(id) {
-  if (userRole !== 'owner') { alert('Only the owner can delete a purchase.'); return; }
-  if (!confirm('Delete this fish purchase? This also removes its matching cost from Expenses.')) return;
+async function deleteFishBill(id) {
+  if (userRole !== 'owner') { alert('Only the owner can delete a bill.'); return; }
+  if (!confirm('Delete this fish bill? This also removes its matching cost from Expenses.')) return;
   if (!currentUser) { alert('Please login first.'); return; }
   if (!(await ensureFreshSession())) return;
 
-  const purchase = fishPurchases.find(p => p.id === id);
+  const bill = fishBills.find(b => b.id === id);
   try {
-    const { error } = await supabase.from('fish_purchases').delete().eq('id', id);
+    const { error } = await supabase.from('fish_bills').delete().eq('id', id);
     if (error) throw error;
-    if (purchase?.linkedExpenseId) {
-      await supabase.from('expenses').delete().eq('id', purchase.linkedExpenseId);
-      expenses = expenses.filter(e => e.id !== purchase.linkedExpenseId);
+    if (bill?.linkedExpenseId) {
+      await supabase.from('expenses').delete().eq('id', bill.linkedExpenseId);
+      expenses = expenses.filter(e => e.id !== bill.linkedExpenseId);
     }
   } catch (e) {
-    console.error('Delete fish purchase error:', e);
+    console.error('Delete fish bill error:', e);
     alert('❌ Could not delete: ' + e.message);
     return;
   }
-  fishPurchases = fishPurchases.filter(p => p.id !== id);
-  renderFishPurchases();
+  fishBills = fishBills.filter(b => b.id !== id);
+  renderFishBills();
   renderSellerLedger();
   renderProductCosting();
   renderExpenses();
   updateMonthlySummary();
-  updateStatus('🗑️ Fish purchase deleted');
+  updateStatus('🗑️ Fish bill deleted');
 }
 
-function renderFishPurchases() {
-  const tbody = $('fishPurchaseBody');
-  if (tbody) {
-    if (fishPurchases.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;opacity:0.5;padding:20px;">No fish purchases yet.</td></tr>';
-    } else {
-      tbody.innerHTML = fishPurchases.map(p => {
-        const balance = p.total - p.paidAmount;
-        return `
-        <tr>
-          <td>${p.date}</td>
-          <td>${p.fishType}</td>
-          <td>${p.quantityKg}</td>
-          <td>${fmt(p.pricePerKg)}</td>
-          <td>${fmt(p.total)}</td>
-          <td>${p.sellerName}<br><small style="opacity:.65;">${p.sellerPhone}</small></td>
-          <td>${fmt(p.paidAmount)}</td>
-          <td>${balance > 0 ? `<span class="badge badge-warn">${fmt(balance)}</span>` : `<span class="badge badge-good">Settled</span>`}</td>
-          <td style="text-transform:capitalize;">${p.method}</td>
-          <td>${userRole === 'owner' ? `<button class="btn btn-sm btn-danger" onclick="deleteFishPurchase('${p.id}')">🗑️</button>` : '<span style="opacity:.4;">—</span>'}</td>
-        </tr>`;
-      }).join('');
-    }
-  }
+function viewFishBill(id) {
+  const bill = fishBills.find(b => b.id === id);
+  if (!bill) return;
+  currentViewedFishBillId = id;
+  $('fbvBillNo').textContent = `Bill No. ${bill.billNo}`;
+  $('fbvDate').textContent = bill.date;
+  $('fbvSeller').textContent = `${bill.sellerName} (${bill.sellerPhone})`;
+  $('fbvItemsBody').innerHTML = bill.items.map(it => `
+    <tr><td>${it.fishType}</td><td>${it.quantityKg}</td><td>${fmt(it.pricePerKg)}</td><td>${fmt(it.subtotal)}</td></tr>
+  `).join('');
+  $('fbvTotal').textContent = fmt(bill.total);
+  $('fbvPaid').textContent = fmt(bill.paidAmount);
+  $('fbvBalance').textContent = fmt(bill.balance);
+  $('fbvMethod').textContent = bill.method;
+  $('fbvReference').textContent = bill.reference ? `(Ref: ${bill.reference})` : '';
+  $('fbvNotesWrap').style.display = bill.notes ? 'block' : 'none';
+  $('fbvNotes').textContent = bill.notes || '';
+  $('fishBillViewModal').classList.add('active');
+}
 
-  const todayPurchases = fishPurchases.filter(p => isToday(p.date));
-  const monthPurchases = fishPurchases.filter(p => isThisMonth(p.date));
-  const todayTotal = todayPurchases.reduce((s, p) => s + p.total, 0);
-  const monthTotal = monthPurchases.reduce((s, p) => s + p.total, 0);
-  const totalOwed = fishPurchases.reduce((s, p) => s + Math.max(0, p.total - p.paidAmount), 0)
-    - fishPayments.reduce((s, pay) => s + pay.amount, 0);
-
-  const set = (id, v) => { const el = $(id); if (el) el.textContent = v; };
-  set('fishTodayTotal', fmt(todayTotal));
-  set('fishMonthTotal', fmt(monthTotal));
-  set('fishTotalOwed', fmt(Math.max(0, totalOwed)));
+function printFishBill(id) {
+  const bill = fishBills.find(b => b.id === (id || currentViewedFishBillId));
+  if (!bill) return;
+  const w = window.open('', '_blank', 'width=480,height=700');
+  if (!w) { alert('Please allow pop-ups to print the bill.'); return; }
+  const itemRows = bill.items.map(it => `
+    <div class="row"><span>${it.fishType} — ${it.quantityKg}kg × ${fmt(it.pricePerKg)}</span><strong>${fmt(it.subtotal)}</strong></div>
+  `).join('');
+  w.document.write(`<!doctype html><html><head><title>Fish Bill ${bill.billNo}</title><style>
+    body{font-family:Arial,sans-serif;padding:28px;color:#10231b}h1{margin:0;color:#059669;font-size:20px}h2{margin:4px 0 20px;font-size:15px;font-weight:600;color:#456}
+    .box{border:1px solid #ddd;border-radius:12px;padding:16px;margin:12px 0}.row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee;font-size:14px}
+    .total{font-size:17px;font-weight:800;color:#059669;border-top:2px solid #d4af37;border-bottom:0;margin-top:6px;padding-top:10px}
+    .bad{color:#d45d55} small{color:#667} @media print{button{display:none}}
+  </style></head><body>
+  <h1>Fish Purchase Bill</h1><h2>${bill.billNo} — ${bill.date}</h2>
+  <div class="box"><strong>Seller:</strong> ${bill.sellerName}<br><strong>Phone:</strong> ${bill.sellerPhone}</div>
+  <div class="box">${itemRows}
+    <div class="row total"><span>Bill Total</span><strong>${fmt(bill.total)}</strong></div>
+    <div class="row"><span>Amount Given (${bill.method}${bill.reference ? ' — ' + bill.reference : ''})</span><strong>${fmt(bill.paidAmount)}</strong></div>
+    <div class="row ${bill.balance > 0 ? 'bad' : ''}"><span>Balance Owed</span><strong>${fmt(bill.balance)}</strong></div>
+  </div>
+  ${bill.notes ? `<div class="box"><small>Note: ${bill.notes}</small></div>` : ''}
+  <button onclick="window.print()">Print</button></body></html>`);
+  w.document.close(); w.focus(); setTimeout(() => w.print(), 250);
 }
 
 function openSellerPayment(sellerName, sellerPhone) {
@@ -2984,17 +3099,7 @@ async function saveSellerPayment() {
   if (amount <= 0) { alert('Enter an amount greater than 0!'); return; }
   if (!(await ensureFreshSession())) return;
 
-  const row = {
-    business_id: businessId,
-    seller_name: sellerName,
-    seller_phone: sellerPhone,
-    payment_date: date,
-    amount,
-    method,
-    reference,
-    notes,
-    created_by: currentUser.id
-  };
+  const row = { business_id: businessId, seller_name: sellerName, seller_phone: sellerPhone, payment_date: date, amount, method, reference, notes, created_by: currentUser.id };
   try {
     const { data, error } = await supabase.from('fish_payments').insert(row).select().single();
     if (error) throw error;
@@ -3006,47 +3111,115 @@ async function saveSellerPayment() {
   }
 
   renderSellerLedger();
-  renderFishPurchases();
+  renderFishBills();
   closeModal('sellerPaymentModal');
+  if (document.getElementById('sellerHistoryModal')?.classList.contains('active')) {
+    openSellerHistory(sellerName, sellerPhone);
+  }
   updateStatus('✅ Payment recorded');
+}
+
+function sellerAggregate(sellerPhone) {
+  const bills = fishBills.filter(b => b.sellerPhone === sellerPhone);
+  const payments = fishPayments.filter(p => p.sellerPhone === sellerPhone);
+  const bought = bills.reduce((s, b) => s + b.total, 0);
+  const paidAtPurchase = bills.reduce((s, b) => s + b.paidAmount, 0);
+  const extraPaid = payments.reduce((s, p) => s + p.amount, 0);
+  const totalPaid = paidAtPurchase + extraPaid;
+  const balance = bought - totalPaid;
+  const lastDate = bills.length ? bills.map(b => b.date).sort().slice(-1)[0] : '—';
+  const name = bills[0]?.sellerName || payments[0]?.sellerName || sellerPhone;
+  return { name, phone: sellerPhone, bought, paid: totalPaid, balance, lastDate, bills, payments };
+}
+
+function renderFishBills() {
+  const tbody = $('fishBillBody');
+  if (tbody) {
+    if (fishBills.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;opacity:0.5;padding:20px;">No fish bills yet.</td></tr>';
+    } else {
+      tbody.innerHTML = fishBills.map(b => {
+        const itemsSummary = b.items.map(it => `${it.fishType} ${it.quantityKg}kg`).join(', ') || '—';
+        return `
+        <tr>
+          <td>${b.billNo}</td>
+          <td>${b.date}</td>
+          <td>${b.sellerName}<br><small style="opacity:.65;">${b.sellerPhone}</small></td>
+          <td style="max-width:180px;">${itemsSummary}</td>
+          <td>${fmt(b.total)}</td>
+          <td>${fmt(b.paidAmount)}</td>
+          <td>${b.balance > 0.01 ? `<span class="badge badge-warn">${fmt(b.balance)}</span>` : `<span class="badge badge-good">Settled</span>`}</td>
+          <td style="text-transform:capitalize;">${b.method}</td>
+          <td style="white-space:nowrap;">
+            <button class="btn btn-sm" onclick="viewFishBill('${b.id}')">👁️</button>
+            ${userRole === 'owner' ? `<button class="btn btn-sm btn-danger" onclick="deleteFishBill('${b.id}')">🗑️</button>` : ''}
+          </td>
+        </tr>`;
+      }).join('');
+    }
+  }
+
+  const todayBills = fishBills.filter(b => isToday(b.date));
+  const monthBills = fishBills.filter(b => isThisMonth(b.date));
+  const todayTotal = todayBills.reduce((s, b) => s + b.total, 0);
+  const monthTotal = monthBills.reduce((s, b) => s + b.total, 0);
+
+  const sellerPhones = [...new Set(fishBills.map(b => b.sellerPhone))];
+  const aggregates = sellerPhones.map(sellerAggregate);
+  const totalOwed = aggregates.reduce((s, a) => s + Math.max(0, a.balance), 0);
+  const sellersWithDues = aggregates.filter(a => a.balance > 0.01).length;
+
+  const set = (id, v) => { const el = $(id); if (el) el.textContent = v; };
+  set('fishTodayTotal', fmt(todayTotal));
+  set('fishMonthTotal', fmt(monthTotal));
+  set('fishTotalOwed', fmt(totalOwed));
+  set('fishSellersWithDues', sellersWithDues);
 }
 
 function renderSellerLedger() {
   const tbody = $('sellerLedgerBody');
   if (!tbody) return;
 
-  const sellers = {};
-  fishPurchases.forEach(p => {
-    const key = p.sellerPhone || p.sellerName;
-    if (!sellers[key]) sellers[key] = { name: p.sellerName, phone: p.sellerPhone, bought: 0, paid: 0 };
-    sellers[key].bought += p.total;
-    sellers[key].paid += p.paidAmount;
-  });
-  fishPayments.forEach(pay => {
-    const key = pay.sellerPhone || pay.sellerName;
-    if (!sellers[key]) sellers[key] = { name: pay.sellerName, phone: pay.sellerPhone, bought: 0, paid: 0 };
-    sellers[key].paid += pay.amount;
-  });
-
-  const list = Object.values(sellers).sort((a, b) => (b.bought - b.paid) - (a.bought - a.paid));
-
-  if (list.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;opacity:0.5;padding:20px;">No sellers yet.</td></tr>';
+  const sellerPhones = [...new Set([...fishBills.map(b => b.sellerPhone), ...fishPayments.map(p => p.sellerPhone)])];
+  if (sellerPhones.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;opacity:0.5;padding:20px;">No sellers yet.</td></tr>';
     return;
   }
 
-  tbody.innerHTML = list.map(s => {
-    const balance = s.bought - s.paid;
-    return `
+  const aggregates = sellerPhones.map(sellerAggregate).sort((a, b) => b.balance - a.balance);
+
+  tbody.innerHTML = aggregates.map(a => `
     <tr>
-      <td>${s.name}</td>
-      <td>${s.phone}</td>
-      <td>${fmt(s.bought)}</td>
-      <td>${fmt(s.paid)}</td>
-      <td>${balance > 0.01 ? `<span class="badge badge-warn">${fmt(balance)}</span>` : `<span class="badge badge-good">Settled</span>`}</td>
-      <td>${userRole === 'owner' ? `<button class="btn btn-sm" onclick="openSellerPayment('${s.name.replace(/'/g, "\\'")}','${s.phone}')">💵 Pay</button>` : '<span style="opacity:.4;">—</span>'}</td>
-    </tr>`;
-  }).join('');
+      <td>${a.name}</td>
+      <td>${a.phone}</td>
+      <td>${fmt(a.bought)}</td>
+      <td>${fmt(a.paid)}</td>
+      <td>${a.balance > 0.01 ? `<span class="badge badge-warn">${fmt(a.balance)}</span>` : `<span class="badge badge-good">Settled</span>`}</td>
+      <td>${a.lastDate}</td>
+      <td style="white-space:nowrap;">
+        <button class="btn btn-sm" onclick="openSellerHistory('${a.name.replace(/'/g, "\\'")}','${a.phone}')">📜</button>
+        ${userRole === 'owner' ? `<button class="btn btn-sm" onclick="openSellerPayment('${a.name.replace(/'/g, "\\'")}','${a.phone}')">💵 Pay</button>` : ''}
+      </td>
+    </tr>
+  `).join('');
+}
+
+function openSellerHistory(sellerName, sellerPhone) {
+  const a = sellerAggregate(sellerPhone);
+  $('shSellerTitle').textContent = `${a.name} — History`;
+  $('shSellerSubtitle').textContent = `Phone: ${a.phone}`;
+  $('shTotalBilled').textContent = fmt(a.bought);
+  $('shTotalPaid').textContent = fmt(a.paid);
+  $('shBalance').textContent = fmt(a.balance);
+  $('shBillsBody').innerHTML = a.bills.length ? a.bills.map(b => `
+    <tr><td>${b.billNo}</td><td>${b.date}</td><td>${fmt(b.total)}</td><td>${fmt(b.paidAmount)}</td><td>${b.balance > 0.01 ? fmt(b.balance) : 'Settled'}</td></tr>
+  `).join('') : '<tr><td colspan="5" style="text-align:center;opacity:.5;padding:12px;">No bills yet.</td></tr>';
+  $('shPaymentsBody').innerHTML = a.payments.length ? a.payments.map(p => `
+    <tr><td>${p.date}</td><td>${fmt(p.amount)}</td><td style="text-transform:capitalize;">${p.method}</td><td>${p.reference || '-'}</td></tr>
+  `).join('') : '<tr><td colspan="4" style="text-align:center;opacity:.5;padding:12px;">No extra payments yet.</td></tr>';
+  const payBtn = $('shPayBtn');
+  if (payBtn) payBtn.onclick = () => openSellerPayment(a.name, a.phone);
+  $('sellerHistoryModal').classList.add('active');
 }
 
 // ==================== RECURRING (DAILY) EXPENSES ====================
@@ -9879,7 +10052,6 @@ function activateAppTab(tabId){
   if (tabId === 'monthly-summary') { updateMonthlySummary(); }
   if (tabId === 'analytics') { renderAnalytics(); }
   if (tabId === 'history') renderHistory();
-  if (tabId === 'production') calcProduction();
   if (tabId === 'orders') { loadCommissionClaims().finally(() => { renderOrders(); renderCustomers(); updateOrderStats(); }); if (userRole === 'owner') { loadStaffList(); } }
   if (tabId === 'delivery') {
     loadOrdersFromCloud().then(() => { renderDelivery(); updateOrderStats(); });
@@ -9900,8 +10072,11 @@ function activateAppTab(tabId){
   if (tabId === 'products') {
     loadProductsFromCloud().then(renderProducts);
     renderProductCosting();
-    Promise.all([loadFishPurchasesFromCloud(), loadFishPaymentsFromCloud()]).then(() => {
-      renderFishPurchases();
+  }
+  if (tabId === 'production') {
+    calcProduction();
+    Promise.all([loadFishBillsFromCloud(), loadFishPaymentsFromCloud()]).then(() => {
+      renderFishBills();
       renderSellerLedger();
     });
   }
