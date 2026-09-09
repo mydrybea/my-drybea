@@ -568,6 +568,25 @@
     <div class="card">
       <h2><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="chart-no-axes-combined" aria-hidden="true"></i></span><span>Profit</span></h2><p class="pro-subtitle gold">Margin, contribution and momentum in one view.</p>
       <div class="income-summary"><div><span>Net Margin</span><strong id="incomeMargin">0%</strong></div><button class="btn btn-primary" data-open-tab="calculator" data-ribbon="true">Open Costing</button></div>
+      <small style="display:block;margin-top:8px;opacity:.6;">⚠️ These numbers above are the <strong>planner</strong> — typed-in quantities &amp; selling prices, not what actually happened. For real figures, see below.</small>
+    </div>
+
+    <div class="card">
+      <h2><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="badge-check" aria-hidden="true"></i></span><span>Real Profit — This Month</span></h2>
+      <p class="pro-subtitle green">Actual orders, actual fish bills, actual expenses and actual finished output — no estimates.</p>
+      <div class="income-grid">
+        <div class="card income-card"><span>Real Revenue</span><strong id="realIncomeRevenue">Rs. 0</strong><small>From actual orders</small></div>
+        <div class="card income-card"><span>Real Raw Fish Cost</span><strong id="realIncomeRawCost">Rs. 0</strong><small>From fish purchase bills</small></div>
+        <div class="card income-card"><span>Real Other Expenses</span><strong id="realIncomeOtherExp">Rs. 0</strong><small>Everything else logged</small></div>
+        <div class="card income-card income-highlight"><span>Real Net Profit</span><strong id="realIncomeNet">Rs. 0</strong><small>Revenue − all real costs</small></div>
+      </div>
+      <div class="income-summary">
+        <div><span>Real Margin</span><strong id="realIncomeMargin">0%</strong></div>
+        <div><span>Finished Output (Completed Batches)</span><strong id="realIncomeOutputKg">0 kg</strong></div>
+        <div><span>Real Cost/kg Produced</span><strong id="realIncomeCostPerKg">Rs. 0</strong></div>
+        <button class="btn btn-primary" data-open-tab="production" data-ribbon="true">Open Production</button>
+      </div>
+      <small style="display:block;margin-top:8px;opacity:.6;">Tip: tick "linked fish bills" when starting a Production Batch and its Real Cost/kg will show ✅ once completed — otherwise it falls back to the estimate.</small>
     </div>
   </section>
 
@@ -2022,8 +2041,8 @@
 
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Batch No</th><th>Date</th><th>Fish Type</th><th>Raw In</th><th>Planned Out</th><th>Actual Out</th><th class="num">Variance</th><th>Cost/kg</th><th>Status</th><th></th></tr></thead>
-          <tbody id="batchBody"><tr><td colspan="10" style="text-align:center;opacity:.5;padding:20px;">Loading…</td></tr></tbody>
+          <thead><tr><th>Batch No</th><th>Date</th><th>Fish Type</th><th>Raw In</th><th>Planned Out</th><th>Actual Out</th><th class="num">Variance</th><th>Est. Cost/kg</th><th>Real Cost/kg</th><th>Status</th><th></th></tr></thead>
+          <tbody id="batchBody"><tr><td colspan="11" style="text-align:center;opacity:.5;padding:20px;">Loading…</td></tr></tbody>
         </table>
       </div>
     </div>

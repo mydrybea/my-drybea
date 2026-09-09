@@ -3001,6 +3001,7 @@ function dbFishBillToLocal(b, items) {
     linkedExpenseId: b.linked_expense_id || null,
     createdAt: b.created_at,
     items: (items || []).map(it => ({
+      id: it.id,
       fishType: it.fish_type,
       quantityKg: Number(it.quantity_kg) || 0,
       pricePerKg: Number(it.price_per_kg) || 0,
@@ -3414,6 +3415,7 @@ function renderFishBills() {
   set('fishMonthTotal', fmt(monthTotal));
   set('fishTotalOwed', fmt(totalOwed));
   set('fishSellersWithDues', sellersWithDues);
+  calcRealIncome();
 }
 
 function renderSellerLedger() {
@@ -3487,6 +3489,10 @@ function dbBatchToLocal(b, sources) {
     plannedFinishedKg: Number(b.planned_finished_kg) || 0,
     actualFinishedKg: b.actual_finished_kg !== null && b.actual_finished_kg !== undefined ? Number(b.actual_finished_kg) : null,
     costPerKgSnapshot: Number(b.cost_per_kg_snapshot) || 0,
+    rawCostPerKgSnapshot: Number(b.raw_cost_per_kg_snapshot) || 0,
+    ingredientsCostPerKgSnapshot: Number(b.ingredients_cost_per_kg_snapshot) || 0,
+    fixedCostPerKgSnapshot: Number(b.fixed_cost_per_kg_snapshot) || 0,
+    realRawCost: b.real_raw_cost !== null && b.real_raw_cost !== undefined ? Number(b.real_raw_cost) : null,
     status: b.status || 'in_progress',
     notes: b.notes || '',
     createdAt: b.created_at,
@@ -3650,7 +3656,7 @@ async function saveProductionBatch() {
   if (rawKg <= 0) { alert('Enter the raw fish kg used for this batch.'); return; }
   if (!(await ensureFreshSession())) return;
 
-  const info = lastProdCostByType[fishType] || lastProdCostByType['Other'] || { yieldFactor: 1, totalCostPerKg: 0 };
+  const info = lastProdCostByType[fishType] || lastProdCostByType['Other'] || { yieldFactor: 1, totalCostPerKg: 0, rawCostPerKg: 0 };
   const plannedFinishedKg = info.yieldFactor > 0 ? rawKg / info.yieldFactor : 0;
   const batchNo = generateBatchNo(date);
 
@@ -3660,6 +3666,22 @@ async function saveProductionBatch() {
     fishBillItemId: cb.dataset.itemId,
     kgAllocated: Number(cb.closest('tr').querySelector('.bsrc-kg').value) || 0
   })).filter(s => s.kgAllocated > 0) : [];
+
+  // REAL COST: if this batch has linked fish-bill sources, work out what was
+  // actually paid for that raw fish (real price_per_kg on those exact bill
+  // items) instead of relying on the Production Model's manual raw-price
+  // estimate. No sources ticked -> real_raw_cost stays null and the app
+  // falls back to the estimate everywhere it's shown.
+  let realRawCost = null;
+  if (sourceRows.length > 0) {
+    realRawCost = 0;
+    sourceRows.forEach(s => {
+      const bill = fishBills.find(b => b.id === s.fishBillId);
+      const item = bill?.items?.find(it => it.id === s.fishBillItemId);
+      const pricePerKg = item ? item.pricePerKg : (info.rawCostPerKg / (info.yieldFactor || 1));
+      realRawCost += s.kgAllocated * pricePerKg;
+    });
+  }
 
   let savedBatch = null;
   try {
@@ -3672,6 +3694,10 @@ async function saveProductionBatch() {
       yield_factor_snapshot: info.yieldFactor,
       planned_finished_kg: plannedFinishedKg,
       cost_per_kg_snapshot: info.totalCostPerKg,
+      raw_cost_per_kg_snapshot: info.rawCostPerKg || 0,
+      ingredients_cost_per_kg_snapshot: lastProdIngredientsCostPerKg || 0,
+      fixed_cost_per_kg_snapshot: lastProdOverheadCostPerKg || 0,
+      real_raw_cost: realRawCost,
       status: 'in_progress',
       notes,
       created_by: currentUser.id
@@ -3781,18 +3807,32 @@ async function deleteProductionBatch(id) {
 }
 window.deleteProductionBatch = deleteProductionBatch;
 
+// Real cost/kg for a batch: uses the REAL price paid on its linked fish
+// bills (realRawCost) once the batch has an actual finished kg, falling
+// back to null (shown as "—", estimate column still shows the old number)
+// when the batch has no linked sources or isn't completed yet.
+function batchRealCostPerKg(b) {
+  if (b.realRawCost === null || !b.actualFinishedKg || b.actualFinishedKg <= 0) return null;
+  return (b.realRawCost / b.actualFinishedKg) + (b.ingredientsCostPerKgSnapshot || 0) + (b.fixedCostPerKgSnapshot || 0);
+}
+window.batchRealCostPerKg = batchRealCostPerKg;
+
 function renderProductionBatches() {
   const tbody = $('batchBody');
   if (!tbody) return;
 
   if (productionBatches.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;opacity:.5;padding:20px;">No batches yet. Start one above.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;opacity:.5;padding:20px;">No batches yet. Start one above.</td></tr>';
   } else {
     tbody.innerHTML = productionBatches.map(b => {
       const hasActual = b.actualFinishedKg !== null;
       const variancePct = hasActual && b.plannedFinishedKg > 0 ? ((b.actualFinishedKg - b.plannedFinishedKg) / b.plannedFinishedKg) * 100 : null;
       const varianceCell = variancePct === null ? '—' : `<span class="badge ${Math.abs(variancePct) <= 5 ? 'badge-good' : 'badge-bad'}">${variancePct >= 0 ? '+' : ''}${variancePct.toFixed(1)}%</span>`;
       const statusBadge = b.status === 'completed' ? '<span class="badge badge-good">Completed</span>' : '<span class="badge badge-warn">In Progress</span>';
+      const realCostPerKg = batchRealCostPerKg(b);
+      const realCostCell = realCostPerKg !== null
+        ? `<span class="badge badge-good" title="From actual fish-bill prices">✅ ${fmt(realCostPerKg)}</span>`
+        : (b.realRawCost === null ? `<span title="No linked fish bills — showing estimate only" style="opacity:.5;">est. only</span>` : `<span style="opacity:.5;">— pending</span>`);
       const actions = b.status === 'completed'
         ? (userRole === 'owner' ? `<button class="btn btn-sm btn-danger" onclick="deleteProductionBatch('${b.id}')">🗑️</button>` : '')
         : (userRole === 'owner' ? `<button class="btn btn-sm btn-primary" onclick="openCompleteBatchModal('${b.id}')">Complete</button> <button class="btn btn-sm btn-danger" onclick="deleteProductionBatch('${b.id}')">🗑️</button>` : '');
@@ -3805,6 +3845,7 @@ function renderProductionBatches() {
         <td>${hasActual ? b.actualFinishedKg.toFixed(1) + ' kg' : '—'}</td>
         <td class="num">${varianceCell}</td>
         <td>${fmt(b.costPerKgSnapshot)}</td>
+        <td>${realCostCell}</td>
         <td>${statusBadge}</td>
         <td style="white-space:nowrap;">${actions}</td>
       </tr>`;
@@ -3827,6 +3868,7 @@ function renderProductionBatches() {
   set('batchCompletedCount', completedThisMonth.length);
   set('batchAvgVariance', (avgVariance >= 0 ? '+' : '') + avgVariance.toFixed(1) + '%');
   set('batchMonthFinishedKg', finishedKgThisMonth.toFixed(0) + ' kg');
+  calcRealIncome();
 }
 window.renderProductionBatches = renderProductionBatches;
 
@@ -8230,7 +8272,58 @@ function updateMonthlySummary() {
   if (note) {
     note.textContent = `Reporting period: 01–${String(day).padStart(2,'0')} ${monthName}. Revenue comes from recorded non-cancelled orders; expenses come from expense records dated in the current month. The figures refresh automatically as new data is loaded or saved.`;
   }
+  calcRealIncome();
 }
+
+// ==================== REAL PROFIT (Income tab — Production → Income Linking) ====================
+// Unlike the "Monthly Mix" planner above (dashBody/incomeRevenue etc., which
+// uses manually-typed quantities & selling prices), this pulls ONLY real
+// recorded data: actual orders, actual fish-purchase bills, actual other
+// expenses, and actual finished output from completed production batches.
+// No extra fetch needed — orders/expenses/fishBills/productionBatches are
+// already loaded elsewhere; this just recomputes from those live arrays.
+function calcRealIncome() {
+  const revenueEl = $('realIncomeRevenue');
+  if (!revenueEl) return; // Income tab not in the DOM for this role — skip
+
+  const now = new Date();
+  const inMonth = (value) => {
+    const d = parseSummaryDate(value);
+    return d && d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+  };
+
+  const monthOrders = (orders || []).filter(o => inMonth(o.createdAt) && o.status !== 'cancelled');
+  const realRevenue = monthOrders.reduce((s, o) => s + (Number(o.total) || 0), 0);
+
+  const monthFishBills = (fishBills || []).filter(b => inMonth(b.date));
+  const realRawCost = monthFishBills.reduce((s, b) => s + b.total, 0);
+
+  // Everything else the owner has logged as an expense this month, EXCLUDING
+  // "Raw Fish" (already counted above via fishBills, to avoid double-counting
+  // — every fish bill also mirrors into expenses under that exact category).
+  const monthOtherExpenses = (expenses || []).filter(e => inMonth(e.date || e.createdAt) && e.category !== 'Raw Fish');
+  const realOtherExpenses = monthOtherExpenses.reduce((s, e) => s + (Number(e.amount) || 0), 0);
+
+  const realNetProfit = realRevenue - realRawCost - realOtherExpenses;
+  const realMargin = realRevenue > 0 ? (realNetProfit / realRevenue) * 100 : 0;
+
+  const monthCompletedBatches = (productionBatches || []).filter(b => inMonth(b.date) && b.status === 'completed');
+  const realOutputKg = monthCompletedBatches.reduce((s, b) => s + (b.actualFinishedKg || 0), 0);
+  const realCostPerKgProduced = realOutputKg > 0 ? realRawCost / realOutputKg : 0;
+
+  const set = (id, v) => { const el = $(id); if (el) el.textContent = v; };
+  set('realIncomeRevenue', fmt(realRevenue));
+  set('realIncomeRawCost', fmt(realRawCost));
+  set('realIncomeOtherExp', fmt(realOtherExpenses));
+  set('realIncomeNet', fmt(realNetProfit));
+  set('realIncomeMargin', realMargin.toFixed(1) + '%');
+  set('realIncomeOutputKg', realOutputKg.toFixed(1) + ' kg');
+  set('realIncomeCostPerKg', fmt(realCostPerKgProduced));
+
+  const netEl = $('realIncomeNet');
+  if (netEl) netEl.style.color = realNetProfit >= 0 ? '#10b981' : '#f87171';
+}
+window.calcRealIncome = calcRealIncome;
 
 // ==================== ANALYTICS ====================
 let trendChart = null, orderStatusChart = null, productMixChart = null, expenseCatChart = null, profitBySizeChart = null, perfFailedReasonsChart = null, newReturningChart = null;
@@ -10691,7 +10784,14 @@ function activateAppTab(tabId){
   if (tabId === 'staff-home') showSkeletons('staff-home');
   if(userRole==='staff') refreshStaffWorkspaceData(tabId);
   if (tabId === 'dashboard') { calcDashboard(); calcSensitivity(); calcBulk(); }
-  if (tabId === 'income') { calcDashboard(); }
+  if (tabId === 'income') {
+    calcDashboard();
+    calcRealIncome();
+    Promise.all([loadFishBillsFromCloud(), loadProductionBatchesFromCloud()]).then(() => {
+      renderFishBills(); // also refreshes calcRealIncome() with real purchase data
+      renderProductionBatches(); // also refreshes calcRealIncome() with real output data
+    });
+  }
   if (tabId === 'monthly-summary') { updateMonthlySummary(); }
   if (tabId === 'analytics') { renderAnalytics(); }
   if (tabId === 'history') renderHistory();
