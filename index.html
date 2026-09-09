@@ -1857,71 +1857,9 @@
 
   <!-- ============ PRODUCTION TAB ============ -->
   <section id="production" class="tab-panel" style="display:none;" role="tabpanel">
-
-    <!-- ---- Daily Fish Purchases & Sellers ---- -->
-    <div class="card">
-      <h2><span class="pro-title-icon orange" aria-hidden="true"><i class="business-icon" data-lucide="fish" aria-hidden="true"></i></span><span>Daily Fish Purchases</span></h2>
-      <p class="pro-subtitle orange">Log the fish you buy each day, track sellers and what you still owe them.</p>
-
-      <div class="btn-row" style="margin-bottom:14px;flex-wrap:wrap;">
-        <button class="btn btn-primary btn-sm" onclick="openNewFishPurchase()"><i class="business-icon icon-inline" data-lucide="plus" aria-hidden="true"></i> Add Purchase</button>
-        <button class="btn btn-sm" onclick="openNewFishSeller()"><i class="business-icon icon-inline" data-lucide="user-plus" aria-hidden="true"></i> Add Seller</button>
-      </div>
-
-      <h3 style="color:var(--green);margin-bottom:8px;">🧾 Sellers &amp; Balance</h3>
-      <div id="fishSellersList" style="display:grid;gap:10px;margin-bottom:20px;">
-        <div style="text-align:center;opacity:.5;padding:14px;">Loading…</div>
-      </div>
-
-      <h3 style="color:var(--green);margin-bottom:8px;">📋 Recent Purchases</h3>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr><th>Date</th><th>Fish Type</th><th class="num">Qty (kg)</th><th class="num">Price/kg</th><th class="num">Total</th><th>Seller</th><th></th></tr>
-          </thead>
-          <tbody id="fishPurchasesBody">
-            <tr><td colspan="7" style="text-align:center;opacity:.5;padding:20px;">Loading…</td></tr>
-          </tbody>
-        </table>
-      </div>
-
-      <h3 style="color:var(--green);margin:18px 0 8px;">💵 Recent Payments to Sellers</h3>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr><th>Date</th><th>Seller</th><th class="num">Amount</th><th>Method</th><th>Notes</th><th></th></tr>
-          </thead>
-          <tbody id="fishPaymentsBody">
-            <tr><td colspan="6" style="text-align:center;opacity:.5;padding:20px;">Loading…</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-
     <div class="card">
       <h2><span class="pro-title-icon orange" aria-hidden="true"><i class="business-icon" data-lucide="factory" aria-hidden="true"></i></span><span>Production Model</span></h2><p class="pro-subtitle orange">Translate raw fish yield into finished output.</p>
       <p class="sub">Compare buying finished Umbalakada vs producing from raw fish. Analyze yield, cost per kg, and profitability.</p>
-
-      <div class="card" style="background:rgba(16,185,129,.06);border:1px solid rgba(16,185,129,.25);margin-bottom:16px;">
-        <h3 style="color:var(--green);margin-bottom:4px;">📅 Today's Raw Fish → Expected Maldive Fish Output & Profit</h3>
-        <p class="sub" style="margin-top:0;">Auto-calculated from today's Daily Fish Purchases using the yield factors and market prices below.</p>
-        <div class="stat-grid" id="todayProdSummary">
-          <div class="stat"><div class="k">Today's Raw Fish Bought</div><div class="v">0 kg</div></div>
-          <div class="stat"><div class="k">Today's Raw Cost</div><div class="v">Rs. 0</div></div>
-          <div class="stat"><div class="k">Expected Umbalakada Output</div><div class="v">0 kg</div></div>
-          <div class="stat accent"><div class="k">Expected Profit Today</div><div class="v">Rs. 0</div></div>
-        </div>
-        <div class="table-wrap" style="margin-top:10px;">
-          <table>
-            <thead>
-              <tr><th>Fish Type</th><th class="num">Raw Bought</th><th class="num">Raw Cost</th><th class="num">Expected Finished</th><th class="num">Expected Revenue</th><th class="num">Expected Profit</th></tr>
-            </thead>
-            <tbody id="todayProdBody">
-              <tr><td colspan="6" style="text-align:center;opacity:.5;padding:16px;">Loading…</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
 
       <div class="grid-2">
         <div>
@@ -2011,112 +1949,6 @@
       </div>
     </div>
   </section>
-
-  <!-- New / Edit Fish Seller Modal -->
-  <div class="modal-backdrop" id="fishSellerModal">
-    <div class="modal">
-      <h3><span class="pro-title-icon orange" aria-hidden="true"><i class="business-icon" data-lucide="user-plus" aria-hidden="true"></i></span><span id="fishSellerModalTitle">New Seller</span></h3><p class="pro-subtitle orange">The person you buy fish from.</p>
-      <input type="hidden" id="fishSellerEditId" value="">
-      <div class="field">
-        <label>Seller Name</label>
-        <input type="text" id="fishSellerName" placeholder="e.g. Sunil Silva">
-      </div>
-      <div class="field">
-        <label>Phone Number</label>
-        <input type="tel" id="fishSellerPhone" placeholder="07XXXXXXXX">
-      </div>
-      <div class="field">
-        <label>Notes (optional)</label>
-        <input type="text" id="fishSellerNotes" placeholder="e.g. usually delivers in the morning">
-      </div>
-      <div class="btn-row">
-        <button class="btn btn-primary" id="fishSellerSaveBtn" onclick="saveFishSeller()"><i class="business-icon icon-inline" data-lucide="save" aria-hidden="true"></i> Save Seller</button>
-        <button class="btn" onclick="closeModal('fishSellerModal')">Cancel</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- New / Edit Fish Purchase Modal -->
-  <div class="modal-backdrop" id="fishPurchaseModal">
-    <div class="modal">
-      <h3><span class="pro-title-icon orange" aria-hidden="true"><i class="business-icon" data-lucide="fish" aria-hidden="true"></i></span><span id="fishPurchaseModalTitle">New Fish Purchase</span></h3><p class="pro-subtitle orange">What you bought, from whom, and at what price.</p>
-      <input type="hidden" id="fishPurchaseEditId" value="">
-      <div class="field">
-        <label>Date</label>
-        <input type="date" id="fishPurchaseDate">
-      </div>
-      <div class="field">
-        <label>Seller</label>
-        <select id="fishPurchaseSeller">
-          <option value="">— Select seller —</option>
-        </select>
-      </div>
-      <div class="field">
-        <label>Fish Type</label>
-        <input type="text" id="fishPurchaseFishType" list="fishTypeList" placeholder="e.g. Linna, Balaya">
-        <datalist id="fishTypeList">
-          <option value="Linna">
-          <option value="Balaya">
-          <option value="Kawalam">
-        </datalist>
-      </div>
-      <div class="grid-2">
-        <div class="field">
-          <label>Quantity (kg)</label>
-          <input type="number" id="fishPurchaseQty" value="0" min="0" step="0.1" oninput="recalcFishPurchaseTotal()">
-        </div>
-        <div class="field">
-          <label>Price per kg (Rs.)</label>
-          <input type="number" id="fishPurchasePrice" value="0" min="0" oninput="recalcFishPurchaseTotal()">
-        </div>
-      </div>
-      <div class="field">
-        <label>Total Amount (Rs.)</label>
-        <div class="input-prefix"><span>Rs.</span><input type="number" id="fishPurchaseTotal" value="0" min="0"></div>
-        <small style="opacity:.6;">Auto-calculated from quantity × price/kg — you can adjust it if needed.</small>
-      </div>
-      <div class="field">
-        <label>Notes (optional)</label>
-        <input type="text" id="fishPurchaseNotes" placeholder="e.g. extra ice charge included">
-      </div>
-      <div class="btn-row">
-        <button class="btn btn-primary" id="fishPurchaseSaveBtn" onclick="saveFishPurchase()"><i class="business-icon icon-inline" data-lucide="save" aria-hidden="true"></i> Save Purchase</button>
-        <button class="btn" onclick="closeModal('fishPurchaseModal')">Cancel</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Record Payment to Seller Modal -->
-  <div class="modal-backdrop" id="fishPaymentModal">
-    <div class="modal">
-      <h3><span class="pro-title-icon orange" aria-hidden="true"><i class="business-icon" data-lucide="wallet" aria-hidden="true"></i></span><span>Pay Seller</span></h3><p class="pro-subtitle orange">Paying <strong id="fishPaymentSellerName">—</strong> · currently owed <strong id="fishPaymentSellerBalance">Rs. 0</strong></p>
-      <input type="hidden" id="fishPaymentSellerId" value="">
-      <div class="field">
-        <label>Date</label>
-        <input type="date" id="fishPaymentDate">
-      </div>
-      <div class="field">
-        <label>Amount (Rs.)</label>
-        <div class="input-prefix"><span>Rs.</span><input type="number" id="fishPaymentAmount" value="0" min="0"></div>
-      </div>
-      <div class="field">
-        <label>Payment Method</label>
-        <select id="fishPaymentMethod">
-          <option value="cash">Cash</option>
-          <option value="check">Check</option>
-          <option value="deposit">Bank Deposit</option>
-        </select>
-      </div>
-      <div class="field">
-        <label>Notes (optional)</label>
-        <input type="text" id="fishPaymentNotes" placeholder="e.g. cheque no. 004521">
-      </div>
-      <div class="btn-row">
-        <button class="btn btn-primary" id="fishPaymentSaveBtn" onclick="saveFishPayment()"><i class="business-icon icon-inline" data-lucide="save" aria-hidden="true"></i> Save Payment</button>
-        <button class="btn" onclick="closeModal('fishPaymentModal')">Cancel</button>
-      </div>
-    </div>
-  </div>
 
   <!-- ============ DASHBOARD TAB ============ -->
   <section id="dashboard" class="tab-panel active" role="tabpanel" style="display:block;">
@@ -2522,7 +2354,198 @@
         <div style="grid-column:1/-1;text-align:center;opacity:.5;padding:20px;">Loading…</div>
       </div>
     </div>
+
+    <!-- ============ DAILY PRODUCT COSTING ============ -->
+    <div class="card" style="margin-top:16px;">
+      <h2><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="calculator" aria-hidden="true"></i></span><span>Daily Product Costing</span></h2>
+      <p class="pro-subtitle gold">Log every daily cost — raw fish, ingredients, staff salary, staff meals, transport, ice, water &amp; electricity. Feeds straight into Expenses and the Profit chart.</p>
+
+      <div class="stat-grid" id="costingStatGrid">
+        <div class="stat"><div class="k">Today's Costing</div><div class="v" id="costingTodayTotal">Rs. 0</div></div>
+        <div class="stat"><div class="k">This Month</div><div class="v" id="costingMonthTotal">Rs. 0</div></div>
+        <div class="stat good"><div class="k">Biggest Cost Today</div><div class="v" id="costingTopCategory">—</div></div>
+      </div>
+
+      <div class="btn-row" style="margin:14px 0;" data-owner-only>
+        <button class="btn btn-primary btn-sm" onclick="openNewCosting()"><i class="business-icon icon-inline" data-lucide="plus" aria-hidden="true"></i> Add Daily Cost</button>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Date</th><th>Category</th><th>Note</th><th>Amount</th><th></th></tr></thead>
+          <tbody id="costingBody"><tr><td colspan="5" style="text-align:center;opacity:.5;padding:20px;">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ============ FISH PURCHASES & SELLER LEDGER ============ -->
+    <div class="card" style="margin-top:16px;">
+      <h2><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="fish" aria-hidden="true"></i></span><span>Daily Fish Purchases</span></h2>
+      <p class="pro-subtitle green">Every fish buy — species, weight, price, and the seller you bought it from. Amount paid vs balance is tracked per seller below.</p>
+
+      <div class="stat-grid" id="fishPurchaseStatGrid">
+        <div class="stat"><div class="k">Bought Today</div><div class="v" id="fishTodayTotal">Rs. 0</div></div>
+        <div class="stat"><div class="k">This Month</div><div class="v" id="fishMonthTotal">Rs. 0</div></div>
+        <div class="stat bad"><div class="k">Total Owed to Sellers</div><div class="v" id="fishTotalOwed">Rs. 0</div></div>
+      </div>
+
+      <div class="btn-row" style="margin:14px 0;" data-owner-only>
+        <button class="btn btn-primary btn-sm" onclick="openNewFishPurchase()"><i class="business-icon icon-inline" data-lucide="plus" aria-hidden="true"></i> Add Fish Purchase</button>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Date</th><th>Fish Type</th><th>Qty (kg)</th><th>Rs./kg</th><th>Total</th><th>Seller</th><th>Paid</th><th>Balance</th><th>Method</th><th></th></tr></thead>
+          <tbody id="fishPurchaseBody"><tr><td colspan="10" style="text-align:center;opacity:.5;padding:20px;">Loading…</td></tr></tbody>
+        </table>
+      </div>
+
+      <h2 style="margin-top:22px;"><span class="pro-title-icon" aria-hidden="true"><i class="business-icon" data-lucide="users" aria-hidden="true"></i></span><span>Seller Ledger</span></h2>
+      <p class="pro-subtitle">Running balance per fish seller — record cash, cheque or deposit payments right here as you settle up.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Seller</th><th>Phone</th><th>Total Bought</th><th>Total Paid</th><th>Balance</th><th></th></tr></thead>
+          <tbody id="sellerLedgerBody"><tr><td colspan="6" style="text-align:center;opacity:.5;padding:20px;">No sellers yet.</td></tr></tbody>
+        </table>
+      </div>
+    </div>
   </section>
+
+  <!-- New Daily Costing Modal -->
+  <div class="modal-backdrop" id="costingModal">
+    <div class="modal">
+      <h3><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="calculator" aria-hidden="true"></i></span><span>Add Daily Cost</span></h3><p class="pro-subtitle gold">Record it while the transaction is fresh — this also appears in Expenses.</p>
+      <div class="field">
+        <label>Date</label>
+        <input type="date" id="costingDate">
+      </div>
+      <div class="field">
+        <label>Category</label>
+        <select id="costingCategory">
+          <option value="Raw Fish">Raw Fish</option>
+          <option value="Ingredients">Ingredients</option>
+          <option value="Workers Salary">Staff Salary</option>
+          <option value="Staff Dining">Staff Meals</option>
+          <option value="Transport">Transport</option>
+          <option value="Ice">Ice</option>
+          <option value="Water">Water</option>
+          <option value="Electricity">Electricity</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Note (optional)</label>
+        <input type="text" id="costingNote" placeholder="e.g. 3 blocks of ice from XYZ shop">
+      </div>
+      <div class="field">
+        <label>Amount (Rs.)</label>
+        <div class="input-prefix"><span>Rs.</span><input type="number" id="costingAmount" value="0" min="0"></div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="saveCosting()"><i class="business-icon icon-inline" data-lucide="save" aria-hidden="true"></i> Save Cost</button>
+        <button class="btn" onclick="closeModal('costingModal')">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- New Fish Purchase Modal -->
+  <div class="modal-backdrop" id="fishPurchaseModal">
+    <div class="modal">
+      <h3><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="fish" aria-hidden="true"></i></span><span>Add Fish Purchase</span></h3><p class="pro-subtitle green">Species, weight, price &amp; the seller you bought it from.</p>
+      <div class="field">
+        <label>Date</label>
+        <input type="date" id="fpDate">
+      </div>
+      <div class="field">
+        <label>Fish Type</label>
+        <input type="text" id="fpFishType" placeholder="e.g. Skipjack Tuna">
+      </div>
+      <div class="grid-2">
+        <div class="field">
+          <label>Quantity (kg)</label>
+          <input type="number" id="fpQuantity" value="0" min="0" step="0.1" oninput="updateFishPurchaseTotal()">
+        </div>
+        <div class="field">
+          <label>Price per kg (Rs.)</label>
+          <input type="number" id="fpPricePerKg" value="0" min="0" oninput="updateFishPurchaseTotal()">
+        </div>
+      </div>
+      <div class="field">
+        <label>Total Cost (Rs.)</label>
+        <div class="input-prefix"><span>Rs.</span><input type="number" id="fpTotal" value="0" min="0" readonly style="opacity:.75;"></div>
+      </div>
+      <div class="field">
+        <label>Seller Name</label>
+        <input type="text" id="fpSellerName" placeholder="e.g. Sunil Fernando">
+      </div>
+      <div class="field">
+        <label>Seller Phone</label>
+        <input type="tel" id="fpSellerPhone" placeholder="e.g. 077 123 4567">
+      </div>
+      <div class="grid-2">
+        <div class="field">
+          <label>Amount Paid Now (Rs.)</label>
+          <input type="number" id="fpPaidAmount" value="0" min="0">
+        </div>
+        <div class="field">
+          <label>Payment Method</label>
+          <select id="fpPaymentMethod">
+            <option value="cash">Cash</option>
+            <option value="cheque">Cheque</option>
+            <option value="deposit">Bank Deposit</option>
+          </select>
+        </div>
+      </div>
+      <div class="field">
+        <label>Cheque / Deposit Ref. (optional)</label>
+        <input type="text" id="fpPaymentReference" placeholder="Cheque no. or deposit slip no.">
+      </div>
+      <div class="field">
+        <label>Note (optional)</label>
+        <input type="text" id="fpNotes" placeholder="Optional notes...">
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="saveFishPurchase()"><i class="business-icon icon-inline" data-lucide="save" aria-hidden="true"></i> Save Purchase</button>
+        <button class="btn" onclick="closeModal('fishPurchaseModal')">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Seller Payment Modal -->
+  <div class="modal-backdrop" id="sellerPaymentModal">
+    <div class="modal">
+      <h3><span class="pro-title-icon" aria-hidden="true"><i class="business-icon" data-lucide="wallet-cards" aria-hidden="true"></i></span><span>Record Payment</span></h3><p class="pro-subtitle" id="sellerPaymentSubtitle">Settle balance with this seller.</p>
+      <input type="hidden" id="spSellerName">
+      <input type="hidden" id="spSellerPhone">
+      <div class="field">
+        <label>Date</label>
+        <input type="date" id="spDate">
+      </div>
+      <div class="field">
+        <label>Amount (Rs.)</label>
+        <div class="input-prefix"><span>Rs.</span><input type="number" id="spAmount" value="0" min="0"></div>
+      </div>
+      <div class="field">
+        <label>Payment Method</label>
+        <select id="spMethod">
+          <option value="cash">Cash</option>
+          <option value="cheque">Cheque</option>
+          <option value="deposit">Bank Deposit</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Cheque / Deposit Ref. (optional)</label>
+        <input type="text" id="spReference" placeholder="Cheque no. or deposit slip no.">
+      </div>
+      <div class="field">
+        <label>Note (optional)</label>
+        <input type="text" id="spNotes" placeholder="Optional notes...">
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="saveSellerPayment()"><i class="business-icon icon-inline" data-lucide="save" aria-hidden="true"></i> Save Payment</button>
+        <button class="btn" onclick="closeModal('sellerPaymentModal')">Cancel</button>
+      </div>
+    </div>
+  </div>
 
   <!-- New / Edit Product Modal -->
   <div class="modal-backdrop" id="productModal">
@@ -3186,6 +3209,10 @@
         <option value="Workers Salary">Workers Salary</option>
         <option value="Packing Materials">Packing Materials</option>
         <option value="Raw Fish">Raw Fish</option>
+        <option value="Ingredients">Ingredients</option>
+        <option value="Ice">Ice</option>
+        <option value="Water">Water</option>
+        <option value="Electricity">Electricity</option>
         <option value="Rent">Rent</option>
         <option value="Utilities">Utilities</option>
         <option value="Bill Payment">Bill Payment</option>
