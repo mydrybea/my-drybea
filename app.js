@@ -1839,6 +1839,12 @@ let costChart = null, sensChart = null, prodChart = null, dpMonthlyChart = null;
 let dailyProductionLogCache = [];
 let lastProdAvgRawCostPerKg = 0, lastProdIngredientsCostPerKg = 0, lastProdOverheadCostPerKg = 0;
 let lastProdAvgCostPerKg = 0, lastProdAvgMarketPrice = 0, lastProdAvgProfitPerKg = 0;
+// Today's real numbers as actually used/saved by the Daily Production Log —
+// these start out equal to the estimates above, but diverge once the owner
+// enters actual ingredient usage and/or a custom selling price for today.
+let todayActualIngredientsCostPerKg = 0;
+let lastProdAvgCostPerKgForSave = 0, lastProdAvgProfitPerKgForSave = 0;
+let lastProdIngredientsCostPerKgForSave = 0, lastProdAvgMarketPriceForSave = 0;
 // Per-fish-type snapshot from the last calcProduction() run — used by the
 // Production Batches feature to know each type's current yield factor and
 // total cost/kg without re-deriving it. Keyed by fish type name.
@@ -2215,7 +2221,7 @@ function calcProduction() {
   lastProdAvgCostPerKg = avgCostPerKg;
   lastProdAvgMarketPrice = avgFinPrice;
   lastProdAvgProfitPerKg = avgProfitPerKg;
-  updateDailyProductionSummaryLive();
+  calcTodayActualIngredients();
 
   const colors = getChartColors();
   const ctx = $('prodChart').getContext('2d');
@@ -2366,20 +2372,94 @@ function applyDailyRawKgFromBills() {
 }
 window.applyDailyRawKgFromBills = applyDailyRawKgFromBills;
 
+// The six ingredient keys shared between the "estimated recipe" table
+// (ingSaltPrice/ingSaltGrams -> per-kg ratio) and the "today's actual usage"
+// table below (ingSaltActualPrice/ingSaltActualQty -> real kg weighed out).
+const DAILY_INGREDIENT_KEYS = ['ingSalt', 'ingGoraka', 'ingTurmeric', 'ingCinnamon', 'ingCurryLeaf', 'ingTamarind'];
+
+// Totals up whatever the owner has actually weighed out today (if anything)
+// and, once Kg Produced Today is known, turns that into a real Rs./kg
+// ingredients cost — this is what Today's Summary uses in place of the
+// theoretical recipe estimate whenever actual quantities are entered.
+function calcTodayActualIngredients() {
+  const totalEl = $('ingActualTotalCost');
+  if (!totalEl) { updateDailyProductionSummaryLive(); return; }
+
+  let total = 0;
+  DAILY_INGREDIENT_KEYS.forEach(key => {
+    const price = Number($(key + 'ActualPrice') && $(key + 'ActualPrice').value) || 0;
+    const qty = Number($(key + 'ActualQty') && $(key + 'ActualQty').value) || 0;
+    const cost = price * qty;
+    total += cost;
+    const costEl = $(key + 'ActualCost');
+    if (costEl) costEl.textContent = fmt(cost);
+  });
+  totalEl.textContent = fmt(total);
+
+  const kgProduced = Number($('dpKgProduced') && $('dpKgProduced').value) || 0;
+  const perKgEl = $('ingActualCostPerKg');
+  if (total <= 0) {
+    todayActualIngredientsCostPerKg = 0;
+    if (perKgEl) perKgEl.textContent = '— no actual usage entered today';
+  } else if (kgProduced <= 0) {
+    todayActualIngredientsCostPerKg = 0;
+    if (perKgEl) perKgEl.textContent = '— enter Kg Produced Today below';
+  } else {
+    todayActualIngredientsCostPerKg = total / kgProduced;
+    if (perKgEl) perKgEl.textContent = fmt(todayActualIngredientsCostPerKg);
+  }
+  updateDailyProductionSummaryLive();
+}
+window.calcTodayActualIngredients = calcTodayActualIngredients;
+
 function updateDailyProductionSummaryLive() {
   const costEl = $('dpTodayCost'), priceEl = $('dpTodayPrice'), profitEl = $('dpTodayProfit'), totalEl = $('dpTodayTotal');
   if (!costEl) return; // Daily Log card not in the DOM (e.g. different role view)
   const kgProduced = Number($('dpKgProduced') && $('dpKgProduced').value) || 0;
-  const totalProfit = lastProdAvgProfitPerKg * kgProduced;
 
-  costEl.textContent = fmt(lastProdAvgCostPerKg);
-  priceEl.textContent = fmt(lastProdAvgMarketPrice);
-  profitEl.textContent = fmt(lastProdAvgProfitPerKg);
+  // Ingredients: real usage today (if entered) overrides the recipe estimate.
+  const usingActualIngredients = todayActualIngredientsCostPerKg > 0;
+  const ingredientsPerKg = usingActualIngredients ? todayActualIngredientsCostPerKg : lastProdIngredientsCostPerKg;
+  const costPerKg = lastProdAvgRawCostPerKg + ingredientsPerKg + lastProdOverheadCostPerKg;
+
+  // Selling price: a manually-entered override (if any) beats the auto
+  // average of Linna/Balaya/Premium Mix market prices from the calculator.
+  const priceInput = $('dpMarketPrice');
+  const priceOverride = priceInput ? Number(priceInput.value) || 0 : 0;
+  const usingCustomPrice = priceOverride > 0;
+  const marketPrice = usingCustomPrice ? priceOverride : lastProdAvgMarketPrice;
+
+  const profitPerKg = marketPrice - costPerKg;
+  const totalProfit = profitPerKg * kgProduced;
+
+  costEl.textContent = fmt(costPerKg);
+  priceEl.textContent = fmt(marketPrice);
+  profitEl.textContent = fmt(profitPerKg);
   totalEl.textContent = fmt(totalProfit);
 
+  const priceNoteEl = $('dpPriceSourceNote');
+  if (priceNoteEl) {
+    priceNoteEl.textContent = usingCustomPrice
+      ? `💰 Using your custom selling price (Rs. ${fmt2(marketPrice)}/kg).`
+      : `💰 Using the auto average of Linna/Balaya/Premium Mix prices (Rs. ${fmt2(marketPrice)}/kg) — enter a value above to override.`;
+  }
+  const ingNoteEl = $('dpIngredientsSourceNote');
+  if (ingNoteEl) {
+    ingNoteEl.textContent = usingActualIngredients
+      ? `🧂 Using today's actual ingredient usage (Rs. ${fmt2(ingredientsPerKg)}/kg).`
+      : `🧂 Using the estimated recipe ratio (Rs. ${fmt2(ingredientsPerKg)}/kg) — enter today's actual usage above to override.`;
+  }
+
   const profitCard = $('dpTodayProfitCard'), totalCard = $('dpTodayTotalCard');
-  if (profitCard) profitCard.classList.toggle('bad', lastProdAvgProfitPerKg < 0);
+  if (profitCard) profitCard.classList.toggle('bad', profitPerKg < 0);
   if (totalCard) totalCard.classList.toggle('bad', totalProfit < 0);
+
+  // These are the numbers Save Today's Snapshot actually writes — kept in
+  // sync here so the save always matches what's on screen.
+  lastProdAvgCostPerKgForSave = costPerKg;
+  lastProdAvgProfitPerKgForSave = profitPerKg;
+  lastProdIngredientsCostPerKgForSave = ingredientsPerKg;
+  lastProdAvgMarketPriceForSave = marketPrice;
 }
 window.updateDailyProductionSummaryLive = updateDailyProductionSummaryLive;
 
@@ -2387,19 +2467,20 @@ async function saveDailyProductionLog() {
   if (userRole !== 'owner') { alert('Only the owner can save the daily production log.'); return; }
   if (!currentUser) { alert('Please login first.'); return; }
 
+  updateDailyProductionSummaryLive(); // make sure the *ForSave values are fresh
   const kgProduced = Number($('dpKgProduced').value) || 0;
   const notes = $('dpNote').value.trim();
-  const totalProfit = lastProdAvgProfitPerKg * kgProduced;
+  const totalProfit = lastProdAvgProfitPerKgForSave * kgProduced;
 
   const row = {
     owner_id: currentUser.id,
     log_date: todayIso(),
     raw_cost_per_kg: lastProdAvgRawCostPerKg,
-    ingredients_cost_per_kg: lastProdIngredientsCostPerKg,
+    ingredients_cost_per_kg: lastProdIngredientsCostPerKgForSave,
     overhead_cost_per_kg: lastProdOverheadCostPerKg,
-    total_cost_per_kg: lastProdAvgCostPerKg,
-    market_price_per_kg: lastProdAvgMarketPrice,
-    profit_per_kg: lastProdAvgProfitPerKg,
+    total_cost_per_kg: lastProdAvgCostPerKgForSave,
+    market_price_per_kg: lastProdAvgMarketPriceForSave,
+    profit_per_kg: lastProdAvgProfitPerKgForSave,
     kg_produced: kgProduced,
     total_profit: totalProfit,
     notes,
@@ -2422,6 +2503,7 @@ async function saveDailyProductionLog() {
   }
 }
 window.saveDailyProductionLog = saveDailyProductionLog;
+
 
 async function loadDailyProductionLog() {
   if (!currentUser || userRole !== 'owner') { dailyProductionLogCache = []; return dailyProductionLogCache; }
