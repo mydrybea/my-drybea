@@ -1712,12 +1712,12 @@ let state = {
     prodTransport: 110000, prodFirewood: 30000,
     prodWorkers: 220000, prodOther: 220000, prodIce: 35000,
     finLinna: 1750, finBalaya: 2200, finKawalam: 1000,
-    ingSaltPrice: 120, ingSaltGrams: 40,
-    ingGorakaPrice: 1200, ingGorakaGrams: 15,
-    ingTurmericPrice: 1800, ingTurmericGrams: 5,
-    ingCinnamonPrice: 3500, ingCinnamonGrams: 3,
-    ingCurryLeafPrice: 400, ingCurryLeafGrams: 10,
-    ingTamarindPrice: 900, ingTamarindGrams: 10
+    ingSaltPrice: 120, ingSaltGrams: 0,
+    ingGorakaPrice: 1200, ingGorakaGrams: 0,
+    ingTurmericPrice: 1800, ingTurmericGrams: 0,
+    ingCinnamonPrice: 3500, ingCinnamonGrams: 0,
+    ingCurryLeafPrice: 400, ingCurryLeafGrams: 0,
+    ingTamarindPrice: 900, ingTamarindGrams: 0
   }
 };
 let history = [];
@@ -1839,10 +1839,8 @@ let costChart = null, sensChart = null, prodChart = null, dpMonthlyChart = null;
 let dailyProductionLogCache = [];
 let lastProdAvgRawCostPerKg = 0, lastProdIngredientsCostPerKg = 0, lastProdOverheadCostPerKg = 0;
 let lastProdAvgCostPerKg = 0, lastProdAvgMarketPrice = 0, lastProdAvgProfitPerKg = 0;
-// Today's real numbers as actually used/saved by the Daily Production Log —
-// these start out equal to the estimates above, but diverge once the owner
-// enters actual ingredient usage and/or a custom selling price for today.
-let todayActualIngredientsCostPerKg = 0;
+// The numbers Save Today's Snapshot actually writes — normally identical to
+// the estimates above, but diverge once a custom selling price is entered.
 let lastProdAvgCostPerKgForSave = 0, lastProdAvgProfitPerKgForSave = 0;
 let lastProdIngredientsCostPerKgForSave = 0, lastProdAvgMarketPriceForSave = 0;
 // Per-fish-type snapshot from the last calcProduction() run — used by the
@@ -2125,8 +2123,16 @@ function calcProduction() {
   const finBalaya = Number($('finBalaya').value) || 0;
   const finPremium = Number($('finKawalam').value) || 0;
 
-  // Ingredients: each spice is priced per kg but used in grams per kg of
-  // finished output, so cost/kg = (price per kg / 1000) * grams used.
+  const avgYield = (yLinna + yBalaya + yPremium) / 3;
+  // Today's finished output, derived straight from Daily Raw Fish (kg) —
+  // this is what actual ingredient spend today gets divided across, so
+  // there's no separate "kg produced" step just to price ingredients.
+  const todaysFinishedOutput = avgYield > 0 ? dailyRaw / avgYield : 0;
+
+  // Ingredients: each spice is priced per kg, and "Qty Used Today" is the
+  // real kg you actually used for today's whole raw fish batch — not a
+  // theoretical ratio. Total spend today ÷ today's finished output = a
+  // real, live Rs./kg ingredients cost.
   const INGREDIENTS = [
     { key:'ingSalt', label:'Salt' },
     { key:'ingGoraka', label:'Garcinia (Goraka)' },
@@ -2135,23 +2141,27 @@ function calcProduction() {
     { key:'ingCurryLeaf', label:'Curry / Pandan Leaves' },
     { key:'ingTamarind', label:'Tamarind' }
   ];
-  let ingredientsCostPerKg = 0;
+  let ingredientsCostToday = 0;
   INGREDIENTS.forEach(ing => {
     const price = Number($(ing.key + 'Price').value) || 0;
-    const grams = Number($(ing.key + 'Grams').value) || 0;
-    const cost = (price / 1000) * grams;
-    ingredientsCostPerKg += cost;
+    const qty = Number($(ing.key + 'Grams').value) || 0; // holds "kg used today"
+    const cost = price * qty;
+    ingredientsCostToday += cost;
     const costEl = $(ing.key + 'Cost');
     if (costEl) costEl.textContent = fmt(cost);
   });
-  $('ingTotalCost').textContent = fmt(ingredientsCostPerKg);
+  const ingredientsCostPerKg = todaysFinishedOutput > 0 ? ingredientsCostToday / todaysFinishedOutput : 0;
+  $('ingTotalCost').textContent = fmt(ingredientsCostToday);
+  const perKgEl = $('ingCostPerKgNote');
+  if (perKgEl) perKgEl.textContent = todaysFinishedOutput > 0
+    ? `= Rs. ${fmt2(ingredientsCostPerKg)} /kg finished output (today's est. output: ${fmt2(todaysFinishedOutput)} kg)`
+    : `Enter Daily Raw Fish (kg) above to calculate Rs./kg`;
   $('prodIngredientsPerKg').textContent = fmt(ingredientsCostPerKg);
   updateIngredientVarianceAlert(ingredientsCostPerKg);
 
   const monthlyRawKg = dailyRaw * days;
   $('prodMonthlyRaw').textContent = monthlyRawKg.toFixed(0) + ' kg';
 
-  const avgYield = (yLinna + yBalaya + yPremium) / 3;
   const monthlyFinished = monthlyRawKg / avgYield;
   $('prodMonthlyFinished').textContent = monthlyFinished.toFixed(1) + ' kg';
 
@@ -2221,7 +2231,7 @@ function calcProduction() {
   lastProdAvgCostPerKg = avgCostPerKg;
   lastProdAvgMarketPrice = avgFinPrice;
   lastProdAvgProfitPerKg = avgProfitPerKg;
-  calcTodayActualIngredients();
+  updateDailyProductionSummaryLive();
 
   const colors = getChartColors();
   const ctx = $('prodChart').getContext('2d');
@@ -2372,55 +2382,15 @@ function applyDailyRawKgFromBills() {
 }
 window.applyDailyRawKgFromBills = applyDailyRawKgFromBills;
 
-// The six ingredient keys shared between the "estimated recipe" table
-// (ingSaltPrice/ingSaltGrams -> per-kg ratio) and the "today's actual usage"
-// table below (ingSaltActualPrice/ingSaltActualQty -> real kg weighed out).
-const DAILY_INGREDIENT_KEYS = ['ingSalt', 'ingGoraka', 'ingTurmeric', 'ingCinnamon', 'ingCurryLeaf', 'ingTamarind'];
-
-// Totals up whatever the owner has actually weighed out today (if anything)
-// and, once Kg Produced Today is known, turns that into a real Rs./kg
-// ingredients cost — this is what Today's Summary uses in place of the
-// theoretical recipe estimate whenever actual quantities are entered.
-function calcTodayActualIngredients() {
-  const totalEl = $('ingActualTotalCost');
-  if (!totalEl) { updateDailyProductionSummaryLive(); return; }
-
-  let total = 0;
-  DAILY_INGREDIENT_KEYS.forEach(key => {
-    const price = Number($(key + 'ActualPrice') && $(key + 'ActualPrice').value) || 0;
-    const qty = Number($(key + 'ActualQty') && $(key + 'ActualQty').value) || 0;
-    const cost = price * qty;
-    total += cost;
-    const costEl = $(key + 'ActualCost');
-    if (costEl) costEl.textContent = fmt(cost);
-  });
-  totalEl.textContent = fmt(total);
-
-  const kgProduced = Number($('dpKgProduced') && $('dpKgProduced').value) || 0;
-  const perKgEl = $('ingActualCostPerKg');
-  if (total <= 0) {
-    todayActualIngredientsCostPerKg = 0;
-    if (perKgEl) perKgEl.textContent = '— no actual usage entered today';
-  } else if (kgProduced <= 0) {
-    todayActualIngredientsCostPerKg = 0;
-    if (perKgEl) perKgEl.textContent = '— enter Kg Produced Today below';
-  } else {
-    todayActualIngredientsCostPerKg = total / kgProduced;
-    if (perKgEl) perKgEl.textContent = fmt(todayActualIngredientsCostPerKg);
-  }
-  updateDailyProductionSummaryLive();
-}
-window.calcTodayActualIngredients = calcTodayActualIngredients;
-
 function updateDailyProductionSummaryLive() {
   const costEl = $('dpTodayCost'), priceEl = $('dpTodayPrice'), profitEl = $('dpTodayProfit'), totalEl = $('dpTodayTotal');
   if (!costEl) return; // Daily Log card not in the DOM (e.g. different role view)
   const kgProduced = Number($('dpKgProduced') && $('dpKgProduced').value) || 0;
 
-  // Ingredients: real usage today (if entered) overrides the recipe estimate.
-  const usingActualIngredients = todayActualIngredientsCostPerKg > 0;
-  const ingredientsPerKg = usingActualIngredients ? todayActualIngredientsCostPerKg : lastProdIngredientsCostPerKg;
-  const costPerKg = lastProdAvgRawCostPerKg + ingredientsPerKg + lastProdOverheadCostPerKg;
+  // lastProdIngredientsCostPerKg is already today's real ingredients cost —
+  // it comes straight from the "Qty Used Today" table above, not a fixed
+  // recipe ratio — so no separate override layer is needed here.
+  const costPerKg = lastProdAvgRawCostPerKg + lastProdIngredientsCostPerKg + lastProdOverheadCostPerKg;
 
   // Selling price: a manually-entered override (if any) beats the auto
   // average of Linna/Balaya/Premium Mix market prices from the calculator.
@@ -2442,12 +2412,6 @@ function updateDailyProductionSummaryLive() {
     priceNoteEl.textContent = usingCustomPrice
       ? `💰 Using your custom selling price (Rs. ${fmt2(marketPrice)}/kg).`
       : `💰 Using the auto average of Linna/Balaya/Premium Mix prices (Rs. ${fmt2(marketPrice)}/kg) — enter a value above to override.`;
-  }
-  const ingNoteEl = $('dpIngredientsSourceNote');
-  if (ingNoteEl) {
-    ingNoteEl.textContent = usingActualIngredients
-      ? `🧂 Using today's actual ingredient usage (Rs. ${fmt2(ingredientsPerKg)}/kg).`
-      : `🧂 Using the estimated recipe ratio (Rs. ${fmt2(ingredientsPerKg)}/kg) — enter today's actual usage above to override.`;
   }
 
   const profitCard = $('dpTodayProfitCard'), totalCard = $('dpTodayTotalCard');
@@ -8094,24 +8058,24 @@ function loadState() {
     prodTransport: 110000, prodFirewood: 30000,
     prodWorkers: 220000, prodOther: 220000, prodIce: 35000,
     finLinna: 1750, finBalaya: 2200, finKawalam: 1000,
-    ingSaltPrice: 120, ingSaltGrams: 40,
-    ingGorakaPrice: 1200, ingGorakaGrams: 15,
-    ingTurmericPrice: 1800, ingTurmericGrams: 5,
-    ingCinnamonPrice: 3500, ingCinnamonGrams: 3,
-    ingCurryLeafPrice: 400, ingCurryLeafGrams: 10,
-    ingTamarindPrice: 900, ingTamarindGrams: 10
+    ingSaltPrice: 120, ingSaltGrams: 0,
+    ingGorakaPrice: 1200, ingGorakaGrams: 0,
+    ingTurmericPrice: 1800, ingTurmericGrams: 0,
+    ingCinnamonPrice: 3500, ingCinnamonGrams: 0,
+    ingCurryLeafPrice: 400, ingCurryLeafGrams: 0,
+    ingTamarindPrice: 900, ingTamarindGrams: 0
   };
   // Older saved states may already have a production object but predate the
   // ingredients/ice fields below — patch in defaults for any missing keys
   // instead of dropping the user's existing raw/yield/cost numbers.
   const productionDefaults = {
     prodIce: 35000,
-    ingSaltPrice: 120, ingSaltGrams: 40,
-    ingGorakaPrice: 1200, ingGorakaGrams: 15,
-    ingTurmericPrice: 1800, ingTurmericGrams: 5,
-    ingCinnamonPrice: 3500, ingCinnamonGrams: 3,
-    ingCurryLeafPrice: 400, ingCurryLeafGrams: 10,
-    ingTamarindPrice: 900, ingTamarindGrams: 10
+    ingSaltPrice: 120, ingSaltGrams: 0,
+    ingGorakaPrice: 1200, ingGorakaGrams: 0,
+    ingTurmericPrice: 1800, ingTurmericGrams: 0,
+    ingCinnamonPrice: 3500, ingCinnamonGrams: 0,
+    ingCurryLeafPrice: 400, ingCurryLeafGrams: 0,
+    ingTamarindPrice: 900, ingTamarindGrams: 0
   };
   Object.keys(productionDefaults).forEach(k => {
     if (state.production[k] === undefined) state.production[k] = productionDefaults[k];

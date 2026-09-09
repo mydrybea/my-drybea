@@ -1952,113 +1952,59 @@
       </div>
 
       <h3 style="color:var(--green);margin:18px 0 4px;">🧂 Ingredients Cost (per kg finished output)</h3>
-      <p class="sub" style="margin-top:-2px;">Enter each spice's market price per kg and how many grams go into curing/seasoning 1kg of finished output — the Rs. cost per kg is calculated automatically.</p>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Ingredient</th><th>Price /kg (Rs.)</th><th>Used /kg output (g)</th><th class="num">Cost /kg (Rs.)</th></tr></thead>
-          <tbody>
-            <tr>
-              <td><strong>Salt</strong></td>
-              <td><input type="number" id="ingSaltPrice" value="120" min="0" oninput="onDataChange()"></td>
-              <td><input type="number" id="ingSaltGrams" value="40" min="0" oninput="onDataChange()"></td>
-              <td class="num" id="ingSaltCost">Rs. 0</td>
-            </tr>
-            <tr>
-              <td><strong>Garcinia (Goraka)</strong></td>
-              <td><input type="number" id="ingGorakaPrice" value="1200" min="0" oninput="onDataChange()"></td>
-              <td><input type="number" id="ingGorakaGrams" value="15" min="0" oninput="onDataChange()"></td>
-              <td class="num" id="ingGorakaCost">Rs. 0</td>
-            </tr>
-            <tr>
-              <td><strong>Turmeric</strong></td>
-              <td><input type="number" id="ingTurmericPrice" value="1800" min="0" oninput="onDataChange()"></td>
-              <td><input type="number" id="ingTurmericGrams" value="5" min="0" oninput="onDataChange()"></td>
-              <td class="num" id="ingTurmericCost">Rs. 0</td>
-            </tr>
-            <tr>
-              <td><strong>Cinnamon</strong></td>
-              <td><input type="number" id="ingCinnamonPrice" value="3500" min="0" oninput="onDataChange()"></td>
-              <td><input type="number" id="ingCinnamonGrams" value="3" min="0" oninput="onDataChange()"></td>
-              <td class="num" id="ingCinnamonCost">Rs. 0</td>
-            </tr>
-            <tr>
-              <td><strong>Curry / Pandan Leaves</strong></td>
-              <td><input type="number" id="ingCurryLeafPrice" value="400" min="0" oninput="onDataChange()"></td>
-              <td><input type="number" id="ingCurryLeafGrams" value="10" min="0" oninput="onDataChange()"></td>
-              <td class="num" id="ingCurryLeafCost">Rs. 0</td>
-            </tr>
-            <tr>
-              <td><strong>Tamarind</strong></td>
-              <td><input type="number" id="ingTamarindPrice" value="900" min="0" oninput="onDataChange()"></td>
-              <td><input type="number" id="ingTamarindGrams" value="10" min="0" oninput="onDataChange()"></td>
-              <td class="num" id="ingTamarindCost">Rs. 0</td>
-            </tr>
-          </tbody>
-          <tfoot>
-            <tr style="font-weight:800;">
-              <td colspan="3">Total Ingredients Cost / kg</td>
-              <td class="num" id="ingTotalCost" style="color:var(--green);">Rs. 0</td>
-            </tr>
-          </tfoot>
-        </table>
-      </div>
-
-      <div class="notice warn" id="ingVarianceAlert" style="display:none;margin-top:10px;"></div>
-
-      <h3 style="color:var(--green);margin:20px 0 4px;">📋 Today's Actual Ingredients Usage (optional)</h3>
-      <p class="sub" style="margin-top:-2px;">The table above is your <em>planned recipe ratio</em> (grams per kg of output). If you weigh out ingredients for today's whole batch instead — e.g. how much salt went into today's raw fish — enter the real quantities here. Whenever this has values, it overrides the estimate above for Today's Summary &amp; the Daily Production Log, using your actual spend ÷ Kg Produced Today.</p>
+      <p class="sub" style="margin-top:-2px;">Enter each spice's market price per kg, and how much you actually used <strong>today for the whole raw fish batch</strong> (in kg) — the Rs./kg of finished output is calculated automatically using today's Daily Raw Fish (kg) and yield above.</p>
       <div class="table-wrap">
         <table>
           <thead><tr><th>Ingredient</th><th>Price /kg (Rs.)</th><th>Qty Used Today (kg)</th><th class="num">Cost (Rs.)</th></tr></thead>
           <tbody>
             <tr>
               <td><strong>Salt</strong></td>
-              <td><input type="number" id="ingSaltActualPrice" value="120" min="0" oninput="calcTodayActualIngredients()"></td>
-              <td><input type="number" id="ingSaltActualQty" value="0" min="0" step="0.1" oninput="calcTodayActualIngredients()"></td>
-              <td class="num" id="ingSaltActualCost">Rs. 0</td>
+              <td><input type="number" id="ingSaltPrice" value="120" min="0" oninput="onDataChange()"></td>
+              <td><input type="number" id="ingSaltGrams" value="0" min="0" step="0.1" oninput="onDataChange()"></td>
+              <td class="num" id="ingSaltCost">Rs. 0</td>
             </tr>
             <tr>
               <td><strong>Garcinia (Goraka)</strong></td>
-              <td><input type="number" id="ingGorakaActualPrice" value="1200" min="0" oninput="calcTodayActualIngredients()"></td>
-              <td><input type="number" id="ingGorakaActualQty" value="0" min="0" step="0.1" oninput="calcTodayActualIngredients()"></td>
-              <td class="num" id="ingGorakaActualCost">Rs. 0</td>
+              <td><input type="number" id="ingGorakaPrice" value="1200" min="0" oninput="onDataChange()"></td>
+              <td><input type="number" id="ingGorakaGrams" value="0" min="0" step="0.1" oninput="onDataChange()"></td>
+              <td class="num" id="ingGorakaCost">Rs. 0</td>
             </tr>
             <tr>
               <td><strong>Turmeric</strong></td>
-              <td><input type="number" id="ingTurmericActualPrice" value="1800" min="0" oninput="calcTodayActualIngredients()"></td>
-              <td><input type="number" id="ingTurmericActualQty" value="0" min="0" step="0.1" oninput="calcTodayActualIngredients()"></td>
-              <td class="num" id="ingTurmericActualCost">Rs. 0</td>
+              <td><input type="number" id="ingTurmericPrice" value="1800" min="0" oninput="onDataChange()"></td>
+              <td><input type="number" id="ingTurmericGrams" value="0" min="0" step="0.1" oninput="onDataChange()"></td>
+              <td class="num" id="ingTurmericCost">Rs. 0</td>
             </tr>
             <tr>
               <td><strong>Cinnamon</strong></td>
-              <td><input type="number" id="ingCinnamonActualPrice" value="3500" min="0" oninput="calcTodayActualIngredients()"></td>
-              <td><input type="number" id="ingCinnamonActualQty" value="0" min="0" step="0.1" oninput="calcTodayActualIngredients()"></td>
-              <td class="num" id="ingCinnamonActualCost">Rs. 0</td>
+              <td><input type="number" id="ingCinnamonPrice" value="3500" min="0" oninput="onDataChange()"></td>
+              <td><input type="number" id="ingCinnamonGrams" value="0" min="0" step="0.1" oninput="onDataChange()"></td>
+              <td class="num" id="ingCinnamonCost">Rs. 0</td>
             </tr>
             <tr>
               <td><strong>Curry / Pandan Leaves</strong></td>
-              <td><input type="number" id="ingCurryLeafActualPrice" value="400" min="0" oninput="calcTodayActualIngredients()"></td>
-              <td><input type="number" id="ingCurryLeafActualQty" value="0" min="0" step="0.1" oninput="calcTodayActualIngredients()"></td>
-              <td class="num" id="ingCurryLeafActualCost">Rs. 0</td>
+              <td><input type="number" id="ingCurryLeafPrice" value="400" min="0" oninput="onDataChange()"></td>
+              <td><input type="number" id="ingCurryLeafGrams" value="0" min="0" step="0.1" oninput="onDataChange()"></td>
+              <td class="num" id="ingCurryLeafCost">Rs. 0</td>
             </tr>
             <tr>
               <td><strong>Tamarind</strong></td>
-              <td><input type="number" id="ingTamarindActualPrice" value="900" min="0" oninput="calcTodayActualIngredients()"></td>
-              <td><input type="number" id="ingTamarindActualQty" value="0" min="0" step="0.1" oninput="calcTodayActualIngredients()"></td>
-              <td class="num" id="ingTamarindActualCost">Rs. 0</td>
+              <td><input type="number" id="ingTamarindPrice" value="900" min="0" oninput="onDataChange()"></td>
+              <td><input type="number" id="ingTamarindGrams" value="0" min="0" step="0.1" oninput="onDataChange()"></td>
+              <td class="num" id="ingTamarindCost">Rs. 0</td>
             </tr>
           </tbody>
           <tfoot>
             <tr style="font-weight:800;">
-              <td colspan="3">Total Actual Ingredients Cost Today</td>
-              <td class="num" id="ingActualTotalCost" style="color:var(--green);">Rs. 0</td>
+              <td colspan="3">Total Ingredients Cost Today</td>
+              <td class="num" id="ingTotalCost" style="color:var(--green);">Rs. 0</td>
             </tr>
           </tfoot>
         </table>
       </div>
-      <div class="stat-grid" style="margin-top:10px;">
-        <div class="stat accent"><div class="k">Real Ingredients Cost /kg (Today)</div><div class="v" id="ingActualCostPerKg">— enter Kg Produced Today below</div></div>
-      </div>
+      <p class="sub" id="ingCostPerKgNote" style="margin:6px 0 0;"></p>
+
+      <div class="notice warn" id="ingVarianceAlert" style="display:none;margin-top:10px;"></div>
 
       <div class="stat-grid" style="margin-top:16px;">
         <div class="stat"><div class="k">Monthly Raw Fish</div><div class="v" id="prodMonthlyRaw">0 kg</div></div>
@@ -2114,7 +2060,7 @@
       <p class="pro-subtitle gold">Save today's cost &amp; profit snapshot from the calculator above, then track profit day by day and month by month.</p>
 
       <div class="grid-3">
-        <div class="field"><label>Kg Produced Today (optional)</label><input type="number" id="dpKgProduced" value="0" min="0" oninput="calcTodayActualIngredients()"></div>
+        <div class="field"><label>Kg Produced Today (optional)</label><input type="number" id="dpKgProduced" value="0" min="0" oninput="updateDailyProductionSummaryLive()"></div>
         <div class="field">
           <label>Today's Selling Price /kg (optional override)</label>
           <input type="number" id="dpMarketPrice" min="0" step="0.01" placeholder="Auto from calculator" oninput="updateDailyProductionSummaryLive()">
@@ -2133,7 +2079,6 @@
         <div class="stat accent" id="dpTodayTotalCard"><div class="k">Today's Total Profit</div><div class="v" id="dpTodayTotal">Rs. 0</div></div>
       </div>
       <p class="sub" id="dpPriceSourceNote" style="margin:6px 0 0;"></p>
-      <p class="sub" id="dpIngredientsSourceNote" style="margin:2px 0 0;"></p>
 
       <h3 style="color:var(--green);margin:16px 0 8px;">📈 Monthly Profit Trend</h3>
       <div class="chart-wrap" style="height:280px;"><canvas id="dpMonthlyChart"></canvas></div>
