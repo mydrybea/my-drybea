@@ -10485,6 +10485,21 @@ window.openEditProduct = openEditProduct;
 window.deleteProduct = deleteProduct;
 window.previewProductImage = previewProductImage;
 window.saveProduct = saveProduct;
+// FIX: Daily Fish Purchase Bills + Seller Ledger panel buttons (New Fish
+// Bill, add/remove item row, save/view/delete/print bill, seller payment,
+// seller history) are also called from onclick attributes — same IIFE
+// scope issue as above, never exposed until now.
+window.openNewFishBill = openNewFishBill;
+window.addFishBillItemRow = addFishBillItemRow;
+window.removeFishBillItemRow = removeFishBillItemRow;
+window.recalcFishBillTotal = recalcFishBillTotal;
+window.saveFishBill = saveFishBill;
+window.viewFishBill = viewFishBill;
+window.deleteFishBill = deleteFishBill;
+window.printFishBill = printFishBill;
+window.openSellerPayment = openSellerPayment;
+window.saveSellerPayment = saveSellerPayment;
+window.openSellerHistory = openSellerHistory;
 
 })();
 
