@@ -1909,13 +1909,15 @@
         </div>
 
         <div>
-          <h3 style="color:var(--green);margin-bottom:8px;">💰 Production Costs</h3>
-          <div class="grid-2">
-            <div class="field"><label>Transport</label><input type="number" id="prodTransport" value="110000" oninput="onDataChange()"></div>
-            <div class="field"><label>Firewood</label><input type="number" id="prodFirewood" value="30000" oninput="onDataChange()"></div>
-            <div class="field"><label>Workers</label><input type="number" id="prodWorkers" value="220000" oninput="onDataChange()"></div>
-            <div class="field"><label>Other</label><input type="number" id="prodOther" value="220000" oninput="onDataChange()"></div>
+          <h3 style="color:var(--green);margin-bottom:8px;">💰 Monthly Overheads (Rs.)</h3>
+          <div class="grid-3">
+            <div class="field"><label>Transport</label><input type="number" id="prodTransport" value="110000" min="0" oninput="onDataChange()"></div>
+            <div class="field"><label>Staff Salary</label><input type="number" id="prodWorkers" value="220000" min="0" oninput="onDataChange()"></div>
+            <div class="field"><label>Ice</label><input type="number" id="prodIce" value="35000" min="0" oninput="onDataChange()"></div>
+            <div class="field"><label>Firewood</label><input type="number" id="prodFirewood" value="30000" min="0" oninput="onDataChange()"></div>
+            <div class="field"><label>Other</label><input type="number" id="prodOther" value="220000" min="0" oninput="onDataChange()"></div>
           </div>
+          <p class="sub" style="margin-top:-4px;">These are monthly totals, spread automatically across the month's finished output (kg) below.</p>
 
           <h3 style="color:var(--green);margin:16px 0 8px;">Finished Umbalakada Market Prices (Rs./kg)</h3>
           <div class="grid-3">
@@ -1926,17 +1928,70 @@
         </div>
       </div>
 
-      <div class="stat-grid">
+      <h3 style="color:var(--green);margin:18px 0 4px;">🧂 Ingredients Cost (per kg finished output)</h3>
+      <p class="sub" style="margin-top:-2px;">Enter each spice's market price per kg and how many grams go into curing/seasoning 1kg of finished output — the Rs. cost per kg is calculated automatically.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Ingredient</th><th>Price /kg (Rs.)</th><th>Used /kg output (g)</th><th class="num">Cost /kg (Rs.)</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><strong>Salt</strong></td>
+              <td><input type="number" id="ingSaltPrice" value="120" min="0" oninput="onDataChange()"></td>
+              <td><input type="number" id="ingSaltGrams" value="40" min="0" oninput="onDataChange()"></td>
+              <td class="num" id="ingSaltCost">Rs. 0</td>
+            </tr>
+            <tr>
+              <td><strong>Garcinia (Goraka)</strong></td>
+              <td><input type="number" id="ingGorakaPrice" value="1200" min="0" oninput="onDataChange()"></td>
+              <td><input type="number" id="ingGorakaGrams" value="15" min="0" oninput="onDataChange()"></td>
+              <td class="num" id="ingGorakaCost">Rs. 0</td>
+            </tr>
+            <tr>
+              <td><strong>Turmeric</strong></td>
+              <td><input type="number" id="ingTurmericPrice" value="1800" min="0" oninput="onDataChange()"></td>
+              <td><input type="number" id="ingTurmericGrams" value="5" min="0" oninput="onDataChange()"></td>
+              <td class="num" id="ingTurmericCost">Rs. 0</td>
+            </tr>
+            <tr>
+              <td><strong>Cinnamon</strong></td>
+              <td><input type="number" id="ingCinnamonPrice" value="3500" min="0" oninput="onDataChange()"></td>
+              <td><input type="number" id="ingCinnamonGrams" value="3" min="0" oninput="onDataChange()"></td>
+              <td class="num" id="ingCinnamonCost">Rs. 0</td>
+            </tr>
+            <tr>
+              <td><strong>Curry / Pandan Leaves</strong></td>
+              <td><input type="number" id="ingCurryLeafPrice" value="400" min="0" oninput="onDataChange()"></td>
+              <td><input type="number" id="ingCurryLeafGrams" value="10" min="0" oninput="onDataChange()"></td>
+              <td class="num" id="ingCurryLeafCost">Rs. 0</td>
+            </tr>
+            <tr>
+              <td><strong>Tamarind</strong></td>
+              <td><input type="number" id="ingTamarindPrice" value="900" min="0" oninput="onDataChange()"></td>
+              <td><input type="number" id="ingTamarindGrams" value="10" min="0" oninput="onDataChange()"></td>
+              <td class="num" id="ingTamarindCost">Rs. 0</td>
+            </tr>
+          </tbody>
+          <tfoot>
+            <tr style="font-weight:800;">
+              <td colspan="3">Total Ingredients Cost / kg</td>
+              <td class="num" id="ingTotalCost" style="color:var(--green);">Rs. 0</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      <div class="stat-grid" style="margin-top:16px;">
         <div class="stat"><div class="k">Monthly Raw Fish</div><div class="v" id="prodMonthlyRaw">0 kg</div></div>
         <div class="stat"><div class="k">Monthly Finished Output</div><div class="v" id="prodMonthlyFinished">0 kg</div></div>
-        <div class="stat"><div class="k">Fixed Cost per kg</div><div class="v" id="prodFixedPerKg">Rs. 0</div></div>
+        <div class="stat"><div class="k">Overhead Cost per kg</div><div class="v" id="prodFixedPerKg">Rs. 0</div></div>
+        <div class="stat"><div class="k">Ingredients Cost per kg</div><div class="v" id="prodIngredientsPerKg">Rs. 0</div></div>
         <div class="stat accent"><div class="k">Avg Production Cost/kg</div><div class="v" id="prodAvgCost">Rs. 0</div></div>
       </div>
 
       <div class="table-wrap">
         <table>
           <thead>
-            <tr><th>Fish Type</th><th>Raw Cost/kg</th><th>Fixed/kg</th><th>Total Cost/kg</th><th>Market Price/kg</th><th class="num">Profit/kg</th><th class="num">Margin</th><th>Verdict</th></tr>
+            <tr><th>Fish Type</th><th>Raw Cost/kg</th><th>Ingredients/kg</th><th>Overhead/kg</th><th>Total Cost/kg</th><th>Market Price/kg</th><th class="num">Profit/kg</th><th class="num">Margin</th><th>Verdict</th></tr>
           </thead>
           <tbody id="prodBody"></tbody>
         </table>
@@ -1946,6 +2001,39 @@
 
       <div class="notice" style="margin-top:12px;">
         💡 <strong>Break-even volume:</strong> Produce at least <span id="breakEvenKg" style="font-weight:800;">0 kg</span> per month to cover fixed costs.
+      </div>
+    </div>
+
+    <!-- ============ DAILY PRODUCTION COST LOG ============ -->
+    <div class="card" style="margin-top:16px;">
+      <h2><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="calendar-check" aria-hidden="true"></i></span><span>Daily Production Log</span></h2>
+      <p class="pro-subtitle gold">Save today's cost &amp; profit snapshot from the calculator above, then track profit day by day and month by month.</p>
+
+      <div class="grid-2">
+        <div class="field"><label>Kg Produced Today (optional)</label><input type="number" id="dpKgProduced" value="0" min="0" oninput="updateDailyProductionSummaryLive()"></div>
+        <div class="field"><label>Note (optional)</label><input type="text" id="dpNote" placeholder="Optional notes..."></div>
+      </div>
+      <div class="btn-row" style="margin:10px 0 16px;" data-owner-only>
+        <button class="btn btn-primary btn-sm" onclick="saveDailyProductionLog()"><i class="business-icon icon-inline" data-lucide="save" aria-hidden="true"></i> Save Today's Snapshot</button>
+      </div>
+
+      <h3 style="color:var(--green);margin-bottom:8px;">📋 Today's Summary</h3>
+      <div class="stat-grid">
+        <div class="stat"><div class="k">Today's Cost/kg</div><div class="v" id="dpTodayCost">Rs. 0</div></div>
+        <div class="stat"><div class="k">Today's Avg Market Price/kg</div><div class="v" id="dpTodayPrice">Rs. 0</div></div>
+        <div class="stat" id="dpTodayProfitCard"><div class="k">Today's Profit/kg</div><div class="v" id="dpTodayProfit">Rs. 0</div></div>
+        <div class="stat accent" id="dpTodayTotalCard"><div class="k">Today's Total Profit</div><div class="v" id="dpTodayTotal">Rs. 0</div></div>
+      </div>
+
+      <h3 style="color:var(--green);margin:16px 0 8px;">📈 Monthly Profit Trend</h3>
+      <div class="chart-wrap" style="height:280px;"><canvas id="dpMonthlyChart"></canvas></div>
+
+      <h3 style="color:var(--green);margin:16px 0 8px;">🗓️ Daily Summary (This Month)</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Date</th><th>Cost/kg</th><th>Price/kg</th><th class="num">Profit/kg</th><th>Kg Produced</th><th class="num">Total Profit</th><th></th></tr></thead>
+          <tbody id="dpLogBody"><tr><td colspan="7" style="text-align:center;opacity:.5;padding:20px;">No entries yet this month.</td></tr></tbody>
+        </table>
       </div>
     </div>
 

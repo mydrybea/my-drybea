@@ -1680,8 +1680,14 @@ let state = {
     yieldLinna: 6, yieldBalaya: 6, yieldKawalam: 7,
     dailyRawKg: 500, workDays: 22,
     prodTransport: 110000, prodFirewood: 30000,
-    prodWorkers: 220000, prodOther: 220000,
-    finLinna: 1750, finBalaya: 2200, finKawalam: 1000
+    prodWorkers: 220000, prodOther: 220000, prodIce: 35000,
+    finLinna: 1750, finBalaya: 2200, finKawalam: 1000,
+    ingSaltPrice: 120, ingSaltGrams: 40,
+    ingGorakaPrice: 1200, ingGorakaGrams: 15,
+    ingTurmericPrice: 1800, ingTurmericGrams: 5,
+    ingCinnamonPrice: 3500, ingCinnamonGrams: 3,
+    ingCurryLeafPrice: 400, ingCurryLeafGrams: 10,
+    ingTamarindPrice: 900, ingTamarindGrams: 10
   }
 };
 let history = [];
@@ -1747,7 +1753,10 @@ function getAllocatedOverheadPerPack() {
 }
 
 // ==================== CHARTS ====================
-let costChart = null, sensChart = null, prodChart = null;
+let costChart = null, sensChart = null, prodChart = null, dpMonthlyChart = null;
+let dailyProductionLogCache = [];
+let lastProdAvgRawCostPerKg = 0, lastProdIngredientsCostPerKg = 0, lastProdOverheadCostPerKg = 0;
+let lastProdAvgCostPerKg = 0, lastProdAvgMarketPrice = 0, lastProdAvgProfitPerKg = 0;
 
 function getChartColors() {
   const isDark = state.theme === 'dark';
@@ -2019,10 +2028,32 @@ function calcProduction() {
   const yPremium = Number($('yieldKawalam').value) || 1;
   const dailyRaw = Number($('dailyRawKg').value) || 0;
   const days = Number($('workDays').value) || 1;
-  const fixedCost = (Number($('prodTransport').value)||0) + (Number($('prodFirewood').value)||0) + (Number($('prodWorkers').value)||0) + (Number($('prodOther').value)||0);
+  const fixedCost = (Number($('prodTransport').value)||0) + (Number($('prodFirewood').value)||0) + (Number($('prodWorkers').value)||0) + (Number($('prodOther').value)||0) + (Number($('prodIce').value)||0);
   const finLinna = Number($('finLinna').value) || 0;
   const finBalaya = Number($('finBalaya').value) || 0;
   const finPremium = Number($('finKawalam').value) || 0;
+
+  // Ingredients: each spice is priced per kg but used in grams per kg of
+  // finished output, so cost/kg = (price per kg / 1000) * grams used.
+  const INGREDIENTS = [
+    { key:'ingSalt', label:'Salt' },
+    { key:'ingGoraka', label:'Garcinia (Goraka)' },
+    { key:'ingTurmeric', label:'Turmeric' },
+    { key:'ingCinnamon', label:'Cinnamon' },
+    { key:'ingCurryLeaf', label:'Curry / Pandan Leaves' },
+    { key:'ingTamarind', label:'Tamarind' }
+  ];
+  let ingredientsCostPerKg = 0;
+  INGREDIENTS.forEach(ing => {
+    const price = Number($(ing.key + 'Price').value) || 0;
+    const grams = Number($(ing.key + 'Grams').value) || 0;
+    const cost = (price / 1000) * grams;
+    ingredientsCostPerKg += cost;
+    const costEl = $(ing.key + 'Cost');
+    if (costEl) costEl.textContent = fmt(cost);
+  });
+  $('ingTotalCost').textContent = fmt(ingredientsCostPerKg);
+  $('prodIngredientsPerKg').textContent = fmt(ingredientsCostPerKg);
 
   const monthlyRawKg = dailyRaw * days;
   $('prodMonthlyRaw').textContent = monthlyRawKg.toFixed(0) + ' kg';
@@ -2040,18 +2071,19 @@ function calcProduction() {
     { name:'Premium Mix', rawPrice:rawPremium, yield:yPremium, finPrice:finPremium }
   ];
 
-  let totalCostSum = 0;
+  let totalCostSum = 0, rawCostSum = 0;
   let html = '';
   const labels = [], costs = [], prices = [], profitsData = [];
 
   fishTypes.forEach(ft => {
     const rawCostPerKg = ft.rawPrice * ft.yield;
-    const totalCostPerKg = rawCostPerKg + fixedPerKg;
+    const totalCostPerKg = rawCostPerKg + ingredientsCostPerKg + fixedPerKg;
     const profitPerKg = ft.finPrice - totalCostPerKg;
     const margin = ft.finPrice > 0 ? (profitPerKg/ft.finPrice)*100 : 0;
     const verdict = profitPerKg > 0 ? '<span class="badge badge-good">PROFIT</span>' : '<span class="badge badge-bad">LOSS</span>';
 
     totalCostSum += totalCostPerKg;
+    rawCostSum += rawCostPerKg;
     labels.push(ft.name);
     costs.push(Math.round(rawCostPerKg));
     prices.push(Math.round(totalCostPerKg));
@@ -2060,6 +2092,7 @@ function calcProduction() {
     html += `<tr>
       <td><strong>${ft.name}</strong></td>
       <td>${fmt(rawCostPerKg)}</td>
+      <td>${fmt(ingredientsCostPerKg)}</td>
       <td>${fmt(fixedPerKg)}</td>
       <td>${fmt(totalCostPerKg)}</td>
       <td>${fmt(ft.finPrice)}</td>
@@ -2078,6 +2111,16 @@ function calcProduction() {
   const avgProfitPerKg = avgFinPrice - avgCostPerKg;
   const breakEven = avgProfitPerKg > 0 ? fixedCost / avgProfitPerKg : Infinity;
   $('breakEvenKg').textContent = isFinite(breakEven) ? breakEven.toFixed(0) + ' kg' : 'N/A (not profitable)';
+
+  // Expose today's averages for the Daily Production Log below (live snapshot
+  // + what gets saved when "Save Today's Snapshot" is clicked).
+  lastProdAvgRawCostPerKg = rawCostSum / 3;
+  lastProdIngredientsCostPerKg = ingredientsCostPerKg;
+  lastProdOverheadCostPerKg = fixedPerKg;
+  lastProdAvgCostPerKg = avgCostPerKg;
+  lastProdAvgMarketPrice = avgFinPrice;
+  lastProdAvgProfitPerKg = avgProfitPerKg;
+  updateDailyProductionSummaryLive();
 
   const colors = getChartColors();
   const ctx = $('prodChart').getContext('2d');
@@ -2115,9 +2158,194 @@ function calcProduction() {
     prodFirewood: Number($('prodFirewood').value)||0,
     prodWorkers: Number($('prodWorkers').value)||0,
     prodOther: Number($('prodOther').value)||0,
-    finLinna, finBalaya, finKawalam: finPremium
+    prodIce: Number($('prodIce').value)||0,
+    finLinna, finBalaya, finKawalam: finPremium,
+    ingSaltPrice: Number($('ingSaltPrice').value)||0, ingSaltGrams: Number($('ingSaltGrams').value)||0,
+    ingGorakaPrice: Number($('ingGorakaPrice').value)||0, ingGorakaGrams: Number($('ingGorakaGrams').value)||0,
+    ingTurmericPrice: Number($('ingTurmericPrice').value)||0, ingTurmericGrams: Number($('ingTurmericGrams').value)||0,
+    ingCinnamonPrice: Number($('ingCinnamonPrice').value)||0, ingCinnamonGrams: Number($('ingCinnamonGrams').value)||0,
+    ingCurryLeafPrice: Number($('ingCurryLeafPrice').value)||0, ingCurryLeafGrams: Number($('ingCurryLeafGrams').value)||0,
+    ingTamarindPrice: Number($('ingTamarindPrice').value)||0, ingTamarindGrams: Number($('ingTamarindGrams').value)||0
   };
 }
+
+// ==================== DAILY PRODUCTION LOG (Production tab) ====================
+// Lets the owner save a snapshot of today's production economics (the
+// averages computed by calcProduction() above) as one row per calendar day,
+// then shows a running monthly profit chart + daily table built from those
+// saved snapshots. Saving the same day twice UPDATES that day's row instead
+// of creating a duplicate (upsert on owner_id + log_date).
+//
+// REQUIRED ONE-TIME SUPABASE SETUP (run once in the SQL editor):
+//
+//   create table if not exists public.production_cost_log (
+//     id uuid primary key default gen_random_uuid(),
+//     owner_id uuid not null references auth.users(id) on delete cascade,
+//     log_date date not null default current_date,
+//     raw_cost_per_kg numeric not null default 0,
+//     ingredients_cost_per_kg numeric not null default 0,
+//     overhead_cost_per_kg numeric not null default 0,
+//     total_cost_per_kg numeric not null default 0,
+//     market_price_per_kg numeric not null default 0,
+//     profit_per_kg numeric not null default 0,
+//     kg_produced numeric not null default 0,
+//     total_profit numeric not null default 0,
+//     notes text,
+//     created_by uuid not null references auth.users(id),
+//     created_at timestamptz not null default now(),
+//     unique (owner_id, log_date)
+//   );
+//   alter table public.production_cost_log enable row level security;
+//   create policy "Owner can manage own production cost log"
+//     on public.production_cost_log for all
+//     using (owner_id = auth.uid())
+//     with check (owner_id = auth.uid());
+//   create index if not exists production_cost_log_owner_date_idx on public.production_cost_log(owner_id, log_date);
+//
+// Until that table exists, the summary cards above still update live from
+// the calculator, but Save/load will show a clear error instead of failing
+// silently.
+
+function todayIso() { return new Date().toISOString().slice(0, 10); }
+
+function updateDailyProductionSummaryLive() {
+  const costEl = $('dpTodayCost'), priceEl = $('dpTodayPrice'), profitEl = $('dpTodayProfit'), totalEl = $('dpTodayTotal');
+  if (!costEl) return; // Daily Log card not in the DOM (e.g. different role view)
+  const kgProduced = Number($('dpKgProduced') && $('dpKgProduced').value) || 0;
+  const totalProfit = lastProdAvgProfitPerKg * kgProduced;
+
+  costEl.textContent = fmt(lastProdAvgCostPerKg);
+  priceEl.textContent = fmt(lastProdAvgMarketPrice);
+  profitEl.textContent = fmt(lastProdAvgProfitPerKg);
+  totalEl.textContent = fmt(totalProfit);
+
+  const profitCard = $('dpTodayProfitCard'), totalCard = $('dpTodayTotalCard');
+  if (profitCard) profitCard.classList.toggle('bad', lastProdAvgProfitPerKg < 0);
+  if (totalCard) totalCard.classList.toggle('bad', totalProfit < 0);
+}
+window.updateDailyProductionSummaryLive = updateDailyProductionSummaryLive;
+
+async function saveDailyProductionLog() {
+  if (userRole !== 'owner') { alert('Only the owner can save the daily production log.'); return; }
+  if (!currentUser) { alert('Please login first.'); return; }
+
+  const kgProduced = Number($('dpKgProduced').value) || 0;
+  const notes = $('dpNote').value.trim();
+  const totalProfit = lastProdAvgProfitPerKg * kgProduced;
+
+  const row = {
+    owner_id: currentUser.id,
+    log_date: todayIso(),
+    raw_cost_per_kg: lastProdAvgRawCostPerKg,
+    ingredients_cost_per_kg: lastProdIngredientsCostPerKg,
+    overhead_cost_per_kg: lastProdOverheadCostPerKg,
+    total_cost_per_kg: lastProdAvgCostPerKg,
+    market_price_per_kg: lastProdAvgMarketPrice,
+    profit_per_kg: lastProdAvgProfitPerKg,
+    kg_produced: kgProduced,
+    total_profit: totalProfit,
+    notes,
+    created_by: currentUser.id
+  };
+
+  if (!(await ensureFreshSession())) return;
+  try {
+    const { data, error } = await supabase.from('production_cost_log')
+      .upsert(row, { onConflict: 'owner_id,log_date' }).select().single();
+    if (error) throw error;
+    const idx = dailyProductionLogCache.findIndex(r => r.log_date === data.log_date);
+    if (idx >= 0) dailyProductionLogCache[idx] = data; else dailyProductionLogCache.push(data);
+    renderDailyProductionLog();
+    updateStatus("✅ Today's production snapshot saved");
+  } catch (e) {
+    console.error('Save daily production log error:', e);
+    const missingTable = /relation .* does not exist/i.test(e?.message || '');
+    alert('❌ Could not save snapshot: ' + (e?.message || String(e)) + (missingTable ? '\n\nThe production_cost_log table hasn\'t been created in Supabase yet — see the SQL setup comment above saveDailyProductionLog() in app.js.' : ''));
+  }
+}
+window.saveDailyProductionLog = saveDailyProductionLog;
+
+async function loadDailyProductionLog() {
+  if (!currentUser || userRole !== 'owner') { dailyProductionLogCache = []; return dailyProductionLogCache; }
+  try {
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+    const { data, error } = await withSessionRetry(() => supabase.from('production_cost_log')
+      .select('*').eq('owner_id', currentUser.id).gte('log_date', monthStart).order('log_date', { ascending: true }));
+    if (error) throw error;
+    dailyProductionLogCache = data || [];
+  } catch (e) {
+    console.warn('Daily production log load skipped:', e?.message || e);
+    dailyProductionLogCache = [];
+  }
+  return dailyProductionLogCache;
+}
+window.loadDailyProductionLog = loadDailyProductionLog;
+
+async function deleteDailyProductionLog(id) {
+  if (userRole !== 'owner') return;
+  if (!confirm('Delete this day\'s production log entry?')) return;
+  try {
+    const { error } = await withSessionRetry(() => supabase.from('production_cost_log').delete().eq('id', id).eq('owner_id', currentUser.id));
+    if (error) throw error;
+    dailyProductionLogCache = dailyProductionLogCache.filter(r => r.id !== id);
+    renderDailyProductionLog();
+    updateStatus('🗑️ Production log entry deleted');
+  } catch (e) {
+    alert('❌ Could not delete entry: ' + (e?.message || String(e)));
+  }
+}
+window.deleteDailyProductionLog = deleteDailyProductionLog;
+
+function renderDailyProductionLog() {
+  const tbody = $('dpLogBody');
+  if (!tbody) return;
+
+  const entries = [...dailyProductionLogCache].sort((a, b) => a.log_date.localeCompare(b.log_date));
+
+  if (entries.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;opacity:.5;padding:20px;">No entries yet this month.</td></tr>';
+  } else {
+    tbody.innerHTML = [...entries].reverse().map(r => `
+      <tr>
+        <td>${r.log_date}</td>
+        <td>${fmt(r.total_cost_per_kg)}</td>
+        <td>${fmt(r.market_price_per_kg)}</td>
+        <td class="num"><span class="badge ${Number(r.profit_per_kg)>=0?'badge-good':'badge-bad'}">${fmt(r.profit_per_kg)}</span></td>
+        <td>${Number(r.kg_produced || 0).toFixed(0)} kg</td>
+        <td class="num">${fmt(r.total_profit)}</td>
+        <td>${userRole === 'owner' ? `<button class="btn btn-sm btn-danger" onclick="deleteDailyProductionLog('${r.id}')">🗑️</button>` : ''}</td>
+      </tr>
+    `).join('');
+  }
+
+  const colors = getChartColors();
+  const canvas = $('dpMonthlyChart');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const chartData = {
+    labels: entries.map(r => r.log_date.slice(8, 10) + '/' + r.log_date.slice(5, 7)),
+    datasets: [
+      { label: 'Profit/kg', data: entries.map(r => Math.round(Number(r.profit_per_kg) || 0)), borderColor: 'rgba(16,185,129,1)', backgroundColor: 'rgba(16,185,129,0.15)', fill: true, tension: 0.3, pointRadius: 3 }
+    ]
+  };
+  if (dpMonthlyChart) { dpMonthlyChart.data = chartData; dpMonthlyChart.update(); }
+  else {
+    dpMonthlyChart = new Chart(ctx, {
+      type: 'line',
+      data: chartData,
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11, family: 'Inter' }, color: colors.text, padding: 12, usePointStyle: true, pointStyle: 'circle' } } },
+        scales: {
+          y: { grid: { color: colors.grid }, ticks: { color: colors.text, font: { size: 10 } } },
+          x: { grid: { display: false }, ticks: { color: colors.text, font: { size: 10 } } }
+        }
+      }
+    });
+  }
+}
+window.renderDailyProductionLog = renderDailyProductionLog;
 
 // ==================== ORDERS / CUSTOMERS ====================
 function generateOrderId() {
@@ -7042,9 +7270,30 @@ function loadState() {
     yieldLinna: 6, yieldBalaya: 6, yieldKawalam: 7,
     dailyRawKg: 500, workDays: 22,
     prodTransport: 110000, prodFirewood: 30000,
-    prodWorkers: 220000, prodOther: 220000,
-    finLinna: 1750, finBalaya: 2200, finKawalam: 1000
+    prodWorkers: 220000, prodOther: 220000, prodIce: 35000,
+    finLinna: 1750, finBalaya: 2200, finKawalam: 1000,
+    ingSaltPrice: 120, ingSaltGrams: 40,
+    ingGorakaPrice: 1200, ingGorakaGrams: 15,
+    ingTurmericPrice: 1800, ingTurmericGrams: 5,
+    ingCinnamonPrice: 3500, ingCinnamonGrams: 3,
+    ingCurryLeafPrice: 400, ingCurryLeafGrams: 10,
+    ingTamarindPrice: 900, ingTamarindGrams: 10
   };
+  // Older saved states may already have a production object but predate the
+  // ingredients/ice fields below — patch in defaults for any missing keys
+  // instead of dropping the user's existing raw/yield/cost numbers.
+  const productionDefaults = {
+    prodIce: 35000,
+    ingSaltPrice: 120, ingSaltGrams: 40,
+    ingGorakaPrice: 1200, ingGorakaGrams: 15,
+    ingTurmericPrice: 1800, ingTurmericGrams: 5,
+    ingCinnamonPrice: 3500, ingCinnamonGrams: 3,
+    ingCurryLeafPrice: 400, ingCurryLeafGrams: 10,
+    ingTamarindPrice: 900, ingTamarindGrams: 10
+  };
+  Object.keys(productionDefaults).forEach(k => {
+    if (state.production[k] === undefined) state.production[k] = productionDefaults[k];
+  });
 }
 function loadHistory() { try { history = JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; } catch(e) { history = []; } }
 function loadOrders() { try { orders = JSON.parse(localStorage.getItem(ORDERS_KEY)) || []; } catch(e) { orders = []; } }
@@ -7403,6 +7652,7 @@ function toggleTheme() {
   if (costChart) { costChart.destroy(); costChart = null; }
   if (sensChart) { sensChart.destroy(); sensChart = null; }
   if (prodChart) { prodChart.destroy(); prodChart = null; }
+  if (dpMonthlyChart) { dpMonthlyChart.destroy(); dpMonthlyChart = null; }
   if (trendChart) { trendChart.destroy(); trendChart = null; }
   if (orderStatusChart) { orderStatusChart.destroy(); orderStatusChart = null; }
   if (productMixChart) { productMixChart.destroy(); productMixChart = null; }
@@ -7514,9 +7764,22 @@ function syncUI() {
   $('prodFirewood').value = state.production.prodFirewood;
   $('prodWorkers').value = state.production.prodWorkers;
   $('prodOther').value = state.production.prodOther;
+  $('prodIce').value = state.production.prodIce;
   $('finLinna').value = state.production.finLinna;
   $('finBalaya').value = state.production.finBalaya;
   $('finKawalam').value = state.production.finKawalam;
+  $('ingSaltPrice').value = state.production.ingSaltPrice;
+  $('ingSaltGrams').value = state.production.ingSaltGrams;
+  $('ingGorakaPrice').value = state.production.ingGorakaPrice;
+  $('ingGorakaGrams').value = state.production.ingGorakaGrams;
+  $('ingTurmericPrice').value = state.production.ingTurmericPrice;
+  $('ingTurmericGrams').value = state.production.ingTurmericGrams;
+  $('ingCinnamonPrice').value = state.production.ingCinnamonPrice;
+  $('ingCinnamonGrams').value = state.production.ingCinnamonGrams;
+  $('ingCurryLeafPrice').value = state.production.ingCurryLeafPrice;
+  $('ingCurryLeafGrams').value = state.production.ingCurryLeafGrams;
+  $('ingTamarindPrice').value = state.production.ingTamarindPrice;
+  $('ingTamarindGrams').value = state.production.ingTamarindGrams;
   toggleCustomMix();
   setMode(state.mode);
   if (state.theme === 'dark') {
@@ -10079,6 +10342,7 @@ function activateAppTab(tabId){
       renderFishBills();
       renderSellerLedger();
     });
+    loadDailyProductionLog().then(renderDailyProductionLog);
   }
   if (tabId === 'distributor-home') { showSkeletons('distributor-home'); loadDistributorCommissionClaims().then(renderDistributorHome); }
   if (tabId === 'my-income') { loadDistributorCommissionClaims().then(renderProductAgentPage); }
