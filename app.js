@@ -1688,6 +1688,9 @@ let history = [];
 let orders = [];
 let customers = [];
 let products = [];
+let fishSellers = [];
+let fishPurchases = [];
+let fishSellerPayments = [];
 let productImageFile = null;
 let snapshots = [];
 let lastSaveTime = null;
@@ -2497,6 +2500,413 @@ function selectOrderProduct(id) {
   }
   renderOrderProductPicker();
   if (typeof updateOrderTotal === 'function') updateOrderTotal();
+}
+
+// ==================== FISH SELLERS, DAILY PURCHASES & PAYMENTS ====================
+// Design note: a seller's "balance" (what the business still owes them) is
+// never stored as its own column — it's always computed on the fly as
+// (sum of that seller's purchases) - (sum of payments made to that seller).
+// That mirrors how this app already recomputes dashboards/stats from raw
+// rows instead of keeping a running total in sync, and it means the balance
+// can never drift out of sync with the underlying purchase/payment history.
+
+function dbFishSellerToLocal(s) {
+  return {
+    id: s.id,
+    name: s.name,
+    phone: s.phone || '',
+    notes: s.notes || '',
+    createdAt: s.created_at || new Date().toISOString(),
+  };
+}
+function dbFishPurchaseToLocal(p) {
+  return {
+    id: p.id,
+    date: p.purchase_date,
+    sellerId: p.seller_id || '',
+    fishType: p.fish_type,
+    quantityKg: Number(p.quantity_kg) || 0,
+    pricePerKg: Number(p.price_per_kg) || 0,
+    totalAmount: Number(p.total_amount) || 0,
+    notes: p.notes || '',
+    createdAt: p.created_at,
+  };
+}
+function dbFishPaymentToLocal(p) {
+  return {
+    id: p.id,
+    date: p.payment_date,
+    sellerId: p.seller_id,
+    amount: Number(p.amount) || 0,
+    method: p.method || 'cash',
+    notes: p.notes || '',
+    createdAt: p.created_at,
+  };
+}
+
+async function loadFishSellersFromCloud() {
+  if (!currentUser) return;
+  try {
+    const { data, error } = await supabase
+      .from('fish_sellers')
+      .select('*')
+      .eq('user_id', businessId)
+      .eq('active', true)
+      .order('name', { ascending: true });
+    if (error) throw error;
+    fishSellers = (data || []).map(dbFishSellerToLocal);
+  } catch (e) {
+    console.error('Load fish sellers error:', e);
+    updateStatus('⚠️ Could not load fish sellers from cloud');
+  }
+}
+
+async function loadFishPurchasesFromCloud() {
+  if (!currentUser) return;
+  try {
+    const { data, error } = await supabase
+      .from('fish_purchases')
+      .select('*')
+      .eq('user_id', businessId)
+      .order('purchase_date', { ascending: false })
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    fishPurchases = (data || []).map(dbFishPurchaseToLocal);
+  } catch (e) {
+    console.error('Load fish purchases error:', e);
+    updateStatus('⚠️ Could not load fish purchases from cloud');
+  }
+}
+
+async function loadFishSellerPaymentsFromCloud() {
+  if (!currentUser) return;
+  try {
+    const { data, error } = await supabase
+      .from('fish_seller_payments')
+      .select('*')
+      .eq('user_id', businessId)
+      .order('payment_date', { ascending: false })
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    fishSellerPayments = (data || []).map(dbFishPaymentToLocal);
+  } catch (e) {
+    console.error('Load fish seller payments error:', e);
+    updateStatus('⚠️ Could not load seller payments from cloud');
+  }
+}
+
+async function loadFishProductionData() {
+  await Promise.all([loadFishSellersFromCloud(), loadFishPurchasesFromCloud(), loadFishSellerPaymentsFromCloud()]);
+  renderFishSellers();
+  renderFishPurchases();
+  renderFishPayments();
+  populateFishPurchaseSellerSelect();
+}
+
+function fishSellerBalance(sellerId) {
+  const bought = fishPurchases.filter(p => p.sellerId === sellerId).reduce((s, p) => s + p.totalAmount, 0);
+  const paid = fishSellerPayments.filter(p => p.sellerId === sellerId).reduce((s, p) => s + p.amount, 0);
+  return bought - paid;
+}
+
+function fishSellerName(sellerId) {
+  const s = fishSellers.find(x => String(x.id) === String(sellerId));
+  return s ? s.name : '—';
+}
+
+function populateFishPurchaseSellerSelect() {
+  const sel = $('fishPurchaseSeller');
+  if (!sel) return;
+  const current = sel.value;
+  sel.innerHTML = '<option value="">— Select seller —</option>' +
+    fishSellers.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+  if (current) sel.value = current;
+}
+
+function renderFishSellers() {
+  const wrap = $('fishSellersList');
+  if (!wrap) return;
+  if (fishSellers.length === 0) {
+    wrap.innerHTML = '<div style="text-align:center;opacity:.5;padding:14px;">No sellers yet — tap "Add Seller" to add who you buy fish from.</div>';
+    return;
+  }
+  wrap.innerHTML = fishSellers.map(s => {
+    const bal = fishSellerBalance(s.id);
+    const balColor = bal > 0 ? 'var(--danger, #d9534f)' : 'var(--green)';
+    return `
+    <div class="card" style="padding:10px 14px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+      <div>
+        <div style="font-weight:700;">${s.name}</div>
+        <div style="font-size:.72rem;opacity:.7;">${s.phone ? '📞 ' + s.phone : 'No phone on file'}</div>
+        ${s.notes ? `<div style="font-size:.7rem;opacity:.55;">${s.notes}</div>` : ''}
+      </div>
+      <div style="text-align:right;">
+        <div style="font-size:.7rem;opacity:.7;">Balance owed</div>
+        <div style="font-weight:800;color:${balColor};">Rs. ${bal.toLocaleString()}</div>
+      </div>
+      <div class="btn-row" style="margin:0;">
+        <button class="btn btn-sm btn-primary" onclick="openFishPayment('${s.id}')">💵 Pay</button>
+        <button class="btn btn-sm" onclick="openEditFishSeller('${s.id}')">✏️</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteFishSeller('${s.id}')">🗑️</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderFishPurchases() {
+  const tbody = $('fishPurchasesBody');
+  if (!tbody) return;
+  if (fishPurchases.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;opacity:.5;padding:20px;">No purchases logged yet.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = fishPurchases.slice(0, 100).map(p => `
+    <tr>
+      <td>${p.date}</td>
+      <td>${p.fishType}</td>
+      <td class="num">${p.quantityKg}</td>
+      <td class="num">Rs. ${p.pricePerKg.toLocaleString()}</td>
+      <td class="num">Rs. ${p.totalAmount.toLocaleString()}</td>
+      <td>${fishSellerName(p.sellerId)}</td>
+      <td><button class="btn btn-sm btn-danger" onclick="deleteFishPurchase('${p.id}')">🗑️</button></td>
+    </tr>
+  `).join('');
+}
+
+function renderFishPayments() {
+  const tbody = $('fishPaymentsBody');
+  if (!tbody) return;
+  if (fishSellerPayments.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;opacity:.5;padding:20px;">No payments recorded yet.</td></tr>';
+    return;
+  }
+  const methodLabel = { cash: 'Cash', check: 'Check', deposit: 'Bank Deposit' };
+  tbody.innerHTML = fishSellerPayments.slice(0, 100).map(p => `
+    <tr>
+      <td>${p.date}</td>
+      <td>${fishSellerName(p.sellerId)}</td>
+      <td class="num">Rs. ${p.amount.toLocaleString()}</td>
+      <td>${methodLabel[p.method] || p.method}</td>
+      <td>${p.notes || '-'}</td>
+      <td><button class="btn btn-sm btn-danger" onclick="deleteFishPayment('${p.id}')">🗑️</button></td>
+    </tr>
+  `).join('');
+}
+
+// ---- Sellers: add / edit / delete ----
+function openNewFishSeller() {
+  if (userRole !== 'owner') { alert('Only the business owner can manage fish sellers.'); return; }
+  $('fishSellerModalTitle').textContent = 'New Seller';
+  $('fishSellerEditId').value = '';
+  $('fishSellerName').value = '';
+  $('fishSellerPhone').value = '';
+  $('fishSellerNotes').value = '';
+  $('fishSellerModal').classList.add('active');
+}
+function openEditFishSeller(id) {
+  const s = fishSellers.find(x => String(x.id) === String(id));
+  if (!s) return;
+  $('fishSellerModalTitle').textContent = 'Edit Seller';
+  $('fishSellerEditId').value = s.id;
+  $('fishSellerName').value = s.name;
+  $('fishSellerPhone').value = s.phone;
+  $('fishSellerNotes').value = s.notes;
+  $('fishSellerModal').classList.add('active');
+}
+async function saveFishSeller() {
+  if (userRole !== 'owner') { alert('Only the business owner can manage fish sellers.'); return; }
+  const editId = $('fishSellerEditId').value;
+  const name = $('fishSellerName').value.trim();
+  const phone = $('fishSellerPhone').value.trim();
+  const notes = $('fishSellerNotes').value.trim();
+  if (!name) { alert('Seller name is required!'); return; }
+  if (!currentUser) { alert('Please login first.'); return; }
+
+  const saveBtn = $('fishSellerSaveBtn');
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving...'; }
+  if (!(await ensureFreshSession())) { if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save Seller'; } return; }
+
+  const row = { user_id: businessId, name, phone, notes, active: true };
+  try {
+    if (editId) {
+      const { error } = await supabase.from('fish_sellers').update(row).eq('id', editId).eq('user_id', businessId);
+      if (error) throw error;
+    } else {
+      const { error } = await supabase.from('fish_sellers').insert(row);
+      if (error) throw error;
+    }
+  } catch (e) {
+    console.error('Save fish seller error:', e);
+    alert('❌ Could not save seller: ' + e.message);
+    if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save Seller'; }
+    return;
+  }
+  if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save Seller'; }
+  closeModal('fishSellerModal');
+  updateStatus('✅ Seller saved');
+  await loadFishSellersFromCloud();
+  renderFishSellers();
+  populateFishPurchaseSellerSelect();
+}
+async function deleteFishSeller(id) {
+  if (userRole !== 'owner') { alert('Only the business owner can manage fish sellers.'); return; }
+  const bal = fishSellerBalance(id);
+  if (bal !== 0 && !confirm(`This seller still has a balance of Rs. ${bal.toLocaleString()}. Remove them anyway? Their purchase/payment history is kept.`)) return;
+  if (bal === 0 && !confirm('Remove this seller?')) return;
+  if (!(await ensureFreshSession())) return;
+  try {
+    const { error } = await supabase.from('fish_sellers').update({ active: false }).eq('id', id).eq('user_id', businessId);
+    if (error) throw error;
+  } catch (e) {
+    console.error('Delete fish seller error:', e);
+    alert('❌ Could not remove seller: ' + e.message);
+    return;
+  }
+  await loadFishSellersFromCloud();
+  renderFishSellers();
+  populateFishPurchaseSellerSelect();
+  updateStatus('🗑️ Seller removed');
+}
+
+// ---- Purchases: add / delete ----
+function recalcFishPurchaseTotal() {
+  const qty = Number($('fishPurchaseQty').value) || 0;
+  const price = Number($('fishPurchasePrice').value) || 0;
+  $('fishPurchaseTotal').value = (qty * price).toFixed(2);
+}
+function openNewFishPurchase() {
+  if (userRole !== 'owner') { alert('Only the business owner can log fish purchases.'); return; }
+  if (fishSellers.length === 0) { alert('Add a seller first, then log the purchase.'); openNewFishSeller(); return; }
+  $('fishPurchaseModalTitle').textContent = 'New Fish Purchase';
+  $('fishPurchaseEditId').value = '';
+  $('fishPurchaseDate').value = new Date().toISOString().slice(0, 10);
+  populateFishPurchaseSellerSelect();
+  $('fishPurchaseSeller').value = '';
+  $('fishPurchaseFishType').value = '';
+  $('fishPurchaseQty').value = 0;
+  $('fishPurchasePrice').value = 0;
+  $('fishPurchaseTotal').value = 0;
+  $('fishPurchaseNotes').value = '';
+  $('fishPurchaseModal').classList.add('active');
+}
+async function saveFishPurchase() {
+  if (userRole !== 'owner') { alert('Only the business owner can log fish purchases.'); return; }
+  const date = $('fishPurchaseDate').value || new Date().toISOString().slice(0, 10);
+  const sellerId = $('fishPurchaseSeller').value;
+  const fishType = $('fishPurchaseFishType').value.trim();
+  const quantityKg = Number($('fishPurchaseQty').value) || 0;
+  const pricePerKg = Number($('fishPurchasePrice').value) || 0;
+  const totalAmount = Number($('fishPurchaseTotal').value) || (quantityKg * pricePerKg);
+  const notes = $('fishPurchaseNotes').value.trim();
+  if (!sellerId) { alert('Please select a seller!'); return; }
+  if (!fishType) { alert('Please enter the fish type!'); return; }
+  if (!currentUser) { alert('Please login first.'); return; }
+
+  const saveBtn = $('fishPurchaseSaveBtn');
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving...'; }
+  if (!(await ensureFreshSession())) { if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save Purchase'; } return; }
+
+  const row = {
+    user_id: businessId, seller_id: sellerId, purchase_date: date, fish_type: fishType,
+    quantity_kg: quantityKg, price_per_kg: pricePerKg, total_amount: totalAmount,
+    notes, created_by: currentUser.id
+  };
+  try {
+    const { error } = await supabase.from('fish_purchases').insert(row);
+    if (error) throw error;
+  } catch (e) {
+    console.error('Save fish purchase error:', e);
+    alert('❌ Could not save purchase: ' + e.message);
+    if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save Purchase'; }
+    return;
+  }
+  if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save Purchase'; }
+  closeModal('fishPurchaseModal');
+  updateStatus('✅ Purchase saved');
+  await loadFishPurchasesFromCloud();
+  renderFishPurchases();
+  renderFishSellers();
+}
+async function deleteFishPurchase(id) {
+  if (userRole !== 'owner') { alert('Only the business owner can manage purchases.'); return; }
+  if (!confirm('Delete this purchase? This also reduces the seller\'s balance owed.')) return;
+  if (!(await ensureFreshSession())) return;
+  try {
+    const { error } = await supabase.from('fish_purchases').delete().eq('id', id).eq('user_id', businessId);
+    if (error) throw error;
+  } catch (e) {
+    console.error('Delete fish purchase error:', e);
+    alert('❌ Could not delete purchase: ' + e.message);
+    return;
+  }
+  await loadFishPurchasesFromCloud();
+  renderFishPurchases();
+  renderFishSellers();
+  updateStatus('🗑️ Purchase deleted');
+}
+
+// ---- Payments to sellers: add / delete ----
+function openFishPayment(sellerId) {
+  if (userRole !== 'owner') { alert('Only the business owner can record payments.'); return; }
+  const s = fishSellers.find(x => String(x.id) === String(sellerId));
+  if (!s) return;
+  $('fishPaymentSellerId').value = s.id;
+  $('fishPaymentSellerName').textContent = s.name;
+  $('fishPaymentSellerBalance').textContent = 'Rs. ' + fishSellerBalance(s.id).toLocaleString();
+  $('fishPaymentDate').value = new Date().toISOString().slice(0, 10);
+  $('fishPaymentAmount').value = 0;
+  $('fishPaymentMethod').value = 'cash';
+  $('fishPaymentNotes').value = '';
+  $('fishPaymentModal').classList.add('active');
+}
+async function saveFishPayment() {
+  if (userRole !== 'owner') { alert('Only the business owner can record payments.'); return; }
+  const sellerId = $('fishPaymentSellerId').value;
+  const date = $('fishPaymentDate').value || new Date().toISOString().slice(0, 10);
+  const amount = Number($('fishPaymentAmount').value) || 0;
+  const method = $('fishPaymentMethod').value;
+  const notes = $('fishPaymentNotes').value.trim();
+  if (!sellerId) { alert('No seller selected!'); return; }
+  if (amount <= 0) { alert('Enter an amount greater than 0!'); return; }
+  if (!currentUser) { alert('Please login first.'); return; }
+
+  const saveBtn = $('fishPaymentSaveBtn');
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving...'; }
+  if (!(await ensureFreshSession())) { if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save Payment'; } return; }
+
+  const row = { user_id: businessId, seller_id: sellerId, payment_date: date, amount, method, notes, created_by: currentUser.id };
+  try {
+    const { error } = await supabase.from('fish_seller_payments').insert(row);
+    if (error) throw error;
+  } catch (e) {
+    console.error('Save fish payment error:', e);
+    alert('❌ Could not save payment: ' + e.message);
+    if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save Payment'; }
+    return;
+  }
+  if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save Payment'; }
+  closeModal('fishPaymentModal');
+  updateStatus('✅ Payment recorded — seller balance updated');
+  await loadFishSellerPaymentsFromCloud();
+  renderFishPayments();
+  renderFishSellers();
+}
+async function deleteFishPayment(id) {
+  if (userRole !== 'owner') { alert('Only the business owner can manage payments.'); return; }
+  if (!confirm('Delete this payment? This also increases the seller\'s balance owed back.')) return;
+  if (!(await ensureFreshSession())) return;
+  try {
+    const { error } = await supabase.from('fish_seller_payments').delete().eq('id', id).eq('user_id', businessId);
+    if (error) throw error;
+  } catch (e) {
+    console.error('Delete fish payment error:', e);
+    alert('❌ Could not delete payment: ' + e.message);
+    return;
+  }
+  await loadFishSellerPaymentsFromCloud();
+  renderFishPayments();
+  renderFishSellers();
+  updateStatus('🗑️ Payment deleted');
 }
 
 // ==================== SUPABASE-BACKED EXPENSES ====================
@@ -9469,7 +9879,7 @@ function activateAppTab(tabId){
   if (tabId === 'monthly-summary') { updateMonthlySummary(); }
   if (tabId === 'analytics') { renderAnalytics(); }
   if (tabId === 'history') renderHistory();
-  if (tabId === 'production') calcProduction();
+  if (tabId === 'production') { calcProduction(); loadFishProductionData(); }
   if (tabId === 'orders') { loadCommissionClaims().finally(() => { renderOrders(); renderCustomers(); updateOrderStats(); }); if (userRole === 'owner') { loadStaffList(); } }
   if (tabId === 'delivery') {
     loadOrdersFromCloud().then(() => { renderDelivery(); updateOrderStats(); });
