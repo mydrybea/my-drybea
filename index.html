@@ -2004,6 +2004,30 @@
       </div>
     </div>
 
+    <!-- ============ PRODUCTION BATCHES (Batch / Lot Traceability) ============ -->
+    <div class="card" style="margin-top:16px;">
+      <h2><span class="pro-title-icon teal" aria-hidden="true"><i class="business-icon" data-lucide="boxes" aria-hidden="true"></i></span><span>Production Batches</span></h2>
+      <p class="pro-subtitle teal">Track every production run as its own Batch — which raw fish bill(s) it came from, planned vs actual output, and cost/kg at the time it was made.</p>
+
+      <div class="stat-grid" id="batchStatGrid">
+        <div class="stat"><div class="k">In Progress</div><div class="v" id="batchInProgressCount">0</div></div>
+        <div class="stat"><div class="k">Completed This Month</div><div class="v" id="batchCompletedCount">0</div></div>
+        <div class="stat"><div class="k">Avg Yield Variance</div><div class="v" id="batchAvgVariance">0%</div></div>
+        <div class="stat accent"><div class="k">Finished Output (This Month)</div><div class="v" id="batchMonthFinishedKg">0 kg</div></div>
+      </div>
+
+      <div class="btn-row" style="margin:14px 0;" data-owner-only>
+        <button class="btn btn-primary btn-sm" onclick="openNewBatchModal()"><i class="business-icon icon-inline" data-lucide="plus" aria-hidden="true"></i> Start New Batch</button>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Batch No</th><th>Date</th><th>Fish Type</th><th>Raw In</th><th>Planned Out</th><th>Actual Out</th><th class="num">Variance</th><th>Cost/kg</th><th>Status</th><th></th></tr></thead>
+          <tbody id="batchBody"><tr><td colspan="10" style="text-align:center;opacity:.5;padding:20px;">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
     <!-- ============ DAILY PRODUCTION COST LOG ============ -->
     <div class="card" style="margin-top:16px;">
       <h2><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="calendar-check" aria-hidden="true"></i></span><span>Daily Production Log</span></h2>
@@ -2140,6 +2164,86 @@
       <div class="btn-row">
         <button class="btn btn-primary" onclick="saveFishBill()"><i class="business-icon icon-inline" data-lucide="save" aria-hidden="true"></i> Save Bill</button>
         <button class="btn" onclick="closeModal('fishBillModal')">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- New Production Batch Modal -->
+  <div class="modal-backdrop" id="newBatchModal">
+    <div class="modal" style="max-width:620px;">
+      <h3><span class="pro-title-icon teal" aria-hidden="true"><i class="business-icon" data-lucide="boxes" aria-hidden="true"></i></span><span>Start New Batch</span></h3>
+      <p class="pro-subtitle teal">Batch No. <strong id="batchNoPreview">—</strong> — link this run to the raw fish bill(s) it's using, or just log the raw kg if it's mixed/unrecorded stock.</p>
+
+      <div class="grid-2">
+        <div class="field">
+          <label>Date</label>
+          <input type="date" id="batchDate" onchange="refreshBatchSourcePicker()">
+        </div>
+        <div class="field">
+          <label>Fish Type (costing category)</label>
+          <select id="batchFishType" onchange="onBatchFishTypeChange()">
+            <option value="Linna">Linna</option>
+            <option value="Balaya">Balaya</option>
+            <option value="Premium Mix">Premium Mix</option>
+            <option value="Other">Other / Mixed</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Raw Fish Sources <span class="sub" style="font-weight:400;">(tick bills to allocate kg from — optional)</span></label>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th></th><th>Bill No</th><th>Seller</th><th>Fish Type (as billed)</th><th>Available (kg)</th><th>Kg to Use</th></tr></thead>
+            <tbody id="batchSourceBody"><tr><td colspan="6" style="text-align:center;opacity:.5;padding:14px;">No recent unallocated fish bills.</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="field">
+          <label>Total Raw Kg Used</label>
+          <input type="number" id="batchRawKg" min="0" step="0.1" value="0" oninput="recalcBatchPlanned(true)">
+          <p class="sub" style="margin-top:4px;">Auto-fills from ticked sources above; edit directly if using unrecorded/manual stock.</p>
+        </div>
+        <div class="field">
+          <label>Planned Finished Output</label>
+          <input type="text" id="batchPlannedOut" readonly style="opacity:.8;font-weight:800;" value="0 kg">
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Note (optional)</label>
+        <input type="text" id="batchNotes" placeholder="Optional notes...">
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="saveProductionBatch()"><i class="business-icon icon-inline" data-lucide="save" aria-hidden="true"></i> Start Batch</button>
+        <button class="btn" onclick="closeModal('newBatchModal')">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Complete Batch Modal -->
+  <div class="modal-backdrop" id="completeBatchModal">
+    <div class="modal" style="max-width:480px;">
+      <h3><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="check-check" aria-hidden="true"></i></span><span>Complete Batch</span></h3>
+      <p class="pro-subtitle green">Batch <strong id="cbBatchNoLabel">—</strong> — enter what actually came out once curing/drying is done.</p>
+
+      <div class="stat-grid">
+        <div class="stat"><div class="k">Raw In</div><div class="v" id="cbRawIn">0 kg</div></div>
+        <div class="stat"><div class="k">Planned Out</div><div class="v" id="cbPlannedOut">0 kg</div></div>
+      </div>
+
+      <div class="field" style="margin-top:12px;">
+        <label>Actual Finished Output (kg)</label>
+        <input type="number" id="cbActualKg" min="0" step="0.1" value="0" oninput="previewBatchVariance()">
+      </div>
+      <div class="notice" id="cbVarianceNotice" style="margin-top:8px;">Enter actual output to see yield variance.</div>
+
+      <div class="btn-row" style="margin-top:14px;">
+        <button class="btn btn-primary" onclick="saveBatchCompletion()"><i class="business-icon icon-inline" data-lucide="check" aria-hidden="true"></i> Mark Complete</button>
+        <button class="btn" onclick="closeModal('completeBatchModal')">Cancel</button>
       </div>
     </div>
   </div>

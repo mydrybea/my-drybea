@@ -1757,6 +1757,10 @@ let costChart = null, sensChart = null, prodChart = null, dpMonthlyChart = null;
 let dailyProductionLogCache = [];
 let lastProdAvgRawCostPerKg = 0, lastProdIngredientsCostPerKg = 0, lastProdOverheadCostPerKg = 0;
 let lastProdAvgCostPerKg = 0, lastProdAvgMarketPrice = 0, lastProdAvgProfitPerKg = 0;
+// Per-fish-type snapshot from the last calcProduction() run — used by the
+// Production Batches feature to know each type's current yield factor and
+// total cost/kg without re-deriving it. Keyed by fish type name.
+let lastProdCostByType = {};
 
 function getChartColors() {
   const isDark = state.theme === 'dark';
@@ -2074,6 +2078,7 @@ function calcProduction() {
   let totalCostSum = 0, rawCostSum = 0;
   let html = '';
   const labels = [], costs = [], prices = [], profitsData = [];
+  lastProdCostByType = {};
 
   fishTypes.forEach(ft => {
     const rawCostPerKg = ft.rawPrice * ft.yield;
@@ -2081,6 +2086,10 @@ function calcProduction() {
     const profitPerKg = ft.finPrice - totalCostPerKg;
     const margin = ft.finPrice > 0 ? (profitPerKg/ft.finPrice)*100 : 0;
     const verdict = profitPerKg > 0 ? '<span class="badge badge-good">PROFIT</span>' : '<span class="badge badge-bad">LOSS</span>';
+
+    // Snapshot for Production Batches: yield factor + total cost/kg per type,
+    // captured fresh every time the Production Model recalculates.
+    lastProdCostByType[ft.name] = { yieldFactor: ft.yield, totalCostPerKg, rawCostPerKg };
 
     totalCostSum += totalCostPerKg;
     rawCostSum += rawCostPerKg;
@@ -2106,6 +2115,9 @@ function calcProduction() {
 
   const avgCostPerKg = totalCostSum / 3;
   $('prodAvgCost').textContent = fmt(avgCostPerKg);
+  // Fallback entry for batches marked "Other / Mixed" fish type.
+  lastProdCostByType['Other'] = { yieldFactor: avgYield, totalCostPerKg: avgCostPerKg, rawCostPerKg: rawCostSum / 3 };
+  window.dispatchEvent(new CustomEvent('production-model-updated'));
 
   const avgFinPrice = (finLinna + finBalaya + finPremium) / 3;
   const avgProfitPerKg = avgFinPrice - avgCostPerKg;
@@ -3449,6 +3461,374 @@ function openSellerHistory(sellerName, sellerPhone) {
   if (payBtn) payBtn.onclick = () => openSellerPayment(a.name, a.phone);
   $('sellerHistoryModal').classList.add('active');
 }
+
+// ==================== PRODUCTION BATCHES (Batch / Lot Traceability) ====================
+// A "batch" is one production run — e.g. today's Linna curing run. It
+// records the raw kg used (optionally traced back to specific fish_bills
+// line items), the planned finished output (from the Production Model's
+// live yield factor), and later the actual finished output once
+// curing/drying is done — so owners can see planned-vs-actual yield
+// variance per batch and per fish type over time.
+//
+// REQUIRED ONE-TIME SUPABASE SETUP: run production_batches_setup.sql once
+// in the Supabase SQL editor before using this feature.
+
+let productionBatches = [];   // [{id, batchNo, date, fishType, rawKgUsed, yieldFactorSnapshot, plannedFinishedKg, actualFinishedKg, costPerKgSnapshot, status, notes, sources:[{id, fishBillId, fishBillItemId, kgAllocated}], createdAt}]
+let batchSourceRowSeq = 0;
+
+function dbBatchToLocal(b, sources) {
+  return {
+    id: b.id,
+    batchNo: b.batch_no,
+    date: b.batch_date,
+    fishType: b.fish_type,
+    rawKgUsed: Number(b.raw_kg_used) || 0,
+    yieldFactorSnapshot: Number(b.yield_factor_snapshot) || 1,
+    plannedFinishedKg: Number(b.planned_finished_kg) || 0,
+    actualFinishedKg: b.actual_finished_kg !== null && b.actual_finished_kg !== undefined ? Number(b.actual_finished_kg) : null,
+    costPerKgSnapshot: Number(b.cost_per_kg_snapshot) || 0,
+    status: b.status || 'in_progress',
+    notes: b.notes || '',
+    createdAt: b.created_at,
+    sources: (sources || []).map(s => ({
+      id: s.id,
+      fishBillId: s.fish_bill_id,
+      fishBillItemId: s.fish_bill_item_id,
+      kgAllocated: Number(s.kg_allocated) || 0
+    }))
+  };
+}
+
+async function loadProductionBatchesFromCloud() {
+  if (!currentUser) return;
+  try {
+    const { data: batches, error: bErr } = await supabase.from('production_batches').select('*').order('batch_date', { ascending: false }).order('created_at', { ascending: false });
+    if (bErr) throw bErr;
+    const batchIds = (batches || []).map(b => b.id);
+    let sources = [];
+    if (batchIds.length) {
+      const { data: srcRows, error: sErr } = await supabase.from('production_batch_sources').select('*').in('batch_id', batchIds);
+      if (sErr) throw sErr;
+      sources = srcRows || [];
+    }
+    productionBatches = (batches || []).map(b => dbBatchToLocal(b, sources.filter(s => s.batch_id === b.id)));
+  } catch (e) {
+    console.error('Load production batches error:', e);
+    const missingTable = /relation .* does not exist/i.test(e?.message || '');
+    if (!missingTable) updateStatus('⚠️ Could not load production batches from cloud');
+    productionBatches = [];
+  }
+}
+window.loadProductionBatchesFromCloud = loadProductionBatchesFromCloud;
+
+function generateBatchNo(dateStr) {
+  const d = (dateStr || new Date().toISOString().slice(0, 10)).replace(/-/g, '');
+  const countToday = productionBatches.filter(b => b.batchNo && b.batchNo.includes(d)).length;
+  return `BATCH-${d}-${countToday + 1}`;
+}
+
+// kg of a fish_bill_item already allocated to OTHER batches (used to work
+// out how much is still available to allocate to a new batch).
+function kgAlreadyAllocated(fishBillItemId, excludeBatchId) {
+  let used = 0;
+  productionBatches.forEach(b => {
+    if (b.id === excludeBatchId) return;
+    (b.sources || []).forEach(s => {
+      if (s.fishBillItemId === fishBillItemId) used += s.kgAllocated;
+    });
+  });
+  return used;
+}
+
+// Recent (last 14 days) fish bill line items with remaining unallocated kg,
+// regardless of exact fish-type label match (seller-recorded names vary),
+// so the owner can tick whichever ones actually went into this batch.
+function getAvailableFishBillSources() {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - 14);
+  const rows = [];
+  fishBills.filter(b => new Date(b.date) >= cutoff).forEach(bill => {
+    (bill.items || []).forEach(item => {
+      if (!item.id) return; // safety: only DB-backed items have ids
+      const remaining = item.quantityKg - kgAlreadyAllocated(item.id, null);
+      if (remaining > 0.01) {
+        rows.push({
+          fishBillId: bill.id, fishBillItemId: item.id, billNo: bill.billNo,
+          sellerName: bill.sellerName, fishType: item.fishType, remainingKg: remaining
+        });
+      }
+    });
+  });
+  return rows;
+}
+
+function refreshBatchSourcePicker() {
+  const tbody = $('batchSourceBody');
+  if (!tbody) return;
+  const rows = getAvailableFishBillSources();
+  if (rows.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;opacity:.5;padding:14px;">No recent unallocated fish bills.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map((r, i) => `
+    <tr>
+      <td><input type="checkbox" class="bsrc-check" data-item-id="${r.fishBillItemId}" data-bill-id="${r.fishBillId}" data-max="${r.remainingKg}" onchange="onBatchSourceToggle(this)"></td>
+      <td>${r.billNo}</td>
+      <td>${r.sellerName}</td>
+      <td>${r.fishType}</td>
+      <td>${r.remainingKg.toFixed(1)} kg</td>
+      <td><input type="number" class="bsrc-kg" min="0" step="0.1" max="${r.remainingKg}" value="0" disabled style="width:80px;" oninput="recalcBatchPlanned(true)"></td>
+    </tr>
+  `).join('');
+}
+window.refreshBatchSourcePicker = refreshBatchSourcePicker;
+
+function onBatchSourceToggle(checkbox) {
+  const row = checkbox.closest('tr');
+  const kgInput = row.querySelector('.bsrc-kg');
+  if (checkbox.checked) {
+    kgInput.disabled = false;
+    if (Number(kgInput.value) <= 0) kgInput.value = checkbox.dataset.max;
+  } else {
+    kgInput.disabled = true;
+    kgInput.value = 0;
+  }
+  recalcBatchPlanned(true);
+}
+window.onBatchSourceToggle = onBatchSourceToggle;
+
+// Recompute total raw kg (from ticked sources, unless the owner is editing
+// the raw-kg field directly for manual/unrecorded stock) and the planned
+// finished output for the currently selected fish type.
+function recalcBatchPlanned(fromSources) {
+  if (fromSources) {
+    const tbody = $('batchSourceBody');
+    let sum = 0;
+    if (tbody) {
+      Array.from(tbody.querySelectorAll('.bsrc-check:checked')).forEach(cb => {
+        sum += Number(cb.closest('tr').querySelector('.bsrc-kg').value) || 0;
+      });
+    }
+    // Only auto-fill from sources if at least one is ticked — otherwise
+    // leave whatever the owner typed manually alone.
+    if (sum > 0) $('batchRawKg').value = sum;
+  }
+  const fishType = $('batchFishType').value;
+  const rawKg = Number($('batchRawKg').value) || 0;
+  const info = lastProdCostByType[fishType] || lastProdCostByType['Other'] || { yieldFactor: 1, totalCostPerKg: 0 };
+  const planned = info.yieldFactor > 0 ? rawKg / info.yieldFactor : 0;
+  $('batchPlannedOut').value = planned.toFixed(1) + ' kg';
+}
+window.recalcBatchPlanned = recalcBatchPlanned;
+
+function onBatchFishTypeChange() { recalcBatchPlanned(false); }
+window.onBatchFishTypeChange = onBatchFishTypeChange;
+
+function openNewBatchModal() {
+  if (userRole !== 'owner') { alert('Only the owner can start a production batch.'); return; }
+  const today = new Date().toISOString().slice(0, 10);
+  $('batchDate').value = today;
+  $('batchNoPreview').textContent = generateBatchNo(today);
+  $('batchFishType').value = 'Linna';
+  $('batchRawKg').value = 0;
+  $('batchNotes').value = '';
+  refreshBatchSourcePicker();
+  recalcBatchPlanned(false);
+  $('newBatchModal').classList.add('active');
+}
+window.openNewBatchModal = openNewBatchModal;
+
+async function saveProductionBatch() {
+  if (userRole !== 'owner') { alert('Only the owner can start a production batch.'); return; }
+  if (!currentUser) { alert('Please login first.'); return; }
+
+  const date = $('batchDate').value || new Date().toISOString().slice(0, 10);
+  const fishType = $('batchFishType').value;
+  const rawKg = Number($('batchRawKg').value) || 0;
+  const notes = $('batchNotes').value.trim();
+
+  if (rawKg <= 0) { alert('Enter the raw fish kg used for this batch.'); return; }
+  if (!(await ensureFreshSession())) return;
+
+  const info = lastProdCostByType[fishType] || lastProdCostByType['Other'] || { yieldFactor: 1, totalCostPerKg: 0 };
+  const plannedFinishedKg = info.yieldFactor > 0 ? rawKg / info.yieldFactor : 0;
+  const batchNo = generateBatchNo(date);
+
+  const tbody = $('batchSourceBody');
+  const sourceRows = tbody ? Array.from(tbody.querySelectorAll('.bsrc-check:checked')).map(cb => ({
+    fishBillId: cb.dataset.billId,
+    fishBillItemId: cb.dataset.itemId,
+    kgAllocated: Number(cb.closest('tr').querySelector('.bsrc-kg').value) || 0
+  })).filter(s => s.kgAllocated > 0) : [];
+
+  let savedBatch = null;
+  try {
+    const { data, error } = await supabase.from('production_batches').insert({
+      business_id: businessId,
+      batch_no: batchNo,
+      batch_date: date,
+      fish_type: fishType,
+      raw_kg_used: rawKg,
+      yield_factor_snapshot: info.yieldFactor,
+      planned_finished_kg: plannedFinishedKg,
+      cost_per_kg_snapshot: info.totalCostPerKg,
+      status: 'in_progress',
+      notes,
+      created_by: currentUser.id
+    }).select().single();
+    if (error) throw error;
+    savedBatch = data;
+  } catch (e) {
+    console.error('Save production batch error:', e);
+    const missingTable = /relation .* does not exist/i.test(e?.message || '');
+    alert('❌ Could not save batch: ' + e.message + (missingTable ? '\n\nThe production_batches table hasn\'t been created yet — run production_batches_setup.sql in Supabase first.' : ''));
+    return;
+  }
+
+  let savedSources = [];
+  if (sourceRows.length) {
+    try {
+      const rows = sourceRows.map(s => ({
+        batch_id: savedBatch.id, fish_bill_id: s.fishBillId, fish_bill_item_id: s.fishBillItemId, kg_allocated: s.kgAllocated
+      }));
+      const { data, error } = await supabase.from('production_batch_sources').insert(rows).select();
+      if (error) throw error;
+      savedSources = data || [];
+    } catch (e) {
+      console.error('Save batch sources error:', e);
+      alert('⚠️ Batch saved but its fish-bill sources failed to save: ' + e.message);
+    }
+  }
+
+  productionBatches.unshift(dbBatchToLocal(savedBatch, savedSources));
+  renderProductionBatches();
+  closeModal('newBatchModal');
+  updateStatus(`✅ Batch ${batchNo} started`);
+}
+window.saveProductionBatch = saveProductionBatch;
+
+function openCompleteBatchModal(id) {
+  const b = productionBatches.find(x => x.id === id);
+  if (!b) return;
+  $('completeBatchModal').dataset.batchId = id;
+  $('cbBatchNoLabel').textContent = b.batchNo;
+  $('cbRawIn').textContent = b.rawKgUsed.toFixed(1) + ' kg';
+  $('cbPlannedOut').textContent = b.plannedFinishedKg.toFixed(1) + ' kg';
+  $('cbActualKg').value = b.actualFinishedKg ?? b.plannedFinishedKg.toFixed(1);
+  $('cbVarianceNotice').textContent = 'Enter actual output to see yield variance.';
+  previewBatchVariance();
+  $('completeBatchModal').classList.add('active');
+}
+window.openCompleteBatchModal = openCompleteBatchModal;
+
+function previewBatchVariance() {
+  const modal = $('completeBatchModal');
+  const b = productionBatches.find(x => x.id === modal?.dataset.batchId);
+  if (!b) return;
+  const actual = Number($('cbActualKg').value) || 0;
+  const planned = b.plannedFinishedKg;
+  const varianceKg = actual - planned;
+  const variancePct = planned > 0 ? (varianceKg / planned) * 100 : 0;
+  const notice = $('cbVarianceNotice');
+  const sign = varianceKg >= 0 ? '+' : '';
+  notice.innerHTML = `${sign}${varianceKg.toFixed(1)} kg vs planned (<strong>${sign}${variancePct.toFixed(1)}%</strong>) ${variancePct < -5 ? '— below planned yield.' : variancePct > 5 ? '— above planned yield.' : '— close to plan.'}`;
+}
+window.previewBatchVariance = previewBatchVariance;
+
+async function saveBatchCompletion() {
+  if (userRole !== 'owner') { alert('Only the owner can complete a batch.'); return; }
+  const id = $('completeBatchModal').dataset.batchId;
+  const b = productionBatches.find(x => x.id === id);
+  if (!b) return;
+  const actualKg = Number($('cbActualKg').value) || 0;
+  if (actualKg <= 0) { alert('Enter the actual finished kg.'); return; }
+  if (!(await ensureFreshSession())) return;
+
+  try {
+    const { error } = await supabase.from('production_batches').update({
+      actual_finished_kg: actualKg, status: 'completed',
+      completed_by: currentUser.id, completed_at: new Date().toISOString()
+    }).eq('id', id);
+    if (error) throw error;
+  } catch (e) {
+    console.error('Complete batch error:', e);
+    alert('❌ Could not complete batch: ' + e.message);
+    return;
+  }
+
+  b.actualFinishedKg = actualKg;
+  b.status = 'completed';
+  renderProductionBatches();
+  closeModal('completeBatchModal');
+  updateStatus(`✅ Batch ${b.batchNo} marked complete`);
+}
+window.saveBatchCompletion = saveBatchCompletion;
+
+async function deleteProductionBatch(id) {
+  if (userRole !== 'owner') { alert('Only the owner can delete a batch.'); return; }
+  if (!confirm('Delete this batch? This also removes its fish-bill source links (the original bills are unaffected).')) return;
+  if (!(await ensureFreshSession())) return;
+  try {
+    const { error } = await supabase.from('production_batches').delete().eq('id', id);
+    if (error) throw error;
+  } catch (e) {
+    alert('❌ Could not delete batch: ' + e.message);
+    return;
+  }
+  productionBatches = productionBatches.filter(b => b.id !== id);
+  renderProductionBatches();
+  updateStatus('🗑️ Batch deleted');
+}
+window.deleteProductionBatch = deleteProductionBatch;
+
+function renderProductionBatches() {
+  const tbody = $('batchBody');
+  if (!tbody) return;
+
+  if (productionBatches.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;opacity:.5;padding:20px;">No batches yet. Start one above.</td></tr>';
+  } else {
+    tbody.innerHTML = productionBatches.map(b => {
+      const hasActual = b.actualFinishedKg !== null;
+      const variancePct = hasActual && b.plannedFinishedKg > 0 ? ((b.actualFinishedKg - b.plannedFinishedKg) / b.plannedFinishedKg) * 100 : null;
+      const varianceCell = variancePct === null ? '—' : `<span class="badge ${Math.abs(variancePct) <= 5 ? 'badge-good' : 'badge-bad'}">${variancePct >= 0 ? '+' : ''}${variancePct.toFixed(1)}%</span>`;
+      const statusBadge = b.status === 'completed' ? '<span class="badge badge-good">Completed</span>' : '<span class="badge badge-warn">In Progress</span>';
+      const actions = b.status === 'completed'
+        ? (userRole === 'owner' ? `<button class="btn btn-sm btn-danger" onclick="deleteProductionBatch('${b.id}')">🗑️</button>` : '')
+        : (userRole === 'owner' ? `<button class="btn btn-sm btn-primary" onclick="openCompleteBatchModal('${b.id}')">Complete</button> <button class="btn btn-sm btn-danger" onclick="deleteProductionBatch('${b.id}')">🗑️</button>` : '');
+      return `<tr>
+        <td>${b.batchNo}</td>
+        <td>${b.date}</td>
+        <td>${b.fishType}</td>
+        <td>${b.rawKgUsed.toFixed(1)} kg</td>
+        <td>${b.plannedFinishedKg.toFixed(1)} kg</td>
+        <td>${hasActual ? b.actualFinishedKg.toFixed(1) + ' kg' : '—'}</td>
+        <td class="num">${varianceCell}</td>
+        <td>${fmt(b.costPerKgSnapshot)}</td>
+        <td>${statusBadge}</td>
+        <td style="white-space:nowrap;">${actions}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  const now = new Date();
+  const monthStr = now.toISOString().slice(0, 7);
+  const thisMonth = productionBatches.filter(b => (b.date || '').startsWith(monthStr));
+  const inProgress = productionBatches.filter(b => b.status === 'in_progress').length;
+  const completedThisMonth = thisMonth.filter(b => b.status === 'completed');
+  const finishedKgThisMonth = completedThisMonth.reduce((s, b) => s + (b.actualFinishedKg || 0), 0);
+  const variances = completedThisMonth
+    .filter(b => b.plannedFinishedKg > 0)
+    .map(b => ((b.actualFinishedKg - b.plannedFinishedKg) / b.plannedFinishedKg) * 100);
+  const avgVariance = variances.length ? variances.reduce((s, v) => s + v, 0) / variances.length : 0;
+
+  const set = (id, v) => { const el = $(id); if (el) el.textContent = v; };
+  set('batchInProgressCount', inProgress);
+  set('batchCompletedCount', completedThisMonth.length);
+  set('batchAvgVariance', (avgVariance >= 0 ? '+' : '') + avgVariance.toFixed(1) + '%');
+  set('batchMonthFinishedKg', finishedKgThisMonth.toFixed(0) + ' kg');
+}
+window.renderProductionBatches = renderProductionBatches;
 
 // ==================== RECURRING (DAILY) EXPENSES ====================
 let recurringExpenses = [];
@@ -10343,6 +10723,7 @@ function activateAppTab(tabId){
       renderSellerLedger();
     });
     loadDailyProductionLog().then(renderDailyProductionLog);
+    loadProductionBatchesFromCloud().then(renderProductionBatches);
   }
   if (tabId === 'distributor-home') { showSkeletons('distributor-home'); loadDistributorCommissionClaims().then(renderDistributorHome); }
   if (tabId === 'my-income') { loadDistributorCommissionClaims().then(renderProductAgentPage); }
