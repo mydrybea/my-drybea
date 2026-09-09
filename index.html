@@ -1919,6 +1919,10 @@
             <div class="field">
               <label>Daily Raw Fish (kg)</label>
               <input type="number" id="dailyRawKg" value="500" min="0" oninput="onDataChange()">
+              <div class="sub" id="dailyRawKgAutoNote" style="margin-top:4px;"></div>
+              <button type="button" class="btn btn-sm" id="dailyRawKgSyncBtn" style="margin-top:6px;display:none;" onclick="applyDailyRawKgFromBills()">
+                <i class="business-icon icon-inline" data-lucide="refresh-cw" aria-hidden="true"></i> Use Today's Bills Total
+              </button>
             </div>
             <div class="field">
               <label>Working Days/Month</label>
@@ -1998,6 +2002,8 @@
           </tfoot>
         </table>
       </div>
+
+      <div class="notice warn" id="ingVarianceAlert" style="display:none;margin-top:10px;"></div>
 
       <div class="stat-grid" style="margin-top:16px;">
         <div class="stat"><div class="k">Monthly Raw Fish</div><div class="v" id="prodMonthlyRaw">0 kg</div></div>

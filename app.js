@@ -2140,6 +2140,7 @@ function calcProduction() {
   });
   $('ingTotalCost').textContent = fmt(ingredientsCostPerKg);
   $('prodIngredientsPerKg').textContent = fmt(ingredientsCostPerKg);
+  updateIngredientVarianceAlert(ingredientsCostPerKg);
 
   const monthlyRawKg = dailyRaw * days;
   $('prodMonthlyRaw').textContent = monthlyRawKg.toFixed(0) + ' kg';
@@ -2301,6 +2302,69 @@ function calcProduction() {
 // silently.
 
 function todayIso() { return new Date().toISOString().slice(0, 10); }
+
+// Compares today's live Ingredients Cost/kg against the trailing average
+// pulled from this month's saved Daily Production Log snapshots, and shows
+// a warning banner under the Ingredients Cost table if it has swung more
+// than 15% either way (e.g. a spice price spike). Needs at least 3 saved
+// days of history before it says anything, so it won't fire on noise.
+function updateIngredientVarianceAlert(currentCostPerKg) {
+  const el = $('ingVarianceAlert');
+  if (!el) return;
+  const history = (dailyProductionLogCache || [])
+    .map(r => Number(r.ingredients_cost_per_kg) || 0)
+    .filter(v => v > 0)
+    .slice(-30);
+  if (history.length < 3) { el.style.display = 'none'; return; }
+  const avg = history.reduce((s, v) => s + v, 0) / history.length;
+  if (avg <= 0) { el.style.display = 'none'; return; }
+  const variancePct = ((currentCostPerKg - avg) / avg) * 100;
+  if (Math.abs(variancePct) < 15) { el.style.display = 'none'; return; }
+  const up = variancePct > 0;
+  el.style.display = '';
+  el.innerHTML = `${up ? '⚠️' : '📉'} <strong>Ingredients cost/kg is ${up ? 'up' : 'down'} ${Math.abs(variancePct).toFixed(1)}%</strong> vs your ${history.length}-day average this month (Rs. ${avg.toFixed(2)}/kg) — today: Rs. ${currentCostPerKg.toFixed(2)}/kg.`;
+}
+
+// ==================== DAILY RAW FISH — AUTO-SYNC FROM FISH BILLS ====================
+// The "Daily Raw Fish (kg)" field feeds the monthly production projection.
+// Rather than typing that number twice, we sum it straight from today's
+// Fish Bills (already entered in the Daily Fish Purchase Bills section) and
+// offer it as a one-tap fill — never overwritten silently, so a manual
+// correction is never clobbered by a bill entered later.
+function computeTodayRawFishKgFromBills() {
+  return (fishBills || [])
+    .filter(b => isToday(b.date))
+    .reduce((sum, b) => sum + (b.items || []).reduce((s, it) => s + (Number(it.quantityKg) || 0), 0), 0);
+}
+
+function syncDailyRawKgFromBills() {
+  const noteEl = $('dailyRawKgAutoNote');
+  const btn = $('dailyRawKgSyncBtn');
+  if (!noteEl && !btn) return;
+  const todayKg = computeTodayRawFishKgFromBills();
+  const current = Number($('dailyRawKg') && $('dailyRawKg').value) || 0;
+  if (noteEl) {
+    if (todayKg <= 0) {
+      noteEl.textContent = "No Fish Bills logged for today yet.";
+    } else if (Math.abs(todayKg - current) < 0.05) {
+      noteEl.textContent = `📋 Matches today's Fish Bills total (${fmt2(todayKg)} kg).`;
+    } else {
+      noteEl.textContent = `📋 Today's Fish Bills total: ${fmt2(todayKg)} kg (field currently shows ${fmt2(current)} kg).`;
+    }
+  }
+  if (btn) btn.style.display = todayKg > 0 && Math.abs(todayKg - current) >= 0.05 ? '' : 'none';
+}
+window.syncDailyRawKgFromBills = syncDailyRawKgFromBills;
+
+function applyDailyRawKgFromBills() {
+  const todayKg = computeTodayRawFishKgFromBills();
+  if (todayKg <= 0) { alert("No Fish Bills logged for today yet."); return; }
+  $('dailyRawKg').value = todayKg.toFixed(1);
+  onDataChange();
+  syncDailyRawKgFromBills();
+  updateStatus("✅ Daily Raw Fish (kg) filled from today's Fish Bills");
+}
+window.applyDailyRawKgFromBills = applyDailyRawKgFromBills;
 
 function updateDailyProductionSummaryLive() {
   const costEl = $('dpTodayCost'), priceEl = $('dpTodayPrice'), profitEl = $('dpTodayProfit'), totalEl = $('dpTodayTotal');
@@ -3581,6 +3645,7 @@ function renderFishBills() {
   set('fishTotalOwed', fmt(totalOwed));
   set('fishSellersWithDues', sellersWithDues);
   calcRealIncome();
+  syncDailyRawKgFromBills();
 }
 
 function renderSellerLedger() {
@@ -11106,7 +11171,7 @@ function activateAppTab(tabId){
       renderFishBills();
       renderSellerLedger();
     });
-    loadDailyProductionLog().then(renderDailyProductionLog);
+    loadDailyProductionLog().then(() => { renderDailyProductionLog(); updateIngredientVarianceAlert(lastProdIngredientsCostPerKg); });
     loadProductionBatchesFromCloud().then(renderProductionBatches);
   }
   if (tabId === 'distributor-home') { showSkeletons('distributor-home'); loadDistributorCommissionClaims().then(renderDistributorHome); }
