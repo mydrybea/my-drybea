@@ -10500,6 +10500,13 @@ window.printFishBill = printFishBill;
 window.openSellerPayment = openSellerPayment;
 window.saveSellerPayment = saveSellerPayment;
 window.openSellerHistory = openSellerHistory;
+// FIX: found via a full onclick/onchange scan against window exposures —
+// two more spots with the same bug: the Daily Costing panel's "Add Daily
+// Cost" / "Save Cost" buttons, and the New Order screen's distributor
+// dropdown (onchange), all silently dead until now.
+window.openNewCosting = openNewCosting;
+window.saveCosting = saveCosting;
+window.onOrderDistributorChange = onOrderDistributorChange;
 
 })();
 
