@@ -492,6 +492,74 @@ textarea { resize: vertical; min-height: 60px; }
 .stat.accent { border-left-color: var(--gold); }
 .stat.accent .v { color: var(--green); }
 
+/* ============================================================
+   ROW ACTION MENU (three-dot / kebab) — shared dropdown used for
+   Edit/Delete/etc. across every table, card grid and list in the
+   app (Sales, Customers, Orders, Products, Expenses, Fish Bills,
+   Production, Salary, Distributor Activity, Staff/Notices...).
+   Uses position:fixed (set via JS) so it always escapes scrollable
+   table-wrap/modal containers instead of being clipped.
+   ============================================================ */
+.action-menu { position: relative; display: inline-flex; }
+.action-menu-trigger {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; min-width: 32px;
+  border-radius: var(--radius-xs);
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: -1px;
+  line-height: 1;
+  transition: var(--transition);
+}
+.action-menu-trigger:hover,
+.action-menu.open .action-menu-trigger {
+  background: var(--bg-elevated);
+  border-color: var(--border-strong);
+  color: var(--text-main);
+}
+.action-menu-list {
+  display: none;
+  position: fixed;
+  min-width: 160px;
+  max-width: 240px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-lg);
+  z-index: 4000;
+  overflow: hidden;
+  padding: 4px;
+}
+.action-menu.open .action-menu-list { display: block; }
+.action-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 9px 12px;
+  border: none;
+  background: transparent;
+  color: var(--text-main);
+  font-family: var(--font);
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  border-radius: var(--radius-xs);
+  white-space: nowrap;
+  transition: var(--transition);
+}
+.action-menu-item:hover { background: var(--green-subtle); color: var(--green); }
+.action-menu-item.danger { color: var(--bad); }
+.action-menu-item.danger:hover { background: var(--bad-bg); color: var(--bad); }
+.action-menu-item .action-menu-icon { font-size: .95em; width: 1.1em; text-align: center; flex-shrink: 0; }
+td .action-menu, th .action-menu { display: inline-flex; }
+
 /* ===== TABLES ===== */
 .table-wrap {
   width: 100%;

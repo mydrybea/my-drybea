@@ -2799,7 +2799,8 @@
   <!-- New Daily Costing Modal -->
   <div class="modal-backdrop" id="costingModal">
     <div class="modal">
-      <h3><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="calculator" aria-hidden="true"></i></span><span>Add Daily Cost</span></h3><p class="pro-subtitle gold">Record it while the transaction is fresh — this also appears in Expenses.</p>
+      <h3><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="calculator" aria-hidden="true"></i></span><span id="costingModalTitle">Add Daily Cost</span></h3><p class="pro-subtitle gold">Record it while the transaction is fresh — this also appears in Expenses.</p>
+      <input type="hidden" id="costEditId" value="">
       <div class="field">
         <label>Date</label>
         <input type="date" id="costingDate">
@@ -3314,7 +3315,8 @@
 <!-- New Customer Modal -->
 <div class="modal-backdrop" id="customerModal">
   <div class="modal">
-    <h3><span class="pro-title-icon blue" aria-hidden="true"><i class="business-icon" data-lucide="user-round" aria-hidden="true"></i></span><span>New Customer</span></h3><p class="pro-subtitle blue">Create a clean customer record.</p>
+    <h3><span class="pro-title-icon blue" aria-hidden="true"><i class="business-icon" data-lucide="user-round" aria-hidden="true"></i></span><span id="customerModalTitle">New Customer</span></h3><p class="pro-subtitle blue">Create a clean customer record.</p>
+    <input type="hidden" id="custEditId" value="">
     <div class="field">
       <label>Customer Name</label>
       <input type="text" id="custName" placeholder="Customer name">
@@ -3337,7 +3339,7 @@
       <div class="notice" style="margin:0;padding:9px 12px;font-size:.72rem;"><i class="business-icon icon-inline" data-lucide="badge-percent"></i> This customer will be registered under <strong id="custReferralStaffName">your staff reference</strong>. Eligible sales earn 12% commission.</div>
     </div>
     <div class="btn-row">
-      <button class="btn btn-primary" onclick="saveCustomer()"><i class="business-icon icon-inline" data-lucide="save" aria-hidden="true"></i> Save Customer</button>
+      <button class="btn btn-primary" id="customerSaveBtn" onclick="saveCustomer()"><i class="business-icon icon-inline" data-lucide="save" aria-hidden="true"></i> Save Customer</button>
       <button class="btn" onclick="closeModal('customerModal')">Cancel</button>
     </div>
   </div>
@@ -3481,7 +3483,8 @@
 
 <div class="modal-backdrop" id="expenseModal">
   <div class="modal">
-    <h3><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="receipt" aria-hidden="true"></i></span><span>New Expense</span></h3><p class="pro-subtitle gold">Record the cost while the transaction is fresh.</p>
+    <h3><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="receipt" aria-hidden="true"></i></span><span id="expenseModalTitle">New Expense</span></h3><p class="pro-subtitle gold">Record the cost while the transaction is fresh.</p>
+    <input type="hidden" id="expEditId" value="">
     <div class="field">
       <label>Date</label>
       <input type="date" id="expDate">
@@ -3521,7 +3524,7 @@
       <p style="font-size:0.78rem;opacity:0.65;margin-top:4px;">Auto-adds this same expense (same category, description &amp; amount) each day you're logged in. You can pause or remove it anytime below.</p>
     </div>
     <div class="btn-row">
-      <button class="btn btn-primary" onclick="saveExpense()">✅ Save Expense</button>
+      <button class="btn btn-primary" id="expenseSaveBtn" onclick="saveExpense()">✅ Save Expense</button>
       <button class="btn" onclick="closeModal('expenseModal')">Cancel</button>
     </div>
   </div>

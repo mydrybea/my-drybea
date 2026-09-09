@@ -823,6 +823,33 @@ async function loadSalaryHistory(staffId) {
   }
 }
 
+async function editSalaryEntry(id) {
+  const s = salaryEntries.find(x => String(x.id) === String(id));
+  if (!s) { alert('Entry not found.'); return; }
+  const newAmountStr = prompt('Amount (Rs.):', s.amount);
+  if (newAmountStr === null) return;
+  const newAmount = Number(newAmountStr);
+  if (!newAmount || newAmount <= 0) { alert('Enter a valid amount greater than 0.'); return; }
+  const newNoteStr = prompt('Note (optional):', s.note || '');
+  if (newNoteStr === null) return;
+  if (!(await ensureFreshSession())) return;
+  try {
+    const { data, error } = await supabase.from('staff_salaries')
+      .update({ amount: newAmount, note: newNoteStr.trim() || null })
+      .eq('id', id).select().single();
+    if (error) throw error;
+    const idx = salaryEntries.findIndex(x => String(x.id) === String(id));
+    if (idx >= 0) salaryEntries[idx] = data;
+    renderSalaryHistory();
+    await refreshSmartSalary();
+    updateStatus('✅ Salary entry updated');
+  } catch (e) {
+    console.error('Update salary entry error:', e);
+    alert('❌ Could not update entry: ' + e.message);
+  }
+}
+window.editSalaryEntry = editSalaryEntry;
+
 async function deleteSalaryEntry(id) {
   if (!confirm('Delete this salary entry?')) return;
   if (!(await ensureFreshSession())) return;
@@ -851,7 +878,10 @@ function renderSalaryHistory() {
         <td>${SAL_TYPE_LABEL[s.entry_type] || s.entry_type}</td>
         <td>${fmt(s.amount)}</td>
         <td>${s.note || '-'}</td>
-        <td><button class="btn btn-sm btn-danger" data-action="deleteSalaryEntry" data-id="${s.id}">🗑️</button></td>
+        <td>${actionMenuHTML([
+          { label: 'Edit', icon: '✏️', onclick: `editSalaryEntry('${s.id}')` },
+          { label: 'Delete', icon: '🗑️', danger: true, onclick: `deleteSalaryEntry('${s.id}')` }
+        ])}</td>
       </tr>
     `).join('');
   }
@@ -1702,6 +1732,58 @@ let appInitialized = false;
 
 // ==================== HELPERS ====================
 const $ = id => document.getElementById(id);
+
+// ============================================================
+// ROW ACTION MENU (three-dot / kebab) — one shared component used
+// everywhere a row/card has "Edit / Delete / ..." buttons (Sales,
+// Customers, Orders, Products, Expenses, Fish Bills, Production,
+// Salary, Recurring Expenses, Distributor Activity, Staff Tasks,
+// Notices, History). Build with actionMenuHTML(items) inside any
+// render...() template string; each item = { label, onclick, danger, icon }.
+// `onclick` is a raw JS expression string, e.g. "editSale('123')".
+// ============================================================
+function actionMenuHTML(items) {
+  const rows = (items || []).filter(Boolean).map(it => {
+    const cls = 'action-menu-item' + (it.danger ? ' danger' : '');
+    const icon = it.icon ? `<span class="action-menu-icon">${it.icon}</span>` : '';
+    return `<button type="button" class="${cls}" onclick="event.stopPropagation();closeAllActionMenus();${it.onclick}">${icon}<span>${it.label}</span></button>`;
+  }).join('');
+  if (!rows) return '';
+  return `<div class="action-menu"><button type="button" class="action-menu-trigger" onclick="event.stopPropagation();toggleActionMenu(this)" aria-haspopup="true" aria-label="Actions">⋮</button><div class="action-menu-list">${rows}</div></div>`;
+}
+
+function closeAllActionMenus() {
+  document.querySelectorAll('.action-menu.open').forEach(m => m.classList.remove('open'));
+}
+
+function toggleActionMenu(btn) {
+  const menu = btn.closest('.action-menu');
+  const list = menu.querySelector('.action-menu-list');
+  const wasOpen = menu.classList.contains('open');
+  closeAllActionMenus();
+  if (wasOpen) return;
+  menu.classList.add('open');
+  const r = btn.getBoundingClientRect();
+  list.style.left = '-9999px';
+  list.style.top = (r.bottom + 6) + 'px';
+  const lw = list.offsetWidth || 160;
+  let left = r.right - lw;
+  if (left < 8) left = 8;
+  const maxLeft = window.innerWidth - lw - 8;
+  if (left > maxLeft) left = Math.max(8, maxLeft);
+  list.style.left = left + 'px';
+  const lh = list.offsetHeight || 0;
+  if (r.bottom + 6 + lh > window.innerHeight) {
+    list.style.top = Math.max(8, r.top - lh - 6) + 'px';
+  }
+}
+
+document.addEventListener('click', closeAllActionMenus);
+document.addEventListener('scroll', closeAllActionMenus, true);
+window.addEventListener('resize', closeAllActionMenus);
+window.actionMenuHTML = actionMenuHTML;
+window.toggleActionMenu = toggleActionMenu;
+window.closeAllActionMenus = closeAllActionMenus;
 const fmt = n => 'Rs. ' + (isFinite(n)?n:0).toLocaleString('en-LK', {maximumFractionDigits:2, minimumFractionDigits:0});
 const fmt2 = n => (isFinite(n)?n:0).toLocaleString('en-LK', {maximumFractionDigits:2, minimumFractionDigits:2});
 
@@ -2294,6 +2376,32 @@ async function loadDailyProductionLog() {
 }
 window.loadDailyProductionLog = loadDailyProductionLog;
 
+async function editDailyProductionLog(id) {
+  if (userRole !== 'owner') return;
+  const r = dailyProductionLogCache.find(x => String(x.id) === String(id));
+  if (!r) { alert('Entry not found.'); return; }
+  const kgStr = prompt('Kg produced:', r.kg_produced);
+  if (kgStr === null) return;
+  const kg = Number(kgStr);
+  if (!kg || kg < 0) { alert('Enter a valid kg amount.'); return; }
+  const notesStr = prompt('Notes (optional):', r.notes || '');
+  if (notesStr === null) return;
+  const totalProfit = Number(r.profit_per_kg || 0) * kg;
+  try {
+    const { data, error } = await withSessionRetry(() => supabase.from('production_cost_log')
+      .update({ kg_produced: kg, notes: notesStr.trim(), total_profit: totalProfit })
+      .eq('id', id).eq('owner_id', currentUser.id).select().single());
+    if (error) throw error;
+    const idx = dailyProductionLogCache.findIndex(x => String(x.id) === String(id));
+    if (idx >= 0) dailyProductionLogCache[idx] = data;
+    renderDailyProductionLog();
+    updateStatus('✅ Production log entry updated');
+  } catch (e) {
+    alert('❌ Could not update entry: ' + (e?.message || String(e)));
+  }
+}
+window.editDailyProductionLog = editDailyProductionLog;
+
 async function deleteDailyProductionLog(id) {
   if (userRole !== 'owner') return;
   if (!confirm('Delete this day\'s production log entry?')) return;
@@ -2326,7 +2434,10 @@ function renderDailyProductionLog() {
         <td class="num"><span class="badge ${Number(r.profit_per_kg)>=0?'badge-good':'badge-bad'}">${fmt(r.profit_per_kg)}</span></td>
         <td>${Number(r.kg_produced || 0).toFixed(0)} kg</td>
         <td class="num">${fmt(r.total_profit)}</td>
-        <td>${userRole === 'owner' ? `<button class="btn btn-sm btn-danger" onclick="deleteDailyProductionLog('${r.id}')">🗑️</button>` : ''}</td>
+        <td>${userRole === 'owner' ? actionMenuHTML([
+          { label: 'Edit', icon: '✏️', onclick: `editDailyProductionLog('${r.id}')` },
+          { label: 'Delete', icon: '🗑️', danger: true, onclick: `deleteDailyProductionLog('${r.id}')` }
+        ]) : ''}</td>
       </tr>
     `).join('');
   }
@@ -2526,9 +2637,11 @@ function renderProducts() {
       <div style="font-weight:700;margin-top:8px;font-size:.85rem;">${p.name}</div>
       <div style="font-size:.72rem;opacity:.7;margin-top:4px;">Wholesale: Rs. ${p.wholesalePrice.toLocaleString()}</div>
       <div style="font-size:.72rem;opacity:.7;">Retail: Rs. ${p.retailPrice.toLocaleString()}</div>
-      ${isOwner ? `<div class="btn-row" style="margin-top:8px;">
-        <button class="btn btn-sm" onclick="openEditProduct('${p.id}')">✏️</button>
-        <button class="btn btn-sm btn-danger" onclick="deleteProduct('${p.id}')">🗑️</button>
+      ${isOwner ? `<div class="btn-row" style="margin-top:8px;justify-content:flex-end;">
+        ${actionMenuHTML([
+          { label: 'Edit', icon: '✏️', onclick: `openEditProduct('${p.id}')` },
+          { label: 'Delete', icon: '🗑️', danger: true, onclick: `deleteProduct('${p.id}')` }
+        ])}
       </div>` : ''}
     </div>
   `).join('');
@@ -2772,15 +2885,35 @@ async function loadExpensesFromCloud() {
 }
 
 function openNewExpense() {
+  if ($('expEditId')) $('expEditId').value = '';
+  if ($('expenseModalTitle')) $('expenseModalTitle').textContent = 'New Expense';
+  if ($('expenseSaveBtn')) $('expenseSaveBtn').innerHTML = '✅ Save Expense';
   $('expDate').value = new Date().toISOString().slice(0, 10);
   $('expCategory').value = 'Transport';
   $('expDescription').value = '';
   $('expAmount').value = 0;
-  if ($('expRecurring')) $('expRecurring').checked = false;
+  if ($('expRecurring')) { $('expRecurring').checked = false; $('expRecurring').disabled = false; }
   $('expenseModal').classList.add('active');
 }
 
+function editExpense(id) {
+  if (userRole !== 'owner') { alert('Only the owner can edit expenses.'); return; }
+  const e = expenses.find(x => String(x.id) === String(id));
+  if (!e) { alert('Expense not found.'); return; }
+  $('expEditId').value = e.id;
+  $('expDate').value = e.date;
+  $('expCategory').value = e.category;
+  $('expDescription').value = e.description || '';
+  $('expAmount').value = e.amount;
+  if ($('expRecurring')) { $('expRecurring').checked = false; $('expRecurring').disabled = true; }
+  if ($('expenseModalTitle')) $('expenseModalTitle').textContent = 'Edit Expense';
+  if ($('expenseSaveBtn')) $('expenseSaveBtn').innerHTML = '✅ Update Expense';
+  $('expenseModal').classList.add('active');
+}
+window.editExpense = editExpense;
+
 async function saveExpense() {
+  const editId = $('expEditId') ? $('expEditId').value : '';
   const date = $('expDate').value || new Date().toISOString().slice(0, 10);
   const category = $('expCategory').value;
   const description = $('expDescription').value.trim();
@@ -2789,6 +2922,30 @@ async function saveExpense() {
 
   if (!currentUser) { alert('Please login first.'); return; }
   if (amount <= 0) { alert('Enter an amount greater than 0!'); return; }
+
+  if (editId) {
+    if (userRole !== 'owner') { alert('Only the owner can edit expenses.'); return; }
+    if (!(await ensureFreshSession())) return;
+    try {
+      const { data, error } = await supabase.from('expenses')
+        .update({ expense_date: date, category, description, amount })
+        .eq('id', editId).select().single();
+      if (error) throw error;
+      const idx = expenses.findIndex(x => String(x.id) === String(editId));
+      if (idx >= 0) expenses[idx] = dbExpenseToLocal(data);
+    } catch (e) {
+      console.error('Update expense error:', e);
+      alert('❌ Could not update expense: ' + e.message);
+      return;
+    }
+    renderExpenses();
+    renderProductCosting();
+    updateMonthlySummary();
+    closeModal('expenseModal');
+    if ($('expRecurring')) $('expRecurring').disabled = false;
+    updateStatus('✅ Expense updated');
+    return;
+  }
 
   const row = {
     expense_date: date,
@@ -2872,7 +3029,10 @@ function renderExpenses() {
         <td>${e.category}</td>
         <td>${e.description || '-'}</td>
         <td>${fmt(e.amount)}</td>
-        <td>${userRole === 'owner' ? `<button class="btn btn-sm btn-danger" onclick="deleteExpense('${e.id}')">🗑️</button>` : '<span style="opacity:.4;">—</span>'}</td>
+        <td>${userRole === 'owner' ? actionMenuHTML([
+          { label: 'Edit', icon: '✏️', onclick: `editExpense('${e.id}')` },
+          { label: 'Delete', icon: '🗑️', danger: true, onclick: `deleteExpense('${e.id}')` }
+        ]) : '<span style="opacity:.4;">—</span>'}</td>
       </tr>
     `).join('');
   }
@@ -2951,7 +3111,10 @@ function renderProductCosting() {
         <td>${COSTING_CATEGORY_LABELS[e.category] || e.category}</td>
         <td>${e.description || '-'}</td>
         <td>${fmt(e.amount)}</td>
-        <td>${userRole === 'owner' ? `<button class="btn btn-sm btn-danger" onclick="deleteExpense('${e.id}').then(renderProductCosting)">🗑️</button>` : '<span style="opacity:.4;">—</span>'}</td>
+        <td>${userRole === 'owner' ? actionMenuHTML([
+          { label: 'Edit', icon: '✏️', onclick: `editExpense('${e.id}')` },
+          { label: 'Delete', icon: '🗑️', danger: true, onclick: `deleteExpense('${e.id}').then(renderProductCosting)` }
+        ]) : '<span style="opacity:.4;">—</span>'}</td>
       </tr>
     `).join('');
   }
@@ -3392,8 +3555,10 @@ function renderFishBills() {
           <td>${b.balance > 0.01 ? `<span class="badge badge-warn">${fmt(b.balance)}</span>` : `<span class="badge badge-good">Settled</span>`}</td>
           <td style="text-transform:capitalize;">${b.method}</td>
           <td style="white-space:nowrap;">
-            <button class="btn btn-sm" onclick="viewFishBill('${b.id}')">👁️</button>
-            ${userRole === 'owner' ? `<button class="btn btn-sm btn-danger" onclick="deleteFishBill('${b.id}')">🗑️</button>` : ''}
+            ${actionMenuHTML([
+              { label: 'View', icon: '👁️', onclick: `viewFishBill('${b.id}')` },
+              userRole === 'owner' ? { label: 'Delete', icon: '🗑️', danger: true, onclick: `deleteFishBill('${b.id}')` } : null
+            ])}
           </td>
         </tr>`;
       }).join('');
@@ -3439,8 +3604,10 @@ function renderSellerLedger() {
       <td>${a.balance > 0.01 ? `<span class="badge badge-warn">${fmt(a.balance)}</span>` : `<span class="badge badge-good">Settled</span>`}</td>
       <td>${a.lastDate}</td>
       <td style="white-space:nowrap;">
-        <button class="btn btn-sm" onclick="openSellerHistory('${a.name.replace(/'/g, "\\'")}','${a.phone}')">📜</button>
-        ${userRole === 'owner' ? `<button class="btn btn-sm" onclick="openSellerPayment('${a.name.replace(/'/g, "\\'")}','${a.phone}')">💵 Pay</button>` : ''}
+        ${actionMenuHTML([
+          { label: 'History', icon: '📜', onclick: `openSellerHistory('${a.name.replace(/'/g, "\\'")}','${a.phone}')` },
+          userRole === 'owner' ? { label: 'Pay', icon: '💵', onclick: `openSellerPayment('${a.name.replace(/'/g, "\\'")}','${a.phone}')` } : null
+        ])}
       </td>
     </tr>
   `).join('');
@@ -3834,8 +4001,11 @@ function renderProductionBatches() {
         ? `<span class="badge badge-good" title="From actual fish-bill prices">✅ ${fmt(realCostPerKg)}</span>`
         : (b.realRawCost === null ? `<span title="No linked fish bills — showing estimate only" style="opacity:.5;">est. only</span>` : `<span style="opacity:.5;">— pending</span>`);
       const actions = b.status === 'completed'
-        ? (userRole === 'owner' ? `<button class="btn btn-sm btn-danger" onclick="deleteProductionBatch('${b.id}')">🗑️</button>` : '')
-        : (userRole === 'owner' ? `<button class="btn btn-sm btn-primary" onclick="openCompleteBatchModal('${b.id}')">Complete</button> <button class="btn btn-sm btn-danger" onclick="deleteProductionBatch('${b.id}')">🗑️</button>` : '');
+        ? (userRole === 'owner' ? actionMenuHTML([{ label: 'Delete', icon: '🗑️', danger: true, onclick: `deleteProductionBatch('${b.id}')` }]) : '')
+        : (userRole === 'owner' ? actionMenuHTML([
+            { label: 'Complete', icon: '✅', onclick: `openCompleteBatchModal('${b.id}')` },
+            { label: 'Delete', icon: '🗑️', danger: true, onclick: `deleteProductionBatch('${b.id}')` }
+          ]) : '');
       return `<tr>
         <td>${b.batchNo}</td>
         <td>${b.date}</td>
@@ -3933,6 +4103,30 @@ async function generateDueRecurringExpenses() {
   updateStatus('🔁 Daily recurring expenses added');
 }
 
+async function editRecurringExpense(id) {
+  const r = recurringExpenses.find(x => String(x.id) === String(id));
+  if (!r) { alert('Entry not found.'); return; }
+  const descStr = prompt('Description:', r.description || '');
+  if (descStr === null) return;
+  const amtStr = prompt('Amount (Rs.):', r.amount);
+  if (amtStr === null) return;
+  const amt = Number(amtStr);
+  if (!amt || amt <= 0) { alert('Enter a valid amount greater than 0.'); return; }
+  if (!(await ensureFreshSession())) return;
+  try {
+    const { error } = await supabase.from('recurring_expenses')
+      .update({ description: descStr.trim(), amount: amt }).eq('id', id);
+    if (error) throw error;
+    r.description = descStr.trim(); r.amount = amt;
+    renderRecurringExpenses();
+    updateStatus('✅ Recurring expense updated');
+  } catch (e) {
+    console.error('Update recurring expense error:', e);
+    alert('❌ Could not update: ' + e.message);
+  }
+}
+window.editRecurringExpense = editRecurringExpense;
+
 function renderRecurringExpenses() {
   const tbody = $('recurringExpensesBody');
   if (!tbody) return;
@@ -3948,8 +4142,11 @@ function renderRecurringExpenses() {
       <td>${fmt(r.amount)}</td>
       <td>${r.active ? '🟢 Active' : '⏸️ Paused'}</td>
       <td>
-        <button class="btn btn-sm" onclick="toggleRecurringExpense('${r.id}', ${!r.active})">${r.active ? '⏸️ Pause' : '<i class="business-icon icon-inline" data-lucide="play" aria-hidden="true"></i> Resume'}</button>
-        <button class="btn btn-sm btn-danger" onclick="deleteRecurringExpense('${r.id}')">🗑️</button>
+        ${actionMenuHTML([
+          { label: 'Edit', icon: '✏️', onclick: `editRecurringExpense('${r.id}')` },
+          { label: r.active ? 'Pause' : 'Resume', icon: r.active ? '⏸️' : '▶️', onclick: `toggleRecurringExpense('${r.id}', ${!r.active})` },
+          { label: 'Delete', icon: '🗑️', danger: true, onclick: `deleteRecurringExpense('${r.id}')` }
+        ])}
       </td>
     </tr>
   `).join('');
@@ -4352,8 +4549,10 @@ function renderSales() {
         <td>${s.pending > 0 ? '<span style="color:#c2410c;font-weight:700;">' + fmt(s.pending) + '</span>' : '<span style="opacity:.5;">Rs. 0</span>'}</td>
         <td>${statusBadge(s)}</td>
         <td>
-          <button class="btn btn-sm" onclick="editSale('${s.id}')"><i class="business-icon icon-inline" data-lucide="pencil" aria-hidden="true"></i></button>
-          ${userRole === 'owner' ? `<button class="btn btn-sm btn-danger" onclick="deleteSale('${s.id}')"><i class="business-icon icon-inline" data-lucide="trash-2" aria-hidden="true"></i></button>` : ''}
+          ${actionMenuHTML([
+            { label: 'Edit', icon: '✏️', onclick: `editSale('${s.id}')` },
+            userRole === 'owner' ? { label: 'Delete', icon: '🗑️', danger: true, onclick: `deleteSale('${s.id}')` } : null
+          ])}
         </td>
       </tr>
     `;
@@ -4668,6 +4867,7 @@ function exportExpensesCSV() {
 }
 
 async function saveCustomer() {
+  const editId = $('custEditId') ? $('custEditId').value : '';
   const name = $('custName').value.trim();
   const phone = $('custPhone').value.trim();
   const address = $('custAddress').value.trim();
@@ -4680,6 +4880,31 @@ async function saveCustomer() {
     referralStaffId = $('custReferralStaffSelect')?.value || null;
     referralStaffReference = referralStaffId ? (staffListCache||[]).find(s=>String(s.id)===String(referralStaffId))?.staff_reference || '' : null;
   }
+
+  if (editId) {
+    if (userRole !== 'owner') { alert('Only the business owner can edit customers.'); return; }
+    const updates = { name, phone, address, referral_staff_id: referralStaffId, referral_staff_reference: referralStaffReference };
+    if (!(await ensureFreshSession())) return;
+    try {
+      let result = await supabase.from('customers').update(updates).eq('id', editId).eq('user_id', businessId);
+      if (result.error && /column|schema|does not exist/i.test(result.error.message||'')) {
+        const fallback = {...updates}; delete fallback.referral_staff_id; delete fallback.referral_staff_reference;
+        result = await supabase.from('customers').update(fallback).eq('id', editId).eq('user_id', businessId);
+      }
+      if (result.error) throw result.error;
+    } catch (e) {
+      console.error('Update customer error:', e);
+      alert('❌ Could not update customer: ' + e.message);
+      return;
+    }
+    const c = customers.find(x => String(x.id) === String(editId));
+    if (c) { c.name = name; c.phone = phone; c.address = address; c.referralStaffId = referralStaffId; c.referralStaffReference = referralStaffReference; }
+    saveCustomers(); renderCustomers(); updateCustomerSelect(); closeModal('customerModal');
+    $('custEditId').value = ''; $('custName').value = ''; $('custPhone').value = ''; $('custAddress').value = '';
+    updateStatus('✅ Customer updated');
+    return;
+  }
+
   const row = { id: Date.now().toString(), user_id: businessId, name, phone, address, referral_staff_id: referralStaffId, referral_staff_reference: referralStaffReference };
   if (!(await ensureFreshSession())) return;
   try {
@@ -4714,7 +4939,10 @@ function renderCustomers() {
       <td><strong>${c.name}</strong></td>
       ${isStaff ? '' : `<td>${c.phone || '-'}</td>`}
       <td>${c.address || '-'}</td>
-      <td><button class="btn btn-sm btn-danger" onclick="deleteCustomer('${c.id}')">🗑️</button></td>
+      <td>${actionMenuHTML([
+        { label: 'Edit', icon: '✏️', onclick: `editCustomer('${c.id}')` },
+        { label: 'Delete', icon: '🗑️', danger: true, onclick: `deleteCustomer('${c.id}')` }
+      ])}</td>
     </tr>
   `).join('');
 }
@@ -4907,12 +5135,36 @@ function openNewOrder() {
 }
 
 function openNewCustomer() {
+  if ($('custEditId')) $('custEditId').value = '';
+  if ($('customerModalTitle')) $('customerModalTitle').textContent = 'New Customer';
+  if ($('customerSaveBtn')) $('customerSaveBtn').innerHTML = '<i class="business-icon icon-inline" data-lucide="save" aria-hidden="true"></i> Save Customer';
+  $('custName').value = ''; $('custPhone').value = ''; $('custAddress').value = '';
   const ref = document.querySelector('[data-staff-referral-field]');
   if(ref) ref.style.display = userRole === 'staff' ? '' : 'none';
   if($('custReferralStaffName') && userRole === 'staff') $('custReferralStaffName').textContent = ((userProfile&&userProfile.display_name)||currentUser?.email||'Staff') + ' · ' + ((userProfile&&userProfile.staff_reference)||('STF-'+currentUser.id.slice(0,8).toUpperCase()));
-  if(userRole==='owner'){ populateStaffReferralSelectors(); const f=document.querySelector('[data-owner-referral-field]'); if(f) f.style.display=''; }
+  if(userRole==='owner'){ populateStaffReferralSelectors(); const f=document.querySelector('[data-owner-referral-field]'); if(f) f.style.display=''; if($('custReferralStaffSelect')) $('custReferralStaffSelect').value=''; }
+  if (window.lucide) lucide.createIcons({attrs:{'stroke-width':1.9,'stroke-linecap':'round','stroke-linejoin':'round'}});
   $('customerModal').classList.add('active');
 }
+
+function editCustomer(id) {
+  if (userRole !== 'owner') { alert('Only the business owner can edit customers.'); return; }
+  const c = customers.find(x => String(x.id) === String(id));
+  if (!c) { alert('Customer not found.'); return; }
+  if(userRole==='owner'){ populateStaffReferralSelectors(); const f=document.querySelector('[data-owner-referral-field]'); if(f) f.style.display=''; }
+  const ref = document.querySelector('[data-staff-referral-field]');
+  if (ref) ref.style.display = 'none';
+  $('custEditId').value = c.id;
+  $('custName').value = c.name || '';
+  $('custPhone').value = c.phone || '';
+  $('custAddress').value = c.address || '';
+  if ($('custReferralStaffSelect') && c.referralStaffId) $('custReferralStaffSelect').value = c.referralStaffId;
+  if ($('customerModalTitle')) $('customerModalTitle').textContent = 'Edit Customer';
+  if ($('customerSaveBtn')) $('customerSaveBtn').innerHTML = '<i class="business-icon icon-inline" data-lucide="save" aria-hidden="true"></i> Update Customer';
+  if (window.lucide) lucide.createIcons({attrs:{'stroke-width':1.9,'stroke-linecap':'round','stroke-linejoin':'round'}});
+  $('customerModal').classList.add('active');
+}
+window.editCustomer = editCustomer;
 
 async function createOrder() {
   const product = $('orderProduct').value;
@@ -5084,13 +5336,14 @@ function renderOrders() {
     const commissionCell = claim?.status === 'approved'
       ? `<div style="font-weight:900;color:#087b3e;">+ ${fmt(Number(claim.commission_amount)||0)}</div><small style="color:#087b3e;">12% Verified</small>`
       : (claim?.status === 'pending' ? '<small style="color:#a27b1b;font-weight:800;">Pending verification</small>' : '<small style="opacity:.45;">—</small>');
-    const proofBtn = order.deliveryPhotoUrl ? `<button class="btn btn-sm" onclick="viewDeliveryProof(${index})" title="View delivery proof"><i class="business-icon" data-lucide="shield-check" aria-hidden="true"></i></button>` : '';
-    const rescheduleBtn = order.status === 'failed' ? `<button class="btn btn-sm" onclick="rescheduleFailedOrder(${index})" title="Reschedule"><i class="business-icon" data-lucide="rotate-ccw" aria-hidden="true"></i></button>` : '';
     const actions = userRole === 'owner'
-      ? `<button class="btn btn-sm" onclick="viewInvoice(${index})"><i class="business-icon" data-lucide="receipt-text" aria-hidden="true"></i></button>
-         <button class="btn btn-sm" onclick="cycleStatus(${index})"><i class="business-icon" data-lucide="refresh-cw" aria-hidden="true"></i></button>
-         ${proofBtn}${rescheduleBtn}
-         <button class="btn btn-sm btn-danger" onclick="deleteOrder(${index})"><i class="business-icon" data-lucide="trash-2" aria-hidden="true"></i></button>`
+      ? actionMenuHTML([
+          { label: 'View Invoice', icon: '🧾', onclick: `viewInvoice(${index})` },
+          { label: 'Change Status', icon: '🔄', onclick: `cycleStatus(${index})` },
+          order.deliveryPhotoUrl ? { label: 'Delivery Proof', icon: '🛡️', onclick: `viewDeliveryProof(${index})` } : null,
+          order.status === 'failed' ? { label: 'Reschedule', icon: '↺', onclick: `rescheduleFailedOrder(${index})` } : null,
+          { label: 'Delete', icon: '🗑️', danger: true, onclick: `deleteOrder(${index})` }
+        ])
       : '<span style="font-size:.68rem;font-weight:800;opacity:.55;">VIEW ONLY</span>';
     return `<tr>
       <td><strong>${order.id}</strong></td>
@@ -7647,7 +7900,7 @@ function renderHistory() {
       <td>${fmt(order.cost)}</td>
       <td>${fmt(order.profit)}</td>
       <td>${fmt(order.netProfit)}</td>
-      <td><button class="btn btn-sm btn-danger" onclick="deleteHistoryEntry(${index})">🗑️</button></td>
+      <td>${actionMenuHTML([{ label: 'Delete', icon: '🗑️', danger: true, onclick: `deleteHistoryEntry(${index})` }])}</td>
     </tr>`;
   }).join('');
 }
@@ -8858,8 +9111,12 @@ async function ownerPublishNotice(){
   if(!currentUser||userRole!=='owner')return;const title=($('ownerNoticeTitle')?.value||'').trim(),message=($('ownerNoticeBody')?.value||'').trim();if(!title||!message)return alert('Enter a notice title and message.');
   if(!(await ensureFreshSession()))return;try{const {data,error}=await supabase.from('staff_announcements').insert({owner_id:currentUser.id,title,message,active:true}).select().single();if(error)throw error;cacheStaffData({notices:[data,...(getMyStaffDataState().notices||[])]});$('ownerNoticeTitle').value='';$('ownerNoticeBody').value='';renderOwnerStaffManagement();renderStaffAnnouncements();updateStatus('☁️ Notice published to Supabase');}catch(e){alert('❌ Notice publish failed: '+e.message);}
 }
+async function ownerEditTask(id){if(userRole!=='owner')return;const task=(getMyStaffDataState().tasks||[]).find(x=>x.id===id);if(!task)return;const newTitle=prompt('Task title:',task.title||'');if(newTitle===null||!newTitle.trim())return;if(!(await ensureFreshSession()))return;try{const {data,error}=await supabase.from('staff_tasks').update({title:newTitle.trim(),updated_at:new Date().toISOString()}).eq('id',id).eq('owner_id',currentUser.id).select().single();if(error)throw error;cacheStaffData({tasks:(getMyStaffDataState().tasks||[]).map(x=>x.id===id?data:x)});renderOwnerStaffManagement();updateStatus('✅ Task updated');}catch(e){alert('❌ Task update failed: '+e.message);}}
+window.ownerEditTask = ownerEditTask;
 async function ownerToggleTask(id){if(userRole!=='owner')return;if(!(await ensureFreshSession()))return;try{const task=(getMyStaffDataState().tasks||[]).find(x=>x.id===id);if(!task)return;const {data,error}=await supabase.from('staff_tasks').update({status:taskDone(task)?'pending':'completed',completed_at:taskDone(task)?null:new Date().toISOString(),updated_at:new Date().toISOString()}).eq('id',id).eq('owner_id',currentUser.id).select().single();if(error)throw error;cacheStaffData({tasks:(getMyStaffDataState().tasks||[]).map(x=>x.id===id?data:x)});renderOwnerStaffManagement();renderOwnerStaffPerformance();}catch(e){alert('❌ Task update failed: '+e.message);}}
 async function ownerDeleteTask(id){if(userRole!=='owner'||!confirm('Delete this task?'))return;if(!(await ensureFreshSession()))return;try{const {error}=await supabase.from('staff_tasks').delete().eq('id',id).eq('owner_id',currentUser.id);if(error)throw error;cacheStaffData({tasks:(getMyStaffDataState().tasks||[]).filter(x=>x.id!==id)});renderOwnerStaffManagement();renderOwnerStaffPerformance();}catch(e){alert('❌ Task delete failed: '+e.message);}}
+async function ownerEditNotice(id){if(userRole!=='owner')return;const notice=(getMyStaffDataState().notices||[]).find(x=>x.id===id);if(!notice)return;const newTitle=prompt('Notice title:',notice.title||'');if(newTitle===null)return;const newMsg=prompt('Notice message:',notice.message||notice.body||'');if(newMsg===null)return;if(!(await ensureFreshSession()))return;try{const {data,error}=await supabase.from('staff_announcements').update({title:newTitle.trim(),message:newMsg.trim()}).eq('id',id).eq('owner_id',currentUser.id).select().single();if(error)throw error;cacheStaffData({notices:(getMyStaffDataState().notices||[]).map(x=>x.id===id?data:x)});renderOwnerStaffManagement();renderStaffAnnouncements();updateStatus('✅ Notice updated');}catch(e){alert('❌ Notice update failed: '+e.message);}}
+window.ownerEditNotice = ownerEditNotice;
 async function ownerDeleteNotice(id){if(userRole!=='owner'||!confirm('Delete this notice?'))return;if(!(await ensureFreshSession()))return;try{const {error}=await supabase.from('staff_announcements').delete().eq('id',id).eq('owner_id',currentUser.id);if(error)throw error;cacheStaffData({notices:(getMyStaffDataState().notices||[]).filter(x=>x.id!==id)});renderOwnerStaffManagement();renderStaffAnnouncements();}catch(e){alert('❌ Notice delete failed: '+e.message);}}
 
 function renderOwnerStaffPerformance(){
@@ -8879,8 +9136,8 @@ function renderOwnerStaffPerformance(){
 }
 function renderOwnerStaffManagement(){
   const tasks=getMyStaffDataState().tasks||[],notices=getMyStaffDataState().notices||[];
-  const taskEl=$('ownerStaffTaskManagement');if(taskEl)taskEl.innerHTML=tasks.length?tasks.map(t=>`<div class="notice-row"><div class="notice-main"><strong>${escapeHtmlSafe(t.title)}</strong><small>${escapeHtmlSafe((staffListCache||[]).find(s=>String(s.id)===String(t.staff_id))?.display_name||t.staff_id||'Staff')} · ${taskDone(t)?'Completed':'Open'}</small></div><div style="display:flex;gap:6px;"><button class="btn btn-xs" onclick="ownerToggleTask('${t.id}')">${taskDone(t)?'Reopen':'Done'}</button><button class="btn btn-xs btn-danger" onclick="ownerDeleteTask('${t.id}')">Delete</button></div></div>`).join(''):'<div class="notice">No assigned tasks.</div>';
-  const noticeEl=$('ownerStaffNoticeManagement');if(noticeEl)noticeEl.innerHTML=notices.length?notices.map(n=>`<div class="notice-row"><div class="notice-main"><strong>${escapeHtmlSafe(n.title)}</strong><small>${escapeHtmlSafe(n.message||n.body||'')}</small></div><button class="btn btn-xs btn-danger" onclick="ownerDeleteNotice('${n.id}')">Delete</button></div>`).join(''):'<div class="notice">No notices published.</div>';
+  const taskEl=$('ownerStaffTaskManagement');if(taskEl)taskEl.innerHTML=tasks.length?tasks.map(t=>`<div class="notice-row"><div class="notice-main"><strong>${escapeHtmlSafe(t.title)}</strong><small>${escapeHtmlSafe((staffListCache||[]).find(s=>String(s.id)===String(t.staff_id))?.display_name||t.staff_id||'Staff')} · ${taskDone(t)?'Completed':'Open'}</small></div>${actionMenuHTML([{label:taskDone(t)?'Reopen':'Mark Done',icon:taskDone(t)?'↺':'✅',onclick:`ownerToggleTask('${t.id}')`},{label:'Edit',icon:'✏️',onclick:`ownerEditTask('${t.id}')`},{label:'Delete',icon:'🗑️',danger:true,onclick:`ownerDeleteTask('${t.id}')`}])}</div>`).join(''):'<div class="notice">No assigned tasks.</div>';
+  const noticeEl=$('ownerStaffNoticeManagement');if(noticeEl)noticeEl.innerHTML=notices.length?notices.map(n=>`<div class="notice-row"><div class="notice-main"><strong>${escapeHtmlSafe(n.title)}</strong><small>${escapeHtmlSafe(n.message||n.body||'')}</small></div>${actionMenuHTML([{label:'Edit',icon:'✏️',onclick:`ownerEditNotice('${n.id}')`},{label:'Delete',icon:'🗑️',danger:true,onclick:`ownerDeleteNotice('${n.id}')`}])}</div>`).join(''):'<div class="notice">No notices published.</div>';
 }
 
 function renderOwnerStaffUploads(){
@@ -9821,6 +10078,30 @@ async function addDistributorActivity(){
 }
 window.addDistributorActivity = addDistributorActivity;
 
+async function editDistributorActivity(id){
+  if (userRole !== 'owner') return;
+  const a = distributorActivitiesCache.find(x => String(x.id) === String(id));
+  if (!a) { alert('Activity not found.'); return; }
+  const notesStr = prompt('Notes:', a.notes || '');
+  if (notesStr === null) return;
+  const followupStr = prompt('Next follow-up date (YYYY-MM-DD, blank for none):', a.next_followup_date || '');
+  if (followupStr === null) return;
+  if (!(await ensureFreshSession())) return;
+  try{
+    const { error } = await withSessionRetry(() => supabase.from('distributor_activities')
+      .update({ notes: notesStr.trim() || null, next_followup_date: followupStr.trim() || null })
+      .eq('id', id).eq('owner_id', currentUser.id));
+    if (error) throw error;
+    a.notes = notesStr.trim() || null; a.next_followup_date = followupStr.trim() || null;
+    renderDistActivityLog(); renderDistActivityOverview();
+    updateStatus('✅ Activity updated');
+  }catch(e){
+    console.error('Update distributor activity failed:', e);
+    alert('❌ Could not update:\n' + (e?.message || String(e)));
+  }
+}
+window.editDistributorActivity = editDistributorActivity;
+
 async function deleteDistributorActivity(id){
   if (userRole !== 'owner') return;
   if (!confirm('Delete this activity entry?')) return;
@@ -9856,7 +10137,10 @@ function renderDistActivityLog(){
       <td style="max-width:220px;white-space:normal;">${escapeHtmlSafe(a.notes || '—')}</td>
       <td>${a.next_followup_date ? new Date(a.next_followup_date).toLocaleDateString() : '—'}</td>
       <td>${a.created_by === currentUser?.id ? 'You' : 'Owner'}</td>
-      <td><button type="button" class="btn btn-xs btn-danger" onclick="deleteDistributorActivity('${a.id}')">Delete</button></td>
+      <td>${actionMenuHTML([
+        { label: 'Edit', icon: '✏️', onclick: `editDistributorActivity('${a.id}')` },
+        { label: 'Delete', icon: '🗑️', danger: true, onclick: `deleteDistributorActivity('${a.id}')` }
+      ])}</td>
     </tr>`).join('') || '<tr><td colspan="8" style="text-align:center;opacity:.5;padding:14px;">No activity logged yet.</td></tr>';
 }
 window.renderDistActivityLog = renderDistActivityLog;
