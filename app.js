@@ -1857,6 +1857,32 @@ function getChartColors() {
   };
 }
 
+// Guards every "new Chart(...)" call. If the Chart.js library failed to
+// load (blocked CDN, offline first-visit before the service worker cached
+// it, etc.) `Chart` is undefined and calling `new Chart(...)` throws — and
+// because that line sits partway through bigger functions like
+// calcProduction()/renderDailyProductionLog(), the throw silently kills the
+// rest of that function too. This wraps the risky part so one broken chart
+// can't take anything else down, and leaves a visible message in the
+// chart's box instead of an unexplained blank area.
+function safeRenderChart(canvasId, renderFn) {
+  const canvas = $(canvasId);
+  if (!canvas) return null;
+  try {
+    if (typeof Chart === 'undefined') {
+      throw new Error('Chart.js did not load (offline or the CDN is blocked)');
+    }
+    return renderFn();
+  } catch (err) {
+    console.error('Chart render failed for #' + canvasId + ':', err);
+    const wrap = canvas.closest('.chart-wrap') || canvas.parentElement;
+    if (wrap) {
+      wrap.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;text-align:center;padding:12px;opacity:.6;font-size:.85rem;">📉 Chart couldn\'t load (check your internet connection) — the numbers above are still accurate.</div>';
+    }
+    return null;
+  }
+}
+
 // ==================== CALCULATIONS ====================
 function calcAll() {
   state.linnaPrice = Number($('linnaPrice').value) || 0;
@@ -2234,32 +2260,34 @@ function calcProduction() {
   updateDailyProductionSummaryLive();
 
   const colors = getChartColors();
-  const ctx = $('prodChart').getContext('2d');
-  const chartData = {
-    labels: labels,
-    datasets: [
-      { label:'Raw Cost/kg', data: costs, backgroundColor: 'rgba(56,189,248,0.8)', borderRadius: 6 },
-      { label:'Total Cost/kg', data: prices, backgroundColor: 'rgba(16,185,129,0.8)', borderRadius: 6 },
-      { label:'Profit/kg', data: profitsData, backgroundColor: 'rgba(167,139,250,0.8)', borderRadius: 6 }
-    ]
-  };
-  if (prodChart) { prodChart.data = chartData; prodChart.update(); }
-  else {
-    prodChart = new Chart(ctx, {
-      type:'bar',
-      data: chartData,
-      options: {
-        responsive:true, maintainAspectRatio:false,
-        plugins:{legend:{position:'bottom',labels:{boxWidth:10,font:{size:11,family:'Inter'},color:colors.text,padding:12,usePointStyle:true,pointStyle:'circle'}}},
-        scales:{
-          y:{beginAtZero:true,grid:{color:colors.grid},ticks:{color:colors.text,font:{size:10}}},
-          x:{grid:{display:false},ticks:{color:colors.text,font:{size:10}}}
-        },
-        barPercentage: 0.7,
-        categoryPercentage: 0.8
-      }
-    });
-  }
+  safeRenderChart('prodChart', () => {
+    const ctx = $('prodChart').getContext('2d');
+    const chartData = {
+      labels: labels,
+      datasets: [
+        { label:'Raw Cost/kg', data: costs, backgroundColor: 'rgba(56,189,248,0.8)', borderRadius: 6 },
+        { label:'Total Cost/kg', data: prices, backgroundColor: 'rgba(16,185,129,0.8)', borderRadius: 6 },
+        { label:'Profit/kg', data: profitsData, backgroundColor: 'rgba(167,139,250,0.8)', borderRadius: 6 }
+      ]
+    };
+    if (prodChart) { prodChart.data = chartData; prodChart.update(); }
+    else {
+      prodChart = new Chart(ctx, {
+        type:'bar',
+        data: chartData,
+        options: {
+          responsive:true, maintainAspectRatio:false,
+          plugins:{legend:{position:'bottom',labels:{boxWidth:10,font:{size:11,family:'Inter'},color:colors.text,padding:12,usePointStyle:true,pointStyle:'circle'}}},
+          scales:{
+            y:{beginAtZero:true,grid:{color:colors.grid},ticks:{color:colors.text,font:{size:10}}},
+            x:{grid:{display:false},ticks:{color:colors.text,font:{size:10}}}
+          },
+          barPercentage: 0.7,
+          categoryPercentage: 0.8
+        }
+      });
+    }
+  });
 
   state.production = {
     rawLinna, rawBalaya, rawKawalam: rawPremium,
@@ -2553,30 +2581,31 @@ function renderDailyProductionLog() {
   }
 
   const colors = getChartColors();
-  const canvas = $('dpMonthlyChart');
-  if (!canvas) return;
-  const ctx = canvas.getContext('2d');
-  const chartData = {
-    labels: entries.map(r => r.log_date.slice(8, 10) + '/' + r.log_date.slice(5, 7)),
-    datasets: [
-      { label: 'Profit/kg', data: entries.map(r => Math.round(Number(r.profit_per_kg) || 0)), borderColor: 'rgba(16,185,129,1)', backgroundColor: 'rgba(16,185,129,0.15)', fill: true, tension: 0.3, pointRadius: 3 }
-    ]
-  };
-  if (dpMonthlyChart) { dpMonthlyChart.data = chartData; dpMonthlyChart.update(); }
-  else {
-    dpMonthlyChart = new Chart(ctx, {
-      type: 'line',
-      data: chartData,
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11, family: 'Inter' }, color: colors.text, padding: 12, usePointStyle: true, pointStyle: 'circle' } } },
-        scales: {
-          y: { grid: { color: colors.grid }, ticks: { color: colors.text, font: { size: 10 } } },
-          x: { grid: { display: false }, ticks: { color: colors.text, font: { size: 10 } } }
+  if (!$('dpMonthlyChart')) return;
+  safeRenderChart('dpMonthlyChart', () => {
+    const ctx = $('dpMonthlyChart').getContext('2d');
+    const chartData = {
+      labels: entries.map(r => r.log_date.slice(8, 10) + '/' + r.log_date.slice(5, 7)),
+      datasets: [
+        { label: 'Profit/kg', data: entries.map(r => Math.round(Number(r.profit_per_kg) || 0)), borderColor: 'rgba(16,185,129,1)', backgroundColor: 'rgba(16,185,129,0.15)', fill: true, tension: 0.3, pointRadius: 3 }
+      ]
+    };
+    if (dpMonthlyChart) { dpMonthlyChart.data = chartData; dpMonthlyChart.update(); }
+    else {
+      dpMonthlyChart = new Chart(ctx, {
+        type: 'line',
+        data: chartData,
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11, family: 'Inter' }, color: colors.text, padding: 12, usePointStyle: true, pointStyle: 'circle' } } },
+          scales: {
+            y: { grid: { color: colors.grid }, ticks: { color: colors.text, font: { size: 10 } } },
+            x: { grid: { display: false }, ticks: { color: colors.text, font: { size: 10 } } }
+          }
         }
-      }
-    });
-  }
+      });
+    }
+  });
 }
 window.renderDailyProductionLog = renderDailyProductionLog;
 
