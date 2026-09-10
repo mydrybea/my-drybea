@@ -1737,6 +1737,17 @@ let state = {
   // product's Stock via applyStockMovement() — see addDailyProductBatch().
   packProductMap: { 50: '', 100: '', 500: '', 1000: '' },
   overhead: {...DEFAULT_FIXED},
+  // Umbalakada varieties tracked in the Production tab's Daily Production
+  // Log. The 3 core types stay wired to linnaPrice/balayaPrice/kawalamPrice
+  // above (everything else in the app — Quick Profit Calculator, quotes,
+  // PDFs, pack pricing — is still built around those three), so their
+  // price lives there, not here. Extra varieties the owner adds get their
+  // own `price` field on the entry itself. See ensureUmbalakadaTypes().
+  umbalakadaTypes: [
+    { id: 'linna', name: 'Linna', core: true },
+    { id: 'balaya', name: 'Balaya', core: true },
+    { id: 'kawalam', name: 'Premium Mix', core: true }
+  ],
   production: {
     rawLinna: 180, rawBalaya: 250, rawKawalam: 60,
     yieldLinna: 6, yieldBalaya: 6, yieldKawalam: 7,
@@ -1973,6 +1984,163 @@ function getFixedCost() {
   return Object.values(state.overhead).reduce((a,b)=>a+b,0);
 }
 
+// ==================== UMBALAKADA VARIETIES (Production tab) ====================
+// Lets the owner track any number of Umbalakada varieties in the Daily
+// Production Log — not just the fixed Linna/Balaya/Premium Mix three the
+// Costing calculator's pack-pricing math (calculatePack, quotes, PDFs,
+// Quick Profit Calculator) is built around. The 3 core types stay wired to
+// state.linnaPrice/balayaPrice/kawalamPrice so nothing that already depends
+// on them changes. Extra varieties the owner adds here are for day-to-day
+// grinding & cost tracking — they feed the Grinding & Dust section's totals
+// and dust-cost valuation, but not the pack pricing formulas.
+let umbalakadaGroundTodayByType = {};
+
+function ensureUmbalakadaTypes() {
+  if (!Array.isArray(state.umbalakadaTypes) || !state.umbalakadaTypes.some(t => t && t.core)) {
+    const existingCustom = Array.isArray(state.umbalakadaTypes) ? state.umbalakadaTypes.filter(t => t && !t.core) : [];
+    state.umbalakadaTypes = [
+      { id: 'linna', name: 'Linna', core: true },
+      { id: 'balaya', name: 'Balaya', core: true },
+      { id: 'kawalam', name: 'Premium Mix', core: true },
+      ...existingCustom
+    ];
+  }
+  return state.umbalakadaTypes;
+}
+
+function getUmbalakadaTypePrice(t) {
+  if (t.id === 'linna') return Number(state.linnaPrice) || 0;
+  if (t.id === 'balaya') return Number(state.balayaPrice) || 0;
+  if (t.id === 'kawalam') return Number(state.kawalamPrice) || 0;
+  return Number(t.price) || 0;
+}
+
+// Core types keep their price wired to the main Raw Materials fields
+// (Costing tab) so every existing calculation stays in sync either way the
+// owner edits it. Custom varieties store price directly on the entry.
+function onUmbalakadaTypePriceInput(id, value) {
+  const t = ensureUmbalakadaTypes().find(x => x.id === id);
+  if (!t) return;
+  const n = Math.max(Number(value) || 0, 0);
+  if (t.id === 'linna') { state.linnaPrice = n; if ($('linnaPrice')) $('linnaPrice').value = n; }
+  else if (t.id === 'balaya') { state.balayaPrice = n; if ($('balayaPrice')) $('balayaPrice').value = n; }
+  else if (t.id === 'kawalam') { state.kawalamPrice = n; if ($('kawalamPrice')) $('kawalamPrice').value = n; }
+  else { t.price = n; }
+  recalcUmbalakadaGrindTotals();
+  onDataChange();
+}
+window.onUmbalakadaTypePriceInput = onUmbalakadaTypePriceInput;
+
+function onUmbalakadaTypeNameInput(id, value) {
+  const t = ensureUmbalakadaTypes().find(x => x.id === id);
+  // Core three keep their fixed label — "Linna"/"Balaya"/"Premium Mix" is
+  // what the Quick Profit Calculator, quotes and PDFs already say, so
+  // renaming them here would silently mismatch the rest of the app. Only
+  // custom varieties can be renamed.
+  if (!t || t.core) return;
+  const name = (value || '').trim();
+  if (name) t.name = name;
+  saveAll();
+  if (currentUser) cloudSaveSilent();
+  renderUmbalakadaTypesTable();
+}
+window.onUmbalakadaTypeNameInput = onUmbalakadaTypeNameInput;
+
+function addUmbalakadaType() {
+  if (userRole !== 'owner') { alert('Only the owner can add Umbalakada varieties.'); return; }
+  const nameEl = $('umbNewTypeName'), priceEl = $('umbNewTypePrice');
+  if (!nameEl) return;
+  const name = (nameEl.value || '').trim();
+  const price = Math.max(Number(priceEl && priceEl.value) || 0, 0);
+  if (!name) { alert('Enter a variety name.'); return; }
+  const list = ensureUmbalakadaTypes();
+  if (list.some(t => t.name.toLowerCase() === name.toLowerCase())) { alert('That variety is already in your list.'); return; }
+  const id = 'custom_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  list.push({ id, name, price, core: false });
+  nameEl.value = '';
+  if (priceEl) priceEl.value = '';
+  renderUmbalakadaTypesTable();
+  saveAll();
+  if (currentUser) cloudSaveSilent();
+  updateStatus(`✅ Added "${name}" to Umbalakada varieties`);
+}
+window.addUmbalakadaType = addUmbalakadaType;
+
+function removeUmbalakadaType(id) {
+  if (userRole !== 'owner') return;
+  const list = ensureUmbalakadaTypes();
+  const t = list.find(x => x.id === id);
+  // The 3 core types can't be removed — too much of the app (pricing
+  // engine, quotes, PDFs) is built around them always existing.
+  if (!t || t.core) return;
+  if (!confirm(`Remove "${t.name}" from your Umbalakada varieties?`)) return;
+  state.umbalakadaTypes = list.filter(x => x.id !== id);
+  delete umbalakadaGroundTodayByType[id];
+  renderUmbalakadaTypesTable();
+  saveAll();
+  if (currentUser) cloudSaveSilent();
+  updateStatus(`🗑️ Removed "${t.name}"`);
+}
+window.removeUmbalakadaType = removeUmbalakadaType;
+
+function onUmbalakadaGroundKgInput(id, value) {
+  const n = Math.max(Number(value) || 0, 0);
+  umbalakadaGroundTodayByType[id] = n;
+  recalcUmbalakadaGrindTotals();
+}
+window.onUmbalakadaGroundKgInput = onUmbalakadaGroundKgInput;
+
+// Sums today's per-variety kg into the "Umbalakada Ground Today" field the
+// Grinding & Dust dust-loss math already reads, and works out a real
+// weighted-average price/kg from what was actually ground today — more
+// accurate than the fixed Mix Ratio assumption once this table is filled in.
+function recalcUmbalakadaGrindTotals() {
+  const list = ensureUmbalakadaTypes();
+  let totalKg = 0, totalValue = 0;
+  const breakdown = [];
+  list.forEach(t => {
+    const kg = Number(umbalakadaGroundTodayByType[t.id]) || 0;
+    const price = getUmbalakadaTypePrice(t);
+    totalKg += kg;
+    totalValue += kg * price;
+    if (kg > 0) breakdown.push({ id: t.id, name: t.name, price, kg });
+  });
+  lastUmbalakadaBreakdownForSave = breakdown;
+  window.umbalakadaBreakdownTotalKg = totalKg;
+  window.umbalakadaBreakdownAvgPrice = totalKg > 0 ? totalValue / totalKg : 0;
+
+  const totalEl = $('umbTotalGroundKg'), avgEl = $('umbAvgPricePerKg');
+  if (totalEl) totalEl.textContent = fmt2(totalKg) + ' kg';
+  if (avgEl) avgEl.textContent = fmt(window.umbalakadaBreakdownAvgPrice);
+  if (totalKg > 0 && $('dpUmbalakadaGroundKg')) $('dpUmbalakadaGroundKg').value = fmt2(totalKg);
+  updateDailyProductionSummaryLive();
+}
+window.recalcUmbalakadaGrindTotals = recalcUmbalakadaGrindTotals;
+
+function renderUmbalakadaTypesTable() {
+  const tbody = $('umbTypesBody');
+  if (!tbody) return;
+  const list = ensureUmbalakadaTypes();
+  tbody.innerHTML = list.map(t => {
+    const price = getUmbalakadaTypePrice(t);
+    const kg = umbalakadaGroundTodayByType[t.id] || '';
+    const nameCell = t.core
+      ? `<strong>${t.name}</strong>`
+      : `<input type="text" value="${t.name}" style="min-width:120px;" onchange="onUmbalakadaTypeNameInput('${t.id}', this.value)">`;
+    const deleteCell = (t.core || userRole !== 'owner') ? '' :
+      `<button type="button" class="btn btn-sm" title="Remove variety" onclick="removeUmbalakadaType('${t.id}')"><i class="business-icon icon-inline" data-lucide="trash-2" aria-hidden="true"></i></button>`;
+    return `<tr>
+      <td>${nameCell}</td>
+      <td><div class="input-prefix" style="max-width:130px;"><span>Rs.</span><input type="number" min="0" value="${price}" onchange="onUmbalakadaTypePriceInput('${t.id}', this.value)"></div></td>
+      <td><input type="number" min="0" step="0.1" value="${kg}" placeholder="0" style="max-width:110px;" oninput="onUmbalakadaGroundKgInput('${t.id}', this.value)"></td>
+      <td>${deleteCell}</td>
+    </tr>`;
+  }).join('');
+  if (window.lucide) lucide.createIcons();
+  recalcUmbalakadaGrindTotals();
+}
+window.renderUmbalakadaTypesTable = renderUmbalakadaTypesTable;
+
 function getAllocatedOverheadPerPack() {
   let totalPacks = 0;
   Object.keys(PACKS).forEach(key => { totalPacks += state.dashQty[key] || 0; });
@@ -2004,6 +2172,11 @@ let lastNetDustImpactForSave = 0, lastNetProfitInclDustForSave = 0, lastUmbalaka
 let lastLinnaGroundKgForSave = 0, lastBalayaGroundKgForSave = 0, lastPremiumGroundKgForSave = 0;
 let lastOutputByProductForSave = { 50: 0, 100: 0, 500: 0, 1000: 0 };
 let lastOutputTotalProfitForSave = 0;
+// Per-variety grind breakdown from the "Umbalakada Varieties & Prices" table
+// — [{id, name, price, kg}] for every variety with kg > 0 today. Written to
+// production_cost_log.umbalakada_variety_breakdown on save (see the SQL
+// comment above saveDailyProductionLog()).
+let lastUmbalakadaBreakdownForSave = [];
 // Per-fish-type snapshot from the last calcProduction() run — used by the
 // Production Batches feature to know each type's current yield factor and
 // total cost/kg without re-deriving it. Keyed by fish type name.
@@ -4229,6 +4402,7 @@ function calcProduction() {
   lastProdAvgCostPerKg = avgCostPerKg;
   lastProdAvgMarketPrice = avgFinPrice;
   lastProdAvgProfitPerKg = avgProfitPerKg;
+  renderUmbalakadaTypesTable(); // also refreshes core-type prices if edited elsewhere
   updateDailyProductionSummaryLive();
 
   const colors = getChartColors();
@@ -4440,11 +4614,16 @@ function updateDailyProductionSummaryLive() {
   const dustSalePrice = Number($('dpDustSalePrice') && $('dpDustSalePrice').value) || 0;
   const dustRemovedKg = Math.max(dustGeneratedKg - dustUsedKg, 0);
 
-  // Weighted average Umbalakada price/kg, using today's mix ratio — the
-  // same prices set in the Costing tab's Raw Materials card — so the cost
-  // of the wasted dust is valued consistently with the rest of the app.
+  // Weighted average Umbalakada price/kg. If the owner has filled in the
+  // Umbalakada Varieties & Prices table above with today's actual grind mix,
+  // use that real weighted average (accurate across any number of
+  // varieties); otherwise fall back to the fixed Mix Ratio assumption from
+  // the Costing tab's Raw Materials card, same as before.
   const mix = getMixPct();
-  const avgUmbalakadaPricePerKg = (mix.linna * state.linnaPrice) + (mix.balaya * state.balayaPrice) + (mix.kawalam * state.kawalamPrice);
+  const breakdownTotalKg = Number(window.umbalakadaBreakdownTotalKg) || 0;
+  const avgUmbalakadaPricePerKg = breakdownTotalKg > 0
+    ? (Number(window.umbalakadaBreakdownAvgPrice) || 0)
+    : (mix.linna * state.linnaPrice) + (mix.balaya * state.balayaPrice) + (mix.kawalam * state.kawalamPrice);
   const dustWasteCost = dustRemovedKg * avgUmbalakadaPricePerKg;
   const dustRecoveryValue = dustUsedKg * dustSalePrice;
   const netDustImpact = dustRecoveryValue - dustWasteCost;
@@ -4544,7 +4723,8 @@ async function saveDailyProductionLog() {
   //   ADD COLUMN IF NOT EXISTS output_qty_100 integer DEFAULT 0,
   //   ADD COLUMN IF NOT EXISTS output_qty_500 integer DEFAULT 0,
   //   ADD COLUMN IF NOT EXISTS output_qty_1000 integer DEFAULT 0,
-  //   ADD COLUMN IF NOT EXISTS output_total_profit numeric DEFAULT 0;
+  //   ADD COLUMN IF NOT EXISTS output_total_profit numeric DEFAULT 0,
+  //   ADD COLUMN IF NOT EXISTS umbalakada_variety_breakdown jsonb DEFAULT '[]'::jsonb;
   // (Existing owner_id-uuid RLS policy already covers these new columns —
   // no policy changes needed, this only adds columns to an already-owned row.)
   const row = {
@@ -4575,6 +4755,7 @@ async function saveDailyProductionLog() {
     dust_recovery_value: lastDustRecoveryValueForSave,
     net_dust_impact: lastNetDustImpactForSave,
     net_profit_incl_dust: totalProfit + lastNetDustImpactForSave,
+    umbalakada_variety_breakdown: lastUmbalakadaBreakdownForSave,
     notes,
     created_by: currentUser.id
   };
@@ -4593,7 +4774,7 @@ async function saveDailyProductionLog() {
     console.error('Save daily production log error:', e);
     const missingTable = /relation .* does not exist/i.test(e?.message || '');
     const missingColumn = /column .* does not exist/i.test(e?.message || '');
-    alert('❌ Could not save snapshot: ' + (e?.message || String(e)) + (missingTable ? '\n\nThe production_cost_log table hasn\'t been created in Supabase yet — see the SQL setup comment above saveDailyProductionLog() in app.js.' : missingColumn ? '\n\nSome columns haven\'t been added to production_cost_log yet (dust-tracking, grind-by-type, or output-by-product) — run the ALTER TABLE SQL in the comment above saveDailyProductionLog() in app.js.' : ''));
+    alert('❌ Could not save snapshot: ' + (e?.message || String(e)) + (missingTable ? '\n\nThe production_cost_log table hasn\'t been created in Supabase yet — see the SQL setup comment above saveDailyProductionLog() in app.js.' : missingColumn ? '\n\nSome columns haven\'t been added to production_cost_log yet (dust-tracking, grind-by-type, output-by-product, or variety-breakdown) — run the ALTER TABLE SQL in the comment above saveDailyProductionLog() in app.js.' : ''));
   }
 }
 window.saveDailyProductionLog = saveDailyProductionLog;
@@ -10471,6 +10652,17 @@ function loadState() {
     };
   });
   if (state.dpPriceBasis !== 'mrp' && state.dpPriceBasis !== 'wholesale') state.dpPriceBasis = 'mrp';
+  // Backfill for state saved before Umbalakada Varieties existed, and guard
+  // against a corrupted/empty array wiping out the 3 core types.
+  if (!Array.isArray(state.umbalakadaTypes) || !state.umbalakadaTypes.some(t => t && t.core)) {
+    const existingCustom = Array.isArray(state.umbalakadaTypes) ? state.umbalakadaTypes.filter(t => t && !t.core) : [];
+    state.umbalakadaTypes = [
+      { id: 'linna', name: 'Linna', core: true },
+      { id: 'balaya', name: 'Balaya', core: true },
+      { id: 'kawalam', name: 'Premium Mix', core: true },
+      ...existingCustom
+    ];
+  }
 }
 function loadHistory() { try { history = JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; } catch(e) { history = []; } }
 function loadOrders() { try { orders = JSON.parse(localStorage.getItem(ORDERS_KEY)) || []; } catch(e) { orders = []; } }

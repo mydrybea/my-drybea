@@ -2620,10 +2620,28 @@
         <div class="field"><label>Note (optional)</label><input type="text" id="dpNote" placeholder="Optional notes..."></div>
       </div>
 
+      <h3 style="color:var(--green);margin:16px 0 8px;">🐟 Umbalakada Varieties &amp; Prices</h3>
+      <p class="sub" style="margin:0 0 10px;">Add every Umbalakada variety you buy and grind, keep each one's price/kg up to date, and log how many kg of each actually went into today's grinder — the total and cost below update automatically and feed the Grinding &amp; Dust section.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Variety</th><th>Price/kg (Rs.)</th><th>Ground Today (kg)</th><th></th></tr></thead>
+          <tbody id="umbTypesBody"></tbody>
+        </table>
+      </div>
+      <div class="btn-row" style="margin:10px 0;flex-wrap:wrap;gap:8px;" data-owner-only>
+        <input type="text" id="umbNewTypeName" placeholder="New variety name e.g. Kelawalla" style="flex:1;min-width:160px;">
+        <div class="input-prefix" style="max-width:150px;"><span>Rs.</span><input type="number" id="umbNewTypePrice" placeholder="Price/kg" min="0"></div>
+        <button type="button" class="btn btn-sm" onclick="addUmbalakadaType()"><i class="business-icon icon-inline" data-lucide="plus" aria-hidden="true"></i> Add Variety</button>
+      </div>
+      <div class="stat-grid">
+        <div class="stat"><div class="k">Total Ground Today</div><div class="v" id="umbTotalGroundKg">0 kg</div></div>
+        <div class="stat accent"><div class="k">Weighted Avg Price/kg</div><div class="v" id="umbAvgPricePerKg">Rs. 0</div></div>
+      </div>
+
       <h3 style="color:var(--green);margin:16px 0 8px;">🌫️ Grinding &amp; Dust (Today)</h3>
       <p class="sub" style="margin:0 0 10px;">Track today's actual grinding: how much Umbalakada went in, how much dust it produced, and how much of that dust was recovered (e.g. sold as fish powder) vs. truly wasted.</p>
       <div class="grid-3">
-        <div class="field"><label>Umbalakada Ground Today <span class="hint">(kg)</span></label><input type="number" id="dpUmbalakadaGroundKg" value="0" min="0" step="0.1" oninput="updateDailyProductionSummaryLive()"></div>
+        <div class="field"><label>Umbalakada Ground Today <span class="hint">(kg — auto-totalled from the varieties above, or type your own)</span></label><input type="number" id="dpUmbalakadaGroundKg" value="0" min="0" step="0.1" oninput="updateDailyProductionSummaryLive()"></div>
         <div class="field"><label>Dust Generated Today <span class="hint">(kg)</span></label><input type="number" id="dpDustGeneratedKg" value="0" min="0" step="0.1" oninput="updateDailyProductionSummaryLive()"></div>
         <div class="field"><label>Dust Used / Recovered <span class="hint">(kg)</span></label><input type="number" id="dpDustUsedKg" value="0" min="0" step="0.1" oninput="updateDailyProductionSummaryLive()"></div>
       </div>
