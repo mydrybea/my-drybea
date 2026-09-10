@@ -2345,7 +2345,12 @@ function switchCostingTab(tab) {
     btn.classList.toggle('btn-primary', btn.getAttribute('data-costing-tab') === tab);
   });
   if (tab === 'daily') { renderCostingGrindOutputChart(); populatePackProductMapSelects(); renderDailyStoreHistory(); }
-  if (tab === 'daypurchase') calcDailyPurchase();
+  if (tab === 'daypurchase') {
+    calcDailyPurchase();
+    const logDateEl = $('dpbLogDate');
+    if (logDateEl && !logDateEl.value) logDateEl.value = todayIso();
+    loadDailyPurchaseLog().then(renderDailyPurchaseHistory);
+  }
   if (tab === 'orderbuy') calcOrderToBuy();
   if (tab === 'breakdown') renderCostBreakdown();
 }
@@ -2641,6 +2646,12 @@ window.renderCostingGrindOutputChart = renderCostingGrindOutputChart;
 // favour the 1kg pack) so the "best" pack is a fair comparison.
 let dpbMarketPriceOverride = {}; // { '50': 200, ... } — set only once the owner edits a cell
 
+// Holds the last computed result from calcDailyPurchase() so
+// saveDailyPurchaseEntry() can save exactly what's on screen without
+// recomputing the whole calculator a second time. Set at the end of
+// calcDailyPurchase(), read (not mutated) by the save function.
+let lastDpbCalc = null;
+
 function calcDailyPurchase() {
   const body = $('dpbBestPackBody');
   if (!body) return; // sub-tab not in the DOM (older cached HTML)
@@ -2795,6 +2806,20 @@ function calcDailyPurchase() {
 
   const bestRow = packRows.find(r => r.key === bestKey);
   $('dpbBestPackNote').textContent = `From today's purchase: ${bestRow.label} gives the best profit at ${fmt(bestRow.profitPerKg)}/kg (${fmt(bestRow.profit)}/pack, ${fmt2(bestRow.margin)}% margin). Market prices are editable per pack above.`;
+
+  // Snapshot everything needed to save this exact calculation as a history
+  // row — see saveDailyPurchaseEntry().
+  lastDpbCalc = {
+    qtyLinna, priceLinna: Number($('dpbPriceLinna').value) || 0,
+    qtyBalaya, priceBalaya: Number($('dpbPriceBalaya').value) || 0,
+    qtyPremium, pricePremium: Number($('dpbPricePremium').value) || 0,
+    totalKg, totalCost: totalRawCost,
+    avgPricePerKg: totalKg > 0 ? totalRawCost / totalKg : 0,
+    grindOutputKg, dustRecoveredKg, dustSalePrice, dustReusedKg, dustWastedKg,
+    otherCosts, netCostPerKg: costPerKgUsable, usableOutputKg,
+    productProfit: productProfitToday, dustProfit: dustProfitToday, fullProfit: fullProfitToday,
+    bestPackKey: bestRow.key, bestPackLabel: bestRow.label, bestPackProfitPerKg: bestRow.profitPerKg
+  };
 }
 window.calcDailyPurchase = calcDailyPurchase;
 
@@ -2803,6 +2828,219 @@ function setDpbMarketPrice(key, value) {
   calcDailyPurchase();
 }
 window.setDpbMarketPrice = setDpbMarketPrice;
+
+// ==================== TODAY'S PURCHASE — SAVE & HISTORY ====================
+// Every "Save / Update Today's Entry" click INSERTS a new row into
+// daily_purchase_log (not an upsert-per-date) so the owner can save several
+// updates in one day — e.g. bought Linna in the morning at one price, then
+// a second round in the afternoon at another — and the History table below
+// becomes a real timeline of every purchase/price change, not just one
+// snapshot per date.
+//
+// Run this SQL once in the Supabase SQL editor to enable this feature:
+//
+//   create table if not exists daily_purchase_log (
+//     id uuid primary key default gen_random_uuid(),
+//     owner_id uuid not null references auth.users(id) on delete cascade,
+//     log_date date not null,
+//     qty_linna numeric default 0, price_linna numeric default 0,
+//     qty_balaya numeric default 0, price_balaya numeric default 0,
+//     qty_premium numeric default 0, price_premium numeric default 0,
+//     total_kg numeric default 0, total_cost numeric default 0,
+//     avg_price_per_kg numeric default 0,
+//     grind_output_kg numeric default 0,
+//     dust_recovered_kg numeric default 0, dust_sale_price numeric default 0,
+//     dust_reused_kg numeric default 0, dust_wasted_kg numeric default 0,
+//     other_costs numeric default 0,
+//     net_cost_per_kg numeric default 0, usable_output_kg numeric default 0,
+//     product_profit numeric default 0, dust_profit numeric default 0, full_profit numeric default 0,
+//     best_pack_key text, best_pack_label text, best_pack_profit_per_kg numeric default 0,
+//     note text, created_by uuid, created_at timestamptz default now()
+//   );
+//   alter table daily_purchase_log enable row level security;
+//   create policy "owner reads own purchase log" on daily_purchase_log
+//     for select using (owner_id = auth.uid());
+//   create policy "owner writes own purchase log" on daily_purchase_log
+//     for insert with check (owner_id = auth.uid());
+//   create policy "owner deletes own purchase log" on daily_purchase_log
+//     for delete using (owner_id = auth.uid());
+
+let dailyPurchaseLogCache = [];
+
+async function loadDailyPurchaseLog() {
+  if (!currentUser || userRole !== 'owner') { dailyPurchaseLogCache = []; return dailyPurchaseLogCache; }
+  try {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 30);
+    const { data, error } = await withSessionRetry(() => supabase.from('daily_purchase_log')
+      .select('*').eq('owner_id', currentUser.id).gte('log_date', cutoff.toISOString().slice(0, 10))
+      .order('created_at', { ascending: false }));
+    if (error) throw error;
+    dailyPurchaseLogCache = data || [];
+  } catch (e) {
+    console.warn('Daily purchase log load skipped:', e?.message || e);
+    dailyPurchaseLogCache = [];
+  }
+  return dailyPurchaseLogCache;
+}
+window.loadDailyPurchaseLog = loadDailyPurchaseLog;
+
+async function saveDailyPurchaseEntry() {
+  if (userRole !== 'owner') { alert('Only the owner can save purchase entries.'); return; }
+  if (!currentUser) { alert('Please login first.'); return; }
+
+  // Make sure lastDpbCalc reflects exactly what's on screen right now.
+  calcDailyPurchase();
+  const c = lastDpbCalc;
+  if (!c || c.totalKg <= 0) { alert('Enter today\'s purchase (qty & price) above before saving.'); return; }
+
+  const logDateEl = $('dpbLogDate');
+  const logDate = (logDateEl && logDateEl.value) ? logDateEl.value : todayIso();
+  const note = ($('dpbLogNote') && $('dpbLogNote').value.trim()) || null;
+
+  const row = {
+    owner_id: currentUser.id,
+    log_date: logDate,
+    qty_linna: c.qtyLinna, price_linna: c.priceLinna,
+    qty_balaya: c.qtyBalaya, price_balaya: c.priceBalaya,
+    qty_premium: c.qtyPremium, price_premium: c.pricePremium,
+    total_kg: c.totalKg, total_cost: c.totalCost, avg_price_per_kg: c.avgPricePerKg,
+    grind_output_kg: c.grindOutputKg,
+    dust_recovered_kg: c.dustRecoveredKg, dust_sale_price: c.dustSalePrice,
+    dust_reused_kg: c.dustReusedKg, dust_wasted_kg: c.dustWastedKg,
+    other_costs: c.otherCosts,
+    net_cost_per_kg: c.netCostPerKg, usable_output_kg: c.usableOutputKg,
+    product_profit: c.productProfit, dust_profit: c.dustProfit, full_profit: c.fullProfit,
+    best_pack_key: String(c.bestPackKey), best_pack_label: c.bestPackLabel, best_pack_profit_per_kg: c.bestPackProfitPerKg,
+    note, created_by: currentUser.id
+  };
+
+  if (!(await ensureFreshSession())) return;
+  try {
+    const { data, error } = await supabase.from('daily_purchase_log').insert(row).select().single();
+    if (error) throw error;
+    dailyPurchaseLogCache.unshift(data);
+    if ($('dpbLogNote')) $('dpbLogNote').value = '';
+    renderDailyPurchaseHistory();
+    updateStatus('✅ Purchase entry saved to history');
+  } catch (e) {
+    console.error('Save daily purchase entry error:', e);
+    const missingTable = /relation .* does not exist/i.test(e?.message || '');
+    alert('❌ Could not save entry: ' + (e?.message || String(e)) + (missingTable ? '\n\nThe daily_purchase_log table hasn\'t been created in Supabase yet — run the SQL setup in the comment above saveDailyPurchaseEntry() in app.js.' : ''));
+  }
+}
+window.saveDailyPurchaseEntry = saveDailyPurchaseEntry;
+
+async function deleteDailyPurchaseEntry(id) {
+  if (userRole !== 'owner') return;
+  if (!confirm('Delete this saved purchase entry?')) return;
+  try {
+    const { error } = await withSessionRetry(() => supabase.from('daily_purchase_log').delete().eq('id', id).eq('owner_id', currentUser.id));
+    if (error) throw error;
+    dailyPurchaseLogCache = dailyPurchaseLogCache.filter(r => String(r.id) !== String(id));
+    renderDailyPurchaseHistory();
+    updateStatus('🗑️ Purchase entry deleted');
+  } catch (e) {
+    alert('❌ Could not delete entry: ' + (e?.message || String(e)));
+  }
+}
+window.deleteDailyPurchaseEntry = deleteDailyPurchaseEntry;
+
+let dpbHistoryChart = null;
+
+function renderDailyPurchaseHistory() {
+  const body = $('dpbHistoryBody');
+  if (!body) return; // sub-tab not in the DOM (older cached HTML)
+
+  // Cache comes back newest-first (created_at desc) — keep that order for
+  // the table, but chronological (oldest-first) for the trend chart.
+  const entries = dailyPurchaseLogCache || [];
+
+  const typeCell = (qty, price) => (Number(qty) > 0)
+    ? `${fmt2(Number(qty))}kg @ ${fmt(Number(price))}`
+    : '—';
+
+  if (entries.length === 0) {
+    body.innerHTML = `<tr><td colspan="10" style="text-align:center;opacity:.5;padding:16px;">No saved entries yet.</td></tr>`;
+    $('dpbHistoryNote').textContent = 'No saved entries yet — use "Save / Update Today\'s Entry" above to start your history.';
+  } else {
+    body.innerHTML = entries.map(e => {
+      const when = e.created_at ? new Date(e.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : e.log_date;
+      return `<tr>
+        <td>${when}${e.note ? `<br><span style="opacity:.6;font-size:.85em;">${e.note}</span>` : ''}</td>
+        <td>${typeCell(e.qty_linna, e.price_linna)}</td>
+        <td>${typeCell(e.qty_balaya, e.price_balaya)}</td>
+        <td>${typeCell(e.qty_premium, e.price_premium)}</td>
+        <td class="num">${fmt2(Number(e.total_kg) || 0)} kg</td>
+        <td class="num">${fmt(Number(e.avg_price_per_kg) || 0)}</td>
+        <td class="num" style="font-weight:700;">${fmt(Number(e.net_cost_per_kg) || 0)}</td>
+        <td>${e.best_pack_label || '—'}</td>
+        <td class="num"><span class="badge ${Number(e.full_profit) >= 0 ? 'badge-good' : 'badge-bad'}">${fmt(Number(e.full_profit) || 0)}</span></td>
+        <td><button type="button" class="btn btn-xs btn-danger" onclick="deleteDailyPurchaseEntry('${e.id}')"><i class="business-icon icon-inline" data-lucide="trash-2" aria-hidden="true"></i></button></td>
+      </tr>`;
+    }).join('');
+    $('dpbHistoryNote').textContent = `${entries.length} saved entr${entries.length === 1 ? 'y' : 'ies'} in the last 30 days.`;
+  }
+
+  // Summary stat cards — "1kg price and other details" at a glance.
+  const latest = entries[0] || null;
+  const previous = entries[1] || null;
+  $('dpbHistLastRawPrice').textContent = latest ? fmt(Number(latest.avg_price_per_kg) || 0) : '—';
+  $('dpbHistLastNetCost').textContent = latest ? fmt(Number(latest.net_cost_per_kg) || 0) : '—';
+
+  const trendEl = $('dpbHistTrend'), trendCard = $('dpbHistTrendCard');
+  if (latest && previous) {
+    const diff = (Number(latest.net_cost_per_kg) || 0) - (Number(previous.net_cost_per_kg) || 0);
+    const arrow = diff > 0 ? '▲' : (diff < 0 ? '▼' : '—');
+    trendEl.textContent = `${arrow} ${fmt(Math.abs(diff))}/kg`;
+    if (trendCard) trendCard.className = 'stat ' + (diff > 0 ? 'bad' : (diff < 0 ? 'good' : ''));
+  } else {
+    trendEl.textContent = '—';
+    if (trendCard) trendCard.className = 'stat';
+  }
+
+  const sevenDaysAgo = new Date(); sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+  const last7d = entries.filter(e => e.log_date >= sevenDaysAgo.toISOString().slice(0, 10));
+  const avg7d = last7d.length > 0
+    ? last7d.reduce((sum, e) => sum + (Number(e.net_cost_per_kg) || 0), 0) / last7d.length
+    : 0;
+  $('dpbHist7dAvg').textContent = last7d.length > 0 ? fmt(avg7d) : '—';
+
+  // Trend chart — Net Cost/kg over time, oldest to newest.
+  if (!$('dpbHistoryChart')) return;
+  const colors = getChartColors();
+  safeRenderChart('dpbHistoryChart', () => {
+    const ctx = $('dpbHistoryChart').getContext('2d');
+    const chronological = [...entries].reverse();
+    const chartData = {
+      labels: chronological.map(e => e.created_at ? new Date(e.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' }) : e.log_date),
+      datasets: [
+        { label: 'Net Cost/kg (usable)', data: chronological.map(e => Number(e.net_cost_per_kg) || 0), borderColor: 'rgba(56,189,248,1)', backgroundColor: 'rgba(56,189,248,0.12)', fill: true, tension: 0.3, pointRadius: 3 },
+        { label: 'Blended Price/kg (raw)', data: chronological.map(e => Number(e.avg_price_per_kg) || 0), borderColor: 'rgba(251,146,60,1)', backgroundColor: 'rgba(251,146,60,0.08)', fill: false, tension: 0.3, pointRadius: 3 }
+      ]
+    };
+    if (dpbHistoryChart) { dpbHistoryChart.data = chartData; dpbHistoryChart.update(); }
+    else {
+      dpbHistoryChart = new Chart(ctx, {
+        type: 'line',
+        data: chartData,
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11, family: 'Inter' }, color: colors.text, padding: 12, usePointStyle: true, pointStyle: 'circle' } },
+            tooltip: { callbacks: { label: (item) => ` ${item.dataset.label}: Rs. ${item.parsed.y.toLocaleString()}` } }
+          },
+          scales: {
+            y: { grid: { color: colors.grid }, ticks: { color: colors.text, font: { size: 10 } }, title: { display: true, text: 'Rs./kg', color: colors.text, font: { size: 10 } } },
+            x: { grid: { display: false }, ticks: { color: colors.text, font: { size: 10 } } }
+          }
+        }
+      });
+    }
+  });
+}
+window.renderDailyPurchaseHistory = renderDailyPurchaseHistory;
 
 // ==================== COSTING TAB — QUICK MARKET DECISION ====================
 // For standing AT the market, before any actual grinding has happened.

@@ -2165,6 +2165,49 @@
         </div>
         <div class="monthly-summary-note" id="dpbBestPackNote">Enter today's purchase and grind output above to see the best pack.</div>
       </div>
+
+      <!-- Save/Update today's numbers as a dated history entry. Multiple
+           saves per day are allowed on purpose (see saveDailyPurchaseEntry()
+           in app.js) — every price change during the day becomes its own
+           row, so the History table below is a real timeline, not just one
+           snapshot per date. -->
+      <div class="card" style="margin-top:16px;">
+        <h2><span class="pro-title-icon blue" aria-hidden="true"><i class="business-icon" data-lucide="save" aria-hidden="true"></i></span><span>Save This Purchase Update</span></h2>
+        <p class="pro-subtitle blue">Save the numbers above as a dated entry. Do this every time prices or the mix change during the day — each save adds a new row to the history below.</p>
+        <div class="grid-3">
+          <div class="field">
+            <label>Entry Date</label>
+            <input type="date" id="dpbLogDate">
+          </div>
+          <div class="field" style="grid-column:span 2;">
+            <label>Note <span class="hint">(optional — e.g. "morning purchase", "2pm 2nd round")</span></label>
+            <input type="text" id="dpbLogNote" placeholder="e.g. Morning purchase from XYZ">
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="saveDailyPurchaseEntry()"><i class="business-icon icon-inline" data-lucide="save" aria-hidden="true"></i> Save / Update Today's Entry</button>
+      </div>
+
+      <!-- Advanced price history: summary stats + trend chart + full log,
+           fed from the daily_purchase_log Supabase table. See
+           renderDailyPurchaseHistory() in app.js. -->
+      <div class="card" style="margin-top:16px;">
+        <h2><span class="pro-title-icon purple" aria-hidden="true"><i class="business-icon" data-lucide="history" aria-hidden="true"></i></span><span>Purchase &amp; Price History</span></h2>
+        <p class="pro-subtitle purple">Every saved update, with the blended 1kg price and net usable cost/kg, so you can see exactly how prices moved day to day.</p>
+        <div class="stat-grid">
+          <div class="stat"><div class="k">Last Saved — Blended Price/kg (raw)</div><div class="v" id="dpbHistLastRawPrice">—</div></div>
+          <div class="stat accent"><div class="k">Last Saved — Net Cost/kg (usable)</div><div class="v" id="dpbHistLastNetCost">—</div></div>
+          <div class="stat" id="dpbHistTrendCard"><div class="k">Vs. Previous Entry</div><div class="v" id="dpbHistTrend">—</div></div>
+          <div class="stat"><div class="k">7-Day Avg Net Cost/kg</div><div class="v" id="dpbHist7dAvg">—</div></div>
+        </div>
+        <div class="chart-wrap" style="margin-top:12px;"><canvas id="dpbHistoryChart"></canvas></div>
+        <div class="table-wrap" style="margin-top:12px;">
+          <table>
+            <thead><tr><th>When</th><th>Linna</th><th>Balaya</th><th>Premium</th><th class="num">Total Kg</th><th class="num">Blended /kg</th><th class="num">Net Cost/kg</th><th>Best Pack</th><th class="num">Full Profit</th><th></th></tr></thead>
+            <tbody id="dpbHistoryBody"></tbody>
+          </table>
+        </div>
+        <div class="monthly-summary-note" id="dpbHistoryNote">No saved entries yet — use "Save / Update Today's Entry" above to start your history.</div>
+      </div>
     </div>
     <!-- /costingTab-daypurchase -->
 
