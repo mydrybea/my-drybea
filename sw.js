@@ -38,7 +38,7 @@ importScripts('https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js');
 // returning users' phones "throw away every old cached copy and fetch
 // fresh." Forgetting to bump it means users can get stuck on an old cached
 // version even though you've updated the live site.
-const CACHE_VERSION = 'v13';
+const CACHE_VERSION = 'v14';
 const CACHE_NAME = `mydrybea-${CACHE_VERSION}`;
 
 // Files that make up the installable "app shell" — network-first.

@@ -1735,6 +1735,16 @@
 
   <!-- ============ CALCULATOR TAB ============ -->
   <section id="calculator" class="tab-panel" role="tabpanel" style="display:none;">
+
+    <!-- Sub-tabs: Pricing/Scenarios logic vs the live daily grind→output trend
+         (see switchCostingTab in app.js). Keeps the "what should I charge"
+         inputs separate from the "what actually happened today" view. -->
+    <div id="costingSubTabs" style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;">
+      <button type="button" class="btn btn-sm costing-subtab btn-primary" data-costing-tab="pricing" onclick="switchCostingTab('pricing')"><i class="business-icon icon-inline" data-lucide="calculator" aria-hidden="true"></i> Pricing &amp; Scenarios</button>
+      <button type="button" class="btn btn-sm costing-subtab" data-costing-tab="daily" onclick="switchCostingTab('daily')"><i class="business-icon icon-inline" data-lucide="line-chart" aria-hidden="true"></i> Daily Costing &amp; Trends</button>
+    </div>
+
+    <div id="costingTab-pricing">
     <div class="grid-2">
       <div class="card">
         <h2><span class="pro-title-icon blue" aria-hidden="true"><i class="business-icon" data-lucide="factory" aria-hidden="true"></i></span><span>Raw Materials</span></h2><p class="pro-subtitle blue">Control the input costs behind every result.</p>
@@ -1898,10 +1908,24 @@
           <label>Scenario B SP (Rs.)</label>
           <input type="number" id="scBSp" value="375" oninput="calcScenario()">
         </div>
+        <div class="field">
+          <label>Scenario C Mix</label>
+          <select id="scC" onchange="calcScenario()">
+            <option value="40/0/60">40/0/60</option>
+            <option value="60/0/40">60/0/40</option>
+            <option value="35/20/45">35/20/45</option>
+            <option value="25/15/60" selected>25/15/60</option>
+            <option value="20/40/40">20/40/40</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Scenario C SP (Rs.)</label>
+          <input type="number" id="scCSp" value="400" oninput="calcScenario()">
+        </div>
       </div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Metric</th><th class="num">A</th><th class="num">B</th><th class="num">Best</th></tr></thead>
+          <thead><tr><th>Metric</th><th class="num">A</th><th class="num">B</th><th class="num">C</th><th class="num">Best</th></tr></thead>
           <tbody id="scenarioBody"></tbody>
         </table>
       </div>
@@ -1922,6 +1946,29 @@
       </div>
       <div class="monthly-summary-note">Recalculates instantly whenever fish prices or the mix ratio change above. Suggested price is what's needed to hit your target margin after 5% packing labour — it does not change your actual selling price automatically.</div>
     </div>
+    </div>
+    <!-- /costingTab-pricing -->
+
+    <!-- ============ COSTING TAB — DAILY COSTING & TRENDS (sub-tab) ============ -->
+    <div id="costingTab-daily" style="display:none;">
+      <div class="card">
+        <h2><span class="pro-title-icon orange" aria-hidden="true"><i class="business-icon" data-lucide="wind" aria-hidden="true"></i></span><span>Today's Grind → Output</span></h2>
+        <p class="pro-subtitle orange">Live snapshot from today's Daily Production Log entry (Production tab). Log today's numbers there and they show up here automatically.</p>
+        <div class="stat-grid">
+          <div class="stat"><div class="k">Umbalakada Ground Today</div><div class="v" id="costingGrindTodayKg">0 kg</div></div>
+          <div class="stat accent"><div class="k">Finished Output Today</div><div class="v" id="costingOutputTodayKg">0 kg</div></div>
+          <div class="stat good" id="costingYieldTodayCard"><div class="k">Output Yield</div><div class="v" id="costingYieldTodayPct">0%</div></div>
+        </div>
+        <div class="monthly-summary-note" id="costingGrindOutputNote">No Daily Production Log entry for today yet — add one from the Production tab.</div>
+      </div>
+
+      <div class="card">
+        <h2><span class="pro-title-icon purple" aria-hidden="true"><i class="business-icon" data-lucide="chart-no-axes-combined" aria-hidden="true"></i></span><span>Grind vs Output — This Month</span></h2>
+        <p class="pro-subtitle purple">Umbalakada fed into grinding each day vs the finished product that came out — same entries as the Production tab's Daily Production Log.</p>
+        <div class="chart-wrap"><canvas id="costingGrindOutputChart"></canvas></div>
+      </div>
+    </div>
+    <!-- /costingTab-daily -->
   </section>
 
   <!-- ============ PRODUCTION TAB ============ -->

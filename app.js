@@ -1881,7 +1881,7 @@ function getAllocatedOverheadPerPack() {
 }
 
 // ==================== CHARTS ====================
-let costChart = null, sensChart = null, prodChart = null, dpMonthlyChart = null, ingBreakdownChart = null, dpDustProfitChart = null;
+let costChart = null, sensChart = null, prodChart = null, dpMonthlyChart = null, ingBreakdownChart = null, dpDustProfitChart = null, costingGrindOutputChart = null;
 let dailyProductionLogCache = [];
 let lastProdAvgRawCostPerKg = 0, lastProdIngredientsCostPerKg = 0, lastProdOverheadCostPerKg = 0;
 let lastProdAvgCostPerKg = 0, lastProdAvgMarketPrice = 0, lastProdAvgProfitPerKg = 0;
@@ -2159,25 +2159,124 @@ window.renderDynamicPricing = renderDynamicPricing;
 
 function calcScenario() {
   const sizeKey = state.packSize;
+  const scCEl = $('scC'), scCSpEl = $('scCSp');
   const mixA = $('scA').value.split('/').map(Number);
   const mixB = $('scB').value.split('/').map(Number);
+  // Scenario C is optional in the DOM (older cached HTML) — fall back to
+  // Scenario B's mix/price so calcScenario() never throws if it's missing.
+  const mixC = scCEl ? scCEl.value.split('/').map(Number) : mixB;
   const spA = Number($('scASp').value) || 0;
   const spB = Number($('scBSp').value) || 0;
+  const spC = scCSpEl ? (Number(scCSpEl.value) || 0) : spB;
   const rA = calculatePack(sizeKey, state.linnaPrice, state.balayaPrice, state.kawalamPrice, {linna:mixA[0]/100,balaya:mixA[1]/100,kawalam:mixA[2]/100}, 'sp', 0, spA);
   const rB = calculatePack(sizeKey, state.linnaPrice, state.balayaPrice, state.kawalamPrice, {linna:mixB[0]/100,balaya:mixB[1]/100,kawalam:mixB[2]/100}, 'sp', 0, spB);
+  const rC = calculatePack(sizeKey, state.linnaPrice, state.balayaPrice, state.kawalamPrice, {linna:mixC[0]/100,balaya:mixC[1]/100,kawalam:mixC[2]/100}, 'sp', 0, spC);
   const metrics = [
-    ['Fish Cost', rA.rawFishCost, rB.rawFishCost, 'cost'],
-    ['Total Cost', rA.totalCost, rB.totalCost, 'cost'],
-    ['Profit', rA.profit, rB.profit, 'profit'],
-    ['Margin %', rA.margin, rB.margin, 'profit'],
-    ['Umbalakada Required (g)', rA.totalUmbalakadaRequiredG, rB.totalUmbalakadaRequiredG, 'cost'],
-    ['Dust Loss (g)', rA.totalDustG, rB.totalDustG, 'cost']
+    ['Fish Cost', rA.rawFishCost, rB.rawFishCost, rC.rawFishCost, 'cost'],
+    ['Total Cost', rA.totalCost, rB.totalCost, rC.totalCost, 'cost'],
+    ['Profit', rA.profit, rB.profit, rC.profit, 'profit'],
+    ['Margin %', rA.margin, rB.margin, rC.margin, 'profit'],
+    ['Umbalakada Required (g)', rA.totalUmbalakadaRequiredG, rB.totalUmbalakadaRequiredG, rC.totalUmbalakadaRequiredG, 'cost'],
+    ['Dust Loss (g)', rA.totalDustG, rB.totalDustG, rC.totalDustG, 'cost']
   ];
   $('scenarioBody').innerHTML = metrics.map(m => {
-    const best = m[3]==='cost' ? (m[1]<m[2]?'A':m[1]>m[2]?'B':'Tie') : (m[1]>m[2]?'A':m[1]<m[2]?'B':'Tie');
-    return `<tr><td>${m[0]}</td><td class="num">${m[0].includes('%')?fmt2(m[1])+'%':m[0].includes('(g)')?fmt2(m[1])+' g':fmt(m[1])}</td><td class="num">${m[0].includes('%')?fmt2(m[2])+'%':m[0].includes('(g)')?fmt2(m[2])+' g':fmt(m[2])}</td><td class="num"><span class="badge badge-good">${best}</span></td></tr>`;
+    const [label, a, b, c, kind] = m;
+    const vals = [['A',a],['B',b],['C',c]];
+    // 'cost'-type metrics: lowest wins. 'profit'-type: highest wins. Ties (all
+    // equal) show "Tie" rather than crowning an arbitrary winner.
+    const best = vals.every(v => v[1] === a) ? 'Tie'
+      : (kind === 'cost' ? vals.reduce((m1, v) => v[1] < m1[1] ? v : m1) : vals.reduce((m1, v) => v[1] > m1[1] ? v : m1))[0];
+    const fmtVal = (v) => label.includes('%') ? fmt2(v)+'%' : label.includes('(g)') ? fmt2(v)+' g' : fmt(v);
+    return `<tr><td>${label}</td><td class="num">${fmtVal(a)}</td><td class="num">${fmtVal(b)}</td><td class="num">${fmtVal(c)}</td><td class="num"><span class="badge badge-good">${best}</span></td></tr>`;
   }).join('');
 }
+
+// ==================== COSTING TAB — SUB-TABS ====================
+// "pricing" = Raw Materials/Scenarios/Dynamic Pricing (inputs & what-if).
+// "daily"   = live Grind→Output snapshot + monthly trend chart, sourced
+// from the same dailyProductionLogCache the Production tab uses.
+function switchCostingTab(tab) {
+  ['pricing', 'daily'].forEach(t => {
+    const panel = $(`costingTab-${t}`);
+    if (panel) panel.style.display = (t === tab) ? '' : 'none';
+  });
+  document.querySelectorAll('.costing-subtab').forEach(btn => {
+    btn.classList.toggle('btn-primary', btn.getAttribute('data-costing-tab') === tab);
+  });
+  if (tab === 'daily') renderCostingGrindOutputChart();
+}
+window.switchCostingTab = switchCostingTab;
+
+// Today's Grind→Output stat cards + the monthly trend chart, in the Costing
+// tab's "Daily Costing & Trends" sub-tab. Reads the same dailyProductionLogCache
+// that Production tab's Daily Production Log populates (umbalakada_ground_kg,
+// kg_produced per log_date) — no separate fetch or table needed.
+function renderCostingGrindOutputChart() {
+  const groundEl = $('costingGrindTodayKg'), outputEl = $('costingOutputTodayKg'),
+        yieldEl = $('costingYieldTodayPct'), noteEl = $('costingGrindOutputNote'),
+        yieldCard = $('costingYieldTodayCard');
+  if (!groundEl) return; // sub-tab not in the DOM (older cached HTML)
+
+  const entries = dailyProductionLogCache || [];
+  const todayEntry = entries.find(r => r.log_date === todayIso());
+
+  const groundToday = Number(todayEntry?.umbalakada_ground_kg) || 0;
+  const outputToday = Number(todayEntry?.kg_produced) || 0;
+  const yieldToday = groundToday > 0 ? (outputToday / groundToday) * 100 : 0;
+
+  groundEl.textContent = fmt2(groundToday) + ' kg';
+  outputEl.textContent = fmt2(outputToday) + ' kg';
+  yieldEl.textContent = fmt2(yieldToday) + '%';
+  if (yieldCard) yieldCard.classList.toggle('bad', groundToday > 0 && yieldToday < 50);
+  if (noteEl) {
+    noteEl.textContent = todayEntry
+      ? `From today's Daily Production Log entry — ${fmt2(groundToday)}kg ground in, ${fmt2(outputToday)}kg finished product out.`
+      : 'No Daily Production Log entry for today yet — add one from the Production tab.';
+  }
+
+  if (!$('costingGrindOutputChart')) return;
+  const colors = getChartColors();
+  safeRenderChart('costingGrindOutputChart', () => {
+    const ctx = $('costingGrindOutputChart').getContext('2d');
+    const sortedEntries = [...entries].sort((a, b) => a.log_date.localeCompare(b.log_date));
+    const chartData = {
+      labels: sortedEntries.map(r => r.log_date.slice(8, 10) + '/' + r.log_date.slice(5, 7)),
+      datasets: [
+        { type: 'bar', label: 'Umbalakada Ground (kg)', data: sortedEntries.map(r => Number(r.umbalakada_ground_kg) || 0), backgroundColor: 'rgba(251,146,60,0.55)', borderRadius: 4, order: 2 },
+        { type: 'bar', label: 'Finished Output (kg)', data: sortedEntries.map(r => Number(r.kg_produced) || 0), backgroundColor: 'rgba(16,185,129,0.55)', borderRadius: 4, order: 2 },
+        { type: 'line', label: 'Yield %', data: sortedEntries.map(r => {
+            const g = Number(r.umbalakada_ground_kg) || 0, o = Number(r.kg_produced) || 0;
+            return g > 0 ? Math.round((o / g) * 100) : 0;
+          }), borderColor: 'rgba(56,189,248,1)', backgroundColor: 'rgba(56,189,248,0.1)', fill: false, tension: 0.3, pointRadius: 3, yAxisID: 'y1', order: 1 }
+      ]
+    };
+    if (costingGrindOutputChart) { costingGrindOutputChart.data = chartData; costingGrindOutputChart.update(); }
+    else {
+      costingGrindOutputChart = new Chart(ctx, {
+        type: 'bar',
+        data: chartData,
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11, family: 'Inter' }, color: colors.text, padding: 12, usePointStyle: true, pointStyle: 'circle' } },
+            tooltip: {
+              callbacks: {
+                label: (item) => item.dataset.label === 'Yield %' ? ` Yield: ${item.parsed.y}%` : ` ${item.dataset.label}: ${item.parsed.y.toLocaleString()} kg`
+              }
+            }
+          },
+          scales: {
+            y: { position: 'left', grid: { color: colors.grid }, ticks: { color: colors.text, font: { size: 10 } }, title: { display: true, text: 'kg', color: colors.text, font: { size: 10 } } },
+            y1: { position: 'right', min: 0, max: 100, grid: { display: false }, ticks: { color: colors.text, font: { size: 10 } }, title: { display: true, text: 'Yield %', color: colors.text, font: { size: 10 } } },
+            x: { grid: { display: false }, ticks: { color: colors.text, font: { size: 10 } } }
+          }
+        }
+      });
+    }
+  });
+}
+window.renderCostingGrindOutputChart = renderCostingGrindOutputChart;
 
 function calcBulk() {
   const targetKg = Number($('bulkTarget').value) || 0;
@@ -2888,6 +2987,10 @@ function renderDailyProductionLog() {
       });
     }
   });
+
+  // Keep the Costing tab's Grind→Output sub-tab in sync with whatever just
+  // changed here, without a separate fetch (same cache, just a different view).
+  renderCostingGrindOutputChart();
 }
 window.renderDailyProductionLog = renderDailyProductionLog;
 
@@ -11546,6 +11649,11 @@ function activateAppTab(tabId){
       renderProductionBatches(); // also refreshes calcRealIncome() with real output data
     });
     loadDailyProductionLog().then(() => renderIncomeDailyDustSummary());
+  }
+  if (tabId === 'calculator') {
+    // Daily Costing & Trends sub-tab reads dailyProductionLogCache — load it
+    // in case the user opens Costing before ever visiting Production/Income.
+    loadDailyProductionLog().then(() => renderCostingGrindOutputChart());
   }
   if (tabId === 'monthly-summary') { updateMonthlySummary(); }
   if (tabId === 'analytics') { renderAnalytics(); }
