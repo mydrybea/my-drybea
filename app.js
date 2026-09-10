@@ -1994,6 +1994,22 @@ function renderIngredientBreakdownChart(breakdown, totalCost) {
 }
 
 
+// Mirrors the Pack Result numbers into the Costing tab's hero banner
+// (#costingHero). Pure display reflection — no separate calculation, so it
+// can never disagree with the Pack Result card below it. Guarded for older
+// cached HTML that doesn't have the hero elements yet.
+function updateCostingHero(r) {
+  const spEl = $('heroSp'), profitEl = $('heroProfit'), marginEl = $('heroMargin'), costEl = $('heroCost');
+  if (!spEl) return;
+  spEl.textContent = fmt(r.sp);
+  profitEl.textContent = fmt(r.profit);
+  marginEl.textContent = fmt2(r.margin) + '%';
+  costEl.textContent = fmt(r.totalCost);
+  const profitKpi = profitEl.closest('.chero-kpi');
+  if (profitKpi) profitKpi.classList.toggle('bad', r.profit < 0);
+}
+window.updateCostingHero = updateCostingHero;
+
 function calcAll() {
   state.linnaPrice = Number($('linnaPrice').value) || 0;
   state.balayaPrice = Number($('balayaPrice').value) || 0;
@@ -2022,6 +2038,7 @@ function calcAll() {
   $('outMargin').textContent = fmt2(r.margin) + '%';
   $('outCost').textContent = fmt(r.totalCost);
   $('profitStat').className = 'stat ' + (r.profit >= 0 ? 'good' : 'bad');
+  updateCostingHero(r);
   if ($('outUmbalakadaRequired')) $('outUmbalakadaRequired').textContent = fmt2(r.totalUmbalakadaRequiredG) + ' g';
   if ($('outDustLoss')) {
     const dustPct = r.totalUmbalakadaRequiredG > 0 ? (r.totalDustG / r.totalUmbalakadaRequiredG) * 100 : 0;

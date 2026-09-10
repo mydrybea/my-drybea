@@ -1736,13 +1736,33 @@
   <!-- ============ CALCULATOR TAB ============ -->
   <section id="calculator" class="tab-panel" role="tabpanel" style="display:none;">
 
+    <!-- Command-center hero: pure visual summary, mirrors outSp/outProfit/
+         outMargin/outCost via updateCostingHero() in app.js (called at the
+         end of calcAll()). No new data source — read-only reflection of the
+         Pack Result card below, so it can never drift or need its own logic. -->
+    <div class="costing-hero" id="costingHero">
+      <div class="costing-hero-top">
+        <div class="costing-hero-eyebrow"><i class="business-icon icon-inline" data-lucide="line-chart" aria-hidden="true"></i> COSTING COMMAND CENTER</div>
+        <h2 class="costing-hero-title">Pricing &amp; Profit Intelligence</h2>
+        <p class="costing-hero-sub">Live unit economics for the pack &amp; mix configured below — updates instantly as you adjust fish prices, mix ratio or pricing mode.</p>
+      </div>
+      <div class="costing-hero-kpis">
+        <div class="chero-kpi"><span class="chero-k">Selling Price</span><span class="chero-v" id="heroSp">Rs. 0</span></div>
+        <div class="chero-kpi accent"><span class="chero-k">Profit / Pack</span><span class="chero-v" id="heroProfit">Rs. 0</span></div>
+        <div class="chero-kpi"><span class="chero-k">Margin</span><span class="chero-v" id="heroMargin">0%</span></div>
+        <div class="chero-kpi"><span class="chero-k">Total Cost</span><span class="chero-v" id="heroCost">Rs. 0</span></div>
+      </div>
+    </div>
+
     <!-- Sub-tabs: Pricing/Scenarios logic vs the live daily grind→output trend
          (see switchCostingTab in app.js). Keeps the "what should I charge"
          inputs separate from the "what actually happened today" view. -->
-    <div id="costingSubTabs" style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;">
-      <button type="button" class="btn btn-sm costing-subtab btn-primary" data-costing-tab="pricing" onclick="switchCostingTab('pricing')"><i class="business-icon icon-inline" data-lucide="calculator" aria-hidden="true"></i> Pricing &amp; Scenarios</button>
-      <button type="button" class="btn btn-sm costing-subtab" data-costing-tab="daily" onclick="switchCostingTab('daily')"><i class="business-icon icon-inline" data-lucide="line-chart" aria-hidden="true"></i> Daily Costing &amp; Trends</button>
-      <button type="button" class="btn btn-sm costing-subtab" data-costing-tab="entry" onclick="switchCostingTab('entry')"><i class="business-icon icon-inline" data-lucide="clipboard-list" aria-hidden="true"></i> Umbalakada → Order Costing</button>
+    <div class="costing-tabs-shell">
+      <div id="costingSubTabs" class="costing-subtabs">
+        <button type="button" class="btn btn-sm costing-subtab btn-primary" data-costing-tab="pricing" onclick="switchCostingTab('pricing')"><i class="business-icon icon-inline" data-lucide="calculator" aria-hidden="true"></i> Pricing &amp; Scenarios</button>
+        <button type="button" class="btn btn-sm costing-subtab" data-costing-tab="daily" onclick="switchCostingTab('daily')"><i class="business-icon icon-inline" data-lucide="line-chart" aria-hidden="true"></i> Daily Costing &amp; Trends</button>
+        <button type="button" class="btn btn-sm costing-subtab" data-costing-tab="entry" onclick="switchCostingTab('entry')"><i class="business-icon icon-inline" data-lucide="clipboard-list" aria-hidden="true"></i> Umbalakada → Order Costing</button>
+      </div>
     </div>
 
     <div id="costingTab-pricing">

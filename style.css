@@ -2938,3 +2938,157 @@ html[data-theme="light"] .home-action.gold{background:linear-gradient(180deg,#ff
 @media (prefers-reduced-motion: reduce){
   .home-section-head span::before{ animation:none !important; }
 }
+
+/* ---- id="costing-tab-professional-dashboard-redesign" ---- */
+/* ============================================================
+   OWNER — COSTING TAB — PROFESSIONAL DASHBOARD REDESIGN
+   Purely visual layer on top of the existing Costing tab
+   (#calculator). No calculation logic touched — the hero KPIs
+   are a read-only mirror of outSp/outProfit/outMargin/outCost
+   (see updateCostingHero() in app.js). Scoped to #calculator /
+   .costing-* classes so nothing outside the Costing tab changes.
+   ============================================================ */
+
+/* ---- Command-center hero banner ---- */
+.costing-hero{
+  position:relative;
+  background:linear-gradient(135deg,#063b25,#087f43 60%,#c9a44d);
+  color:#fff;
+  border-radius:20px;
+  padding:20px 22px 18px;
+  margin-bottom:16px;
+  box-shadow:0 20px 50px rgba(6,59,37,.24);
+  overflow:hidden;
+  isolation:isolate;
+}
+.costing-hero::before{
+  content:'';
+  position:absolute; inset:0; z-index:0;
+  background:
+    radial-gradient(ellipse at 90% -10%, rgba(255,255,255,.16) 0%, transparent 55%),
+    radial-gradient(ellipse at -10% 120%, rgba(163,230,53,.18) 0%, transparent 55%);
+  pointer-events:none;
+}
+.costing-hero-top{ position:relative; z-index:1; }
+.costing-hero-eyebrow{
+  display:inline-flex; align-items:center; gap:6px;
+  font-size:.66rem; font-weight:900; letter-spacing:.12em; text-transform:uppercase;
+  color:rgba(255,255,255,.8);
+  background:rgba(255,255,255,.12);
+  border:1px solid rgba(255,255,255,.18);
+  padding:4px 10px 4px 8px;
+  border-radius:999px;
+}
+.costing-hero-eyebrow .business-icon{ width:13px; height:13px; }
+.costing-hero-title{
+  font-family:var(--font-display);
+  font-size:1.5rem; font-weight:800; letter-spacing:-.01em;
+  margin:10px 0 4px; color:#fff;
+}
+.costing-hero-sub{
+  font-size:.78rem; line-height:1.5;
+  color:rgba(255,255,255,.8);
+  margin:0 0 16px; max-width:560px;
+}
+.costing-hero-kpis{
+  position:relative; z-index:1;
+  display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px;
+}
+.chero-kpi{
+  background:rgba(255,255,255,.10);
+  border:1px solid rgba(255,255,255,.16);
+  border-radius:14px;
+  padding:10px 12px;
+  transition:background .2s ease, border-color .2s ease;
+}
+.chero-kpi .chero-k{
+  display:block; font-size:.6rem; font-weight:800; letter-spacing:.04em; text-transform:uppercase;
+  color:rgba(255,255,255,.68); margin-bottom:4px;
+}
+.chero-kpi .chero-v{ display:block; font-size:1.08rem; font-weight:900; color:#fff; letter-spacing:-.01em; }
+.chero-kpi.accent{ background:rgba(163,230,53,.18); border-color:rgba(163,230,53,.3); }
+.chero-kpi.accent .chero-v{ color:#eaff9a; }
+.chero-kpi.bad{ background:rgba(248,113,113,.18); border-color:rgba(248,113,113,.3); }
+.chero-kpi.bad .chero-v{ color:#ffc4c4; }
+@media(max-width:680px){
+  .costing-hero{ padding:16px 16px 14px; border-radius:18px; }
+  .costing-hero-title{ font-size:1.2rem; }
+  .costing-hero-kpis{ grid-template-columns:1fr 1fr; }
+}
+
+/* ---- Segmented sub-tab switcher (Pricing / Daily / Entry) ---- */
+.costing-tabs-shell{
+  background:linear-gradient(180deg,rgba(13,26,21,.92),rgba(6,14,11,.96));
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:18px;
+  padding:6px;
+  margin-bottom:16px;
+  box-shadow:0 14px 34px rgba(0,0,0,.35), 0 0 0 1px rgba(16,185,129,.06);
+  overflow-x:auto;
+}
+.costing-subtabs{ display:flex !important; gap:4px !important; flex-wrap:nowrap !important; }
+.costing-subtab{
+  flex:1 1 0 !important; min-width:150px; white-space:nowrap;
+  justify-content:center !important;
+  background:transparent !important; border:none !important; box-shadow:none !important;
+  color:rgba(210,229,220,.6) !important; font-weight:700 !important;
+  border-radius:13px !important; padding:10px 12px !important;
+  transition:color .25s ease, background .25s ease;
+}
+.costing-subtab:hover{ color:#bfe9d3 !important; background:rgba(255,255,255,.04) !important; }
+.costing-subtab.btn-primary{
+  background:linear-gradient(135deg,rgba(16,185,129,.24),rgba(163,230,53,.15)) !important;
+  color:#eafff2 !important;
+  box-shadow:0 6px 16px rgba(16,185,129,.26), inset 0 0 0 1px rgba(163,230,53,.2) !important;
+}
+html[data-theme="light"] .costing-tabs-shell{
+  background:linear-gradient(180deg,#ffffff,#f3faf6);
+  border-color:rgba(8,127,67,.14);
+  box-shadow:0 14px 32px rgba(16,48,32,.10);
+}
+html[data-theme="light"] .costing-subtab{ color:#7c8d84 !important; }
+html[data-theme="light"] .costing-subtab:hover{ background:rgba(8,127,67,.06) !important; }
+html[data-theme="light"] .costing-subtab.btn-primary{
+  background:linear-gradient(135deg,rgba(8,127,67,.14),rgba(197,161,58,.14)) !important;
+  color:#08512b !important;
+  box-shadow:0 6px 16px rgba(8,127,67,.14), inset 0 0 0 1px rgba(8,127,67,.14) !important;
+}
+@media(max-width:700px){
+  .costing-subtabs{ flex-wrap:wrap !important; }
+  .costing-subtab{ min-width:0; flex:1 1 auto !important; font-size:.7rem !important; padding:9px 8px !important; }
+}
+
+/* ---- Cards inside the Costing tab: subtle top accent + a touch more depth ---- */
+#calculator .card{ position:relative; overflow:hidden; }
+#calculator .card::before{
+  content:''; position:absolute; top:0; left:0; right:0; height:3px; z-index:1;
+  background:linear-gradient(90deg,var(--green,#10b981) 0%,var(--lime-accent,#a3e635) 50%,var(--gold,#d4af37) 100%);
+  opacity:.55;
+}
+
+/* ---- Tables inside the Costing tab: clearer headers, zebra rows, hover ---- */
+#calculator .table-wrap table thead th{
+  text-transform:uppercase !important; font-size:.62rem !important; letter-spacing:.05em !important;
+  font-weight:800 !important;
+}
+#calculator .table-wrap table tbody tr:not(.total-row):nth-child(even){
+  background:rgba(16,185,129,.045);
+}
+#calculator .table-wrap table tbody tr:not(.total-row):hover{
+  background:rgba(16,185,129,.09);
+}
+html[data-theme="light"] #calculator .table-wrap table tbody tr:not(.total-row):nth-child(even){
+  background:rgba(8,127,67,.035);
+}
+html[data-theme="light"] #calculator .table-wrap table tbody tr:not(.total-row):hover{
+  background:rgba(8,127,67,.06);
+}
+
+/* ---- Pack Result stat grid: a bit more presence on the primary numbers ---- */
+#calculator .stat-grid .stat .v{ font-size:1.05rem; }
+#calculator .stat-grid .stat.accent .v,
+#calculator #profitStat .v{ font-size:1.18rem; }
+
+@media (prefers-reduced-motion: reduce){
+  .chero-kpi{ transition:none; }
+}
