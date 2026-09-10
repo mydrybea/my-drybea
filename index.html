@@ -594,6 +594,23 @@
       </div>
       <small style="display:block;margin-top:8px;opacity:.6;">Tip: tick "linked fish bills" when starting a Production Batch and its Real Cost/kg will show ✅ once completed — otherwise it falls back to the estimate.</small>
     </div>
+
+    <div class="card">
+      <h2><span class="pro-title-icon orange" aria-hidden="true"><i class="business-icon" data-lucide="wind" aria-hidden="true"></i></span><span>Daily Grinding &amp; Dust Summary</span></h2>
+      <p class="pro-subtitle orange">Today's grinding output and dust loss, from the Production tab's Daily Production Log.</p>
+      <div class="income-grid">
+        <div class="card income-card"><span>Today's Umbalakada Ground</span><strong id="incomeDustGroundKg">0 kg</strong><small>Fed into grinding today</small></div>
+        <div class="card income-card"><span>Today's Dust Removed</span><strong id="incomeDustRemovedKg">0 kg</strong><small>Net waste after recovery</small></div>
+        <div class="card income-card"><span>Today's Net Dust Impact</span><strong id="incomeDustImpact">Rs. 0</strong><small>Waste cost − recovery value</small></div>
+        <div class="card income-card income-highlight"><span>Today's Net Profit (incl. Dust)</span><strong id="incomeDustNetProfit">Rs. 0</strong><small>Today's saved snapshot</small></div>
+      </div>
+      <div class="income-summary">
+        <div><span>This Month — Dust Removed</span><strong id="incomeDustMonthRemoved">0 kg</strong></div>
+        <div><span>This Month — Net Dust Impact</span><strong id="incomeDustMonthImpact">Rs. 0</strong></div>
+        <button class="btn btn-primary" data-open-tab="production" data-ribbon="true">Open Production</button>
+      </div>
+      <small style="display:block;margin-top:8px;opacity:.6;" id="incomeDustSummaryNote">No Daily Production Log snapshot saved for today yet — figures show the most recent saved day.</small>
+    </div>
   </section>
 
   <!-- ============ SALES / DAILY BUSINESS DIARY TAB (owner-only) ============ -->
@@ -1839,6 +1856,14 @@
         <div class="table-wrap">
           <table><tbody id="monthlyBody"></tbody></table>
         </div>
+
+        <h2 style="margin-top:16px;"><span class="pro-title-icon orange" aria-hidden="true"><i class="business-icon" data-lucide="scale" aria-hidden="true"></i></span><span>Grinding Requirement — All Packs</span></h2><p class="pro-subtitle orange">Umbalakada needed and dust lost per pack, for every pack size, using the current mix &amp; grind yields above.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Pack</th><th class="num">Umbalakada Required</th><th class="num">Usable (Packed)</th><th class="num">Dust Loss</th><th class="num">Dust %</th><th class="num">Dust Cost</th></tr></thead>
+            <tbody id="grindDustAllPacksBody"></tbody>
+          </table>
+        </div>
       </div>
     </div>
 
@@ -2096,6 +2121,19 @@
         </div>
         <div class="field"><label>Note (optional)</label><input type="text" id="dpNote" placeholder="Optional notes..."></div>
       </div>
+
+      <h3 style="color:var(--green);margin:16px 0 8px;">🌫️ Grinding &amp; Dust (Today)</h3>
+      <p class="sub" style="margin:0 0 10px;">Track today's actual grinding: how much Umbalakada went in, how much dust it produced, and how much of that dust was recovered (e.g. sold as fish powder) vs. truly wasted.</p>
+      <div class="grid-3">
+        <div class="field"><label>Umbalakada Ground Today <span class="hint">(kg)</span></label><input type="number" id="dpUmbalakadaGroundKg" value="0" min="0" step="0.1" oninput="updateDailyProductionSummaryLive()"></div>
+        <div class="field"><label>Dust Generated Today <span class="hint">(kg)</span></label><input type="number" id="dpDustGeneratedKg" value="0" min="0" step="0.1" oninput="updateDailyProductionSummaryLive()"></div>
+        <div class="field"><label>Dust Used / Recovered <span class="hint">(kg)</span></label><input type="number" id="dpDustUsedKg" value="0" min="0" step="0.1" oninput="updateDailyProductionSummaryLive()"></div>
+      </div>
+      <div class="grid-3">
+        <div class="field"><label>Dust Sale Price <span class="hint">(Rs./kg, if sold)</span></label><input type="number" id="dpDustSalePrice" value="0" min="0" step="0.01" oninput="updateDailyProductionSummaryLive()"></div>
+      </div>
+      <p class="sub" id="dpDustSuggestNote" style="margin:4px 0 0;"></p>
+
       <div class="btn-row" style="margin:10px 0 16px;" data-owner-only>
         <button class="btn btn-primary btn-sm" onclick="saveDailyProductionLog()"><i class="business-icon icon-inline" data-lucide="save" aria-hidden="true"></i> Save Today's Snapshot</button>
       </div>
@@ -2106,6 +2144,9 @@
         <div class="stat"><div class="k">Today's Selling Price/kg</div><div class="v" id="dpTodayPrice">Rs. 0</div></div>
         <div class="stat" id="dpTodayProfitCard"><div class="k">Today's Profit/kg</div><div class="v" id="dpTodayProfit">Rs. 0</div></div>
         <div class="stat accent" id="dpTodayTotalCard"><div class="k">Today's Total Profit</div><div class="v" id="dpTodayTotal">Rs. 0</div></div>
+        <div class="stat" id="dpDustRemovedCard"><div class="k">Dust Removed (Net Waste)</div><div class="v" id="dpDustRemoved">0 kg</div></div>
+        <div class="stat" id="dpDustImpactCard"><div class="k">Net Dust Impact</div><div class="v" id="dpDustImpact">Rs. 0</div></div>
+        <div class="stat accent" id="dpNetProfitCard"><div class="k">Net Profit (incl. Dust)</div><div class="v" id="dpNetProfit">Rs. 0</div></div>
       </div>
       <p class="sub" id="dpPriceSourceNote" style="margin:6px 0 0;"></p>
 
@@ -2113,11 +2154,15 @@
       <div class="chart-wrap" style="height:320px;"><canvas id="dpMonthlyChart"></canvas></div>
       <p class="sub" style="margin:6px 0 0;">Bars = cumulative profit this month (right axis). Lines = per-kg cost/price/profit for each saved day (left axis).</p>
 
+      <h3 style="color:var(--green);margin:16px 0 8px;">🌫️ Daily Profit Summary — Incl. Dust Impact</h3>
+      <div class="chart-wrap" style="height:280px;"><canvas id="dpDustProfitChart"></canvas></div>
+      <p class="sub" style="margin:6px 0 0;">Compares each saved day's Total Profit (before dust) against Net Profit (after dust waste cost and any dust recovery value).</p>
+
       <h3 style="color:var(--green);margin:16px 0 8px;">🗓️ Daily Summary (This Month)</h3>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Date</th><th>Cost/kg</th><th>Price/kg</th><th class="num">Profit/kg</th><th>Kg Produced</th><th class="num">Total Profit</th><th></th></tr></thead>
-          <tbody id="dpLogBody"><tr><td colspan="7" style="text-align:center;opacity:.5;padding:20px;">No entries yet this month.</td></tr></tbody>
+          <thead><tr><th>Date</th><th>Cost/kg</th><th>Price/kg</th><th class="num">Profit/kg</th><th>Kg Produced</th><th class="num">Dust Removed</th><th class="num">Total Profit</th><th class="num">Net Profit (Dust)</th><th></th></tr></thead>
+          <tbody id="dpLogBody"><tr><td colspan="9" style="text-align:center;opacity:.5;padding:20px;">No entries yet this month.</td></tr></tbody>
         </table>
       </div>
     </div>

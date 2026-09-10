@@ -1881,7 +1881,7 @@ function getAllocatedOverheadPerPack() {
 }
 
 // ==================== CHARTS ====================
-let costChart = null, sensChart = null, prodChart = null, dpMonthlyChart = null, ingBreakdownChart = null;
+let costChart = null, sensChart = null, prodChart = null, dpMonthlyChart = null, ingBreakdownChart = null, dpDustProfitChart = null;
 let dailyProductionLogCache = [];
 let lastProdAvgRawCostPerKg = 0, lastProdIngredientsCostPerKg = 0, lastProdOverheadCostPerKg = 0;
 let lastProdAvgCostPerKg = 0, lastProdAvgMarketPrice = 0, lastProdAvgProfitPerKg = 0;
@@ -1889,6 +1889,12 @@ let lastProdAvgCostPerKg = 0, lastProdAvgMarketPrice = 0, lastProdAvgProfitPerKg
 // the estimates above, but diverge once a custom selling price is entered.
 let lastProdAvgCostPerKgForSave = 0, lastProdAvgProfitPerKgForSave = 0;
 let lastProdIngredientsCostPerKgForSave = 0, lastProdAvgMarketPriceForSave = 0;
+// Daily grinding & dust figures — computed live by updateDailyProductionSummaryLive()
+// and written as-is by saveDailyProductionLog(). See the SQL comment above
+// saveDailyProductionLog() for the matching production_cost_log columns.
+let lastDustGeneratedKgForSave = 0, lastDustUsedKgForSave = 0, lastDustRemovedKgForSave = 0;
+let lastDustSalePriceForSave = 0, lastDustWasteCostForSave = 0, lastDustRecoveryValueForSave = 0;
+let lastNetDustImpactForSave = 0, lastNetProfitInclDustForSave = 0, lastUmbalakadaGroundKgForSave = 0;
 // Per-fish-type snapshot from the last calcProduction() run — used by the
 // Production Batches feature to know each type's current yield factor and
 // total cost/kg without re-deriving it. Keyed by fish type name.
@@ -2079,7 +2085,26 @@ function calcAll() {
   calcSensitivity();
   calcDashboard();
   renderDynamicPricing();
+  renderGrindingDustAllPacksTable();
 }
+
+// ==================== GRINDING & DUST — ALL PACKS ====================
+// For every pack size, shows how much Umbalakada must be fed into the
+// grinder and how much of that is lost as dust, using the CURRENT mix
+// ratio and the editable grind-yield % above. Independent of pricing mode
+// (dust math only depends on pack weight, mix and yields), so it always
+// reflects every product at once — not just the pack size selected above.
+function renderGrindingDustAllPacksTable() {
+  const tbody = $('grindDustAllPacksBody');
+  if (!tbody) return;
+  const mix = getMixPct();
+  tbody.innerHTML = Object.keys(PACKS).map(key => {
+    const r = calculatePack(key, state.linnaPrice, state.balayaPrice, state.kawalamPrice, mix, 'mrp', 0, 0);
+    const dustPct = r.totalUmbalakadaRequiredG > 0 ? (r.totalDustG / r.totalUmbalakadaRequiredG) * 100 : 0;
+    return `<tr><td>${r.p.label}</td><td class="num">${fmt2(r.totalUmbalakadaRequiredG)} g</td><td class="num">${fmt2(r.p.fish)} g</td><td class="num">${fmt2(r.totalDustG)} g</td><td class="num">${fmt2(dustPct)}%</td><td class="num">${fmt(r.dustCost)}</td></tr>`;
+  }).join('');
+}
+window.renderGrindingDustAllPacksTable = renderGrindingDustAllPacksTable;
 
 // ==================== DYNAMIC PRICING SUGGESTIONS ====================
 // Recomputes, for every pack size, what selling price would be needed to
@@ -2144,11 +2169,13 @@ function calcScenario() {
     ['Fish Cost', rA.rawFishCost, rB.rawFishCost, 'cost'],
     ['Total Cost', rA.totalCost, rB.totalCost, 'cost'],
     ['Profit', rA.profit, rB.profit, 'profit'],
-    ['Margin %', rA.margin, rB.margin, 'profit']
+    ['Margin %', rA.margin, rB.margin, 'profit'],
+    ['Umbalakada Required (g)', rA.totalUmbalakadaRequiredG, rB.totalUmbalakadaRequiredG, 'cost'],
+    ['Dust Loss (g)', rA.totalDustG, rB.totalDustG, 'cost']
   ];
   $('scenarioBody').innerHTML = metrics.map(m => {
     const best = m[3]==='cost' ? (m[1]<m[2]?'A':m[1]>m[2]?'B':'Tie') : (m[1]>m[2]?'A':m[1]<m[2]?'B':'Tie');
-    return `<tr><td>${m[0]}</td><td class="num">${m[0].includes('%')?fmt2(m[1])+'%':fmt(m[1])}</td><td class="num">${m[0].includes('%')?fmt2(m[2])+'%':fmt(m[2])}</td><td class="num"><span class="badge badge-good">${best}</span></td></tr>`;
+    return `<tr><td>${m[0]}</td><td class="num">${m[0].includes('%')?fmt2(m[1])+'%':m[0].includes('(g)')?fmt2(m[1])+' g':fmt(m[1])}</td><td class="num">${m[0].includes('%')?fmt2(m[2])+'%':m[0].includes('(g)')?fmt2(m[2])+' g':fmt(m[2])}</td><td class="num"><span class="badge badge-good">${best}</span></td></tr>`;
   }).join('');
 }
 
@@ -2572,12 +2599,58 @@ function updateDailyProductionSummaryLive() {
   if (profitCard) profitCard.classList.toggle('bad', profitPerKg < 0);
   if (totalCard) totalCard.classList.toggle('bad', totalProfit < 0);
 
+  // ---- Grinding & Dust (Today) ----
+  const groundKg = Number($('dpUmbalakadaGroundKg') && $('dpUmbalakadaGroundKg').value) || 0;
+  const dustGeneratedKg = Number($('dpDustGeneratedKg') && $('dpDustGeneratedKg').value) || 0;
+  const dustUsedKg = Number($('dpDustUsedKg') && $('dpDustUsedKg').value) || 0;
+  const dustSalePrice = Number($('dpDustSalePrice') && $('dpDustSalePrice').value) || 0;
+  const dustRemovedKg = Math.max(dustGeneratedKg - dustUsedKg, 0);
+
+  // Weighted average Umbalakada price/kg, using today's mix ratio — the
+  // same prices set in the Costing tab's Raw Materials card — so the cost
+  // of the wasted dust is valued consistently with the rest of the app.
+  const mix = getMixPct();
+  const avgUmbalakadaPricePerKg = (mix.linna * state.linnaPrice) + (mix.balaya * state.balayaPrice) + (mix.kawalam * state.kawalamPrice);
+  const dustWasteCost = dustRemovedKg * avgUmbalakadaPricePerKg;
+  const dustRecoveryValue = dustUsedKg * dustSalePrice;
+  const netDustImpact = dustRecoveryValue - dustWasteCost;
+  const netProfitInclDust = totalProfit + netDustImpact;
+
+  const dustRemovedEl = $('dpDustRemoved'), dustImpactEl = $('dpDustImpact'), netProfitEl = $('dpNetProfit');
+  if (dustRemovedEl) dustRemovedEl.textContent = fmt2(dustRemovedKg) + ' kg';
+  if (dustImpactEl) dustImpactEl.textContent = fmt(netDustImpact);
+  if (netProfitEl) netProfitEl.textContent = fmt(netProfitInclDust);
+  const dustImpactCard = $('dpDustImpactCard'), netProfitCard = $('dpNetProfitCard');
+  if (dustImpactCard) dustImpactCard.classList.toggle('bad', netDustImpact < 0);
+  if (netProfitCard) netProfitCard.classList.toggle('bad', netProfitInclDust < 0);
+
+  const suggestNoteEl = $('dpDustSuggestNote');
+  if (suggestNoteEl) {
+    if (groundKg > 0) {
+      const gy = getGrindYields();
+      const usableFraction = (mix.linna * gy.linna) + (mix.balaya * gy.balaya) + (mix.kawalam * gy.premium);
+      const suggestedDustKg = groundKg * Math.max(1 - usableFraction, 0);
+      suggestNoteEl.textContent = `Based on your Grinding Yield % and current mix, ${fmt2(groundKg)}kg of Umbalakada should produce around ${fmt2(suggestedDustKg)}kg of dust — enter what actually came out above.`;
+    } else {
+      suggestNoteEl.textContent = '';
+    }
+  }
+
   // These are the numbers Save Today's Snapshot actually writes — kept in
   // sync here so the save always matches what's on screen.
   lastProdAvgCostPerKgForSave = costPerKg;
   lastProdAvgProfitPerKgForSave = profitPerKg;
   lastProdIngredientsCostPerKgForSave = lastProdIngredientsCostPerKg;
   lastProdAvgMarketPriceForSave = marketPrice;
+  lastUmbalakadaGroundKgForSave = groundKg;
+  lastDustGeneratedKgForSave = dustGeneratedKg;
+  lastDustUsedKgForSave = dustUsedKg;
+  lastDustRemovedKgForSave = dustRemovedKg;
+  lastDustSalePriceForSave = dustSalePrice;
+  lastDustWasteCostForSave = dustWasteCost;
+  lastDustRecoveryValueForSave = dustRecoveryValue;
+  lastNetDustImpactForSave = netDustImpact;
+  lastNetProfitInclDustForSave = netProfitInclDust;
 }
 window.updateDailyProductionSummaryLive = updateDailyProductionSummaryLive;
 
@@ -2590,6 +2663,19 @@ async function saveDailyProductionLog() {
   const notes = $('dpNote').value.trim();
   const totalProfit = lastProdAvgProfitPerKgForSave * kgProduced;
 
+  // ---- SQL setup (run once in Supabase before dust fields will save) ----
+  // ALTER TABLE production_cost_log
+  //   ADD COLUMN IF NOT EXISTS umbalakada_ground_kg numeric DEFAULT 0,
+  //   ADD COLUMN IF NOT EXISTS dust_generated_kg numeric DEFAULT 0,
+  //   ADD COLUMN IF NOT EXISTS dust_used_kg numeric DEFAULT 0,
+  //   ADD COLUMN IF NOT EXISTS dust_removed_kg numeric DEFAULT 0,
+  //   ADD COLUMN IF NOT EXISTS dust_sale_price numeric DEFAULT 0,
+  //   ADD COLUMN IF NOT EXISTS dust_waste_cost numeric DEFAULT 0,
+  //   ADD COLUMN IF NOT EXISTS dust_recovery_value numeric DEFAULT 0,
+  //   ADD COLUMN IF NOT EXISTS net_dust_impact numeric DEFAULT 0,
+  //   ADD COLUMN IF NOT EXISTS net_profit_incl_dust numeric DEFAULT 0;
+  // (Existing owner_id-uuid RLS policy already covers these new columns —
+  // no policy changes needed, this only adds columns to an already-owned row.)
   const row = {
     owner_id: currentUser.id,
     log_date: todayIso(),
@@ -2601,6 +2687,15 @@ async function saveDailyProductionLog() {
     profit_per_kg: lastProdAvgProfitPerKgForSave,
     kg_produced: kgProduced,
     total_profit: totalProfit,
+    umbalakada_ground_kg: lastUmbalakadaGroundKgForSave,
+    dust_generated_kg: lastDustGeneratedKgForSave,
+    dust_used_kg: lastDustUsedKgForSave,
+    dust_removed_kg: lastDustRemovedKgForSave,
+    dust_sale_price: lastDustSalePriceForSave,
+    dust_waste_cost: lastDustWasteCostForSave,
+    dust_recovery_value: lastDustRecoveryValueForSave,
+    net_dust_impact: lastNetDustImpactForSave,
+    net_profit_incl_dust: totalProfit + lastNetDustImpactForSave,
     notes,
     created_by: currentUser.id
   };
@@ -2613,11 +2708,13 @@ async function saveDailyProductionLog() {
     const idx = dailyProductionLogCache.findIndex(r => r.log_date === data.log_date);
     if (idx >= 0) dailyProductionLogCache[idx] = data; else dailyProductionLogCache.push(data);
     renderDailyProductionLog();
+    renderIncomeDailyDustSummary();
     updateStatus("✅ Today's production snapshot saved");
   } catch (e) {
     console.error('Save daily production log error:', e);
     const missingTable = /relation .* does not exist/i.test(e?.message || '');
-    alert('❌ Could not save snapshot: ' + (e?.message || String(e)) + (missingTable ? '\n\nThe production_cost_log table hasn\'t been created in Supabase yet — see the SQL setup comment above saveDailyProductionLog() in app.js.' : ''));
+    const missingColumn = /column .* does not exist/i.test(e?.message || '');
+    alert('❌ Could not save snapshot: ' + (e?.message || String(e)) + (missingTable ? '\n\nThe production_cost_log table hasn\'t been created in Supabase yet — see the SQL setup comment above saveDailyProductionLog() in app.js.' : missingColumn ? '\n\nThe dust-tracking columns haven\'t been added to production_cost_log yet — run the ALTER TABLE SQL in the comment above saveDailyProductionLog() in app.js.' : ''));
   }
 }
 window.saveDailyProductionLog = saveDailyProductionLog;
@@ -2688,22 +2785,28 @@ function renderDailyProductionLog() {
   const entries = [...dailyProductionLogCache].sort((a, b) => a.log_date.localeCompare(b.log_date));
 
   if (entries.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;opacity:.5;padding:20px;">No entries yet this month.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;opacity:.5;padding:20px;">No entries yet this month.</td></tr>';
   } else {
-    tbody.innerHTML = [...entries].reverse().map(r => `
+    tbody.innerHTML = [...entries].reverse().map(r => {
+      const netProfitInclDust = r.net_profit_incl_dust !== undefined && r.net_profit_incl_dust !== null
+        ? Number(r.net_profit_incl_dust) : Number(r.total_profit || 0);
+      return `
       <tr>
         <td>${r.log_date}</td>
         <td>${fmt(r.total_cost_per_kg)}</td>
         <td>${fmt(r.market_price_per_kg)}</td>
         <td class="num"><span class="badge ${Number(r.profit_per_kg)>=0?'badge-good':'badge-bad'}">${fmt(r.profit_per_kg)}</span></td>
         <td>${Number(r.kg_produced || 0).toFixed(0)} kg</td>
+        <td class="num">${Number(r.dust_removed_kg || 0).toFixed(2)} kg</td>
         <td class="num">${fmt(r.total_profit)}</td>
+        <td class="num"><span class="badge ${netProfitInclDust>=0?'badge-good':'badge-bad'}">${fmt(netProfitInclDust)}</span></td>
         <td>${userRole === 'owner' ? actionMenuHTML([
           { label: 'Edit', icon: '✏️', onclick: `editDailyProductionLog('${r.id}')` },
           { label: 'Delete', icon: '🗑️', danger: true, onclick: `deleteDailyProductionLog('${r.id}')` }
         ]) : ''}</td>
       </tr>
-    `).join('');
+    `;
+    }).join('');
   }
 
   const colors = getChartColors();
@@ -2750,8 +2853,86 @@ function renderDailyProductionLog() {
       });
     }
   });
+
+  // ---- Daily Profit Summary — Incl. Dust Impact ----
+  if (!$('dpDustProfitChart')) return;
+  safeRenderChart('dpDustProfitChart', () => {
+    const ctx = $('dpDustProfitChart').getContext('2d');
+    const sortedEntries = [...entries].sort((a, b) => a.log_date.localeCompare(b.log_date));
+    const chartData = {
+      labels: sortedEntries.map(r => r.log_date.slice(8, 10) + '/' + r.log_date.slice(5, 7)),
+      datasets: [
+        { label: 'Total Profit (before dust)', data: sortedEntries.map(r => Math.round(Number(r.total_profit) || 0)), backgroundColor: 'rgba(56,189,248,0.55)', borderRadius: 4 },
+        { label: 'Net Profit (incl. dust)', data: sortedEntries.map(r => {
+            const v = r.net_profit_incl_dust !== undefined && r.net_profit_incl_dust !== null ? Number(r.net_profit_incl_dust) : Number(r.total_profit || 0);
+            return Math.round(v);
+          }), backgroundColor: 'rgba(16,185,129,0.55)', borderRadius: 4 }
+      ]
+    };
+    if (dpDustProfitChart) { dpDustProfitChart.data = chartData; dpDustProfitChart.update(); }
+    else {
+      dpDustProfitChart = new Chart(ctx, {
+        type: 'bar',
+        data: chartData,
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: {
+            legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11, family: 'Inter' }, color: colors.text, padding: 12, usePointStyle: true, pointStyle: 'circle' } },
+            tooltip: { callbacks: { label: (item) => ` ${item.dataset.label}: Rs. ${item.parsed.y.toLocaleString()}` } }
+          },
+          scales: {
+            y: { grid: { color: colors.grid }, ticks: { color: colors.text, font: { size: 10 } } },
+            x: { grid: { display: false }, ticks: { color: colors.text, font: { size: 10 } } }
+          }
+        }
+      });
+    }
+  });
 }
 window.renderDailyProductionLog = renderDailyProductionLog;
+
+// ==================== INCOME TAB — DAILY GRINDING & DUST SUMMARY ====================
+// Reads the same dailyProductionLogCache the Production tab's Daily
+// Production Log uses (loaded via loadDailyProductionLog()) so the Income
+// tab shows the same day-by-day dust figures without a separate fetch.
+function renderIncomeDailyDustSummary() {
+  const groundEl = $('incomeDustGroundKg'), removedEl = $('incomeDustRemovedKg');
+  const impactEl = $('incomeDustImpact'), netProfitEl = $('incomeDustNetProfit');
+  const monthRemovedEl = $('incomeDustMonthRemoved'), monthImpactEl = $('incomeDustMonthImpact');
+  const noteEl = $('incomeDustSummaryNote');
+  if (!groundEl) return; // Income tab card not in the DOM (e.g. different role view)
+
+  const today = todayIso();
+  const entries = dailyProductionLogCache || [];
+  const todayEntry = entries.find(r => r.log_date === today);
+  const latest = todayEntry || [...entries].sort((a, b) => a.log_date.localeCompare(b.log_date)).pop();
+
+  if (latest) {
+    const netProfit = latest.net_profit_incl_dust !== undefined && latest.net_profit_incl_dust !== null
+      ? Number(latest.net_profit_incl_dust) : Number(latest.total_profit || 0);
+    groundEl.textContent = fmt2(Number(latest.umbalakada_ground_kg || 0)) + ' kg';
+    removedEl.textContent = fmt2(Number(latest.dust_removed_kg || 0)) + ' kg';
+    impactEl.textContent = fmt(Number(latest.net_dust_impact || 0));
+    netProfitEl.textContent = fmt(netProfit);
+    if (noteEl) {
+      noteEl.textContent = todayEntry
+        ? "Figures are from today's saved Daily Production Log snapshot."
+        : `No snapshot saved for today yet — showing the most recent saved day (${latest.log_date}).`;
+    }
+  } else {
+    groundEl.textContent = '0 kg';
+    removedEl.textContent = '0 kg';
+    impactEl.textContent = 'Rs. 0';
+    netProfitEl.textContent = 'Rs. 0';
+    if (noteEl) noteEl.textContent = "No Daily Production Log snapshot saved yet this month — save one from the Production tab.";
+  }
+
+  const monthDustRemoved = entries.reduce((sum, r) => sum + (Number(r.dust_removed_kg) || 0), 0);
+  const monthDustImpact = entries.reduce((sum, r) => sum + (Number(r.net_dust_impact) || 0), 0);
+  if (monthRemovedEl) monthRemovedEl.textContent = fmt2(monthDustRemoved) + ' kg';
+  if (monthImpactEl) monthImpactEl.textContent = fmt(monthDustImpact);
+}
+window.renderIncomeDailyDustSummary = renderIncomeDailyDustSummary;
 
 // ==================== ORDERS / CUSTOMERS ====================
 function generateOrderId() {
@@ -8612,6 +8793,7 @@ function toggleTheme() {
   if (sensChart) { sensChart.destroy(); sensChart = null; }
   if (prodChart) { prodChart.destroy(); prodChart = null; }
   if (dpMonthlyChart) { dpMonthlyChart.destroy(); dpMonthlyChart = null; }
+  if (dpDustProfitChart) { dpDustProfitChart.destroy(); dpDustProfitChart = null; }
   if (ingBreakdownChart) { ingBreakdownChart.destroy(); ingBreakdownChart = null; }
   if (trendChart) { trendChart.destroy(); trendChart = null; }
   if (orderStatusChart) { orderStatusChart.destroy(); orderStatusChart = null; }
@@ -11363,6 +11545,7 @@ function activateAppTab(tabId){
       renderFishBills(); // also refreshes calcRealIncome() with real purchase data
       renderProductionBatches(); // also refreshes calcRealIncome() with real output data
     });
+    loadDailyProductionLog().then(() => renderIncomeDailyDustSummary());
   }
   if (tabId === 'monthly-summary') { updateMonthlySummary(); }
   if (tabId === 'analytics') { renderAnalytics(); }
