@@ -2337,7 +2337,7 @@ function calcScenario() {
 // "daily"   = live Grind→Output snapshot + monthly trend chart, sourced
 // from the same dailyProductionLogCache the Production tab uses.
 function switchCostingTab(tab) {
-  ['pricing', 'daily', 'entry', 'daypurchase', 'quickmarket', 'orderbuy'].forEach(t => {
+  ['pricing', 'daily', 'daypurchase', 'orderbuy'].forEach(t => {
     const panel = $(`costingTab-${t}`);
     if (panel) panel.style.display = (t === tab) ? '' : 'none';
   });
@@ -2345,14 +2345,7 @@ function switchCostingTab(tab) {
     btn.classList.toggle('btn-primary', btn.getAttribute('data-costing-tab') === tab);
   });
   if (tab === 'daily') { renderCostingGrindOutputChart(); populatePackProductMapSelects(); renderDailyStoreHistory(); }
-  if (tab === 'entry') {
-    if (!$('ceDate').value) $('ceDate').value = todayIso();
-    onCostingEntryTypeChange();
-    populateCostingEntryOrderPicker();
-    loadCostingEntriesFromCloud().then(renderCostingEntries);
-  }
   if (tab === 'daypurchase') calcDailyPurchase();
-  if (tab === 'quickmarket') calcQuickMarket();
   if (tab === 'orderbuy') calcOrderToBuy();
 }
 window.switchCostingTab = switchCostingTab;

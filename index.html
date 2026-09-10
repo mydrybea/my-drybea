@@ -1761,9 +1761,7 @@
       <div id="costingSubTabs" class="costing-subtabs">
         <button type="button" class="btn btn-sm costing-subtab btn-primary" data-costing-tab="pricing" onclick="switchCostingTab('pricing')"><i class="business-icon icon-inline" data-lucide="calculator" aria-hidden="true"></i> Pricing &amp; Scenarios</button>
         <button type="button" class="btn btn-sm costing-subtab" data-costing-tab="daily" onclick="switchCostingTab('daily')"><i class="business-icon icon-inline" data-lucide="line-chart" aria-hidden="true"></i> Daily Costing &amp; Trends</button>
-        <button type="button" class="btn btn-sm costing-subtab" data-costing-tab="entry" onclick="switchCostingTab('entry')"><i class="business-icon icon-inline" data-lucide="clipboard-list" aria-hidden="true"></i> Umbalakada → Order Costing</button>
         <button type="button" class="btn btn-sm costing-subtab" data-costing-tab="daypurchase" onclick="switchCostingTab('daypurchase')"><i class="business-icon icon-inline" data-lucide="scale" aria-hidden="true"></i> Today's Purchase → Best Pack</button>
-        <button type="button" class="btn btn-sm costing-subtab" data-costing-tab="quickmarket" onclick="switchCostingTab('quickmarket')"><i class="business-icon icon-inline" data-lucide="zap" aria-hidden="true"></i> Quick Market Decision</button>
         <button type="button" class="btn btn-sm costing-subtab" data-costing-tab="orderbuy" onclick="switchCostingTab('orderbuy')"><i class="business-icon icon-inline" data-lucide="shopping-cart" aria-hidden="true"></i> Order → What to Buy</button>
       </div>
     </div>
@@ -2075,119 +2073,6 @@
     </div>
     <!-- /costingTab-daily -->
 
-    <!-- ============ COSTING TAB — UMBALAKADA → ORDER COSTING (sub-tab) ============ -->
-    <!-- One-place entry chain: today's Umbalakada purchase (type & price) ->
-         grind output & dust used -> the Final Product it became -> how that
-         product was sold -> which Order it's linked to -> the Income, which
-         is saved straight to Supabase (costing_entries) and mirrored into
-         the Sales table automatically so it shows up in Income/Sales too.
-         See saveCostingEntry() in app.js for the one-time Supabase setup SQL. -->
-    <div id="costingTab-entry" style="display:none;">
-      <div class="card">
-        <h2><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="clipboard-list" aria-hidden="true"></i></span><span>Add Costing Entry</span></h2>
-        <p class="pro-subtitle green">Umbalakada purchase → grind &amp; dust → final product → sale → order → income, all in one entry.</p>
-
-        <div class="grid-3">
-          <div class="field">
-            <label>Date</label>
-            <input type="date" id="ceDate">
-          </div>
-          <div class="field">
-            <label>Umbalakada Type</label>
-            <select id="ceType" onchange="onCostingEntryTypeChange()">
-              <option value="linna">Linna</option>
-              <option value="balaya">Balaya</option>
-              <option value="premium">Premium Mix</option>
-            </select>
-          </div>
-          <div class="field">
-            <label>Price <span class="hint">(Rs./kg)</span></label>
-            <div class="input-prefix"><span>Rs.</span><input type="number" id="cePricePerKg" value="0" min="0"></div>
-          </div>
-        </div>
-
-        <div class="grid-3">
-          <div class="field">
-            <label>Purchased Today <span class="hint">(kg)</span></label>
-            <input type="number" id="cePurchasedKg" value="0" min="0" step="0.1">
-          </div>
-          <div class="field">
-            <label>Grind Output Weight <span class="hint">(kg, after grinding)</span></label>
-            <input type="number" id="ceGrindOutputKg" value="0" min="0" step="0.1">
-          </div>
-          <div class="field">
-            <label>Used Umbalakada <span class="hint">(kg, into production)</span></label>
-            <input type="number" id="ceUsedUmbalakadaKg" value="0" min="0" step="0.1">
-          </div>
-        </div>
-
-        <div class="grid-3">
-          <div class="field">
-            <label>Used Dust <span class="hint">(kg)</span></label>
-            <input type="number" id="ceUsedDustKg" value="0" min="0" step="0.1">
-          </div>
-          <div class="field">
-            <label>Final Product <span class="hint">(pack size)</span></label>
-            <select id="ceFinalProduct">
-              <option value="50">50g</option>
-              <option value="100" selected>100g</option>
-              <option value="500">500g</option>
-              <option value="1000">1kg</option>
-            </select>
-          </div>
-          <div class="field">
-            <label>Output Qty <span class="hint">(packs produced)</span></label>
-            <input type="number" id="ceOutputQty" value="0" min="0" step="1">
-          </div>
-        </div>
-
-        <div class="grid-2">
-          <div class="field">
-            <label>Sale Type <span class="hint">(how this product was sold)</span></label>
-            <select id="ceSaleType">
-              <option value="unsold">Not sold yet</option>
-              <option value="retail">Retail</option>
-              <option value="wholesale">Wholesale</option>
-              <option value="distributor">Distributor</option>
-            </select>
-          </div>
-          <div class="field">
-            <label>Link to Order <span class="hint">(optional)</span></label>
-            <select id="ceOrderId" onchange="onCostingEntryOrderPick()">
-              <option value="">— None —</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="field">
-          <label>Income <span class="hint">(Rs. — saved straight to Sales/Income automatically)</span></label>
-          <div class="input-prefix"><span>Rs.</span><input type="number" id="ceIncome" value="0" min="0"></div>
-        </div>
-        <div class="field">
-          <label>Notes</label>
-          <input type="text" id="ceNotes" placeholder="Optional note">
-        </div>
-
-        <div class="btn-row">
-          <button class="btn btn-primary" onclick="saveCostingEntry()"><i class="business-icon icon-inline" data-lucide="save" aria-hidden="true"></i> Save Entry</button>
-        </div>
-      </div>
-
-      <div class="stat-grid" style="margin-top:16px;">
-        <div class="stat"><div class="k">Purchased (This Month)</div><div class="v" id="ceSumPurchasedKg">0 kg</div></div>
-        <div class="stat"><div class="k">Used (This Month)</div><div class="v" id="ceSumUsedKg">0 kg</div></div>
-        <div class="stat"><div class="k">Dust Used (This Month)</div><div class="v" id="ceSumDustKg">0 kg</div></div>
-        <div class="stat accent"><div class="k">Income (This Month)</div><div class="v" id="ceSumIncome">Rs. 0</div></div>
-      </div>
-
-      <div class="table-wrap" style="margin-top:14px;">
-        <table>
-          <thead><tr><th>Date</th><th>Type</th><th class="num">Price/kg</th><th class="num">Purchased</th><th class="num">Grind Out</th><th class="num">Used</th><th class="num">Dust Used</th><th>Final Product</th><th>Sale Type</th><th>Order</th><th class="num">Income</th><th>Actions</th></tr></thead>
-          <tbody id="costingEntriesBody"></tbody>
-        </table>
-      </div>
-    </div>
-    <!-- /costingTab-entry -->
 
     <!-- ============ COSTING TAB — TODAY'S PURCHASE → BEST PACK (sub-tab) ============ -->
     <!-- Pure live calculator (nothing saved to Supabase, same as the
@@ -2279,92 +2164,6 @@
       </div>
     </div>
     <!-- /costingTab-daypurchase -->
-
-    <!-- ============ COSTING TAB — QUICK MARKET DECISION (sub-tab) ============ -->
-    <!-- Built for standing AT the market, before buying anything: no actual
-         grind output yet, so estimates use the Grinding Yield % already set
-         on the Pricing & Scenarios sub-tab (linnaGrindYield etc.) rather
-         than requiring a real grind. Weight can be entered in kg or grams
-         (market quotes are sometimes in grams for small lots). The Mix
-         Variation table reuses calculatePack()/PACKS — no new pricing
-         logic — to instantly compare today's 5 preset mixes and surface the
-         single best pack+mix combination. "Send to Daily Production" just
-         pre-fills the Production tab's existing Daily Production Log fields
-         so the day still lands in that tab's day-by-day history once the
-         owner reviews & hits Save there. See calcQuickMarket() in app.js. -->
-    <div id="costingTab-quickmarket" style="display:none;">
-      <div class="card">
-        <h2><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="zap" aria-hidden="true"></i></span><span>Quick Market Decision</span></h2>
-        <p class="pro-subtitle gold">At the market, about to buy? Enter what's on offer and decide before you pay — uses your saved Grinding Yield % to estimate output, no actual grinding needed yet.</p>
-
-        <div class="field" style="max-width:220px;">
-          <label>Weight Unit</label>
-          <select id="qmUnit" onchange="calcQuickMarket()">
-            <option value="kg" selected>Kilograms (kg)</option>
-            <option value="g">Grams (g)</option>
-          </select>
-        </div>
-
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>Type</th><th class="num">Weight Offered (<span id="qmUnitHeader">kg</span>)</th><th class="num">Price /kg (Rs.)</th><th class="num">Cost (Rs.)</th><th class="num">Est. Usable Output</th></tr></thead>
-            <tbody>
-              <tr>
-                <td><strong>Linna</strong></td>
-                <td><input type="number" id="qmQtyLinna" value="0" min="0" step="0.1" oninput="calcQuickMarket()"></td>
-                <td><input type="number" id="qmPriceLinna" value="0" min="0" oninput="calcQuickMarket()"></td>
-                <td class="num" id="qmCostLinna">Rs. 0</td>
-                <td class="num" id="qmOutLinna">0 kg</td>
-              </tr>
-              <tr>
-                <td><strong>Balaya</strong></td>
-                <td><input type="number" id="qmQtyBalaya" value="0" min="0" step="0.1" oninput="calcQuickMarket()"></td>
-                <td><input type="number" id="qmPriceBalaya" value="0" min="0" oninput="calcQuickMarket()"></td>
-                <td class="num" id="qmCostBalaya">Rs. 0</td>
-                <td class="num" id="qmOutBalaya">0 kg</td>
-              </tr>
-              <tr>
-                <td><strong>Premium Mix</strong></td>
-                <td><input type="number" id="qmQtyPremium" value="0" min="0" step="0.1" oninput="calcQuickMarket()"></td>
-                <td><input type="number" id="qmPricePremium" value="0" min="0" oninput="calcQuickMarket()"></td>
-                <td class="num" id="qmCostPremium">Rs. 0</td>
-                <td class="num" id="qmOutPremium">0 kg</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <div class="stat-grid" style="margin-top:14px;">
-          <div class="stat"><div class="k">Total Weight</div><div class="v" id="qmStatTotalWeight">0 kg</div></div>
-          <div class="stat"><div class="k">Total Cost</div><div class="v" id="qmStatTotalCost">Rs. 0</div></div>
-          <div class="stat"><div class="k">Est. Usable Output</div><div class="v" id="qmStatEstOutput">0 kg</div></div>
-          <div class="stat bad"><div class="k">Est. Dust Loss</div><div class="v" id="qmStatEstDust">0 kg</div></div>
-          <div class="stat accent"><div class="k">Est. Cost / kg Usable</div><div class="v" id="qmStatCostPerKg">Rs. 0</div></div>
-        </div>
-        <div class="monthly-summary-note" id="qmYieldNote">Estimates use the Grinding Yield % from the Pricing &amp; Scenarios sub-tab.</div>
-      </div>
-
-      <div class="card" style="margin-top:16px;">
-        <h2><span class="pro-title-icon purple" aria-hidden="true"><i class="business-icon" data-lucide="chart-no-axes-combined" aria-hidden="true"></i></span><span>Mix Variation Comparison</span></h2>
-        <p class="pro-subtitle purple">Every preset fish-mix ratio, priced at today's fish costs above, showing each mix's single most profitable pack size (by profit/kg, so pack sizes compare fairly).</p>
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>Mix (Linna/Balaya/Premium)</th><th>Best Pack</th><th class="num">Cost/kg</th><th class="num">Profit/kg</th><th class="num">Margin</th><th></th></tr></thead>
-            <tbody id="qmMixVariationBody"></tbody>
-          </table>
-        </div>
-        <div class="monthly-summary-note" id="qmOverallBestNote"></div>
-      </div>
-
-      <div class="card" style="margin-top:16px;">
-        <h2><span class="pro-title-icon teal" aria-hidden="true"><i class="business-icon" data-lucide="calendar-check" aria-hidden="true"></i></span><span>Send to Daily Production</span></h2>
-        <p class="pro-subtitle teal">Decided? Push today's estimated Grind Output &amp; Dust straight into the Production tab's Daily Production Log — review the numbers there and hit "Save Today's Snapshot" to store it in your day-by-day production history.</p>
-        <div class="btn-row">
-          <button class="btn btn-primary" onclick="sendQuickMarketToProduction()"><i class="business-icon icon-inline" data-lucide="package-check" aria-hidden="true"></i> Send Estimated Output to Daily Production Log</button>
-        </div>
-      </div>
-    </div>
-    <!-- /costingTab-quickmarket -->
 
     <!-- ============ COSTING TAB — ORDER → WHAT TO BUY (sub-tab) ============ -->
     <!-- Reverse of Quick Market Decision: instead of "what should I do with
@@ -3421,29 +3220,6 @@
       <div class="notice" style="margin-bottom:14px;font-size:.75rem;">This catalog is shared with the team. Only the owner can add, edit or remove products.</div>
       <div id="productsGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px;">
         <div style="grid-column:1/-1;text-align:center;opacity:.5;padding:20px;">Loading…</div>
-      </div>
-    </div>
-
-    <!-- ============ DAILY PRODUCT COSTING ============ -->
-    <div class="card" style="margin-top:16px;">
-      <h2><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="calculator" aria-hidden="true"></i></span><span>Daily Product Costing</span></h2>
-      <p class="pro-subtitle gold">Log every daily cost — raw fish, ingredients, staff salary, staff meals, transport, ice, water &amp; electricity. Feeds straight into Expenses and the Profit chart.</p>
-
-      <div class="stat-grid" id="costingStatGrid">
-        <div class="stat"><div class="k">Today's Costing</div><div class="v" id="costingTodayTotal">Rs. 0</div></div>
-        <div class="stat"><div class="k">This Month</div><div class="v" id="costingMonthTotal">Rs. 0</div></div>
-        <div class="stat good"><div class="k">Biggest Cost Today</div><div class="v" id="costingTopCategory">—</div></div>
-      </div>
-
-      <div class="btn-row" style="margin:14px 0;" data-owner-only>
-        <button class="btn btn-primary btn-sm" onclick="openNewCosting()"><i class="business-icon icon-inline" data-lucide="plus" aria-hidden="true"></i> Add Daily Cost</button>
-      </div>
-
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Date</th><th>Category</th><th>Note</th><th>Amount</th><th></th></tr></thead>
-          <tbody id="costingBody"><tr><td colspan="5" style="text-align:center;opacity:.5;padding:20px;">Loading…</td></tr></tbody>
-        </table>
       </div>
     </div>
   </section>
