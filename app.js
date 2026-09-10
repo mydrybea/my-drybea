@@ -2149,7 +2149,7 @@ function getAllocatedOverheadPerPack() {
 }
 
 // ==================== CHARTS ====================
-let costChart = null, sensChart = null, prodChart = null, dpMonthlyChart = null, ingBreakdownChart = null, dpDustProfitChart = null, costingGrindOutputChart = null, costBreakdownChart = null;
+let costChart = null, prodChart = null, dpMonthlyChart = null, ingBreakdownChart = null, dpDustProfitChart = null, costingGrindOutputChart = null, costBreakdownChart = null;
 let dailyProductionLogCache = [];
 let lastProdAvgRawCostPerKg = 0, lastProdIngredientsCostPerKg = 0, lastProdOverheadCostPerKg = 0;
 let lastProdAvgCostPerKg = 0, lastProdAvgMarketPrice = 0, lastProdAvgProfitPerKg = 0;
@@ -2381,7 +2381,6 @@ function calcAll() {
 
   calcScenario();
   calcBulk();
-  calcSensitivity();
   calcDashboard();
   renderDynamicPricing();
   renderGrindingDustAllPacksTable();
@@ -4117,40 +4116,6 @@ function calcBulk() {
   $('bulkBalaya').textContent = balayaWhole.toFixed(1) + ' kg';
   $('bulkKawalam').textContent = premiumWhole.toFixed(1) + ' kg';
   $('bulkCost').textContent = fmt(fishCost);
-}
-
-function calcSensitivity() {
-  const sizeKey = $('sensSize').value;
-  const mix = getMixPct();
-  const sp = state.dashSp[sizeKey] || PACKS[sizeKey].mrp;
-  let html = '';
-  const labels = [], profits = [];
-  for (let price = 1400; price <= 2100; price += 50) {
-    const r = calculatePack(sizeKey, price, state.balayaPrice, state.kawalamPrice, mix, 'sp', 0, sp);
-    html += `<tr><td>Rs.${price}</td><td>${fmt(r.rawFishCost)}</td><td class="num">${fmt(r.totalCost)}</td><td class="num"><span class="badge ${r.profit>=0?'badge-good':'badge-bad'}">${fmt(r.profit)}</span></td><td class="num">${fmt2(r.margin)}%</td></tr>`;
-    labels.push('Rs.'+price);
-    profits.push(Math.round(r.profit));
-  }
-  $('sensBody').innerHTML = html;
-  const colors = getChartColors();
-  const ctx = $('sensChart').getContext('2d');
-  const chartData = {labels, datasets:[{label:'Profit', data:profits, borderColor:'#10b981', fill:true, backgroundColor:'rgba(16,185,129,0.08)', tension:0.4, pointBackgroundColor:'#10b981', pointRadius:3, pointHoverRadius:6, borderWidth:2}]};
-  if (sensChart) { sensChart.data = chartData; sensChart.update(); }
-  else {
-    sensChart = new Chart(ctx, {
-      type:'line',
-      data: chartData,
-      options:{
-        responsive:true,
-        maintainAspectRatio:false,
-        plugins:{legend:{display:false}},
-        scales:{
-          y:{beginAtZero:true, grid:{color:colors.grid}, ticks:{color:colors.text, font:{size:10}}},
-          x:{grid:{color:colors.grid}, ticks:{color:colors.text, font:{size:10}}}
-        }
-      }
-    });
-  }
 }
 
 function calcDashboard() {
@@ -11019,7 +10984,6 @@ function toggleTheme() {
   $('themeToggle').innerHTML = '<i class="business-icon" data-lucide="moon" aria-hidden="true"></i>';
   if (window.lucide) lucide.createIcons();
   if (costChart) { costChart.destroy(); costChart = null; }
-  if (sensChart) { sensChart.destroy(); sensChart = null; }
   if (prodChart) { prodChart.destroy(); prodChart = null; }
   if (dpMonthlyChart) { dpMonthlyChart.destroy(); dpMonthlyChart = null; }
   if (dpDustProfitChart) { dpDustProfitChart.destroy(); dpDustProfitChart = null; }
@@ -13766,7 +13730,7 @@ function activateAppTab(tabId){
   panel.style.animation = 'none'; panel.offsetHeight; panel.style.animation = 'fadeIn 0.3s ease';
   if (tabId === 'staff-home') showSkeletons('staff-home');
   if(userRole==='staff') refreshStaffWorkspaceData(tabId);
-  if (tabId === 'dashboard') { calcDashboard(); calcSensitivity(); calcBulk(); }
+  if (tabId === 'dashboard') { calcDashboard(); calcBulk(); }
   if (tabId === 'income') {
     calcDashboard();
     calcRealIncome();
@@ -14095,7 +14059,6 @@ window.resetDash = resetDash;
 window.calcAll = calcAll;
 window.calcScenario = calcScenario;
 window.calcBulk = calcBulk;
-window.calcSensitivity = calcSensitivity;
 window.calcDashboard = calcDashboard;
 window.calcProduction = calcProduction;
 window.updateMonthlySummary = updateMonthlySummary;
