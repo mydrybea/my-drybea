@@ -1762,6 +1762,7 @@
         <button type="button" class="btn btn-sm costing-subtab btn-primary" data-costing-tab="pricing" onclick="switchCostingTab('pricing')"><i class="business-icon icon-inline" data-lucide="calculator" aria-hidden="true"></i> Pricing &amp; Scenarios</button>
         <button type="button" class="btn btn-sm costing-subtab" data-costing-tab="daily" onclick="switchCostingTab('daily')"><i class="business-icon icon-inline" data-lucide="line-chart" aria-hidden="true"></i> Daily Costing &amp; Trends</button>
         <button type="button" class="btn btn-sm costing-subtab" data-costing-tab="entry" onclick="switchCostingTab('entry')"><i class="business-icon icon-inline" data-lucide="clipboard-list" aria-hidden="true"></i> Umbalakada → Order Costing</button>
+        <button type="button" class="btn btn-sm costing-subtab" data-costing-tab="daypurchase" onclick="switchCostingTab('daypurchase')"><i class="business-icon icon-inline" data-lucide="scale" aria-hidden="true"></i> Today's Purchase → Best Pack</button>
       </div>
     </div>
 
@@ -2158,6 +2159,97 @@
       </div>
     </div>
     <!-- /costingTab-entry -->
+
+    <!-- ============ COSTING TAB — TODAY'S PURCHASE → BEST PACK (sub-tab) ============ -->
+    <!-- Pure live calculator (nothing saved to Supabase, same as the
+         "Pricing & Scenarios" sub-tab): enter TODAY's actual multi-type
+         Umbalakada purchase (Linna + Balaya + Premium, bought at different
+         kg/price in one go) -> actual Grind Output (kg) -> dust weight is
+         auto-derived (Purchased − Grind Output) -> optional dust
+         recovery/sale income + any other cost -> Net Cost/kg of usable
+         product -> cost, profit & margin for EVERY pack size, with the
+         most profitable pack (by profit per kg, so pack sizes compare
+         fairly) highlighted. See calcDailyPurchase() in app.js. -->
+    <div id="costingTab-daypurchase" style="display:none;">
+      <div class="card">
+        <h2><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="shopping-basket" aria-hidden="true"></i></span><span>Today's Umbalakada Purchase</span></h2>
+        <p class="pro-subtitle green">Enter today's actual purchase — any combination of the three types, at today's prices.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Type</th><th class="num">Qty Bought (kg)</th><th class="num">Price /kg (Rs.)</th><th class="num">Row Cost (Rs.)</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><strong>Linna</strong></td>
+                <td><input type="number" id="dpbQtyLinna" value="0" min="0" step="0.1" oninput="calcDailyPurchase()"></td>
+                <td><input type="number" id="dpbPriceLinna" value="0" min="0" oninput="calcDailyPurchase()"></td>
+                <td class="num" id="dpbCostLinna">Rs. 0</td>
+              </tr>
+              <tr>
+                <td><strong>Balaya</strong></td>
+                <td><input type="number" id="dpbQtyBalaya" value="0" min="0" step="0.1" oninput="calcDailyPurchase()"></td>
+                <td><input type="number" id="dpbPriceBalaya" value="0" min="0" oninput="calcDailyPurchase()"></td>
+                <td class="num" id="dpbCostBalaya">Rs. 0</td>
+              </tr>
+              <tr>
+                <td><strong>Premium Mix</strong></td>
+                <td><input type="number" id="dpbQtyPremium" value="0" min="0" step="0.1" oninput="calcDailyPurchase()"></td>
+                <td><input type="number" id="dpbPricePremium" value="0" min="0" oninput="calcDailyPurchase()"></td>
+                <td class="num" id="dpbCostPremium">Rs. 0</td>
+              </tr>
+            </tbody>
+            <tfoot>
+              <tr style="font-weight:800;">
+                <td colspan="2">Total Purchased</td>
+                <td class="num" id="dpbTotalKg">0 kg</td>
+                <td class="num" id="dpbTotalCost" style="color:var(--green);">Rs. 0</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+
+        <h2 style="margin-top:16px;"><span class="pro-title-icon orange" aria-hidden="true"><i class="business-icon" data-lucide="wind" aria-hidden="true"></i></span><span>Grinding &amp; Dust Loss (Today)</span></h2>
+        <p class="pro-subtitle orange">Grind everything bought above, then tell it what actually came out — dust weight is worked out automatically.</p>
+        <div class="grid-3">
+          <div class="field">
+            <label>Grind Output <span class="hint">(kg, usable after grinding)</span></label>
+            <input type="number" id="dpbGrindOutputKg" value="0" min="0" step="0.1" oninput="calcDailyPurchase()">
+          </div>
+          <div class="field">
+            <label>Dust Recovered / Sold <span class="hint">(kg, optional)</span></label>
+            <input type="number" id="dpbDustRecoveredKg" value="0" min="0" step="0.1" oninput="calcDailyPurchase()">
+          </div>
+          <div class="field">
+            <label>Dust Sale Price <span class="hint">(Rs./kg, if sold)</span></label>
+            <input type="number" id="dpbDustSalePrice" value="0" min="0" step="0.01" oninput="calcDailyPurchase()">
+          </div>
+        </div>
+        <div class="field">
+          <label>Other Costs Today <span class="hint">(Rs. — ingredients, packing labour etc., optional)</span></label>
+          <div class="input-prefix"><span>Rs.</span><input type="number" id="dpbOtherCosts" value="0" min="0" oninput="calcDailyPurchase()"></div>
+        </div>
+        <div class="notice warn" id="dpbDustWarning" style="display:none;margin-top:6px;"></div>
+
+        <div class="stat-grid" style="margin-top:14px;">
+          <div class="stat"><div class="k">Total Purchased</div><div class="v" id="dpbStatPurchased">0 kg</div></div>
+          <div class="stat"><div class="k">Grind Output</div><div class="v" id="dpbStatOutput">0 kg</div></div>
+          <div class="stat bad"><div class="k">Dust Loss</div><div class="v" id="dpbStatDust">0 kg (0%)</div></div>
+          <div class="stat accent"><div class="k">Net Cost / kg (usable)</div><div class="v" id="dpbStatNetCostPerKg">Rs. 0</div></div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:16px;">
+        <h2><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="trophy" aria-hidden="true"></i></span><span>Best Profit Pack</span></h2>
+        <p class="pro-subtitle gold">Cost, profit &amp; margin for every pack size from today's actual purchase — ranked by profit per kg so pack sizes compare fairly. Market Price is pre-filled from the mix you bought today &amp; the Production tab's finished prices — edit any cell to use your real selling price.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Pack</th><th class="num">Cost/Pack</th><th class="num">Market Price/Pack</th><th class="num">Profit/Pack</th><th class="num">Margin</th><th class="num">Profit/kg</th><th>Verdict</th></tr></thead>
+            <tbody id="dpbBestPackBody"></tbody>
+          </table>
+        </div>
+        <div class="monthly-summary-note" id="dpbBestPackNote">Enter today's purchase and grind output above to see the best pack.</div>
+      </div>
+    </div>
+    <!-- /costingTab-daypurchase -->
 
     <!-- Add Product (today's pack output) — quick, ADDITIVE batch log from
          the Costing tab's "Output by Product" card, so the owner doesn't

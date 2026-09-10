@@ -2332,7 +2332,7 @@ function calcScenario() {
 // "daily"   = live Grind→Output snapshot + monthly trend chart, sourced
 // from the same dailyProductionLogCache the Production tab uses.
 function switchCostingTab(tab) {
-  ['pricing', 'daily', 'entry'].forEach(t => {
+  ['pricing', 'daily', 'entry', 'daypurchase'].forEach(t => {
     const panel = $(`costingTab-${t}`);
     if (panel) panel.style.display = (t === tab) ? '' : 'none';
   });
@@ -2346,6 +2346,7 @@ function switchCostingTab(tab) {
     populateCostingEntryOrderPicker();
     loadCostingEntriesFromCloud().then(renderCostingEntries);
   }
+  if (tab === 'daypurchase') calcDailyPurchase();
 }
 window.switchCostingTab = switchCostingTab;
 
@@ -2481,6 +2482,129 @@ function renderCostingGrindOutputChart() {
   });
 }
 window.renderCostingGrindOutputChart = renderCostingGrindOutputChart;
+
+// ==================== COSTING TAB — TODAY'S PURCHASE → BEST PACK ====================
+// Pure live calculator, same spirit as the "Pricing & Scenarios" sub-tab —
+// nothing is saved to Supabase here. Takes TODAY's actual multi-type
+// Umbalakada purchase (Linna + Balaya + Premium, each optional, bought at
+// different kg/price), an actual Grind Output (kg), auto-derives dust
+// weight (Purchased − Grind Output), nets off any dust sale income + other
+// costs, then prices EVERY pack size against that real Net Cost/kg and
+// ranks them by PROFIT PER KG (not profit per pack, which would always
+// favour the 1kg pack) so the "best" pack is a fair comparison.
+let dpbMarketPriceOverride = {}; // { '50': 200, ... } — set only once the owner edits a cell
+
+function calcDailyPurchase() {
+  const body = $('dpbBestPackBody');
+  if (!body) return; // sub-tab not in the DOM (older cached HTML)
+
+  const rows = [
+    { key: 'Linna', qtyId: 'dpbQtyLinna', priceId: 'dpbPriceLinna', costId: 'dpbCostLinna', finField: 'finLinna' },
+    { key: 'Balaya', qtyId: 'dpbQtyBalaya', priceId: 'dpbPriceBalaya', costId: 'dpbCostBalaya', finField: 'finBalaya' },
+    { key: 'Premium Mix', qtyId: 'dpbQtyPremium', priceId: 'dpbPricePremium', costId: 'dpbCostPremium', finField: 'finKawalam' }
+  ];
+
+  let totalKg = 0, totalRawCost = 0, weightedFinPriceSum = 0;
+  rows.forEach(r => {
+    const qty = Number($(r.qtyId).value) || 0;
+    const price = Number($(r.priceId).value) || 0;
+    const cost = qty * price;
+    totalKg += qty;
+    totalRawCost += cost;
+    // Finished/market price per kg for this type comes straight from the
+    // Production tab's "Finished Umbalakada Market Prices" fields, so this
+    // stays in sync without duplicating those numbers here.
+    const finEl = $(r.finField);
+    const finPrice = finEl ? (Number(finEl.value) || 0) : 0;
+    weightedFinPriceSum += qty * finPrice;
+    const costEl = $(r.costId);
+    if (costEl) costEl.textContent = fmt(cost);
+  });
+
+  $('dpbTotalKg').textContent = fmt2(totalKg) + ' kg';
+  $('dpbTotalCost').textContent = fmt(totalRawCost);
+
+  const grindOutputKg = Number($('dpbGrindOutputKg').value) || 0;
+  const dustRecoveredKg = Number($('dpbDustRecoveredKg').value) || 0;
+  const dustSalePrice = Number($('dpbDustSalePrice').value) || 0;
+  const otherCosts = Number($('dpbOtherCosts').value) || 0;
+
+  const dustKg = totalKg - grindOutputKg; // auto-derived, not entered
+  const dustPct = totalKg > 0 ? (dustKg / totalKg) * 100 : 0;
+  const dustWarnEl = $('dpbDustWarning');
+  if (dustWarnEl) {
+    if (grindOutputKg > totalKg && totalKg > 0) {
+      dustWarnEl.style.display = 'block';
+      dustWarnEl.textContent = `⚠️ Grind Output (${fmt2(grindOutputKg)}kg) can't be more than what you bought (${fmt2(totalKg)}kg) — check the numbers above.`;
+    } else {
+      dustWarnEl.style.display = 'none';
+    }
+  }
+
+  const dustIncome = Math.min(dustRecoveredKg, Math.max(dustKg, 0)) * dustSalePrice;
+  const netCost = totalRawCost - dustIncome + otherCosts;
+  const costPerKgUsable = grindOutputKg > 0 ? netCost / grindOutputKg : 0;
+  const weightedFinPricePerKg = totalKg > 0 ? weightedFinPriceSum / totalKg : 0;
+
+  $('dpbStatPurchased').textContent = fmt2(totalKg) + ' kg';
+  $('dpbStatOutput').textContent = fmt2(grindOutputKg) + ' kg';
+  $('dpbStatDust').textContent = fmt2(Math.max(dustKg, 0)) + ' kg (' + fmt2(Math.max(dustPct, 0)) + '%)';
+  $('dpbStatNetCostPerKg').textContent = fmt(costPerKgUsable);
+
+  if (grindOutputKg <= 0 || totalKg <= 0) {
+    body.innerHTML = `<tr><td colspan="7" style="text-align:center;opacity:.5;padding:16px;">Enter today's purchase and Grind Output above.</td></tr>`;
+    $('dpbBestPackNote').textContent = 'Enter today\'s purchase and grind output above to see the best pack.';
+    return;
+  }
+
+  // Cost/pack = this pack's share of the raw+dust-net cost + the same
+  // grinding-labour & packaging-cost assumptions used on the Pricing &
+  // Scenarios sub-tab (PACKS[key].grind / .pack), so numbers stay consistent
+  // across sub-tabs.
+  const packRows = Object.keys(PACKS).map(key => {
+    const p = PACKS[key];
+    const grams = Number(key);
+    const rawShare = costPerKgUsable * (grams / 1000);
+    const costPerPack = rawShare + p.grind + p.pack;
+
+    const defaultMarketPrice = weightedFinPricePerKg > 0 ? weightedFinPricePerKg * (grams / 1000) : p.mrp;
+    const marketPrice = (dpbMarketPriceOverride[key] != null) ? dpbMarketPriceOverride[key] : defaultMarketPrice;
+
+    const profit = marketPrice - costPerPack;
+    const margin = marketPrice > 0 ? (profit / marketPrice) * 100 : 0;
+    const profitPerKg = grams > 0 ? profit / (grams / 1000) : 0;
+
+    return { key, label: p.label, costPerPack, marketPrice, profit, margin, profitPerKg };
+  });
+
+  const bestKey = packRows.reduce((best, r) => (r.profitPerKg > best.profitPerKg ? r : best), packRows[0]).key;
+
+  body.innerHTML = packRows.map(r => {
+    const isBest = r.key === bestKey;
+    const verdict = isBest
+      ? '<span class="badge badge-good">⭐ Best Pack</span>'
+      : (r.profit >= 0 ? '<span class="badge badge-good">Profit</span>' : '<span class="badge badge-bad">Loss</span>');
+    return `<tr${isBest ? ' style="background:rgba(14,164,114,.07);"' : ''}>
+      <td>${r.label}</td>
+      <td class="num">${fmt(r.costPerPack)}</td>
+      <td class="num"><input type="number" class="editable-sp" value="${r.marketPrice.toFixed(2)}" style="width:90px;min-height:32px;text-align:right;" onchange="setDpbMarketPrice('${r.key}',this.value)"></td>
+      <td class="num"><span class="badge ${r.profit>=0?'badge-good':'badge-bad'}">${fmt(r.profit)}</span></td>
+      <td class="num">${fmt2(r.margin)}%</td>
+      <td class="num">${fmt(r.profitPerKg)}</td>
+      <td>${verdict}</td>
+    </tr>`;
+  }).join('');
+
+  const bestRow = packRows.find(r => r.key === bestKey);
+  $('dpbBestPackNote').textContent = `From today's purchase: ${bestRow.label} gives the best profit at ${fmt(bestRow.profitPerKg)}/kg (${fmt(bestRow.profit)}/pack, ${fmt2(bestRow.margin)}% margin). Market prices are editable per pack above.`;
+}
+window.calcDailyPurchase = calcDailyPurchase;
+
+function setDpbMarketPrice(key, value) {
+  dpbMarketPriceOverride[key] = Number(value) || 0;
+  calcDailyPurchase();
+}
+window.setDpbMarketPrice = setDpbMarketPrice;
 
 // ==================== COSTING TAB — "ADD PRODUCT" BATCH LOG (today's pack output) ====================
 // Lets the owner log today's pack output right from the Costing tab's
