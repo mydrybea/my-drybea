@@ -2000,15 +2000,20 @@
       </div>
 
       <div class="card">
-        <h2><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="package-check" aria-hidden="true"></i></span><span>Output by Product — Profit (Today)</span></h2>
-        <p class="pro-subtitle gold">Today's pack quantities (entered in the Production tab's Daily Production Log) priced at current fish costs &amp; MRP — updates live whenever prices or the mix change.</p>
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+          <div style="flex:1;min-width:220px;">
+            <h2><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="package-check" aria-hidden="true"></i></span><span>Output by Product — Profit (Today)</span></h2>
+            <p class="pro-subtitle gold">Today's pack quantities, priced at current fish costs &amp; MRP — updates live whenever prices or the mix change.</p>
+          </div>
+          <button type="button" class="btn btn-primary btn-sm" style="margin-top:2px;" onclick="openAddDailyProductModal()"><i class="business-icon icon-inline" data-lucide="plus" aria-hidden="true"></i> Add Product</button>
+        </div>
         <div class="table-wrap">
           <table>
             <thead><tr><th>Pack</th><th class="num">Qty Today</th><th class="num">Cost/Pack</th><th class="num">Profit/Pack</th><th class="num">Total Profit</th></tr></thead>
             <tbody id="costingOutputByProductBody"></tbody>
           </table>
         </div>
-        <div class="monthly-summary-note" id="costingOutputByProductTotal">Enter today's pack quantities in the Production tab to see this breakdown.</div>
+        <div class="monthly-summary-note" id="costingOutputByProductTotal">No pack quantities added for today yet — tap "Add Product" above, or enter them in the Production tab.</div>
       </div>
 
       <div class="card">
@@ -2144,6 +2149,31 @@
       </div>
     </div>
     <!-- /costingTab-entry -->
+
+    <!-- Add Product (today's pack output) — quick entry from the Costing
+         tab's "Output by Product" card, so the owner doesn't have to switch
+         to the Production tab just to log pack quantities. Saves straight to
+         production_cost_log (same row/table the Production tab's Daily
+         Production Log uses), only touching the output_qty_* + notes
+         columns — see saveAddDailyProduct() in app.js. -->
+    <div class="modal-backdrop" id="addDailyProductModal">
+      <div class="modal">
+        <h3><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="package-check" aria-hidden="true"></i></span><span>Add Today's Product Output</span></h3>
+        <p class="pro-subtitle gold">How many of each pack size came out of today's batch — feeds the profit breakdown above instantly.</p>
+        <div class="grid-2">
+          <div class="field"><label>50g Packs</label><input type="number" id="adpQty50" value="0" min="0" step="1"></div>
+          <div class="field"><label>100g Packs</label><input type="number" id="adpQty100" value="0" min="0" step="1"></div>
+        </div>
+        <div class="grid-2">
+          <div class="field"><label>500g Packs</label><input type="number" id="adpQty500" value="0" min="0" step="1"></div>
+          <div class="field"><label>1kg Packs</label><input type="number" id="adpQty1000" value="0" min="0" step="1"></div>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-primary" onclick="saveAddDailyProduct()"><i class="business-icon icon-inline" data-lucide="save" aria-hidden="true"></i> Save</button>
+          <button class="btn" onclick="closeModal('addDailyProductModal')">Cancel</button>
+        </div>
+      </div>
+    </div>
   </section>
 
   <!-- ============ PRODUCTION TAB ============ -->

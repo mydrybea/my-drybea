@@ -2321,7 +2321,7 @@ function renderCostingGrindOutputChart() {
     if (outTotalEl) {
       outTotalEl.textContent = withQty.length > 0
         ? `Total Profit from today's output (all packs): ${fmt(grandTotalProfit)} — recalculates instantly if fish prices or the mix ratio change.`
-        : 'Enter today\'s pack quantities in the Production tab to see this breakdown.';
+        : 'No pack quantities added for today yet — tap "Add Product" above, or enter them in the Production tab.';
     }
   }
 
@@ -2371,6 +2371,71 @@ function renderCostingGrindOutputChart() {
   });
 }
 window.renderCostingGrindOutputChart = renderCostingGrindOutputChart;
+
+// ==================== COSTING TAB — QUICK "ADD PRODUCT" (today's pack output) ====================
+// Lets the owner log today's pack quantities right from the Costing tab's
+// "Output by Product" card, instead of switching to the Production tab's
+// full Daily Production Log. Reads/writes only the output_qty_* columns
+// (+ output_total_profit) on today's production_cost_log row via a partial
+// upsert — grind/dust/cost fields already saved for today (if any) are left
+// untouched, since Supabase upsert() only updates the columns you pass.
+function openAddDailyProductModal() {
+  if (userRole !== 'owner') { alert('Only the owner can add product output.'); return; }
+  const todayEntry = (dailyProductionLogCache || []).find(r => r.log_date === todayIso());
+  Object.keys(PACKS).forEach(key => {
+    const el = $('adpQty' + key);
+    if (el) el.value = todayEntry ? (Number(todayEntry['output_qty_' + key]) || 0) : 0;
+  });
+  $('addDailyProductModal').classList.add('active');
+}
+window.openAddDailyProductModal = openAddDailyProductModal;
+
+async function saveAddDailyProduct() {
+  if (userRole !== 'owner') { alert('Only the owner can add product output.'); return; }
+  if (!currentUser) { alert('Please login first.'); return; }
+
+  const mixNow = getMixPct();
+  const qtyByKey = {};
+  let outputTotalProfit = 0;
+  Object.keys(PACKS).forEach(key => {
+    const qty = Number($('adpQty' + key) && $('adpQty' + key).value) || 0;
+    qtyByKey[key] = qty;
+    if (qty > 0) {
+      try {
+        const r = calculatePack(key, state.linnaPrice, state.balayaPrice, state.kawalamPrice, mixNow, 'mrp', 0, 0);
+        outputTotalProfit += r.profit * qty;
+      } catch (e) {}
+    }
+  });
+
+  const row = {
+    owner_id: currentUser.id,
+    log_date: todayIso(),
+    output_qty_50: qtyByKey[50] || 0,
+    output_qty_100: qtyByKey[100] || 0,
+    output_qty_500: qtyByKey[500] || 0,
+    output_qty_1000: qtyByKey[1000] || 0,
+    output_total_profit: outputTotalProfit,
+    created_by: currentUser.id
+  };
+
+  if (!(await ensureFreshSession())) return;
+  try {
+    const { data, error } = await supabase.from('production_cost_log')
+      .upsert(row, { onConflict: 'owner_id,log_date' }).select().single();
+    if (error) throw error;
+    const idx = dailyProductionLogCache.findIndex(r => r.log_date === data.log_date);
+    if (idx >= 0) dailyProductionLogCache[idx] = data; else dailyProductionLogCache.push(data);
+    closeModal('addDailyProductModal');
+    renderCostingGrindOutputChart();
+    updateStatus("✅ Today's product output saved");
+  } catch (e) {
+    console.error('Save daily product output error:', e);
+    const missingTable = /relation .* does not exist/i.test(e?.message || '');
+    alert('❌ Could not save product output: ' + (e?.message || String(e)) + (missingTable ? '\n\nThe production_cost_log table hasn\'t been created in Supabase yet — see the SQL setup comment above saveDailyProductionLog() in app.js.' : ''));
+  }
+}
+window.saveAddDailyProduct = saveAddDailyProduct;
 
 // ==================== COSTING TAB — UMBALAKADA → ORDER COSTING ENTRY ====================
 // One-place daily entry chaining the whole story together: today's
