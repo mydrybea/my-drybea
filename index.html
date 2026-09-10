@@ -2318,6 +2318,51 @@
       <h2><span class="pro-title-icon orange" aria-hidden="true"><i class="business-icon" data-lucide="factory" aria-hidden="true"></i></span><span>Production Model</span></h2><p class="pro-subtitle orange">Translate raw fish yield into finished output.</p>
       <p class="sub">Compare buying finished Umbalakada vs producing from raw fish. Analyze yield, cost per kg, and profitability.</p>
 
+      <!-- ============ QUICK PROFIT CALCULATOR ============
+           Owner-facing simple mode: update ONLY the Raw Fish Price + a Kg
+           quantity, everything else (yield, ingredients Rs./kg, overhead
+           Rs./kg, market price) is pulled live from the Advanced Settings
+           section below (still calculated by calcProduction()), so this
+           never drifts out of sync with the detailed model. -->
+      <div class="notice" id="quickProfitCalc" style="margin:14px 0 18px;background:rgba(16,185,129,.07);border:1px solid var(--green);border-radius:12px;padding:16px;">
+        <h3 style="color:var(--green);margin:0 0 4px;display:flex;align-items:center;gap:6px;"><i class="business-icon icon-inline" data-lucide="zap" aria-hidden="true"></i> Quick Profit Calculator</h3>
+        <p class="sub" style="margin-top:-2px;">Pick a fish type, update the Raw Fish Price if it changed today, enter how many Kg — Profit calculates automatically.</p>
+        <div class="grid-3">
+          <div class="field">
+            <label>Fish Type</label>
+            <select id="qcFishType" onchange="onQcFishTypeChange()">
+              <option value="Linna">Linna</option>
+              <option value="Balaya">Balaya</option>
+              <option value="Premium Mix">Premium Mix</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Raw Fish Price <span class="hint">(Rs./kg)</span></label>
+            <div class="input-prefix"><span>Rs.</span><input type="number" id="qcRawPrice" min="0" oninput="onQcRawPriceChange()"></div>
+          </div>
+          <div class="field">
+            <label>Raw Fish Quantity <span class="hint">(kg)</span></label>
+            <input type="number" id="qcRawKg" value="100" min="0" oninput="onDataChange()">
+          </div>
+        </div>
+        <div class="stat-grid" style="margin-top:12px;">
+          <div class="stat"><div class="k">Finished Output</div><div class="v" id="qcFinishedKg">0 kg</div></div>
+          <div class="stat"><div class="k">Total Cost</div><div class="v" id="qcTotalCost">Rs. 0</div></div>
+          <div class="stat"><div class="k">Expected Revenue</div><div class="v" id="qcRevenue">Rs. 0</div></div>
+          <div class="stat accent" id="qcProfitStat"><div class="k">Profit</div><div class="v" id="qcProfit">Rs. 0</div></div>
+          <div class="stat"><div class="k">Profit / kg</div><div class="v" id="qcProfitPerKg">Rs. 0/kg</div></div>
+          <div class="stat"><div class="k">Margin</div><div class="v" id="qcMargin">0%</div></div>
+        </div>
+        <div style="margin-top:10px;"><span class="badge" id="qcVerdict">—</span></div>
+      </div>
+
+      <div class="btn-row" style="margin-bottom:14px;">
+        <button type="button" class="btn btn-sm" id="prodAdvancedToggleBtn" onclick="toggleProdAdvanced()">
+          <i class="business-icon icon-inline" data-lucide="settings-2" aria-hidden="true"></i> <span id="prodAdvancedToggleLabel">Show Advanced Settings</span>
+        </button>
+      </div>
+
+      <div id="prodAdvancedWrap" style="display:none;">
       <div class="grid-2">
         <div>
           <h3 style="color:var(--green);margin-bottom:8px;">🐟 Raw Fish Prices (Rs./kg)</h3>
@@ -2470,6 +2515,8 @@
       <div class="notice" style="margin-top:12px;">
         💡 <strong>Break-even volume:</strong> Produce at least <span id="breakEvenKg" style="font-weight:800;">0 kg</span> per month to cover fixed costs.
       </div>
+      </div>
+      <!-- /prodAdvancedWrap -->
     </div>
 
     <!-- ============ PRODUCTION BATCHES (Batch / Lot Traceability) ============ -->

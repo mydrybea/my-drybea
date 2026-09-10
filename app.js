@@ -3730,6 +3730,88 @@ function calcDashboard() {
 }
 
 // ==================== PRODUCTION ====================
+// ==================== QUICK PROFIT CALCULATOR (Production tab) ====================
+// Simple mode for the owner: only "Fish Type", "Raw Fish Price" and "Raw Fish
+// Quantity (kg)" are touched here. Yield / Ingredients Rs./kg / Overhead
+// Rs./kg / Market Price all come live from the Advanced Settings section
+// (still calculated in calcProduction() below), so Quick Calculator profit
+// can never drift out of sync with the detailed model — it's just a focused
+// read+write view onto the same numbers.
+function toggleProdAdvanced() {
+  const wrap = $('prodAdvancedWrap');
+  const label = $('prodAdvancedToggleLabel');
+  if (!wrap) return;
+  const show = wrap.style.display === 'none';
+  wrap.style.display = show ? '' : 'none';
+  if (label) label.textContent = show ? 'Hide Advanced Settings' : 'Show Advanced Settings';
+}
+
+// Map Quick Calculator fish type -> the matching Advanced raw price field id.
+const QC_RAW_PRICE_FIELD = { 'Linna': 'rawLinna', 'Balaya': 'rawBalaya', 'Premium Mix': 'rawKawalam' };
+
+// Fish type changed -> pull that type's current Raw Price from Advanced
+// Settings into the Quick Calculator field, then recalc.
+function onQcFishTypeChange() {
+  const type = $('qcFishType').value;
+  const fieldId = QC_RAW_PRICE_FIELD[type];
+  const qcPriceEl = $('qcRawPrice');
+  if (fieldId && qcPriceEl && $(fieldId)) qcPriceEl.value = $(fieldId).value;
+  onDataChange();
+}
+
+// Owner edits Raw Fish Price directly in the Quick Calculator -> write it
+// straight back into the matching Advanced Settings field, so the two never
+// disagree and the detailed table/chart update too.
+function onQcRawPriceChange() {
+  const type = $('qcFishType') ? $('qcFishType').value : 'Linna';
+  const fieldId = QC_RAW_PRICE_FIELD[type];
+  const qcPriceEl = $('qcRawPrice');
+  if (fieldId && qcPriceEl && $(fieldId)) $(fieldId).value = qcPriceEl.value;
+  onDataChange();
+}
+
+// Called from calcProduction() with the same fishTypes / ingredientsCostPerKg
+// / fixedPerKg it just computed, so nothing is duplicated or recalculated
+// differently.
+function updateQuickProfitCalc(fishTypes, ingredientsCostPerKg, fixedPerKg) {
+  const typeEl = $('qcFishType');
+  if (!typeEl) return; // guard for older cached HTML without the Quick Calculator
+  const type = typeEl.value || 'Linna';
+  const ft = fishTypes.find(f => f.name === type) || fishTypes[0];
+  if (!ft) return;
+
+  // Keep the price field showing the live Advanced value, unless the owner
+  // is actively typing in it right now.
+  const qcPriceEl = $('qcRawPrice');
+  if (qcPriceEl && document.activeElement !== qcPriceEl) qcPriceEl.value = ft.rawPrice;
+
+  const rawKg = Number($('qcRawKg') && $('qcRawKg').value) || 0;
+  const finishedKg = ft.yield > 0 ? rawKg / ft.yield : 0;
+  const rawCost = rawKg * ft.rawPrice;
+  const ingredientsCost = ingredientsCostPerKg * finishedKg;
+  const overheadCost = fixedPerKg * finishedKg;
+  const totalCost = rawCost + ingredientsCost + overheadCost;
+  const revenue = finishedKg * ft.finPrice;
+  const profit = revenue - totalCost;
+  const profitPerKg = finishedKg > 0 ? profit / finishedKg : 0;
+  const margin = revenue > 0 ? (profit / revenue) * 100 : 0;
+
+  if ($('qcFinishedKg')) $('qcFinishedKg').textContent = finishedKg.toFixed(1) + ' kg';
+  if ($('qcTotalCost')) $('qcTotalCost').textContent = fmt(totalCost);
+  if ($('qcRevenue')) $('qcRevenue').textContent = fmt(revenue);
+  if ($('qcProfit')) $('qcProfit').textContent = fmt(profit);
+  if ($('qcProfitPerKg')) $('qcProfitPerKg').textContent = fmt(profitPerKg) + '/kg';
+  if ($('qcMargin')) $('qcMargin').textContent = fmt2(margin) + '%';
+
+  const statEl = $('qcProfitStat');
+  if (statEl) statEl.className = 'stat accent ' + (profit >= 0 ? 'good' : 'bad');
+  const verdictEl = $('qcVerdict');
+  if (verdictEl) {
+    verdictEl.textContent = rawKg > 0 ? (profit >= 0 ? '✅ PROFIT' : '⚠️ LOSS') : 'Enter a Kg quantity above';
+    verdictEl.className = 'badge ' + (rawKg > 0 ? (profit >= 0 ? 'badge-good' : 'badge-bad') : '');
+  }
+}
+
 function calcProduction() {
   const rawLinna = Number($('rawLinna').value) || 0;
   const rawBalaya = Number($('rawBalaya').value) || 0;
@@ -3837,6 +3919,7 @@ function calcProduction() {
   });
 
   $('prodBody').innerHTML = html;
+  updateQuickProfitCalc(fishTypes, ingredientsCostPerKg, fixedPerKg);
 
   const avgCostPerKg = totalCostSum / 3;
   $('prodAvgCost').textContent = fmt(avgCostPerKg);
