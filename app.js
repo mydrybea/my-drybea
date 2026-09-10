@@ -2671,7 +2671,20 @@ function calcDailyPurchase() {
   $('dpbTotalKg').textContent = fmt2(totalKg) + ' kg';
   $('dpbTotalCost').textContent = fmt(totalRawCost);
 
-  const grindOutputKg = Number($('dpbGrindOutputKg').value) || 0;
+  // Grind Output is no longer typed in by hand — it's auto-calculated from
+  // today's purchase qty per type × that type's Grinding Yield % (set on
+  // the Costing tab, getGrindYields()). The field itself is now read-only
+  // and just displays this computed number.
+  const gyToday = getGrindYields();
+  const qtyLinna = Number($('dpbQtyLinna').value) || 0;
+  const qtyBalaya = Number($('dpbQtyBalaya').value) || 0;
+  const qtyPremium = Number($('dpbQtyPremium').value) || 0;
+  const grindOutputKg = Math.round(
+    (qtyLinna * gyToday.linna + qtyBalaya * gyToday.balaya + qtyPremium * gyToday.premium) * 100
+  ) / 100;
+  const grindOutputEl = $('dpbGrindOutputKg');
+  if (grindOutputEl) grindOutputEl.value = grindOutputKg;
+
   const dustRecoveredKgRaw = Number($('dpbDustRecoveredKg').value) || 0;
   const dustSalePrice = Number($('dpbDustSalePrice').value) || 0;
   const dustReusedKgRaw = Number($('dpbDustReusedKg').value) || 0;

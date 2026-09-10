@@ -2061,7 +2061,8 @@
     <!-- Pure live calculator (nothing saved to Supabase, same as the
          "Pricing & Scenarios" sub-tab): enter TODAY's actual multi-type
          Umbalakada purchase (Linna + Balaya + Premium, bought at different
-         kg/price in one go) -> actual Grind Output (kg) -> dust weight is
+         kg/price in one go) -> Grind Output (kg) is auto-calculated from
+         the Grinding Yield % (Costing tab) per type -> dust weight is
          auto-derived (Purchased − Grind Output) -> optional dust
          recovery/sale income + any other cost -> Net Cost/kg of usable
          product -> cost, profit & margin for EVERY pack size, with the
@@ -2105,11 +2106,11 @@
         </div>
 
         <h2 style="margin-top:16px;"><span class="pro-title-icon orange" aria-hidden="true"><i class="business-icon" data-lucide="wind" aria-hidden="true"></i></span><span>Grinding &amp; Dust Loss (Today)</span></h2>
-        <p class="pro-subtitle orange">Grind everything bought above, then tell it what actually came out — dust weight is worked out automatically.</p>
+        <p class="pro-subtitle orange">Grind Output is worked out automatically from what you bought above and the Grinding Yield % (Costing tab) — dust weight follows from that.</p>
         <div class="grid-3">
           <div class="field">
-            <label>Grind Output <span class="hint">(kg, usable after grinding)</span></label>
-            <input type="number" id="dpbGrindOutputKg" value="0" min="0" step="0.1" oninput="calcDailyPurchase()">
+            <label>Grind Output <span class="hint">(kg, auto from Grinding Yield % — Costing tab)</span></label>
+            <input type="number" id="dpbGrindOutputKg" value="0" min="0" step="0.1" readonly style="opacity:.8;font-weight:800;">
           </div>
           <div class="field">
             <label>Dust Recovered / Sold <span class="hint">(kg, optional)</span></label>
