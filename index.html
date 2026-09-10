@@ -1971,6 +1971,13 @@
         </div>
       </div>
 
+      <!-- Anomaly Check — hidden by default via JS unless something is flagged -->
+      <div class="card" id="costingAnomalyCard" style="display:none;border:1px solid #f59e0b;">
+        <h2><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="alert-triangle" aria-hidden="true"></i></span><span>Worth Double-Checking</span></h2>
+        <p class="pro-subtitle gold">Today's numbers compared against your recent average — just a nudge, not an error.</p>
+        <div id="costingAnomalyNote"></div>
+      </div>
+
       <div class="card">
         <h2><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="package-check" aria-hidden="true"></i></span><span>Output by Product — Profit (Today)</span></h2>
         <p class="pro-subtitle gold">Today's pack quantities (entered in the Production tab's Daily Production Log) priced at current fish costs &amp; MRP — updates live whenever prices or the mix change.</p>
@@ -1981,6 +1988,18 @@
           </table>
         </div>
         <div class="monthly-summary-note" id="costingOutputByProductTotal">Enter today's pack quantities in the Production tab to see this breakdown.</div>
+      </div>
+
+      <div class="card">
+        <h2><span class="pro-title-icon teal" aria-hidden="true"><i class="business-icon" data-lucide="calendar-range" aria-hidden="true"></i></span><span>This Week vs Last Week</span></h2>
+        <p class="pro-subtitle teal">Rolling 7-day totals — Ground, Output and Profit — compared to the 7 days before that.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Metric</th><th class="num">This Week</th><th class="num">Last Week</th><th class="num">Change</th></tr></thead>
+            <tbody id="costingWowBody"></tbody>
+          </table>
+        </div>
+        <div class="monthly-summary-note" id="costingWowNote"></div>
       </div>
 
       <div class="card">

@@ -2260,18 +2260,19 @@ function renderCostingGrindOutputChart() {
     typeBody.innerHTML = typeRows.map(t => `<tr><td>${t.label}</td><td class="num">${fmt2(t.pct * 100)}%</td><td class="num">${fmt2(t.kg)} kg</td></tr>`).join('');
   }
 
-  // ---- Output by Product — Profit (Today) ----
+  // ---- Output by Product — Profit (Today), with Profitability Ranking ----
   // Qty comes from today's saved log (typed in the Production tab); cost,
   // MRP and profit are recalculated LIVE from current fish prices & mix —
   // same "always current" approach as the Dynamic Pricing table above.
+  // Best/Worst badges only appear once at least 2 packs have qty > 0 today
+  // — ranking a single product against itself isn't meaningful.
   const outBody = $('costingOutputByProductBody'), outTotalEl = $('costingOutputByProductTotal');
   if (outBody) {
     const mixNow = getMixPct();
-    let grandTotalProfit = 0, anyQty = false;
-    const rows = Object.keys(PACKS).map(key => {
+    let grandTotalProfit = 0;
+    const rowData = Object.keys(PACKS).map(key => {
       const p = PACKS[key];
       const qty = todayEntry ? (Number(todayEntry['output_qty_' + key]) || 0) : 0;
-      if (qty > 0) anyQty = true;
       let costPerPack = 0, profitPerPack = 0;
       try {
         const r = calculatePack(key, state.linnaPrice, state.balayaPrice, state.kawalamPrice, mixNow, 'mrp', 0, 0);
@@ -2280,15 +2281,29 @@ function renderCostingGrindOutputChart() {
       } catch (e) {}
       const lineProfit = profitPerPack * qty;
       grandTotalProfit += lineProfit;
-      return `<tr><td>${p.label}</td><td class="num">${qty}</td><td class="num">${fmt(costPerPack)}</td><td class="num" style="color:${profitPerPack>=0?'#0a8f43':'#d45d55'};font-weight:700;">${fmt(profitPerPack)}</td><td class="num">${fmt(lineProfit)}</td></tr>`;
+      return { key, label: p.label, qty, costPerPack, profitPerPack, lineProfit };
     });
-    outBody.innerHTML = rows.join('');
+    const withQty = rowData.filter(r => r.qty > 0);
+    const rankable = withQty.length >= 2;
+    let bestKey = null, worstKey = null;
+    if (rankable) {
+      bestKey = withQty.reduce((m, r) => r.lineProfit > m.lineProfit ? r : m).key;
+      worstKey = withQty.reduce((m, r) => r.lineProfit < m.lineProfit ? r : m).key;
+    }
+    outBody.innerHTML = rowData.map(r => {
+      const badge = r.key === bestKey ? ' <span class="badge badge-good">🏆 Best</span>'
+        : r.key === worstKey ? ' <span class="badge badge-bad">⚠️ Lowest</span>' : '';
+      return `<tr><td>${r.label}${badge}</td><td class="num">${r.qty}</td><td class="num">${fmt(r.costPerPack)}</td><td class="num" style="color:${r.profitPerPack>=0?'#0a8f43':'#d45d55'};font-weight:700;">${fmt(r.profitPerPack)}</td><td class="num">${fmt(r.lineProfit)}</td></tr>`;
+    }).join('');
     if (outTotalEl) {
-      outTotalEl.textContent = anyQty
+      outTotalEl.textContent = withQty.length > 0
         ? `Total Profit from today's output (all packs): ${fmt(grandTotalProfit)} — recalculates instantly if fish prices or the mix ratio change.`
         : 'Enter today\'s pack quantities in the Production tab to see this breakdown.';
     }
   }
+
+  renderCostingWeekOverWeek();
+  renderCostingAnomalyCheck();
 
   if (!$('costingGrindOutputChart')) return;
   const colors = getChartColors();
@@ -2333,6 +2348,131 @@ function renderCostingGrindOutputChart() {
   });
 }
 window.renderCostingGrindOutputChart = renderCostingGrindOutputChart;
+
+// Small average helper — used by the Week-over-Week and Anomaly Check cards
+// below. Ignores null/undefined entries (e.g. a day with groundKg = 0 has no
+// meaningful yield%, so it's excluded rather than counted as 0%).
+function avgOf(arr) {
+  const vals = arr.filter(v => v != null && isFinite(v));
+  return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
+}
+
+// ---- Week-over-Week: This Week vs Last Week (rolling 7-day windows, not
+// calendar weeks — simpler and always meaningful regardless of what day it
+// is). Ground/Output/Profit totals, side by side with a % change. ----
+function renderCostingWeekOverWeek() {
+  const body = $('costingWowBody'), noteEl = $('costingWowNote');
+  if (!body) return;
+  const entries = dailyProductionLogCache || [];
+  const msDay = 86400000;
+  const todayMs = new Date(todayIso() + 'T00:00:00').getTime();
+  const bucket = (loDays, hiDays) => {
+    const out = { ground: 0, output: 0, profit: 0, days: 0 };
+    entries.forEach(r => {
+      const dMs = new Date(r.log_date + 'T00:00:00').getTime();
+      const daysAgo = Math.round((todayMs - dMs) / msDay);
+      if (daysAgo < loDays || daysAgo > hiDays) return;
+      const profit = r.net_profit_incl_dust != null ? Number(r.net_profit_incl_dust) : (Number(r.total_profit) || 0);
+      out.ground += Number(r.umbalakada_ground_kg) || 0;
+      out.output += Number(r.kg_produced) || 0;
+      out.profit += profit;
+      out.days++;
+    });
+    return out;
+  };
+  const thisWeek = bucket(0, 6);
+  const lastWeek = bucket(7, 13);
+
+  const pctChange = (now, prev) => {
+    if (prev === 0) return now === 0 ? null : (now > 0 ? Infinity : -Infinity);
+    return ((now - prev) / Math.abs(prev)) * 100;
+  };
+  const fmtChange = (pct) => {
+    if (pct === null) return '<span style="opacity:.5;">—</span>';
+    if (pct === Infinity) return '<span class="badge badge-good">New ⬆</span>';
+    if (pct === -Infinity) return '<span class="badge badge-bad">New ⬇</span>';
+    const arrow = pct >= 0 ? '⬆' : '⬇';
+    const cls = pct >= 0 ? 'badge-good' : 'badge-bad';
+    return `<span class="badge ${cls}">${arrow} ${fmt2(Math.abs(pct))}%</span>`;
+  };
+
+  const rows = [
+    ['Umbalakada Ground (kg)', thisWeek.ground, lastWeek.ground, false],
+    ['Finished Output (kg)', thisWeek.output, lastWeek.output, false],
+    ['Total Profit (Rs.)', thisWeek.profit, lastWeek.profit, true]
+  ];
+  body.innerHTML = rows.map(([label, now, prev, isMoney]) => {
+    const fmtVal = (v) => isMoney ? fmt(v) : fmt2(v) + ' kg';
+    return `<tr><td>${label}</td><td class="num">${fmtVal(now)}</td><td class="num">${fmtVal(prev)}</td><td class="num">${fmtChange(pctChange(now, prev))}</td></tr>`;
+  }).join('');
+
+  if (noteEl) {
+    noteEl.textContent = (thisWeek.days === 0 && lastWeek.days === 0)
+      ? 'No Daily Production Log entries yet — save a few days from the Production tab to see week-over-week trends.'
+      : `This Week = last ${thisWeek.days || 0} logged day(s) (rolling 7-day window ending today). Last Week = the 7 days before that (${lastWeek.days || 0} logged day(s)).`;
+  }
+}
+window.renderCostingWeekOverWeek = renderCostingWeekOverWeek;
+
+// ---- Anomaly Check: flags today's entry if yield% or profit/kg deviates
+// sharply (±30%+) from the trailing average of the prior logged days. Meant
+// to catch data-entry mistakes or a genuinely unusual day — not a hard
+// error, just a "worth double-checking" nudge. ----
+function renderCostingAnomalyCheck() {
+  const card = $('costingAnomalyCard'), noteEl = $('costingAnomalyNote');
+  if (!card || !noteEl) return;
+  const THRESH = 0.30; // 30% deviation trigger
+  const entries = dailyProductionLogCache || [];
+  const todayEntry = entries.find(r => r.log_date === todayIso());
+
+  if (!todayEntry) {
+    card.style.display = 'none';
+    return;
+  }
+  const prior = [...entries]
+    .filter(r => r.log_date !== todayIso())
+    .sort((a, b) => b.log_date.localeCompare(a.log_date))
+    .slice(0, 14);
+
+  if (prior.length < 3) {
+    card.style.display = 'none';
+    return;
+  }
+
+  const priorYields = prior.map(r => {
+    const g = Number(r.umbalakada_ground_kg) || 0, o = Number(r.kg_produced) || 0;
+    return g > 0 ? (o / g) * 100 : null;
+  });
+  const avgYield = avgOf(priorYields);
+  const avgProfitPerKg = avgOf(prior.map(r => Number(r.profit_per_kg)));
+
+  const todayGround = Number(todayEntry.umbalakada_ground_kg) || 0;
+  const todayOutput = Number(todayEntry.kg_produced) || 0;
+  const todayYield = todayGround > 0 ? (todayOutput / todayGround) * 100 : null;
+  const todayProfitPerKg = Number(todayEntry.profit_per_kg) || 0;
+
+  const flags = [];
+  if (todayYield != null && avgYield > 0) {
+    const dev = (todayYield - avgYield) / avgYield;
+    if (Math.abs(dev) >= THRESH) {
+      flags.push(`📉 Yield ${dev > 0 ? 'up' : 'down'} ${fmt2(Math.abs(dev) * 100)}% vs your last ${prior.length}-day average (${fmt2(avgYield)}% → today ${fmt2(todayYield)}%) — worth double-checking today's Ground/Kg Produced entries.`);
+    }
+  }
+  if (avgProfitPerKg !== 0) {
+    const dev = (todayProfitPerKg - avgProfitPerKg) / Math.abs(avgProfitPerKg);
+    if (Math.abs(dev) >= THRESH) {
+      flags.push(`💰 Profit/kg ${dev > 0 ? 'up' : 'down'} ${fmt2(Math.abs(dev) * 100)}% vs your last ${prior.length}-day average (Rs. ${fmt2(avgProfitPerKg)} → today Rs. ${fmt2(todayProfitPerKg)}) — check today's fish prices or selling price.`);
+    }
+  }
+
+  if (flags.length === 0) {
+    card.style.display = 'none';
+    return;
+  }
+  card.style.display = '';
+  noteEl.innerHTML = flags.map(f => `<div style="margin-bottom:6px;">${f}</div>`).join('');
+}
+window.renderCostingAnomalyCheck = renderCostingAnomalyCheck;
 
 function calcBulk() {
   const targetKg = Number($('bulkTarget').value) || 0;
