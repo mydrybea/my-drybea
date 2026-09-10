@@ -1960,6 +1960,27 @@
           <div class="stat good" id="costingYieldTodayCard"><div class="k">Output Yield</div><div class="v" id="costingYieldTodayPct">0%</div></div>
         </div>
         <div class="monthly-summary-note" id="costingGrindOutputNote">No Daily Production Log entry for today yet — add one from the Production tab.</div>
+
+        <h3 style="color:var(--green);margin:16px 0 8px;">🐟 Grind Breakdown by Fish Type (Today)</h3>
+        <p class="sub" style="margin:0 0 10px;">Today's total ground kg, split by the current Fish Mix Ratio (set in Pricing &amp; Scenarios above) — no extra typing needed.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Fish Type</th><th class="num">Mix %</th><th class="num">Ground (kg)</th></tr></thead>
+            <tbody id="costingGrindByTypeBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="package-check" aria-hidden="true"></i></span><span>Output by Product — Profit (Today)</span></h2>
+        <p class="pro-subtitle gold">Today's pack quantities (entered in the Production tab's Daily Production Log) priced at current fish costs &amp; MRP — updates live whenever prices or the mix change.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Pack</th><th class="num">Qty Today</th><th class="num">Cost/Pack</th><th class="num">Profit/Pack</th><th class="num">Total Profit</th></tr></thead>
+            <tbody id="costingOutputByProductBody"></tbody>
+          </table>
+        </div>
+        <div class="monthly-summary-note" id="costingOutputByProductTotal">Enter today's pack quantities in the Production tab to see this breakdown.</div>
       </div>
 
       <div class="card">
@@ -2180,6 +2201,18 @@
         <div class="field"><label>Dust Sale Price <span class="hint">(Rs./kg, if sold)</span></label><input type="number" id="dpDustSalePrice" value="0" min="0" step="0.01" oninput="updateDailyProductionSummaryLive()"></div>
       </div>
       <p class="sub" id="dpDustSuggestNote" style="margin:4px 0 0;"></p>
+
+      <h3 style="color:var(--green);margin:16px 0 8px;">📦 Output by Product (Today)</h3>
+      <p class="sub" style="margin:0 0 10px;">How many of each pack size actually came out of today's batch — feeds the per-product profit breakdown on the Costing tab's Daily Costing &amp; Trends sub-tab.</p>
+      <div class="grid-2">
+        <div class="field"><label>50g Packs</label><input type="number" id="dpOutQty50" value="0" min="0" step="1" oninput="updateDailyProductionSummaryLive()"></div>
+        <div class="field"><label>100g Packs</label><input type="number" id="dpOutQty100" value="0" min="0" step="1" oninput="updateDailyProductionSummaryLive()"></div>
+      </div>
+      <div class="grid-2">
+        <div class="field"><label>500g Packs</label><input type="number" id="dpOutQty500" value="0" min="0" step="1" oninput="updateDailyProductionSummaryLive()"></div>
+        <div class="field"><label>1kg Packs</label><input type="number" id="dpOutQty1000" value="0" min="0" step="1" oninput="updateDailyProductionSummaryLive()"></div>
+      </div>
+      <p class="sub" id="dpOutputByProductNote" style="margin:4px 0 0;"></p>
 
       <div class="btn-row" style="margin:10px 0 16px;" data-owner-only>
         <button class="btn btn-primary btn-sm" onclick="saveDailyProductionLog()"><i class="business-icon icon-inline" data-lucide="save" aria-hidden="true"></i> Save Today's Snapshot</button>

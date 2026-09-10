@@ -1895,6 +1895,15 @@ let lastProdIngredientsCostPerKgForSave = 0, lastProdAvgMarketPriceForSave = 0;
 let lastDustGeneratedKgForSave = 0, lastDustUsedKgForSave = 0, lastDustRemovedKgForSave = 0;
 let lastDustSalePriceForSave = 0, lastDustWasteCostForSave = 0, lastDustRecoveryValueForSave = 0;
 let lastNetDustImpactForSave = 0, lastNetProfitInclDustForSave = 0, lastUmbalakadaGroundKgForSave = 0;
+// Grind-by-fish-type split (Linna/Balaya/Premium) — today's groundKg divided
+// using the mix ratio in effect when saved, so it stays historically
+// accurate even if the mix ratio changes later. Output-by-product qty/profit
+// — today's pack counts (Production tab) priced with calculatePack() at
+// save time, so Costing tab's per-product profit table has something to
+// read even before the owner revisits that day.
+let lastLinnaGroundKgForSave = 0, lastBalayaGroundKgForSave = 0, lastPremiumGroundKgForSave = 0;
+let lastOutputByProductForSave = { 50: 0, 100: 0, 500: 0, 1000: 0 };
+let lastOutputTotalProfitForSave = 0;
 // Per-fish-type snapshot from the last calcProduction() run — used by the
 // Production Batches feature to know each type's current yield factor and
 // total cost/kg without re-deriving it. Keyed by fish type name.
@@ -2232,6 +2241,53 @@ function renderCostingGrindOutputChart() {
     noteEl.textContent = todayEntry
       ? `From today's Daily Production Log entry — ${fmt2(groundToday)}kg ground in, ${fmt2(outputToday)}kg finished product out.`
       : 'No Daily Production Log entry for today yet — add one from the Production tab.';
+  }
+
+  // ---- Grind Breakdown by Fish Type (Today) ----
+  // Prefer the split saved with that day's entry (accurate to that day's mix
+  // ratio at save time); fall back to splitting groundToday with the CURRENT
+  // mix ratio if the entry predates this feature (old rows won't have these
+  // columns yet).
+  const typeBody = $('costingGrindByTypeBody');
+  if (typeBody) {
+    const mixNow = getMixPct();
+    const hasSavedSplit = todayEntry && (todayEntry.linna_ground_kg != null || todayEntry.balaya_ground_kg != null || todayEntry.premium_ground_kg != null);
+    const typeRows = [
+      { label: 'Linna', pct: mixNow.linna, kg: hasSavedSplit ? Number(todayEntry.linna_ground_kg) || 0 : groundToday * mixNow.linna },
+      { label: 'Balaya', pct: mixNow.balaya, kg: hasSavedSplit ? Number(todayEntry.balaya_ground_kg) || 0 : groundToday * mixNow.balaya },
+      { label: 'Premium Mix', pct: mixNow.kawalam, kg: hasSavedSplit ? Number(todayEntry.premium_ground_kg) || 0 : groundToday * mixNow.kawalam }
+    ];
+    typeBody.innerHTML = typeRows.map(t => `<tr><td>${t.label}</td><td class="num">${fmt2(t.pct * 100)}%</td><td class="num">${fmt2(t.kg)} kg</td></tr>`).join('');
+  }
+
+  // ---- Output by Product — Profit (Today) ----
+  // Qty comes from today's saved log (typed in the Production tab); cost,
+  // MRP and profit are recalculated LIVE from current fish prices & mix —
+  // same "always current" approach as the Dynamic Pricing table above.
+  const outBody = $('costingOutputByProductBody'), outTotalEl = $('costingOutputByProductTotal');
+  if (outBody) {
+    const mixNow = getMixPct();
+    let grandTotalProfit = 0, anyQty = false;
+    const rows = Object.keys(PACKS).map(key => {
+      const p = PACKS[key];
+      const qty = todayEntry ? (Number(todayEntry['output_qty_' + key]) || 0) : 0;
+      if (qty > 0) anyQty = true;
+      let costPerPack = 0, profitPerPack = 0;
+      try {
+        const r = calculatePack(key, state.linnaPrice, state.balayaPrice, state.kawalamPrice, mixNow, 'mrp', 0, 0);
+        costPerPack = r.totalCost;
+        profitPerPack = r.profit;
+      } catch (e) {}
+      const lineProfit = profitPerPack * qty;
+      grandTotalProfit += lineProfit;
+      return `<tr><td>${p.label}</td><td class="num">${qty}</td><td class="num">${fmt(costPerPack)}</td><td class="num" style="color:${profitPerPack>=0?'#0a8f43':'#d45d55'};font-weight:700;">${fmt(profitPerPack)}</td><td class="num">${fmt(lineProfit)}</td></tr>`;
+    });
+    outBody.innerHTML = rows.join('');
+    if (outTotalEl) {
+      outTotalEl.textContent = anyQty
+        ? `Total Profit from today's output (all packs): ${fmt(grandTotalProfit)} — recalculates instantly if fish prices or the mix ratio change.`
+        : 'Enter today\'s pack quantities in the Production tab to see this breakdown.';
+    }
   }
 
   if (!$('costingGrindOutputChart')) return;
@@ -2735,6 +2791,30 @@ function updateDailyProductionSummaryLive() {
     }
   }
 
+  // ---- Grind Breakdown by Fish Type (Today) — auto-split from groundKg
+  // using the current Fish Mix Ratio (Pricing & Scenarios above), no extra
+  // typing needed. Shown in the Costing tab's Daily Costing & Trends sub-tab.
+  const linnaGroundKg = groundKg * mix.linna;
+  const balayaGroundKg = groundKg * mix.balaya;
+  const premiumGroundKg = groundKg * mix.kawalam;
+
+  // ---- Output by Product (Today) — per-pack qty typed above, priced at
+  // current fish costs & MRP via calculatePack(). Costing tab renders this
+  // same breakdown live (recalculating with whatever prices are current),
+  // this snapshot is just what gets written to the daily log on save.
+  const outputByProduct = {};
+  let outputTotalProfit = 0;
+  Object.keys(PACKS).forEach(key => {
+    const qty = Number($('dpOutQty' + key) && $('dpOutQty' + key).value) || 0;
+    outputByProduct[key] = qty;
+    if (qty > 0) {
+      try {
+        const r = calculatePack(key, state.linnaPrice, state.balayaPrice, state.kawalamPrice, mix, 'mrp', 0, 0);
+        outputTotalProfit += r.profit * qty;
+      } catch (e) {}
+    }
+  });
+
   // These are the numbers Save Today's Snapshot actually writes — kept in
   // sync here so the save always matches what's on screen.
   lastProdAvgCostPerKgForSave = costPerKg;
@@ -2750,6 +2830,11 @@ function updateDailyProductionSummaryLive() {
   lastDustRecoveryValueForSave = dustRecoveryValue;
   lastNetDustImpactForSave = netDustImpact;
   lastNetProfitInclDustForSave = netProfitInclDust;
+  lastLinnaGroundKgForSave = linnaGroundKg;
+  lastBalayaGroundKgForSave = balayaGroundKg;
+  lastPremiumGroundKgForSave = premiumGroundKg;
+  lastOutputByProductForSave = outputByProduct;
+  lastOutputTotalProfitForSave = outputTotalProfit;
 }
 window.updateDailyProductionSummaryLive = updateDailyProductionSummaryLive;
 
@@ -2772,7 +2857,15 @@ async function saveDailyProductionLog() {
   //   ADD COLUMN IF NOT EXISTS dust_waste_cost numeric DEFAULT 0,
   //   ADD COLUMN IF NOT EXISTS dust_recovery_value numeric DEFAULT 0,
   //   ADD COLUMN IF NOT EXISTS net_dust_impact numeric DEFAULT 0,
-  //   ADD COLUMN IF NOT EXISTS net_profit_incl_dust numeric DEFAULT 0;
+  //   ADD COLUMN IF NOT EXISTS net_profit_incl_dust numeric DEFAULT 0,
+  //   ADD COLUMN IF NOT EXISTS linna_ground_kg numeric DEFAULT 0,
+  //   ADD COLUMN IF NOT EXISTS balaya_ground_kg numeric DEFAULT 0,
+  //   ADD COLUMN IF NOT EXISTS premium_ground_kg numeric DEFAULT 0,
+  //   ADD COLUMN IF NOT EXISTS output_qty_50 integer DEFAULT 0,
+  //   ADD COLUMN IF NOT EXISTS output_qty_100 integer DEFAULT 0,
+  //   ADD COLUMN IF NOT EXISTS output_qty_500 integer DEFAULT 0,
+  //   ADD COLUMN IF NOT EXISTS output_qty_1000 integer DEFAULT 0,
+  //   ADD COLUMN IF NOT EXISTS output_total_profit numeric DEFAULT 0;
   // (Existing owner_id-uuid RLS policy already covers these new columns —
   // no policy changes needed, this only adds columns to an already-owned row.)
   const row = {
@@ -2785,6 +2878,14 @@ async function saveDailyProductionLog() {
     market_price_per_kg: lastProdAvgMarketPriceForSave,
     profit_per_kg: lastProdAvgProfitPerKgForSave,
     kg_produced: kgProduced,
+    linna_ground_kg: lastLinnaGroundKgForSave,
+    balaya_ground_kg: lastBalayaGroundKgForSave,
+    premium_ground_kg: lastPremiumGroundKgForSave,
+    output_qty_50: lastOutputByProductForSave[50] || 0,
+    output_qty_100: lastOutputByProductForSave[100] || 0,
+    output_qty_500: lastOutputByProductForSave[500] || 0,
+    output_qty_1000: lastOutputByProductForSave[1000] || 0,
+    output_total_profit: lastOutputTotalProfitForSave,
     total_profit: totalProfit,
     umbalakada_ground_kg: lastUmbalakadaGroundKgForSave,
     dust_generated_kg: lastDustGeneratedKgForSave,
@@ -2813,7 +2914,7 @@ async function saveDailyProductionLog() {
     console.error('Save daily production log error:', e);
     const missingTable = /relation .* does not exist/i.test(e?.message || '');
     const missingColumn = /column .* does not exist/i.test(e?.message || '');
-    alert('❌ Could not save snapshot: ' + (e?.message || String(e)) + (missingTable ? '\n\nThe production_cost_log table hasn\'t been created in Supabase yet — see the SQL setup comment above saveDailyProductionLog() in app.js.' : missingColumn ? '\n\nThe dust-tracking columns haven\'t been added to production_cost_log yet — run the ALTER TABLE SQL in the comment above saveDailyProductionLog() in app.js.' : ''));
+    alert('❌ Could not save snapshot: ' + (e?.message || String(e)) + (missingTable ? '\n\nThe production_cost_log table hasn\'t been created in Supabase yet — see the SQL setup comment above saveDailyProductionLog() in app.js.' : missingColumn ? '\n\nSome columns haven\'t been added to production_cost_log yet (dust-tracking, grind-by-type, or output-by-product) — run the ALTER TABLE SQL in the comment above saveDailyProductionLog() in app.js.' : ''));
   }
 }
 window.saveDailyProductionLog = saveDailyProductionLog;
