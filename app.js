@@ -70,6 +70,12 @@ const PACKS = {
   1000: { label:'1kg',  fish:950, dust:50, grind:40, pack:140,  qty:50,   mrp:3500 }
 };
 const DEFAULT_FIXED = { transport:110000, firewood:30000, workers:220000, other:220000 };
+// Default grinding yields — % of Umbalakada that survives grinding into
+// usable flakes; the rest is lost as fine dust. Overridden by
+// state.linnaGrindYield / balayaGrindYield / premiumGrindYield (editable
+// in the Costing tab's "Grinding Yield & Dust Loss" fields) once the app
+// has loaded state — see getGrindYields() below. These constants remain
+// the fallback for any code path that runs before state is ready.
 const LINNA_USABLE = 0.80;
 const BALAYA_USABLE = 0.90;
 const PREMIUM_USABLE = 0.65;
@@ -1702,6 +1708,12 @@ let state = {
   targetProfit: 30,
   customSp: 350,
   monthlyQty: 500,
+  // Grinding yield % per fish type — % of Umbalakada that survives grinding
+  // into usable flakes for packing; the remainder is lost as dust. See
+  // getGrindYields() and calculatePack()'s dust math.
+  linnaGrindYield: 80,
+  balayaGrindYield: 90,
+  premiumGrindYield: 65,
   dashQty: {50:1000, 100:500, 500:50, 1000:50},
   dashSp: {50:170, 100:350, 500:1750, 1000:3500},
   overhead: {...DEFAULT_FIXED},
@@ -1799,18 +1811,49 @@ function getMixPct() {
   return { linna: l/100, balaya: b/100, kawalam: k/100 };
 }
 
+// Reads the owner's editable grinding-yield % (Costing tab) with a safe
+// fallback to the original hardcoded constants for any call site that runs
+// before state has loaded. Returns fractions (0-1), not percentages.
+function getGrindYields() {
+  const s = (typeof state !== 'undefined' && state) ? state : {};
+  const clampFrac = (v, fallback) => {
+    const n = Number(v);
+    return (isFinite(n) && n > 0) ? Math.min(n, 100) / 100 : fallback;
+  };
+  return {
+    linna: clampFrac(s.linnaGrindYield, LINNA_USABLE),
+    balaya: clampFrac(s.balayaGrindYield, BALAYA_USABLE),
+    premium: clampFrac(s.premiumGrindYield, PREMIUM_USABLE)
+  };
+}
+
 function calculatePack(sizeKey, linnaPrice, balayaPrice, premiumPrice, mixPct, mode, targetProfit, customSp) {
   const p = PACKS[sizeKey];
+  const gy = getGrindYields();
   const linnaUsableG = p.fish * mixPct.linna;
   const balayaUsableG = p.fish * mixPct.balaya;
   const premiumUsableG = p.fish * mixPct.kawalam;
-  const linnaRawG = linnaUsableG / LINNA_USABLE;
-  const balayaRawG = balayaUsableG / BALAYA_USABLE;
-  const premiumRawG = premiumUsableG / PREMIUM_USABLE;
+  // Umbalakada required BEFORE grinding — inflated to cover the fine dust
+  // that grinding will strip out, so the pack still ends up with the
+  // usable weight above after grinding.
+  const linnaRawG = linnaUsableG / gy.linna;
+  const balayaRawG = balayaUsableG / gy.balaya;
+  const premiumRawG = premiumUsableG / gy.premium;
+  // Dust lost per type = Umbalakada fed in minus usable flakes that make it
+  // into the pack. You paid full Umbalakada price for this weight even
+  // though none of it ends up in the customer's pack.
+  const linnaDustG = linnaRawG - linnaUsableG;
+  const balayaDustG = balayaRawG - balayaUsableG;
+  const premiumDustG = premiumRawG - premiumUsableG;
+  const totalDustG = linnaDustG + balayaDustG + premiumDustG;
+  const totalUmbalakadaRequiredG = linnaRawG + balayaRawG + premiumRawG;
   const linnaCost = (linnaRawG/1000) * linnaPrice;
   const balayaCost = (balayaRawG/1000) * balayaPrice;
   const premiumCost = (premiumRawG/1000) * premiumPrice;
   const rawFishCost = linnaCost + balayaCost + premiumCost;
+  // Cost of the material that becomes dust — already included inside
+  // linna/balaya/premiumCost above (informational only, not added again).
+  const dustCost = (linnaDustG/1000) * linnaPrice + (balayaDustG/1000) * balayaPrice + (premiumDustG/1000) * premiumPrice;
   const baseCost = rawFishCost + p.grind + p.pack;
   let sp;
   if (mode === 'profit') sp = (baseCost + targetProfit) / (1 - PACKING_LABOUR_PCT);
@@ -1820,7 +1863,10 @@ function calculatePack(sizeKey, linnaPrice, balayaPrice, premiumPrice, mixPct, m
   const totalCost = baseCost + packingLabour;
   const profit = sp - totalCost;
   const margin = sp > 0 ? (profit/sp)*100 : 0;
-  return { p, linnaRawG, balayaRawG, premiumRawG, linnaCost, balayaCost, premiumCost, rawFishCost, baseCost, sp, packingLabour, totalCost, profit, margin };
+  return {
+    p, linnaRawG, balayaRawG, premiumRawG, linnaCost, balayaCost, premiumCost, rawFishCost, baseCost, sp, packingLabour, totalCost, profit, margin,
+    linnaDustG, balayaDustG, premiumDustG, totalDustG, totalUmbalakadaRequiredG, dustCost
+  };
 }
 
 function getFixedCost() {
@@ -1945,6 +1991,9 @@ function calcAll() {
   state.targetProfit = Number($('targetProfit').value) || 0;
   state.customSp = Number($('customSp').value) || 0;
   state.monthlyQty = Number($('monthlyQty').value) || 0;
+  state.linnaGrindYield = Number($('linnaGrindYield').value) || state.linnaGrindYield;
+  state.balayaGrindYield = Number($('balayaGrindYield').value) || state.balayaGrindYield;
+  state.premiumGrindYield = Number($('premiumGrindYield').value) || state.premiumGrindYield;
 
   const mix = getMixPct();
   const mixTotal = Math.round((mix.linna + mix.balaya + mix.kawalam) * 100);
@@ -1958,11 +2007,19 @@ function calcAll() {
   $('outMargin').textContent = fmt2(r.margin) + '%';
   $('outCost').textContent = fmt(r.totalCost);
   $('profitStat').className = 'stat ' + (r.profit >= 0 ? 'good' : 'bad');
+  if ($('outUmbalakadaRequired')) $('outUmbalakadaRequired').textContent = fmt2(r.totalUmbalakadaRequiredG) + ' g';
+  if ($('outDustLoss')) {
+    const dustPct = r.totalUmbalakadaRequiredG > 0 ? (r.totalDustG / r.totalUmbalakadaRequiredG) * 100 : 0;
+    $('outDustLoss').textContent = fmt2(r.totalDustG) + ' g (' + fmt2(dustPct) + '%)';
+  }
+  if ($('dustLossNote')) {
+    $('dustLossNote').textContent = `To fill this ${r.p.label} pack, ${fmt2(r.totalUmbalakadaRequiredG)}g of Umbalakada goes into the grinder — ${fmt2(r.totalDustG)}g of that (worth ${fmt(r.dustCost)}) is lost as fine dust, leaving ${fmt2(r.p.fish)}g of usable flakes. That dust cost is already folded into the fish cost rows below, not added twice.`;
+  }
 
   const rows = [
-    [`Linna fish (${fmt2(r.linnaRawG)}g raw)`, r.linnaCost],
-    [`Balaya fish (${fmt2(r.balayaRawG)}g raw)`, r.balayaCost],
-    [`Premium Mix (${fmt2(r.premiumRawG)}g raw)`, r.premiumCost],
+    [`Linna Umbalakada (${fmt2(r.linnaRawG)}g in → ${fmt2(r.linnaRawG - r.linnaDustG)}g usable, ${fmt2(r.linnaDustG)}g dust)`, r.linnaCost],
+    [`Balaya Umbalakada (${fmt2(r.balayaRawG)}g in → ${fmt2(r.balayaRawG - r.balayaDustG)}g usable, ${fmt2(r.balayaDustG)}g dust)`, r.balayaCost],
+    [`Premium Mix Umbalakada (${fmt2(r.premiumRawG)}g in → ${fmt2(r.premiumRawG - r.premiumDustG)}g usable, ${fmt2(r.premiumDustG)}g dust)`, r.premiumCost],
     ['Grinding labour', r.p.grind],
     ['Packaging', r.p.pack],
     ['Packing labour (5%)', r.packingLabour],
@@ -8651,6 +8708,9 @@ function syncUI() {
   $('targetProfit').value = state.targetProfit;
   $('customSp').value = state.customSp;
   $('monthlyQty').value = state.monthlyQty;
+  if ($('linnaGrindYield')) $('linnaGrindYield').value = state.linnaGrindYield;
+  if ($('balayaGrindYield')) $('balayaGrindYield').value = state.balayaGrindYield;
+  if ($('premiumGrindYield')) $('premiumGrindYield').value = state.premiumGrindYield;
   $('ohTransport').value = state.overhead.transport;
   $('ohFirewood').value = state.overhead.firewood;
   $('ohWorkers').value = state.overhead.workers;

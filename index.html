@@ -1775,6 +1775,22 @@
           </div>
         </div>
 
+        <h2 style="margin-top:16px;"><span class="pro-title-icon orange" aria-hidden="true"><i class="business-icon" data-lucide="wind" aria-hidden="true"></i></span><span>Grinding Yield &amp; Dust Loss</span></h2><p class="pro-subtitle orange">% of Umbalakada that survives grinding as usable flakes — the rest is lost as fine dust, but you already paid for it.</p>
+        <div class="grid-3">
+          <div class="field">
+            <label>Linna Grind Yield <span class="hint">(%)</span></label>
+            <input type="number" id="linnaGrindYield" value="80" min="1" max="100" oninput="onDataChange()">
+          </div>
+          <div class="field">
+            <label>Balaya Grind Yield <span class="hint">(%)</span></label>
+            <input type="number" id="balayaGrindYield" value="90" min="1" max="100" oninput="onDataChange()">
+          </div>
+          <div class="field">
+            <label>Premium Mix Grind Yield <span class="hint">(%)</span></label>
+            <input type="number" id="premiumGrindYield" value="65" min="1" max="100" oninput="onDataChange()">
+          </div>
+        </div>
+
         <h2 style="margin-top:16px;"><span class="pro-title-icon purple" aria-hidden="true"><i class="business-icon" data-lucide="calculator" aria-hidden="true"></i></span><span>Pricing</span></h2><p class="pro-subtitle purple">Choose the commercial lens behind your selling price.</p>
         <div class="mode-toggle">
           <button class="btn active" data-mode="mrp" onclick="setMode('mrp')">MRP</button>
@@ -1805,7 +1821,10 @@
           <div class="stat" id="profitStat"><div class="k">Profit/Pack</div><div class="v" id="outProfit">Rs. 0</div></div>
           <div class="stat"><div class="k">Margin</div><div class="v" id="outMargin">0%</div></div>
           <div class="stat"><div class="k">Total Cost</div><div class="v" id="outCost">Rs. 0</div></div>
+          <div class="stat"><div class="k">Umbalakada Required</div><div class="v" id="outUmbalakadaRequired">0 g</div></div>
+          <div class="stat bad"><div class="k">Grinding Dust Loss</div><div class="v" id="outDustLoss">0 g</div></div>
         </div>
+        <div class="monthly-summary-note" id="dustLossNote">Dust loss is fine powder swept away during grinding — it's already paid for as Umbalakada, so its cost is folded into the fish cost rows below.</div>
 
         <div class="table-wrap">
           <table>
