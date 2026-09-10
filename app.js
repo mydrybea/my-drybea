@@ -13765,6 +13765,55 @@ window.openNewCosting = openNewCosting;
 window.saveCosting = saveCosting;
 window.onOrderDistributorChange = onOrderDistributorChange;
 
+// FIX: same missing-exposure bug found a 5th time via a fresh full
+// onclick/onchange/oninput scan — this time on the Production tab's Quick
+// Profit Calculator (fish type dropdown, raw price input, Advanced Settings
+// toggle) and the Fish Seller phone-autofill field. All were defined but
+// never attached to window, so clicking/changing them silently threw
+// "is not defined" and did nothing.
+window.onQcFishTypeChange = onQcFishTypeChange;
+window.onQcRawPriceChange = onQcRawPriceChange;
+window.toggleProdAdvanced = toggleProdAdvanced;
+window.fillSellerNameFromPhone = fillSellerNameFromPhone;
+window.onSaleProductPick = onSaleProductPick;
+
+// ==================== PERMANENT SAFETY NET (this bug has now hit ====================
+// production 5 separate times: a function used in onclick/onchange/oninput or
+// data-action gets defined but never exposed via window.funcName, so the whole
+// app.js IIFE swallows it and the button/dropdown just silently does nothing
+// until a real user hits it and reports it. This scans the live DOM once,
+// right after the app finishes loading, and loudly logs anything still
+// broken — so it shows up in testing/QA immediately instead of in a user's
+// console screenshot weeks later. It changes nothing about app behavior,
+// it only reports. Safe to leave running permanently.
+window.addEventListener('load', function () {
+  setTimeout(function checkHandlerExposures() {
+    const attrRe = /^([a-zA-Z_][a-zA-Z0-9_]*)\(/;
+    const missing = new Set();
+    document.querySelectorAll('[onclick],[onchange],[oninput],[onsubmit],[data-action]').forEach((el) => {
+      const names = [];
+      ['onclick', 'onchange', 'oninput', 'onsubmit'].forEach((attr) => {
+        const v = el.getAttribute(attr);
+        const m = v && v.match(attrRe);
+        if (m) names.push(m[1]);
+      });
+      if (el.dataset.action) names.push(el.dataset.action);
+      names.forEach((name) => {
+        if (typeof window[name] !== 'function') missing.add(name);
+      });
+    });
+    if (missing.size) {
+      console.error(
+        '[MY DRYBEA] ' + missing.size + ' handler(s) referenced in the DOM are NOT exposed on window ' +
+        '(they will silently do nothing when clicked): ' + [...missing].join(', ') +
+        '\nFix: add window.<name> = <name>; near the bottom of app.js for each.'
+      );
+    } else {
+      console.log('[MY DRYBEA] Handler exposure check: all good, ' + document.querySelectorAll('[onclick],[onchange],[oninput],[onsubmit],[data-action]').length + ' handlers checked.');
+    }
+  }, 500);
+});
+
 })();
 
 if ('serviceWorker' in navigator) {
