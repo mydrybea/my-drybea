@@ -2672,33 +2672,71 @@ function calcDailyPurchase() {
   $('dpbTotalCost').textContent = fmt(totalRawCost);
 
   const grindOutputKg = Number($('dpbGrindOutputKg').value) || 0;
-  const dustRecoveredKg = Number($('dpbDustRecoveredKg').value) || 0;
+  const dustRecoveredKgRaw = Number($('dpbDustRecoveredKg').value) || 0;
   const dustSalePrice = Number($('dpbDustSalePrice').value) || 0;
+  const dustReusedKgRaw = Number($('dpbDustReusedKg').value) || 0;
   const otherCosts = Number($('dpbOtherCosts').value) || 0;
 
   const dustKg = totalKg - grindOutputKg; // auto-derived, not entered
   const dustPct = totalKg > 0 ? (dustKg / totalKg) * 100 : 0;
+  const dustAvailable = Math.max(dustKg, 0);
+
+  // Dust can be split three ways: reused back into the product, sold off
+  // separately, or wasted. Reused + Sold can never exceed the dust that
+  // actually exists — cap them (reused first, sold from what's left) so the
+  // three numbers always add up cleanly.
+  const dustReusedKg = Math.min(Math.max(dustReusedKgRaw, 0), dustAvailable);
+  const dustRecoveredKg = Math.min(Math.max(dustRecoveredKgRaw, 0), Math.max(dustAvailable - dustReusedKg, 0));
+  const dustWastedKg = Math.max(dustAvailable - dustReusedKg - dustRecoveredKg, 0);
+
   const dustWarnEl = $('dpbDustWarning');
   if (dustWarnEl) {
     if (grindOutputKg > totalKg && totalKg > 0) {
       dustWarnEl.style.display = 'block';
       dustWarnEl.textContent = `⚠️ Grind Output (${fmt2(grindOutputKg)}kg) can't be more than what you bought (${fmt2(totalKg)}kg) — check the numbers above.`;
+    } else if ((dustReusedKgRaw + dustRecoveredKgRaw) > dustAvailable && dustAvailable > 0) {
+      dustWarnEl.style.display = 'block';
+      dustWarnEl.textContent = `⚠️ Dust Reused (${fmt2(dustReusedKgRaw)}kg) + Dust Sold (${fmt2(dustRecoveredKgRaw)}kg) is more than the ${fmt2(dustAvailable)}kg of dust you actually have — capped to fit.`;
     } else {
       dustWarnEl.style.display = 'none';
     }
   }
 
-  const dustIncome = Math.min(dustRecoveredKg, Math.max(dustKg, 0)) * dustSalePrice;
-  const netCost = totalRawCost - dustIncome + otherCosts;
-  const costPerKgUsable = grindOutputKg > 0 ? netCost / grindOutputKg : 0;
+  // Reused dust is mixed straight back into the packs, so it adds directly
+  // to the sellable/usable output — it dilutes cost per kg exactly the way
+  // real reused dust would.
+  const usableOutputKg = grindOutputKg + dustReusedKg;
+  const dustIncome = dustRecoveredKg * dustSalePrice;
+  const grossCost = totalRawCost + otherCosts;
+  const netCost = grossCost - dustIncome;
+  const costPerKgUsable = usableOutputKg > 0 ? netCost / usableOutputKg : 0;
   const weightedFinPricePerKg = totalKg > 0 ? weightedFinPriceSum / totalKg : 0;
+
+  // Full Profit = what selling all of today's usable output at market price
+  // brings in, minus everything it cost (raw material + other costs),
+  // plus whatever the recovered dust sold for. Product Profit and Dust
+  // Profit are just that same total split into two labelled pieces — Dust
+  // Profit never gets double-subtracted from Product Profit.
+  const productRevenue = usableOutputKg * weightedFinPricePerKg;
+  const fullProfitToday = productRevenue - grossCost + dustIncome;
+  const dustProfitToday = dustIncome;
+  const productProfitToday = fullProfitToday - dustProfitToday;
 
   $('dpbStatPurchased').textContent = fmt2(totalKg) + ' kg';
   $('dpbStatOutput').textContent = fmt2(grindOutputKg) + ' kg';
-  $('dpbStatDust').textContent = fmt2(Math.max(dustKg, 0)) + ' kg (' + fmt2(Math.max(dustPct, 0)) + '%)';
+  $('dpbStatDust').textContent = fmt2(dustAvailable) + ' kg (' + fmt2(Math.max(dustPct, 0)) + '%)';
   $('dpbStatNetCostPerKg').textContent = fmt(costPerKgUsable);
 
-  if (grindOutputKg <= 0 || totalKg <= 0) {
+  const dustReusedEl = $('dpbStatDustReused'); if (dustReusedEl) dustReusedEl.textContent = fmt2(dustReusedKg) + ' kg';
+  const dustSoldEl = $('dpbStatDustSold'); if (dustSoldEl) dustSoldEl.textContent = fmt2(dustRecoveredKg) + ' kg';
+  const dustWastedEl = $('dpbStatDustWasted'); if (dustWastedEl) dustWastedEl.textContent = fmt2(dustWastedKg) + ' kg';
+  const usableOutputEl = $('dpbStatUsableOutput'); if (usableOutputEl) usableOutputEl.textContent = fmt2(usableOutputKg) + ' kg';
+
+  const productProfitEl = $('dpbStatProductProfit'); if (productProfitEl) productProfitEl.textContent = fmt(productProfitToday);
+  const dustProfitEl = $('dpbStatDustProfit'); if (dustProfitEl) dustProfitEl.textContent = fmt(dustProfitToday);
+  const fullProfitEl = $('dpbStatFullProfit'); if (fullProfitEl) fullProfitEl.textContent = fmt(fullProfitToday);
+
+  if (usableOutputKg <= 0 || totalKg <= 0) {
     body.innerHTML = `<tr><td colspan="7" style="text-align:center;opacity:.5;padding:16px;">Enter today's purchase and Grind Output above.</td></tr>`;
     $('dpbBestPackNote').textContent = 'Enter today\'s purchase and grind output above to see the best pack.';
     return;

@@ -2119,6 +2119,10 @@
             <label>Dust Sale Price <span class="hint">(Rs./kg, if sold)</span></label>
             <input type="number" id="dpbDustSalePrice" value="0" min="0" step="0.01" oninput="calcDailyPurchase()">
           </div>
+          <div class="field">
+            <label>Dust Reused in Product <span class="hint">(kg, mixed back into packs)</span></label>
+            <input type="number" id="dpbDustReusedKg" value="0" min="0" step="0.1" oninput="calcDailyPurchase()">
+          </div>
         </div>
         <div class="field">
           <label>Other Costs Today <span class="hint">(Rs. — ingredients, packing labour etc., optional)</span></label>
@@ -2129,8 +2133,23 @@
         <div class="stat-grid" style="margin-top:14px;">
           <div class="stat"><div class="k">Total Purchased</div><div class="v" id="dpbStatPurchased">0 kg</div></div>
           <div class="stat"><div class="k">Grind Output</div><div class="v" id="dpbStatOutput">0 kg</div></div>
-          <div class="stat bad"><div class="k">Dust Loss</div><div class="v" id="dpbStatDust">0 kg (0%)</div></div>
+          <div class="stat bad"><div class="k">Dust Loss (total)</div><div class="v" id="dpbStatDust">0 kg (0%)</div></div>
           <div class="stat accent"><div class="k">Net Cost / kg (usable)</div><div class="v" id="dpbStatNetCostPerKg">Rs. 0</div></div>
+        </div>
+
+        <div class="stat-grid" style="margin-top:10px;">
+          <div class="stat"><div class="k">Dust Reused (added to output)</div><div class="v" id="dpbStatDustReused">0 kg</div></div>
+          <div class="stat"><div class="k">Dust Sold</div><div class="v" id="dpbStatDustSold">0 kg</div></div>
+          <div class="stat bad"><div class="k">Dust Wasted</div><div class="v" id="dpbStatDustWasted">0 kg</div></div>
+          <div class="stat"><div class="k">Total Usable Output</div><div class="v" id="dpbStatUsableOutput">0 kg</div></div>
+        </div>
+
+        <h3 style="color:var(--green);margin:16px 0 8px;">💰 Today's Profit — Product vs Dust</h3>
+        <p class="pro-subtitle green" style="margin:0 0 8px;">Product Profit uses the Umbalakada sold as packs (including any dust mixed back in). Dust Profit is the extra income from selling recovered dust — its raw cost is already counted in Product Profit, so this is pure bonus profit. Full Profit is the two combined.</p>
+        <div class="stat-grid">
+          <div class="stat"><div class="k">Product Profit (Today)</div><div class="v" id="dpbStatProductProfit">Rs. 0</div></div>
+          <div class="stat accent"><div class="k">Dust Profit (Today)</div><div class="v" id="dpbStatDustProfit">Rs. 0</div></div>
+          <div class="stat accent" style="grid-column:1/-1;"><div class="k">Full Profit (Today) — Product + Dust</div><div class="v" id="dpbStatFullProfit" style="font-size:1.3em;">Rs. 0</div></div>
         </div>
       </div>
 
