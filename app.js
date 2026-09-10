@@ -1731,6 +1731,11 @@ let state = {
   // Which of the two prices above the Dynamic Pricing Suggestions table is
   // currently calculating against — toggled by the owner via #dpPriceBasis.
   dpPriceBasis: 'mrp',
+  // Pack size (g) -> catalog product id (Products tab), set via "Link Packs
+  // to Store Products" on the Daily Costing & Trends sub-tab. Once set,
+  // logging (or deleting) a Daily Product Batch automatically moves that
+  // product's Stock via applyStockMovement() — see addDailyProductBatch().
+  packProductMap: { 50: '', 100: '', 500: '', 1000: '' },
   overhead: {...DEFAULT_FIXED},
   production: {
     rawLinna: 180, rawBalaya: 250, rawKawalam: 60,
@@ -2332,14 +2337,14 @@ function calcScenario() {
 // "daily"   = live Grind→Output snapshot + monthly trend chart, sourced
 // from the same dailyProductionLogCache the Production tab uses.
 function switchCostingTab(tab) {
-  ['pricing', 'daily', 'entry', 'daypurchase', 'quickmarket'].forEach(t => {
+  ['pricing', 'daily', 'entry', 'daypurchase', 'quickmarket', 'orderbuy'].forEach(t => {
     const panel = $(`costingTab-${t}`);
     if (panel) panel.style.display = (t === tab) ? '' : 'none';
   });
   document.querySelectorAll('.costing-subtab').forEach(btn => {
     btn.classList.toggle('btn-primary', btn.getAttribute('data-costing-tab') === tab);
   });
-  if (tab === 'daily') renderCostingGrindOutputChart();
+  if (tab === 'daily') { renderCostingGrindOutputChart(); populatePackProductMapSelects(); renderDailyStoreHistory(); }
   if (tab === 'entry') {
     if (!$('ceDate').value) $('ceDate').value = todayIso();
     onCostingEntryTypeChange();
@@ -2348,6 +2353,7 @@ function switchCostingTab(tab) {
   }
   if (tab === 'daypurchase') calcDailyPurchase();
   if (tab === 'quickmarket') calcQuickMarket();
+  if (tab === 'orderbuy') calcOrderToBuy();
 }
 window.switchCostingTab = switchCostingTab;
 
@@ -2736,6 +2742,79 @@ function sendQuickMarketToProduction() {
 }
 window.sendQuickMarketToProduction = sendQuickMarketToProduction;
 
+// ==================== COSTING TAB — ORDER → WHAT TO BUY ====================
+// Reverse of Quick Market Decision: given an ORDER (pack size + qty),
+// answers "how much of each type do I need to buy". Reuses calculatePack()
+// per pack, then scales its per-pack raw-weight/cost numbers by the order
+// qty — no separate math, so this always agrees with every other sub-tab.
+function calcOrderToBuy() {
+  const body = $('obBuyBody');
+  if (!body) return; // sub-tab not in the DOM (older cached HTML)
+
+  const packSize = $('obPackSize').value;
+  const qty = Number($('obQty').value) || 0;
+  const mixChoice = $('obMix').value;
+
+  let mix, mixLabel;
+  if (mixChoice === 'auto') {
+    // Pick whichever of the 5 preset mixes is most profitable for THIS
+    // pack size at today's prices — same presets as Quick Market Decision.
+    let best = null;
+    QM_MIX_PRESETS.forEach(preset => {
+      let r;
+      try {
+        r = calculatePack(packSize, state.linnaPrice, state.balayaPrice, state.kawalamPrice, preset.mix, 'mrp', 0, 0);
+      } catch (e) { return; }
+      if (!best || r.profit > best.profit) best = { preset, r };
+    });
+    mix = best ? best.preset.mix : QM_MIX_PRESETS[0].mix;
+    mixLabel = best ? best.preset.label : QM_MIX_PRESETS[0].label;
+  } else {
+    const preset = QM_MIX_PRESETS[Number(mixChoice)] || QM_MIX_PRESETS[0];
+    mix = preset.mix;
+    mixLabel = preset.label;
+  }
+
+  $('obMixNote').textContent = mixChoice === 'auto'
+    ? `🏆 Auto-picked for best profit on this pack size: ${mixLabel}`
+    : `Using: ${mixLabel}`;
+
+  let r;
+  try {
+    r = calculatePack(packSize, state.linnaPrice, state.balayaPrice, state.kawalamPrice, mix, 'mrp', 0, 0);
+  } catch (e) { return; }
+
+  const typeRows = [
+    { label: 'Linna', rawKg: (r.linnaRawG / 1000) * qty, price: state.linnaPrice, cost: r.linnaCost * qty },
+    { label: 'Balaya', rawKg: (r.balayaRawG / 1000) * qty, price: state.balayaPrice, cost: r.balayaCost * qty },
+    { label: 'Premium Mix', rawKg: (r.premiumRawG / 1000) * qty, price: state.kawalamPrice, cost: r.premiumCost * qty }
+  ];
+
+  body.innerHTML = typeRows.map(t => `<tr>
+    <td><strong>${t.label}</strong></td>
+    <td class="num">${fmt2(t.rawKg)} kg</td>
+    <td class="num">${fmt(t.price)}</td>
+    <td class="num">${fmt(t.cost)}</td>
+  </tr>`).join('');
+
+  const totalKg = typeRows.reduce((a, t) => a + t.rawKg, 0);
+  const totalRawCost = typeRows.reduce((a, t) => a + t.cost, 0);
+  $('obTotalKg').textContent = fmt2(totalKg) + ' kg';
+  $('obTotalRawCost').textContent = fmt(totalRawCost);
+
+  const totalCost = r.totalCost * qty;
+  const revenue = r.sp * qty;
+  const profit = r.profit * qty;
+
+  $('obStatTotalCost').textContent = fmt(totalCost);
+  $('obStatRevenue').textContent = fmt(revenue);
+  $('obStatProfit').textContent = fmt(profit);
+  $('obStatMargin').textContent = fmt2(r.margin) + '%';
+  const profitStatEl = $('obStatProfit') && $('obStatProfit').closest('.stat');
+  if (profitStatEl) profitStatEl.classList.toggle('bad', profit < 0);
+}
+window.calcOrderToBuy = calcOrderToBuy;
+
 // ==================== COSTING TAB — "ADD PRODUCT" BATCH LOG (today's pack output) ====================
 // Lets the owner log today's pack output right from the Costing tab's
 // "Output by Product" card — ADDITIVELY. Each "Add Batch" inserts its own
@@ -2749,6 +2828,87 @@ window.sendQuickMarketToProduction = sendQuickMarketToProduction;
 // batch-computed total for today with whatever's typed there. Use one or
 // the other for a given day to avoid the two fighting over today's total.
 let dailyProductBatchesCache = [];
+
+// ==================== PACK → STORE PRODUCT LINKING + DAILY STORE ====================
+// Bridges "how much did I produce today" (Daily Production Log / batches,
+// above) with the real Product catalog's Stock (Products tab). Nothing new
+// in Supabase is needed — the mapping lives in state.packProductMap (synced
+// via the existing app_data blob), and stock changes go through the SAME
+// applyStockMovement()/adjust_product_stock() RPC the Restock/Adjust Stock
+// buttons already use on the Products tab.
+function populatePackProductMapSelects() {
+  Object.keys(PACKS).forEach(key => {
+    const sel = $('ppmMap' + key);
+    if (!sel) return;
+    const current = (state.packProductMap && state.packProductMap[key]) || '';
+    sel.innerHTML = '<option value="">— Not linked —</option>' +
+      (products || []).map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+    sel.value = current;
+  });
+}
+window.populatePackProductMapSelects = populatePackProductMapSelects;
+
+function onPackProductMapChange() {
+  if (!state.packProductMap) state.packProductMap = {};
+  Object.keys(PACKS).forEach(key => {
+    const sel = $('ppmMap' + key);
+    if (sel) state.packProductMap[key] = sel.value;
+  });
+  onDataChange();
+  renderDailyStoreHistory();
+}
+window.onPackProductMapChange = onPackProductMapChange;
+
+// For each pack size in qtyByKey with qty > 0 and a linked product, moves
+// that qty of Stock (sign=+1 for a batch added, -1 to reverse one deleted).
+// Silently skips unlinked sizes — never blocks the batch save/delete itself.
+async function applyPackBatchStockMovements(qtyByKey, note, sign) {
+  const map = state.packProductMap || {};
+  for (const key of Object.keys(PACKS)) {
+    const qty = Number(qtyByKey[key]) || 0;
+    const productId = map[key];
+    if (qty > 0 && productId) {
+      await applyStockMovement(productId, qty * sign, 'production', note || `${PACKS[key].label} — daily production`);
+    }
+  }
+}
+
+// Day-by-day table on the Daily Costing & Trends sub-tab — reuses
+// dailyProductionLogCache (already loaded for the month by the Production
+// tab / renderCostingGrindOutputChart), so no extra fetch needed. "Current
+// Stock" is each linked product's live stock right now, not a historical
+// snapshot for that day (Stock History on the Products tab has the
+// day-by-day movement log if that level of detail is needed).
+function renderDailyStoreHistory() {
+  const body = $('dailyStoreHistoryBody');
+  if (!body) return;
+  const entries = [...(dailyProductionLogCache || [])].sort((a, b) => b.log_date.localeCompare(a.log_date));
+  if (entries.length === 0) {
+    body.innerHTML = '<tr><td colspan="6" style="text-align:center;opacity:.5;padding:14px;">No production logged yet this month.</td></tr>';
+    return;
+  }
+  const map = state.packProductMap || {};
+  const stockSummary = Object.keys(PACKS)
+    .filter(key => map[key])
+    .map(key => {
+      const p = (products || []).find(pr => String(pr.id) === String(map[key]));
+      return p ? `${PACKS[key].label}: ${p.stockQty}` : null;
+    })
+    .filter(Boolean)
+    .join(' · ') || '—';
+
+  body.innerHTML = entries.map(e => `<tr>
+    <td>${e.log_date}</td>
+    <td class="num">${Number(e.output_qty_50) || 0}</td>
+    <td class="num">${Number(e.output_qty_100) || 0}</td>
+    <td class="num">${Number(e.output_qty_500) || 0}</td>
+    <td class="num">${Number(e.output_qty_1000) || 0}</td>
+    <td class="num">${stockSummary}</td>
+  </tr>`).join('');
+}
+window.renderDailyStoreHistory = renderDailyStoreHistory;
+
+
 
 async function loadDailyProductBatches() {
   if (!currentUser || userRole !== 'owner') { dailyProductBatchesCache = []; return dailyProductBatchesCache; }
@@ -2878,11 +3038,13 @@ async function addDailyProductBatch() {
     const { data, error } = await supabase.from('daily_product_batches').insert(row).select().single();
     if (error) throw error;
     dailyProductBatchesCache.push(data);
+    await applyPackBatchStockMovements(qtyByKey, note ? `Batch: ${note}` : 'Daily production batch', 1);
     Object.keys(PACKS).forEach(key => { const el = $('adpQty' + key); if (el) el.value = 0; });
     if ($('adpNote')) $('adpNote').value = '';
     await recomputeTodayProductOutput();
     renderDailyProductBatchList();
-    updateStatus("✅ Batch added");
+    renderDailyStoreHistory();
+    updateStatus("✅ Batch added — linked products restocked");
   } catch (e) {
     console.error('Add daily product batch error:', e);
     const missingTable = /relation .* does not exist/i.test(e?.message || '');
@@ -2895,12 +3057,18 @@ async function deleteDailyProductBatch(id) {
   if (userRole !== 'owner') return;
   if (!confirm('Delete this batch?')) return;
   try {
+    const batch = (dailyProductBatchesCache || []).find(b => String(b.id) === String(id));
     const { error } = await withSessionRetry(() => supabase.from('daily_product_batches').delete().eq('id', id).eq('owner_id', currentUser.id));
     if (error) throw error;
     dailyProductBatchesCache = dailyProductBatchesCache.filter(b => String(b.id) !== String(id));
+    if (batch) {
+      const qtyByKey = { 50: batch.qty_50, 100: batch.qty_100, 500: batch.qty_500, 1000: batch.qty_1000 };
+      await applyPackBatchStockMovements(qtyByKey, 'Batch deleted — stock reversed', -1);
+    }
     await recomputeTodayProductOutput();
     renderDailyProductBatchList();
-    updateStatus('🗑️ Batch deleted');
+    renderDailyStoreHistory();
+    updateStatus('🗑️ Batch deleted — linked stock reversed');
   } catch (e) {
     alert('❌ Could not delete batch: ' + (e?.message || String(e)));
   }

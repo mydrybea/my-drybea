@@ -1764,6 +1764,7 @@
         <button type="button" class="btn btn-sm costing-subtab" data-costing-tab="entry" onclick="switchCostingTab('entry')"><i class="business-icon icon-inline" data-lucide="clipboard-list" aria-hidden="true"></i> Umbalakada → Order Costing</button>
         <button type="button" class="btn btn-sm costing-subtab" data-costing-tab="daypurchase" onclick="switchCostingTab('daypurchase')"><i class="business-icon icon-inline" data-lucide="scale" aria-hidden="true"></i> Today's Purchase → Best Pack</button>
         <button type="button" class="btn btn-sm costing-subtab" data-costing-tab="quickmarket" onclick="switchCostingTab('quickmarket')"><i class="business-icon icon-inline" data-lucide="zap" aria-hidden="true"></i> Quick Market Decision</button>
+        <button type="button" class="btn btn-sm costing-subtab" data-costing-tab="orderbuy" onclick="switchCostingTab('orderbuy')"><i class="business-icon icon-inline" data-lucide="shopping-cart" aria-hidden="true"></i> Order → What to Buy</button>
       </div>
     </div>
 
@@ -2025,6 +2026,33 @@
           </table>
         </div>
         <div class="monthly-summary-note" id="costingOutputByProductTotal">No pack quantities added for today yet — tap "Add Product" above, or enter them in the Production tab.</div>
+      </div>
+
+      <div class="card">
+        <h2><span class="pro-title-icon teal" aria-hidden="true"><i class="business-icon" data-lucide="link" aria-hidden="true"></i></span><span>Link Packs to Store Products</span></h2>
+        <p class="pro-subtitle teal">One-time setup: pick which catalog product (Products tab) each pack size restocks. Once linked, every batch you log below (or delete) automatically adds to — or reverses from — that product's Stock, so the Products tab always shows what's actually on the shelf.</p>
+        <div class="grid-2" id="ppmGrid">
+          <div class="field"><label>50g Packs →</label><select id="ppmMap50" onchange="onPackProductMapChange()"><option value="">— Not linked —</option></select></div>
+          <div class="field"><label>100g Packs →</label><select id="ppmMap100" onchange="onPackProductMapChange()"><option value="">— Not linked —</option></select></div>
+          <div class="field"><label>500g Packs →</label><select id="ppmMap500" onchange="onPackProductMapChange()"><option value="">— Not linked —</option></select></div>
+          <div class="field"><label>1kg Packs →</label><select id="ppmMap1000" onchange="onPackProductMapChange()"><option value="">— Not linked —</option></select></div>
+        </div>
+        <div class="monthly-summary-note" id="ppmNote">Packs left "Not linked" won't touch Product Stock — everything else on this page still works as before.</div>
+      </div>
+
+      <div class="card">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+          <div style="flex:1;min-width:220px;">
+            <h2><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="warehouse" aria-hidden="true"></i></span><span>Daily Store — Production History</span></h2>
+            <p class="pro-subtitle gold">What was produced each day, and the linked product's stock right now — scroll back through the month.</p>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Date</th><th class="num">50g</th><th class="num">100g</th><th class="num">500g</th><th class="num">1kg</th><th class="num">Current Stock (linked products)</th></tr></thead>
+            <tbody id="dailyStoreHistoryBody"><tr><td colspan="6" style="text-align:center;opacity:.5;padding:14px;">No production logged yet this month.</td></tr></tbody>
+          </table>
+        </div>
       </div>
 
       <div class="card">
@@ -2337,6 +2365,76 @@
       </div>
     </div>
     <!-- /costingTab-quickmarket -->
+
+    <!-- ============ COSTING TAB — ORDER → WHAT TO BUY (sub-tab) ============ -->
+    <!-- Reverse of Quick Market Decision: instead of "what should I do with
+         fish I'm being offered", this answers "I have an order — how much
+         of each type do I need to go and buy". Reuses calculatePack()
+         directly (same per-pack raw-weight math as every other sub-tab), so
+         the numbers always agree with Pricing & Scenarios. "Best Profit Mix
+         (auto)" reuses the QM_MIX_PRESETS list from Quick Market Decision to
+         pick whichever preset mix is most profitable for THIS pack size at
+         today's prices. See calcOrderToBuy() in app.js. -->
+    <div id="costingTab-orderbuy" style="display:none;">
+      <div class="card">
+        <h2><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="shopping-cart" aria-hidden="true"></i></span><span>Today's Order</span></h2>
+        <p class="pro-subtitle green">Got an order? Enter the pack size &amp; quantity — see exactly how much of each type to buy, and what it'll cost.</p>
+        <div class="grid-3">
+          <div class="field">
+            <label>Pack Size</label>
+            <select id="obPackSize" onchange="calcOrderToBuy()">
+              <option value="50">50g</option>
+              <option value="100">100g</option>
+              <option value="500">500g</option>
+              <option value="1000">1kg</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Order Qty <span class="hint">(packs)</span></label>
+            <input type="number" id="obQty" value="10" min="1" step="1" oninput="calcOrderToBuy()">
+          </div>
+          <div class="field">
+            <label>Fish Mix</label>
+            <select id="obMix" onchange="calcOrderToBuy()">
+              <option value="auto">🏆 Best Profit Mix (auto)</option>
+              <option value="0">40% Linna / 0% Balaya / 60% Premium</option>
+              <option value="1">60% Linna / 0% Balaya / 40% Premium</option>
+              <option value="2">35% Linna / 20% Balaya / 45% Premium</option>
+              <option value="3">25% Linna / 15% Balaya / 60% Premium</option>
+              <option value="4">20% Linna / 40% Balaya / 40% Premium</option>
+            </select>
+          </div>
+        </div>
+        <div class="monthly-summary-note" id="obMixNote"></div>
+      </div>
+
+      <div class="card" style="margin-top:16px;">
+        <h2><span class="pro-title-icon orange" aria-hidden="true"><i class="business-icon" data-lucide="basket" aria-hidden="true"></i></span><span>What to Buy</span></h2>
+        <p class="pro-subtitle orange">Raw Umbalakada needed per type — already inflated to cover grinding dust loss, so this is exactly how much to buy at the market.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Type</th><th class="num">Buy This Much (kg)</th><th class="num">Price/kg</th><th class="num">Cost (Rs.)</th></tr></thead>
+            <tbody id="obBuyBody"></tbody>
+            <tfoot>
+              <tr style="font-weight:800;">
+                <td>Total Raw Material</td>
+                <td class="num" id="obTotalKg">0 kg</td>
+                <td></td>
+                <td class="num" id="obTotalRawCost" style="color:var(--green);">Rs. 0</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+
+        <div class="stat-grid" style="margin-top:14px;">
+          <div class="stat"><div class="k">Total Cost (incl. grinding &amp; packing)</div><div class="v" id="obStatTotalCost">Rs. 0</div></div>
+          <div class="stat"><div class="k">Expected Revenue</div><div class="v" id="obStatRevenue">Rs. 0</div></div>
+          <div class="stat accent"><div class="k">Expected Profit</div><div class="v" id="obStatProfit">Rs. 0</div></div>
+          <div class="stat"><div class="k">Margin</div><div class="v" id="obStatMargin">0%</div></div>
+        </div>
+      </div>
+    </div>
+    <!-- /costingTab-orderbuy -->
 
     <!-- Add Product (today's pack output) — quick, ADDITIVE batch log from
          the Costing tab's "Output by Product" card, so the owner doesn't
