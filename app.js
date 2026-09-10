@@ -2372,34 +2372,56 @@ function renderCostingGrindOutputChart() {
 }
 window.renderCostingGrindOutputChart = renderCostingGrindOutputChart;
 
-// ==================== COSTING TAB — QUICK "ADD PRODUCT" (today's pack output) ====================
-// Lets the owner log today's pack quantities right from the Costing tab's
-// "Output by Product" card, instead of switching to the Production tab's
-// full Daily Production Log. Reads/writes only the output_qty_* columns
-// (+ output_total_profit) on today's production_cost_log row via a partial
-// upsert — grind/dust/cost fields already saved for today (if any) are left
-// untouched, since Supabase upsert() only updates the columns you pass.
-function openAddDailyProductModal() {
-  if (userRole !== 'owner') { alert('Only the owner can add product output.'); return; }
-  const todayEntry = (dailyProductionLogCache || []).find(r => r.log_date === todayIso());
-  Object.keys(PACKS).forEach(key => {
-    const el = $('adpQty' + key);
-    if (el) el.value = todayEntry ? (Number(todayEntry['output_qty_' + key]) || 0) : 0;
-  });
-  $('addDailyProductModal').classList.add('active');
+// ==================== COSTING TAB — "ADD PRODUCT" BATCH LOG (today's pack output) ====================
+// Lets the owner log today's pack output right from the Costing tab's
+// "Output by Product" card — ADDITIVELY. Each "Add Batch" inserts its own
+// row into daily_product_batches (a separate table, one row per batch, as
+// many batches/day as you like). The sum of today's batches is then written
+// to production_cost_log.output_qty_* via a partial upsert (only those
+// columns — grind/dust/cost fields already saved for today are untouched).
+// NOTE: the Production tab's "Daily Production Log" → "Save Today's
+// Snapshot" still writes output_qty_* directly from its own manual fields —
+// if that's saved AFTER batches were added here, it will overwrite the
+// batch-computed total for today with whatever's typed there. Use one or
+// the other for a given day to avoid the two fighting over today's total.
+let dailyProductBatchesCache = [];
+
+async function loadDailyProductBatches() {
+  if (!currentUser || userRole !== 'owner') { dailyProductBatchesCache = []; return dailyProductBatchesCache; }
+  try {
+    const { data, error } = await withSessionRetry(() => supabase.from('daily_product_batches')
+      .select('*').eq('owner_id', currentUser.id).eq('log_date', todayIso()).order('created_at', { ascending: true }));
+    if (error) throw error;
+    dailyProductBatchesCache = data || [];
+  } catch (e) {
+    console.warn('Daily product batches load skipped:', e?.message || e);
+    dailyProductBatchesCache = [];
+  }
+  return dailyProductBatchesCache;
 }
-window.openAddDailyProductModal = openAddDailyProductModal;
+window.loadDailyProductBatches = loadDailyProductBatches;
 
-async function saveAddDailyProduct() {
-  if (userRole !== 'owner') { alert('Only the owner can add product output.'); return; }
-  if (!currentUser) { alert('Please login first.'); return; }
+function computeTodayBatchSums() {
+  const sums = { 50: 0, 100: 0, 500: 0, 1000: 0 };
+  (dailyProductBatchesCache || []).forEach(b => {
+    sums[50] += Number(b.qty_50) || 0;
+    sums[100] += Number(b.qty_100) || 0;
+    sums[500] += Number(b.qty_500) || 0;
+    sums[1000] += Number(b.qty_1000) || 0;
+  });
+  return sums;
+}
 
+// Sums today's batches and writes the total into production_cost_log —
+// same partial-upsert approach as before, just fed by the batch sum instead
+// of a single overwritten input.
+async function recomputeTodayProductOutput() {
+  if (!currentUser) return;
+  const sums = computeTodayBatchSums();
   const mixNow = getMixPct();
-  const qtyByKey = {};
   let outputTotalProfit = 0;
   Object.keys(PACKS).forEach(key => {
-    const qty = Number($('adpQty' + key) && $('adpQty' + key).value) || 0;
-    qtyByKey[key] = qty;
+    const qty = sums[key] || 0;
     if (qty > 0) {
       try {
         const r = calculatePack(key, state.linnaPrice, state.balayaPrice, state.kawalamPrice, mixNow, 'mrp', 0, 0);
@@ -2407,35 +2429,120 @@ async function saveAddDailyProduct() {
       } catch (e) {}
     }
   });
-
   const row = {
     owner_id: currentUser.id,
     log_date: todayIso(),
-    output_qty_50: qtyByKey[50] || 0,
-    output_qty_100: qtyByKey[100] || 0,
-    output_qty_500: qtyByKey[500] || 0,
-    output_qty_1000: qtyByKey[1000] || 0,
+    output_qty_50: sums[50] || 0,
+    output_qty_100: sums[100] || 0,
+    output_qty_500: sums[500] || 0,
+    output_qty_1000: sums[1000] || 0,
     output_total_profit: outputTotalProfit,
+    created_by: currentUser.id
+  };
+  if (!(await ensureFreshSession())) return;
+  const { data, error } = await supabase.from('production_cost_log')
+    .upsert(row, { onConflict: 'owner_id,log_date' }).select().single();
+  if (error) throw error;
+  const idx = dailyProductionLogCache.findIndex(r => r.log_date === data.log_date);
+  if (idx >= 0) dailyProductionLogCache[idx] = data; else dailyProductionLogCache.push(data);
+  renderCostingGrindOutputChart();
+}
+
+function renderDailyProductBatchList() {
+  const body = $('adpBatchListBody'), noteEl = $('adpBatchTotalsNote');
+  if (!body) return;
+  const batches = dailyProductBatchesCache || [];
+  if (batches.length === 0) {
+    body.innerHTML = `<tr><td colspan="3" style="text-align:center;opacity:.5;padding:14px;">No batches added yet today.</td></tr>`;
+  } else {
+    body.innerHTML = batches.map(b => {
+      const time = b.created_at ? new Date(b.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—';
+      const parts = [];
+      Object.keys(PACKS).forEach(key => {
+        const qty = Number(b['qty_' + key]) || 0;
+        if (qty > 0) parts.push(`${qty}× ${PACKS[key].label}`);
+      });
+      const breakdown = parts.join(', ') + (b.note ? ` <span style="opacity:.6;">— ${b.note}</span>` : '');
+      return `<tr><td>${time}</td><td>${breakdown || '—'}</td><td><button type="button" class="btn btn-xs btn-danger" onclick="deleteDailyProductBatch('${b.id}')"><i class="business-icon icon-inline" data-lucide="trash-2" aria-hidden="true"></i></button></td></tr>`;
+    }).join('');
+  }
+  if (noteEl) {
+    const sums = computeTodayBatchSums();
+    const totalParts = Object.keys(PACKS).map(key => `${sums[key] || 0}× ${PACKS[key].label}`).join(' · ');
+    noteEl.textContent = `Total today (${batches.length} batch${batches.length === 1 ? '' : 'es'}): ${totalParts}`;
+  }
+}
+window.renderDailyProductBatchList = renderDailyProductBatchList;
+
+async function openAddDailyProductModal() {
+  if (userRole !== 'owner') { alert('Only the owner can add product output.'); return; }
+  Object.keys(PACKS).forEach(key => { const el = $('adpQty' + key); if (el) el.value = 0; });
+  if ($('adpNote')) $('adpNote').value = '';
+  $('addDailyProductModal').classList.add('active');
+  await loadDailyProductBatches();
+  renderDailyProductBatchList();
+}
+window.openAddDailyProductModal = openAddDailyProductModal;
+
+async function addDailyProductBatch() {
+  if (userRole !== 'owner') { alert('Only the owner can add product output.'); return; }
+  if (!currentUser) { alert('Please login first.'); return; }
+
+  const qtyByKey = {};
+  let anyQty = false;
+  Object.keys(PACKS).forEach(key => {
+    const qty = Number($('adpQty' + key) && $('adpQty' + key).value) || 0;
+    qtyByKey[key] = qty;
+    if (qty > 0) anyQty = true;
+  });
+  if (!anyQty) { alert('Enter at least one pack quantity for this batch.'); return; }
+
+  const note = ($('adpNote') && $('adpNote').value.trim()) || null;
+  const row = {
+    owner_id: currentUser.id,
+    log_date: todayIso(),
+    qty_50: qtyByKey[50] || 0,
+    qty_100: qtyByKey[100] || 0,
+    qty_500: qtyByKey[500] || 0,
+    qty_1000: qtyByKey[1000] || 0,
+    note,
     created_by: currentUser.id
   };
 
   if (!(await ensureFreshSession())) return;
   try {
-    const { data, error } = await supabase.from('production_cost_log')
-      .upsert(row, { onConflict: 'owner_id,log_date' }).select().single();
+    const { data, error } = await supabase.from('daily_product_batches').insert(row).select().single();
     if (error) throw error;
-    const idx = dailyProductionLogCache.findIndex(r => r.log_date === data.log_date);
-    if (idx >= 0) dailyProductionLogCache[idx] = data; else dailyProductionLogCache.push(data);
-    closeModal('addDailyProductModal');
-    renderCostingGrindOutputChart();
-    updateStatus("✅ Today's product output saved");
+    dailyProductBatchesCache.push(data);
+    Object.keys(PACKS).forEach(key => { const el = $('adpQty' + key); if (el) el.value = 0; });
+    if ($('adpNote')) $('adpNote').value = '';
+    await recomputeTodayProductOutput();
+    renderDailyProductBatchList();
+    updateStatus("✅ Batch added");
   } catch (e) {
-    console.error('Save daily product output error:', e);
+    console.error('Add daily product batch error:', e);
     const missingTable = /relation .* does not exist/i.test(e?.message || '');
-    alert('❌ Could not save product output: ' + (e?.message || String(e)) + (missingTable ? '\n\nThe production_cost_log table hasn\'t been created in Supabase yet — see the SQL setup comment above saveDailyProductionLog() in app.js.' : ''));
+    alert('❌ Could not add batch: ' + (e?.message || String(e)) + (missingTable ? '\n\nThe daily_product_batches table hasn\'t been created in Supabase yet — run the SQL setup for this feature.' : ''));
   }
 }
-window.saveAddDailyProduct = saveAddDailyProduct;
+window.addDailyProductBatch = addDailyProductBatch;
+
+async function deleteDailyProductBatch(id) {
+  if (userRole !== 'owner') return;
+  if (!confirm('Delete this batch?')) return;
+  try {
+    const { error } = await withSessionRetry(() => supabase.from('daily_product_batches').delete().eq('id', id).eq('owner_id', currentUser.id));
+    if (error) throw error;
+    dailyProductBatchesCache = dailyProductBatchesCache.filter(b => String(b.id) !== String(id));
+    await recomputeTodayProductOutput();
+    renderDailyProductBatchList();
+    updateStatus('🗑️ Batch deleted');
+  } catch (e) {
+    alert('❌ Could not delete batch: ' + (e?.message || String(e)));
+  }
+}
+window.deleteDailyProductBatch = deleteDailyProductBatch;
+
 
 // ==================== COSTING TAB — UMBALAKADA → ORDER COSTING ENTRY ====================
 // One-place daily entry chaining the whole story together: today's

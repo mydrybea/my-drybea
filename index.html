@@ -2150,16 +2150,29 @@
     </div>
     <!-- /costingTab-entry -->
 
-    <!-- Add Product (today's pack output) — quick entry from the Costing
-         tab's "Output by Product" card, so the owner doesn't have to switch
-         to the Production tab just to log pack quantities. Saves straight to
-         production_cost_log (same row/table the Production tab's Daily
-         Production Log uses), only touching the output_qty_* + notes
-         columns — see saveAddDailyProduct() in app.js. -->
+    <!-- Add Product (today's pack output) — quick, ADDITIVE batch log from
+         the Costing tab's "Output by Product" card, so the owner doesn't
+         have to switch to the Production tab. Each "Add Batch" inserts a row
+         into daily_product_batches (its own table — multiple batches/day
+         allowed, nothing overwritten); the sum of today's batches is then
+         written to production_cost_log.output_qty_* (only those columns —
+         grind/dust/cost fields already saved for today are untouched).
+         See recomputeTodayProductOutput() / addDailyProductBatch() in app.js. -->
     <div class="modal-backdrop" id="addDailyProductModal">
       <div class="modal">
         <h3><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="package-check" aria-hidden="true"></i></span><span>Add Today's Product Output</span></h3>
-        <p class="pro-subtitle gold">How many of each pack size came out of today's batch — feeds the profit breakdown above instantly.</p>
+        <p class="pro-subtitle gold">Log each batch separately — quantities add up automatically, nothing gets overwritten.</p>
+
+        <h4 style="margin:0 0 8px;color:var(--green);">📋 Today's Batches</h4>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Time</th><th>Pack Breakdown</th><th></th></tr></thead>
+            <tbody id="adpBatchListBody"><tr><td colspan="3" style="text-align:center;opacity:.5;padding:14px;">No batches added yet today.</td></tr></tbody>
+          </table>
+        </div>
+        <div class="monthly-summary-note" id="adpBatchTotalsNote">Total today: —</div>
+
+        <h4 style="margin:16px 0 8px;color:var(--green);">➕ Add a Batch</h4>
         <div class="grid-2">
           <div class="field"><label>50g Packs</label><input type="number" id="adpQty50" value="0" min="0" step="1"></div>
           <div class="field"><label>100g Packs</label><input type="number" id="adpQty100" value="0" min="0" step="1"></div>
@@ -2168,9 +2181,11 @@
           <div class="field"><label>500g Packs</label><input type="number" id="adpQty500" value="0" min="0" step="1"></div>
           <div class="field"><label>1kg Packs</label><input type="number" id="adpQty1000" value="0" min="0" step="1"></div>
         </div>
+        <div class="field"><label>Note <span class="hint">(optional, e.g. "Morning batch")</span></label><input type="text" id="adpNote" placeholder="Optional note"></div>
+
         <div class="btn-row">
-          <button class="btn btn-primary" onclick="saveAddDailyProduct()"><i class="business-icon icon-inline" data-lucide="save" aria-hidden="true"></i> Save</button>
-          <button class="btn" onclick="closeModal('addDailyProductModal')">Cancel</button>
+          <button class="btn btn-primary" onclick="addDailyProductBatch()"><i class="business-icon icon-inline" data-lucide="plus" aria-hidden="true"></i> Add Batch</button>
+          <button class="btn" onclick="closeModal('addDailyProductModal')">Done</button>
         </div>
       </div>
     </div>
