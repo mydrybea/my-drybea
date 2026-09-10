@@ -1763,6 +1763,7 @@
         <button type="button" class="btn btn-sm costing-subtab" data-costing-tab="daily" onclick="switchCostingTab('daily')"><i class="business-icon icon-inline" data-lucide="line-chart" aria-hidden="true"></i> Daily Costing &amp; Trends</button>
         <button type="button" class="btn btn-sm costing-subtab" data-costing-tab="entry" onclick="switchCostingTab('entry')"><i class="business-icon icon-inline" data-lucide="clipboard-list" aria-hidden="true"></i> Umbalakada → Order Costing</button>
         <button type="button" class="btn btn-sm costing-subtab" data-costing-tab="daypurchase" onclick="switchCostingTab('daypurchase')"><i class="business-icon icon-inline" data-lucide="scale" aria-hidden="true"></i> Today's Purchase → Best Pack</button>
+        <button type="button" class="btn btn-sm costing-subtab" data-costing-tab="quickmarket" onclick="switchCostingTab('quickmarket')"><i class="business-icon icon-inline" data-lucide="zap" aria-hidden="true"></i> Quick Market Decision</button>
       </div>
     </div>
 
@@ -2250,6 +2251,92 @@
       </div>
     </div>
     <!-- /costingTab-daypurchase -->
+
+    <!-- ============ COSTING TAB — QUICK MARKET DECISION (sub-tab) ============ -->
+    <!-- Built for standing AT the market, before buying anything: no actual
+         grind output yet, so estimates use the Grinding Yield % already set
+         on the Pricing & Scenarios sub-tab (linnaGrindYield etc.) rather
+         than requiring a real grind. Weight can be entered in kg or grams
+         (market quotes are sometimes in grams for small lots). The Mix
+         Variation table reuses calculatePack()/PACKS — no new pricing
+         logic — to instantly compare today's 5 preset mixes and surface the
+         single best pack+mix combination. "Send to Daily Production" just
+         pre-fills the Production tab's existing Daily Production Log fields
+         so the day still lands in that tab's day-by-day history once the
+         owner reviews & hits Save there. See calcQuickMarket() in app.js. -->
+    <div id="costingTab-quickmarket" style="display:none;">
+      <div class="card">
+        <h2><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="zap" aria-hidden="true"></i></span><span>Quick Market Decision</span></h2>
+        <p class="pro-subtitle gold">At the market, about to buy? Enter what's on offer and decide before you pay — uses your saved Grinding Yield % to estimate output, no actual grinding needed yet.</p>
+
+        <div class="field" style="max-width:220px;">
+          <label>Weight Unit</label>
+          <select id="qmUnit" onchange="calcQuickMarket()">
+            <option value="kg" selected>Kilograms (kg)</option>
+            <option value="g">Grams (g)</option>
+          </select>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Type</th><th class="num">Weight Offered (<span id="qmUnitHeader">kg</span>)</th><th class="num">Price /kg (Rs.)</th><th class="num">Cost (Rs.)</th><th class="num">Est. Usable Output</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><strong>Linna</strong></td>
+                <td><input type="number" id="qmQtyLinna" value="0" min="0" step="0.1" oninput="calcQuickMarket()"></td>
+                <td><input type="number" id="qmPriceLinna" value="0" min="0" oninput="calcQuickMarket()"></td>
+                <td class="num" id="qmCostLinna">Rs. 0</td>
+                <td class="num" id="qmOutLinna">0 kg</td>
+              </tr>
+              <tr>
+                <td><strong>Balaya</strong></td>
+                <td><input type="number" id="qmQtyBalaya" value="0" min="0" step="0.1" oninput="calcQuickMarket()"></td>
+                <td><input type="number" id="qmPriceBalaya" value="0" min="0" oninput="calcQuickMarket()"></td>
+                <td class="num" id="qmCostBalaya">Rs. 0</td>
+                <td class="num" id="qmOutBalaya">0 kg</td>
+              </tr>
+              <tr>
+                <td><strong>Premium Mix</strong></td>
+                <td><input type="number" id="qmQtyPremium" value="0" min="0" step="0.1" oninput="calcQuickMarket()"></td>
+                <td><input type="number" id="qmPricePremium" value="0" min="0" oninput="calcQuickMarket()"></td>
+                <td class="num" id="qmCostPremium">Rs. 0</td>
+                <td class="num" id="qmOutPremium">0 kg</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="stat-grid" style="margin-top:14px;">
+          <div class="stat"><div class="k">Total Weight</div><div class="v" id="qmStatTotalWeight">0 kg</div></div>
+          <div class="stat"><div class="k">Total Cost</div><div class="v" id="qmStatTotalCost">Rs. 0</div></div>
+          <div class="stat"><div class="k">Est. Usable Output</div><div class="v" id="qmStatEstOutput">0 kg</div></div>
+          <div class="stat bad"><div class="k">Est. Dust Loss</div><div class="v" id="qmStatEstDust">0 kg</div></div>
+          <div class="stat accent"><div class="k">Est. Cost / kg Usable</div><div class="v" id="qmStatCostPerKg">Rs. 0</div></div>
+        </div>
+        <div class="monthly-summary-note" id="qmYieldNote">Estimates use the Grinding Yield % from the Pricing &amp; Scenarios sub-tab.</div>
+      </div>
+
+      <div class="card" style="margin-top:16px;">
+        <h2><span class="pro-title-icon purple" aria-hidden="true"><i class="business-icon" data-lucide="chart-no-axes-combined" aria-hidden="true"></i></span><span>Mix Variation Comparison</span></h2>
+        <p class="pro-subtitle purple">Every preset fish-mix ratio, priced at today's fish costs above, showing each mix's single most profitable pack size (by profit/kg, so pack sizes compare fairly).</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Mix (Linna/Balaya/Premium)</th><th>Best Pack</th><th class="num">Cost/kg</th><th class="num">Profit/kg</th><th class="num">Margin</th><th></th></tr></thead>
+            <tbody id="qmMixVariationBody"></tbody>
+          </table>
+        </div>
+        <div class="monthly-summary-note" id="qmOverallBestNote"></div>
+      </div>
+
+      <div class="card" style="margin-top:16px;">
+        <h2><span class="pro-title-icon teal" aria-hidden="true"><i class="business-icon" data-lucide="calendar-check" aria-hidden="true"></i></span><span>Send to Daily Production</span></h2>
+        <p class="pro-subtitle teal">Decided? Push today's estimated Grind Output &amp; Dust straight into the Production tab's Daily Production Log — review the numbers there and hit "Save Today's Snapshot" to store it in your day-by-day production history.</p>
+        <div class="btn-row">
+          <button class="btn btn-primary" onclick="sendQuickMarketToProduction()"><i class="business-icon icon-inline" data-lucide="package-check" aria-hidden="true"></i> Send Estimated Output to Daily Production Log</button>
+        </div>
+      </div>
+    </div>
+    <!-- /costingTab-quickmarket -->
 
     <!-- Add Product (today's pack output) — quick, ADDITIVE batch log from
          the Costing tab's "Output by Product" card, so the owner doesn't

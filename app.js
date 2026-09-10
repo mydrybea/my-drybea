@@ -2332,7 +2332,7 @@ function calcScenario() {
 // "daily"   = live Grind→Output snapshot + monthly trend chart, sourced
 // from the same dailyProductionLogCache the Production tab uses.
 function switchCostingTab(tab) {
-  ['pricing', 'daily', 'entry', 'daypurchase'].forEach(t => {
+  ['pricing', 'daily', 'entry', 'daypurchase', 'quickmarket'].forEach(t => {
     const panel = $(`costingTab-${t}`);
     if (panel) panel.style.display = (t === tab) ? '' : 'none';
   });
@@ -2347,6 +2347,7 @@ function switchCostingTab(tab) {
     loadCostingEntriesFromCloud().then(renderCostingEntries);
   }
   if (tab === 'daypurchase') calcDailyPurchase();
+  if (tab === 'quickmarket') calcQuickMarket();
 }
 window.switchCostingTab = switchCostingTab;
 
@@ -2605,6 +2606,135 @@ function setDpbMarketPrice(key, value) {
   calcDailyPurchase();
 }
 window.setDpbMarketPrice = setDpbMarketPrice;
+
+// ==================== COSTING TAB — QUICK MARKET DECISION ====================
+// For standing AT the market, before any actual grinding has happened.
+// Estimates usable output/dust from weight offered using the Grinding
+// Yield % already saved on the Pricing & Scenarios sub-tab (getGrindYields()
+// — same source of truth as calculatePack()), so this needs no new inputs
+// the owner hasn't already set once. The Mix Variation table reuses
+// calculatePack()/PACKS directly — zero duplicated pricing logic.
+const QM_MIX_PRESETS = [
+  { label: '40% Linna / 0% Balaya / 60% Premium', mix: { linna: 0.40, balaya: 0.00, kawalam: 0.60 } },
+  { label: '60% Linna / 0% Balaya / 40% Premium', mix: { linna: 0.60, balaya: 0.00, kawalam: 0.40 } },
+  { label: '35% Linna / 20% Balaya / 45% Premium', mix: { linna: 0.35, balaya: 0.20, kawalam: 0.45 } },
+  { label: '25% Linna / 15% Balaya / 60% Premium', mix: { linna: 0.25, balaya: 0.15, kawalam: 0.60 } },
+  { label: '20% Linna / 40% Balaya / 40% Premium', mix: { linna: 0.20, balaya: 0.40, kawalam: 0.40 } }
+];
+
+let lastQmEstOutputKg = 0, lastQmEstDustKg = 0, lastQmTotalWeightKg = 0;
+
+function calcQuickMarket() {
+  const body = $('qmMixVariationBody');
+  if (!body) return; // sub-tab not in the DOM (older cached HTML)
+
+  const unit = $('qmUnit').value || 'kg';
+  const unitDivisor = unit === 'g' ? 1000 : 1; // convert entered weight to kg
+  const unitLabel = unit === 'g' ? 'g' : 'kg';
+  const headerEl = $('qmUnitHeader');
+  if (headerEl) headerEl.textContent = unitLabel;
+
+  const gy = getGrindYields(); // { linna, balaya, premium } as fractions, e.g. 0.8
+  const rows = [
+    { key: 'Linna', qtyId: 'qmQtyLinna', priceId: 'qmPriceLinna', costId: 'qmCostLinna', outId: 'qmOutLinna', yield: gy.linna },
+    { key: 'Balaya', qtyId: 'qmQtyBalaya', priceId: 'qmPriceBalaya', costId: 'qmCostBalaya', outId: 'qmOutBalaya', yield: gy.balaya },
+    { key: 'Premium Mix', qtyId: 'qmQtyPremium', priceId: 'qmPricePremium', costId: 'qmCostPremium', outId: 'qmOutPremium', yield: gy.premium }
+  ];
+
+  let totalWeightKg = 0, totalCost = 0, totalOutputKg = 0;
+  rows.forEach(r => {
+    const enteredQty = Number($(r.qtyId).value) || 0;
+    const price = Number($(r.priceId).value) || 0;
+    const qtyKg = enteredQty / unitDivisor;
+    const cost = qtyKg * price;
+    const outputKg = qtyKg * r.yield;
+    totalWeightKg += qtyKg;
+    totalCost += cost;
+    totalOutputKg += outputKg;
+    const costEl = $(r.costId), outEl = $(r.outId);
+    if (costEl) costEl.textContent = fmt(cost);
+    if (outEl) outEl.textContent = fmt2(outputKg) + ' kg';
+  });
+
+  const dustKg = Math.max(totalWeightKg - totalOutputKg, 0);
+  const costPerKgUsable = totalOutputKg > 0 ? totalCost / totalOutputKg : 0;
+
+  lastQmTotalWeightKg = totalWeightKg;
+  lastQmEstOutputKg = totalOutputKg;
+  lastQmEstDustKg = dustKg;
+
+  $('qmStatTotalWeight').textContent = fmt2(totalWeightKg) + ' kg';
+  $('qmStatTotalCost').textContent = fmt(totalCost);
+  $('qmStatEstOutput').textContent = fmt2(totalOutputKg) + ' kg';
+  $('qmStatEstDust').textContent = fmt2(dustKg) + ' kg';
+  $('qmStatCostPerKg').textContent = fmt(costPerKgUsable);
+
+  // ---- Mix Variation Comparison — independent of the weight entered above,
+  // this always compares TODAY's fish prices (Pricing & Scenarios sub-tab)
+  // across every preset mix & pack size, so it's useful even with 0kg typed
+  // in (e.g. deciding what to ask for before a price is even quoted). If
+  // prices ARE entered above for a type, they override the saved Raw
+  // Materials price for that type only, so the comparison reflects what's
+  // actually on offer right now.
+  const priceOverride = {
+    linna: (Number($('qmPriceLinna').value) || 0) || state.linnaPrice,
+    balaya: (Number($('qmPriceBalaya').value) || 0) || state.balayaPrice,
+    kawalam: (Number($('qmPricePremium').value) || 0) || state.kawalamPrice
+  };
+
+  let overallBest = null;
+  const mixRows = QM_MIX_PRESETS.map(preset => {
+    let bestForMix = null;
+    Object.keys(PACKS).forEach(key => {
+      let r;
+      try {
+        r = calculatePack(key, priceOverride.linna, priceOverride.balaya, priceOverride.kawalam, preset.mix, 'mrp', 0, 0);
+      } catch (e) { return; }
+      const usableKg = r.p.fish / 1000;
+      const profitPerKg = usableKg > 0 ? r.profit / usableKg : 0;
+      const costPerKg = usableKg > 0 ? r.totalCost / usableKg : 0;
+      const candidate = { packLabel: r.p.label, costPerKg, profitPerKg, margin: r.margin };
+      if (!bestForMix || candidate.profitPerKg > bestForMix.profitPerKg) bestForMix = candidate;
+    });
+    const row = { mixLabel: preset.label, ...bestForMix };
+    if (!overallBest || row.profitPerKg > overallBest.profitPerKg) overallBest = row;
+    return row;
+  });
+
+  body.innerHTML = mixRows.map(r => {
+    const isBest = overallBest && r.mixLabel === overallBest.mixLabel && r.packLabel === overallBest.packLabel;
+    const verdict = isBest ? '<span class="badge badge-good">⭐ Best Right Now</span>' : (r.profitPerKg >= 0 ? '<span class="badge badge-good">Profit</span>' : '<span class="badge badge-bad">Loss</span>');
+    return `<tr${isBest ? ' style="background:rgba(14,164,114,.07);"' : ''}>
+      <td>${r.mixLabel}</td>
+      <td>${r.packLabel}</td>
+      <td class="num">${fmt(r.costPerKg)}</td>
+      <td class="num">${fmt(r.profitPerKg)}</td>
+      <td class="num">${fmt2(r.margin)}%</td>
+      <td>${verdict}</td>
+    </tr>`;
+  }).join('');
+
+  if (overallBest) {
+    $('qmOverallBestNote').textContent = `Right now, the ${overallBest.mixLabel} mix packed as ${overallBest.packLabel} gives the best profit: ${fmt(overallBest.profitPerKg)}/kg (${fmt2(overallBest.margin)}% margin).`;
+  }
+}
+window.calcQuickMarket = calcQuickMarket;
+
+// Pre-fills the Production tab's existing Daily Production Log fields with
+// this session's estimated totals, then jumps there so the owner can review
+// (and adjust once actual grinding is done) before hitting that tab's own
+// "Save Today's Snapshot" — this never saves to Supabase by itself.
+function sendQuickMarketToProduction() {
+  if (lastQmTotalWeightKg <= 0) { alert('Enter a weight above first.'); return; }
+  calcQuickMarket();
+  if ($('dpUmbalakadaGroundKg')) $('dpUmbalakadaGroundKg').value = fmt2(lastQmTotalWeightKg);
+  if ($('dpDustGeneratedKg')) $('dpDustGeneratedKg').value = fmt2(lastQmEstDustKg);
+  if ($('dpKgProduced')) $('dpKgProduced').value = fmt2(lastQmEstOutputKg);
+  updateDailyProductionSummaryLive();
+  if (typeof activateAppTab === 'function') activateAppTab('production');
+  updateStatus('📦 Estimated output sent to Daily Production Log — review & click "Save Today\'s Snapshot" there.');
+}
+window.sendQuickMarketToProduction = sendQuickMarketToProduction;
 
 // ==================== COSTING TAB — "ADD PRODUCT" BATCH LOG (today's pack output) ====================
 // Lets the owner log today's pack output right from the Costing tab's
