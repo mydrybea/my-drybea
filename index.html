@@ -1763,6 +1763,7 @@
         <button type="button" class="btn btn-sm costing-subtab" data-costing-tab="daily" onclick="switchCostingTab('daily')"><i class="business-icon icon-inline" data-lucide="line-chart" aria-hidden="true"></i> Daily Costing &amp; Trends</button>
         <button type="button" class="btn btn-sm costing-subtab" data-costing-tab="daypurchase" onclick="switchCostingTab('daypurchase')"><i class="business-icon icon-inline" data-lucide="scale" aria-hidden="true"></i> Today's Purchase → Best Pack</button>
         <button type="button" class="btn btn-sm costing-subtab" data-costing-tab="orderbuy" onclick="switchCostingTab('orderbuy')"><i class="business-icon icon-inline" data-lucide="shopping-cart" aria-hidden="true"></i> Order → What to Buy</button>
+        <button type="button" class="btn btn-sm costing-subtab" data-costing-tab="breakdown" onclick="switchCostingTab('breakdown')"><i class="business-icon icon-inline" data-lucide="pie-chart" aria-hidden="true"></i> Cost Breakdown</button>
       </div>
     </div>
 
@@ -2234,6 +2235,59 @@
       </div>
     </div>
     <!-- /costingTab-orderbuy -->
+
+    <!-- ============ COSTING TAB — COST BREAKDOWN ANALYTICS (sub-tab) ============ -->
+    <!-- Category-wise cost analytics for any date range — reuses the same
+         `expenses` array as the Expenses tab (every category: Raw Fish,
+         Ingredients, Salary, Transport, Ice, Electricity, etc.), so this
+         always agrees exactly with Expenses & the Profit chart, with zero
+         separate data entry. See renderCostBreakdown() in app.js. -->
+    <div id="costingTab-breakdown" style="display:none;">
+      <div class="card">
+        <h2><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="pie-chart" aria-hidden="true"></i></span><span>Cost Breakdown Analytics</span></h2>
+        <p class="pro-subtitle gold">Where the money is going, by category — pick a period below to see the split.</p>
+
+        <div class="grid-3">
+          <div class="field">
+            <label>Period</label>
+            <select id="cbRangePreset" onchange="onCostBreakdownRangeChange()">
+              <option value="today">Today</option>
+              <option value="week">This Week</option>
+              <option value="month" selected>This Month</option>
+              <option value="year">This Year</option>
+              <option value="all">All Time</option>
+              <option value="custom">Custom Range</option>
+            </select>
+          </div>
+          <div class="field" id="cbCustomFromWrap" style="display:none;">
+            <label>From</label>
+            <input type="date" id="cbCustomFrom" onchange="renderCostBreakdown()">
+          </div>
+          <div class="field" id="cbCustomToWrap" style="display:none;">
+            <label>To</label>
+            <input type="date" id="cbCustomTo" onchange="renderCostBreakdown()">
+          </div>
+        </div>
+
+        <div class="stat-grid" style="margin-top:6px;">
+          <div class="stat"><div class="k">Total Cost</div><div class="v" id="cbStatTotal">Rs. 0</div></div>
+          <div class="stat"><div class="k">Entries</div><div class="v" id="cbStatEntries">0</div></div>
+          <div class="stat"><div class="k">Avg / Entry</div><div class="v" id="cbStatAvg">Rs. 0</div></div>
+          <div class="stat good"><div class="k">Top Category</div><div class="v" id="cbStatTop">—</div></div>
+        </div>
+
+        <div class="chart-wrap"><canvas id="costBreakdownChart"></canvas></div>
+
+        <div class="table-wrap" style="margin-top:14px;">
+          <table>
+            <thead><tr><th>Category</th><th class="num">Amount</th><th class="num">% of Total</th><th class="num">Entries</th></tr></thead>
+            <tbody id="cbBreakdownBody"><tr><td colspan="4" style="text-align:center;opacity:.5;padding:20px;">No costs in this period.</td></tr></tbody>
+          </table>
+        </div>
+        <div class="monthly-summary-note" id="cbBreakdownNote">Pulled straight from Expenses — add or edit entries there and this updates automatically.</div>
+      </div>
+    </div>
+    <!-- /costingTab-breakdown -->
 
     <!-- Add Product (today's pack output) — quick, ADDITIVE batch log from
          the Costing tab's "Output by Product" card, so the owner doesn't

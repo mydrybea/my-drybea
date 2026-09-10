@@ -1981,7 +1981,7 @@ function getAllocatedOverheadPerPack() {
 }
 
 // ==================== CHARTS ====================
-let costChart = null, sensChart = null, prodChart = null, dpMonthlyChart = null, ingBreakdownChart = null, dpDustProfitChart = null, costingGrindOutputChart = null;
+let costChart = null, sensChart = null, prodChart = null, dpMonthlyChart = null, ingBreakdownChart = null, dpDustProfitChart = null, costingGrindOutputChart = null, costBreakdownChart = null;
 let dailyProductionLogCache = [];
 let lastProdAvgRawCostPerKg = 0, lastProdIngredientsCostPerKg = 0, lastProdOverheadCostPerKg = 0;
 let lastProdAvgCostPerKg = 0, lastProdAvgMarketPrice = 0, lastProdAvgProfitPerKg = 0;
@@ -2337,7 +2337,7 @@ function calcScenario() {
 // "daily"   = live Grind→Output snapshot + monthly trend chart, sourced
 // from the same dailyProductionLogCache the Production tab uses.
 function switchCostingTab(tab) {
-  ['pricing', 'daily', 'daypurchase', 'orderbuy'].forEach(t => {
+  ['pricing', 'daily', 'daypurchase', 'orderbuy', 'breakdown'].forEach(t => {
     const panel = $(`costingTab-${t}`);
     if (panel) panel.style.display = (t === tab) ? '' : 'none';
   });
@@ -2347,8 +2347,155 @@ function switchCostingTab(tab) {
   if (tab === 'daily') { renderCostingGrindOutputChart(); populatePackProductMapSelects(); renderDailyStoreHistory(); }
   if (tab === 'daypurchase') calcDailyPurchase();
   if (tab === 'orderbuy') calcOrderToBuy();
+  if (tab === 'breakdown') renderCostBreakdown();
 }
 window.switchCostingTab = switchCostingTab;
+
+// ==================== COSTING TAB — COST BREAKDOWN ANALYTICS ====================
+// Category-wise view of the same `expenses` array as the Expenses tab, for
+// any date range the owner picks. Always agrees exactly with Expenses and
+// the Profit chart — no separate data entry, just a different lens on the
+// same records.
+const CB_SLICE_COLORS = ['#f87171', '#fbbf24', '#10b981', '#4b9cff', '#9a72ff', '#ee9a3d', '#27b9b1', '#8fa3ad', '#f472b6', '#38bdf8', '#a3e635', '#fb923c', '#c084fc', '#94a3b8'];
+
+function onCostBreakdownRangeChange() {
+  const presetEl = $('cbRangePreset');
+  if (!presetEl) return;
+  const showCustom = presetEl.value === 'custom';
+  if ($('cbCustomFromWrap')) $('cbCustomFromWrap').style.display = showCustom ? '' : 'none';
+  if ($('cbCustomToWrap')) $('cbCustomToWrap').style.display = showCustom ? '' : 'none';
+  if (showCustom) {
+    if ($('cbCustomFrom') && !$('cbCustomFrom').value) $('cbCustomFrom').value = todayIso();
+    if ($('cbCustomTo') && !$('cbCustomTo').value) $('cbCustomTo').value = todayIso();
+  }
+  renderCostBreakdown();
+}
+window.onCostBreakdownRangeChange = onCostBreakdownRangeChange;
+
+// Resolves the selected preset (or custom dates) into actual from/to Date
+// bounds. 'all' returns both as null, meaning "no bound" — every expense
+// ever recorded is included.
+function costBreakdownRangeBounds() {
+  const preset = $('cbRangePreset') ? $('cbRangePreset').value : 'month';
+  const now = new Date();
+  let from = null, to = null;
+  if (preset === 'today') {
+    from = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    to = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+  } else if (preset === 'week') {
+    const day = now.getDay(); // 0 = Sunday
+    const diffToMonday = (day === 0 ? 6 : day - 1);
+    from = new Date(now.getFullYear(), now.getMonth(), now.getDate() - diffToMonday);
+    to = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+  } else if (preset === 'month') {
+    from = new Date(now.getFullYear(), now.getMonth(), 1);
+    to = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+  } else if (preset === 'year') {
+    from = new Date(now.getFullYear(), 0, 1);
+    to = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+  } else if (preset === 'custom') {
+    const fromStr = $('cbCustomFrom') ? $('cbCustomFrom').value : '';
+    const toStr = $('cbCustomTo') ? $('cbCustomTo').value : '';
+    from = fromStr ? parseSummaryDate(fromStr) : null;
+    to = toStr ? parseSummaryDate(toStr) : null;
+    if (to) to = new Date(to.getFullYear(), to.getMonth(), to.getDate(), 23, 59, 59, 999);
+  }
+  // preset === 'all' falls through with from/to both still null.
+  return { from, to };
+}
+
+function renderCostBreakdown() {
+  const body = $('cbBreakdownBody');
+  if (!body) return;
+  const setStat = (id, v) => { const el = $(id); if (el) el.textContent = v; };
+
+  const { from, to } = costBreakdownRangeBounds();
+  const inRange = (dateStr) => {
+    const d = parseSummaryDate(dateStr);
+    if (!d) return false;
+    if (from && d < from) return false;
+    if (to && d > to) return false;
+    return true;
+  };
+  const entries = (expenses || []).filter(e => inRange(e.date));
+
+  const catTotals = {}, catCounts = {};
+  let total = 0;
+  entries.forEach(e => {
+    const cat = e.category || 'Other';
+    const amt = Number(e.amount) || 0;
+    catTotals[cat] = (catTotals[cat] || 0) + amt;
+    catCounts[cat] = (catCounts[cat] || 0) + 1;
+    total += amt;
+  });
+  const catLabel = (c) => COSTING_CATEGORY_LABELS[c] || c;
+  const sortedCats = Object.keys(catTotals).sort((a, b) => catTotals[b] - catTotals[a]);
+
+  // ---- Stat cards ----
+  setStat('cbStatTotal', fmt(total));
+  setStat('cbStatEntries', String(entries.length));
+  setStat('cbStatAvg', fmt(entries.length ? total / entries.length : 0));
+  setStat('cbStatTop', sortedCats.length ? `${catLabel(sortedCats[0])} (${fmt(catTotals[sortedCats[0]])})` : '—');
+
+  // ---- Table ----
+  if (sortedCats.length === 0) {
+    body.innerHTML = '<tr><td colspan="4" style="text-align:center;opacity:.5;padding:20px;">No costs in this period.</td></tr>';
+  } else {
+    body.innerHTML = sortedCats.map(c => {
+      const amt = catTotals[c];
+      const pct = total > 0 ? (amt / total * 100) : 0;
+      return `<tr>
+        <td>${catLabel(c)}</td>
+        <td class="num">${fmt(amt)}</td>
+        <td class="num">${pct.toFixed(1)}%</td>
+        <td class="num">${catCounts[c]}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  // ---- Doughnut chart ----
+  safeRenderChart('costBreakdownChart', () => {
+    const colors = getChartColors();
+    const ctx = $('costBreakdownChart').getContext('2d');
+    const chartData = {
+      labels: sortedCats.length ? sortedCats.map(catLabel) : ['No costs yet'],
+      datasets: [{
+        data: sortedCats.length ? sortedCats.map(c => Math.round(catTotals[c])) : [1],
+        backgroundColor: sortedCats.length ? sortedCats.map((_, i) => CB_SLICE_COLORS[i % CB_SLICE_COLORS.length]) : ['#e5e7eb'],
+        borderColor: 'transparent',
+        hoverOffset: 8
+      }]
+    };
+    if (costBreakdownChart) { costBreakdownChart.data = chartData; costBreakdownChart.update(); }
+    else {
+      costBreakdownChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: chartData,
+        options: {
+          responsive: true, maintainAspectRatio: false, cutout: '62%',
+          plugins: {
+            legend: { position: 'right', labels: { boxWidth: 10, font: { size: 11, family: 'Inter' }, color: colors.text, usePointStyle: true, pointStyle: 'circle' } },
+            tooltip: {
+              callbacks: {
+                label: (item) => {
+                  const pct = total > 0 ? (item.parsed / total * 100).toFixed(1) : '0';
+                  return ` ${item.label}: Rs. ${item.parsed.toLocaleString()} (${pct}%)`;
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+  });
+
+  const note = $('cbBreakdownNote');
+  if (note) {
+    const rangeLabel = $('cbRangePreset') && $('cbRangePreset').value === 'all' ? 'all recorded costs' : 'the selected period';
+    note.textContent = `Showing ${rangeLabel} — pulled straight from Expenses; add or edit entries there and this updates automatically.`;
+  }
+}
+window.renderCostBreakdown = renderCostBreakdown;
 
 // Today's Grind→Output stat cards + the monthly trend chart, in the Costing
 // tab's "Daily Costing & Trends" sub-tab. Reads the same dailyProductionLogCache
@@ -4342,6 +4489,7 @@ function dbOrderToLocal(o) {
     customerName: o.customer_name_snapshot || '',
     customerPhone: o.customer_phone_snapshot || '',
     orderRefNo: o.order_ref_no || null,
+    productId: o.product_id || null,
     product: String(o.product_size_g),
     qty: Number(o.qty),
     unitPrice: Number(o.unit_price),
@@ -4554,7 +4702,7 @@ async function openStockHistory(id) {
       $('stockHistoryBody').innerHTML = '<tr><td colspan="5" style="text-align:center;opacity:.6;">No stock movements yet.</td></tr>';
       return;
     }
-    const typeLabel = { restock: '📦 Restock', sale: '🛒 Sale', adjustment: '🛠️ Adjustment' };
+    const typeLabel = { restock: '📦 Restock', sale: '🛒 Sale', order: '📋 Order', production: '🏭 Production', adjustment: '🛠️ Adjustment' };
     $('stockHistoryBody').innerHTML = data.map(m => `
       <tr>
         <td>${new Date(m.created_at).toLocaleString()}</td>
@@ -7243,7 +7391,12 @@ async function createOrder() {
       else loadDistributorCommissionClaims();
     }
   } catch (e) { console.error('Create order error:',e); alert('❌ Could not save order: '+e.message); return; }
-  orders.unshift({id:row.id,customerId,product,qty,unitPrice,total,address,notes,status:'pending',createdBy:currentUser.id,createdAt:new Date().toISOString(),referralStaffId,referralStaffReference,referralStatus:referralStaffId?'pending_verification':'none',orderRefNo:row.order_ref_no||null,paymentMethod});
+  orders.unshift({id:row.id,customerId,productId,product,qty,unitPrice,total,address,notes,status:'pending',createdBy:currentUser.id,createdAt:new Date().toISOString(),referralStaffId,referralStaffReference,referralStatus:referralStaffId?'pending_verification':'none',orderRefNo:row.order_ref_no||null,paymentMethod});
+  // Order placed against a catalog product -> stock is committed right away
+  // (not just when a Sale is logged), so the Products tab reflects orders
+  // the moment they're created. Reversed automatically if the order is
+  // later cancelled/reactivated (see cycleStatus()) or deleted (see deleteOrder()).
+  if (productId) await applyStockMovement(productId, -qty, 'order', `New order${customer ? ' — ' + customer.name : ''}`);
   saveOrders(); renderOrders(); renderDelivery(); updateOrderStats(); closeModal('orderModal');
   $('orderQty').value=1; $('orderUnitPrice').value=350; $('orderAddress').value=''; $('orderNotes').value='';
   if ($('orderPaymentMethod')) $('orderPaymentMethod').value = 'cod';
@@ -7345,6 +7498,7 @@ async function cycleStatus(index) {
     alert('❌ Could not update order status: ' + e.message);
     return;
   }
+  const prevStatus = order.status;
   order.status = newStatus;
   saveOrders();
   renderOrders();
@@ -7355,6 +7509,17 @@ async function cycleStatus(index) {
   // happens if the order gets cancelled first — see finalizeDistributorCommissionForOrder().
   if (newStatus === 'delivered') finalizeDistributorCommissionForOrder(order.id, 'approved');
   else if (newStatus === 'cancelled') finalizeDistributorCommissionForOrder(order.id, 'rejected');
+  // Stock was committed the moment this order was created (see createOrder()).
+  // Cancelling it releases that stock back to the shelf; reviving a
+  // previously-cancelled order (cycling past 'cancelled' back to 'pending')
+  // commits it again.
+  if (order.productId) {
+    if (newStatus === 'cancelled' && prevStatus !== 'cancelled') {
+      await applyStockMovement(order.productId, order.qty, 'adjustment', `Order ${order.orderRefNo || ''} cancelled — stock released`.trim());
+    } else if (prevStatus === 'cancelled' && newStatus !== 'cancelled') {
+      await applyStockMovement(order.productId, -order.qty, 'order', `Order ${order.orderRefNo || ''} reactivated — stock committed`.trim());
+    }
+  }
   updateStatus('🔄 Order status updated');
 }
 
@@ -7371,6 +7536,11 @@ async function deleteOrder(index) {
     console.error('Delete order error:', e);
     alert('❌ Could not delete order: ' + e.message);
     return;
+  }
+  // If the order was still holding committed stock (never cancelled first),
+  // deleting it must give that stock back — otherwise it's lost forever.
+  if (order.productId && order.status !== 'cancelled') {
+    await applyStockMovement(order.productId, order.qty, 'adjustment', `Order ${order.orderRefNo || ''} deleted — stock released`.trim());
   }
   orders.splice(index, 1);
   saveOrders();
