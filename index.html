@@ -1742,6 +1742,7 @@
     <div id="costingSubTabs" style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;">
       <button type="button" class="btn btn-sm costing-subtab btn-primary" data-costing-tab="pricing" onclick="switchCostingTab('pricing')"><i class="business-icon icon-inline" data-lucide="calculator" aria-hidden="true"></i> Pricing &amp; Scenarios</button>
       <button type="button" class="btn btn-sm costing-subtab" data-costing-tab="daily" onclick="switchCostingTab('daily')"><i class="business-icon icon-inline" data-lucide="line-chart" aria-hidden="true"></i> Daily Costing &amp; Trends</button>
+      <button type="button" class="btn btn-sm costing-subtab" data-costing-tab="entry" onclick="switchCostingTab('entry')"><i class="business-icon icon-inline" data-lucide="clipboard-list" aria-hidden="true"></i> Umbalakada → Order Costing</button>
     </div>
 
     <div id="costingTab-pricing">
@@ -2009,6 +2010,120 @@
       </div>
     </div>
     <!-- /costingTab-daily -->
+
+    <!-- ============ COSTING TAB — UMBALAKADA → ORDER COSTING (sub-tab) ============ -->
+    <!-- One-place entry chain: today's Umbalakada purchase (type & price) ->
+         grind output & dust used -> the Final Product it became -> how that
+         product was sold -> which Order it's linked to -> the Income, which
+         is saved straight to Supabase (costing_entries) and mirrored into
+         the Sales table automatically so it shows up in Income/Sales too.
+         See saveCostingEntry() in app.js for the one-time Supabase setup SQL. -->
+    <div id="costingTab-entry" style="display:none;">
+      <div class="card">
+        <h2><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="clipboard-list" aria-hidden="true"></i></span><span>Add Costing Entry</span></h2>
+        <p class="pro-subtitle green">Umbalakada purchase → grind &amp; dust → final product → sale → order → income, all in one entry.</p>
+
+        <div class="grid-3">
+          <div class="field">
+            <label>Date</label>
+            <input type="date" id="ceDate">
+          </div>
+          <div class="field">
+            <label>Umbalakada Type</label>
+            <select id="ceType" onchange="onCostingEntryTypeChange()">
+              <option value="linna">Linna</option>
+              <option value="balaya">Balaya</option>
+              <option value="premium">Premium Mix</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Price <span class="hint">(Rs./kg)</span></label>
+            <div class="input-prefix"><span>Rs.</span><input type="number" id="cePricePerKg" value="0" min="0"></div>
+          </div>
+        </div>
+
+        <div class="grid-3">
+          <div class="field">
+            <label>Purchased Today <span class="hint">(kg)</span></label>
+            <input type="number" id="cePurchasedKg" value="0" min="0" step="0.1">
+          </div>
+          <div class="field">
+            <label>Grind Output Weight <span class="hint">(kg, after grinding)</span></label>
+            <input type="number" id="ceGrindOutputKg" value="0" min="0" step="0.1">
+          </div>
+          <div class="field">
+            <label>Used Umbalakada <span class="hint">(kg, into production)</span></label>
+            <input type="number" id="ceUsedUmbalakadaKg" value="0" min="0" step="0.1">
+          </div>
+        </div>
+
+        <div class="grid-3">
+          <div class="field">
+            <label>Used Dust <span class="hint">(kg)</span></label>
+            <input type="number" id="ceUsedDustKg" value="0" min="0" step="0.1">
+          </div>
+          <div class="field">
+            <label>Final Product <span class="hint">(pack size)</span></label>
+            <select id="ceFinalProduct">
+              <option value="50">50g</option>
+              <option value="100" selected>100g</option>
+              <option value="500">500g</option>
+              <option value="1000">1kg</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Output Qty <span class="hint">(packs produced)</span></label>
+            <input type="number" id="ceOutputQty" value="0" min="0" step="1">
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="field">
+            <label>Sale Type <span class="hint">(how this product was sold)</span></label>
+            <select id="ceSaleType">
+              <option value="unsold">Not sold yet</option>
+              <option value="retail">Retail</option>
+              <option value="wholesale">Wholesale</option>
+              <option value="distributor">Distributor</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Link to Order <span class="hint">(optional)</span></label>
+            <select id="ceOrderId" onchange="onCostingEntryOrderPick()">
+              <option value="">— None —</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Income <span class="hint">(Rs. — saved straight to Sales/Income automatically)</span></label>
+          <div class="input-prefix"><span>Rs.</span><input type="number" id="ceIncome" value="0" min="0"></div>
+        </div>
+        <div class="field">
+          <label>Notes</label>
+          <input type="text" id="ceNotes" placeholder="Optional note">
+        </div>
+
+        <div class="btn-row">
+          <button class="btn btn-primary" onclick="saveCostingEntry()"><i class="business-icon icon-inline" data-lucide="save" aria-hidden="true"></i> Save Entry</button>
+        </div>
+      </div>
+
+      <div class="stat-grid" style="margin-top:16px;">
+        <div class="stat"><div class="k">Purchased (This Month)</div><div class="v" id="ceSumPurchasedKg">0 kg</div></div>
+        <div class="stat"><div class="k">Used (This Month)</div><div class="v" id="ceSumUsedKg">0 kg</div></div>
+        <div class="stat"><div class="k">Dust Used (This Month)</div><div class="v" id="ceSumDustKg">0 kg</div></div>
+        <div class="stat accent"><div class="k">Income (This Month)</div><div class="v" id="ceSumIncome">Rs. 0</div></div>
+      </div>
+
+      <div class="table-wrap" style="margin-top:14px;">
+        <table>
+          <thead><tr><th>Date</th><th>Type</th><th class="num">Price/kg</th><th class="num">Purchased</th><th class="num">Grind Out</th><th class="num">Used</th><th class="num">Dust Used</th><th>Final Product</th><th>Sale Type</th><th>Order</th><th class="num">Income</th><th>Actions</th></tr></thead>
+          <tbody id="costingEntriesBody"></tbody>
+        </table>
+      </div>
+    </div>
+    <!-- /costingTab-entry -->
   </section>
 
   <!-- ============ PRODUCTION TAB ============ -->

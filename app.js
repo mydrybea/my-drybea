@@ -2205,7 +2205,7 @@ function calcScenario() {
 // "daily"   = live Grind→Output snapshot + monthly trend chart, sourced
 // from the same dailyProductionLogCache the Production tab uses.
 function switchCostingTab(tab) {
-  ['pricing', 'daily'].forEach(t => {
+  ['pricing', 'daily', 'entry'].forEach(t => {
     const panel = $(`costingTab-${t}`);
     if (panel) panel.style.display = (t === tab) ? '' : 'none';
   });
@@ -2213,6 +2213,12 @@ function switchCostingTab(tab) {
     btn.classList.toggle('btn-primary', btn.getAttribute('data-costing-tab') === tab);
   });
   if (tab === 'daily') renderCostingGrindOutputChart();
+  if (tab === 'entry') {
+    if (!$('ceDate').value) $('ceDate').value = todayIso();
+    onCostingEntryTypeChange();
+    populateCostingEntryOrderPicker();
+    loadCostingEntriesFromCloud().then(renderCostingEntries);
+  }
 }
 window.switchCostingTab = switchCostingTab;
 
@@ -2348,6 +2354,306 @@ function renderCostingGrindOutputChart() {
   });
 }
 window.renderCostingGrindOutputChart = renderCostingGrindOutputChart;
+
+// ==================== COSTING TAB — UMBALAKADA → ORDER COSTING ENTRY ====================
+// One-place daily entry chaining the whole story together: today's
+// Umbalakada purchase (type & price/kg) -> grind output & dust used ->
+// which Final Product (pack size) it became -> how that product was sold
+// -> which Order (if any) it's linked to -> the Income. Saving an entry
+// writes it to `costing_entries`, and — if an income amount is entered —
+// ALSO auto-inserts a matching row into `sales` (mirroring the same shape
+// addSale() uses) so the income shows up in the Sales diary / Income tab
+// immediately, with no separate manual entry needed there.
+//
+// REQUIRED ONE-TIME SUPABASE SETUP (run once in the SQL editor):
+//
+//   create table if not exists public.costing_entries (
+//     id uuid primary key default gen_random_uuid(),
+//     owner_id uuid not null references auth.users(id) on delete cascade,
+//     entry_date date not null default current_date,
+//     umbalakada_type text not null default 'linna',       -- linna | balaya | premium
+//     price_per_kg numeric not null default 0,
+//     purchased_kg numeric not null default 0,
+//     grind_output_kg numeric not null default 0,
+//     used_umbalakada_kg numeric not null default 0,
+//     used_dust_kg numeric not null default 0,
+//     final_product_g integer not null default 0,          -- pack size in grams: 50/100/500/1000
+//     output_qty integer not null default 0,                -- packs produced
+//     sale_type text not null default 'unsold',              -- unsold | retail | wholesale | distributor
+//     order_id uuid references public.orders(id) on delete set null,
+//     sale_id uuid references public.sales(id) on delete set null,
+//     income numeric not null default 0,
+//     notes text,
+//     created_by uuid not null references auth.users(id),
+//     created_at timestamptz not null default now()
+//   );
+//   alter table public.costing_entries enable row level security;
+//   create policy "Owner can manage own costing entries"
+//     on public.costing_entries for all
+//     using (owner_id = auth.uid())
+//     with check (owner_id = auth.uid());
+//   create index if not exists costing_entries_owner_date_idx on public.costing_entries(owner_id, entry_date);
+
+let costingEntries = []; // [{id, date, umbalakadaType, pricePerKg, purchasedKg, grindOutputKg, usedUmbalakadaKg, usedDustKg, finalProductG, outputQty, saleType, orderId, saleId, income, notes, createdAt}]
+
+function dbCostingEntryToLocal(e) {
+  return {
+    id: e.id,
+    date: e.entry_date,
+    umbalakadaType: e.umbalakada_type || 'linna',
+    pricePerKg: Number(e.price_per_kg) || 0,
+    purchasedKg: Number(e.purchased_kg) || 0,
+    grindOutputKg: Number(e.grind_output_kg) || 0,
+    usedUmbalakadaKg: Number(e.used_umbalakada_kg) || 0,
+    usedDustKg: Number(e.used_dust_kg) || 0,
+    finalProductG: Number(e.final_product_g) || 0,
+    outputQty: Number(e.output_qty) || 0,
+    saleType: e.sale_type || 'unsold',
+    orderId: e.order_id || null,
+    saleId: e.sale_id || null,
+    income: Number(e.income) || 0,
+    notes: e.notes || '',
+    createdAt: e.created_at
+  };
+}
+
+async function loadCostingEntriesFromCloud() {
+  if (!currentUser || userRole !== 'owner') { costingEntries = []; return costingEntries; }
+  try {
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+    const { data, error } = await withSessionRetry(() => supabase.from('costing_entries')
+      .select('*').eq('owner_id', currentUser.id).gte('entry_date', monthStart)
+      .order('entry_date', { ascending: false }).order('created_at', { ascending: false }));
+    if (error) throw error;
+    costingEntries = (data || []).map(dbCostingEntryToLocal);
+  } catch (e) {
+    console.warn('Costing entries load skipped:', e?.message || e);
+    costingEntries = [];
+  }
+  return costingEntries;
+}
+window.loadCostingEntriesFromCloud = loadCostingEntriesFromCloud;
+
+// Autofills Price/kg from the same Raw Materials prices set in Pricing &
+// Scenarios above (still editable — the actual price paid today can differ).
+function onCostingEntryTypeChange() {
+  const typeSel = $('ceType'), priceEl = $('cePricePerKg');
+  if (!typeSel || !priceEl) return;
+  const priceByType = { linna: state.linnaPrice, balaya: state.balayaPrice, premium: state.kawalamPrice };
+  priceEl.value = priceByType[typeSel.value] || 0;
+}
+window.onCostingEntryTypeChange = onCostingEntryTypeChange;
+
+// Fills the "Link to Order" dropdown from the already-loaded Orders list —
+// most recent first, showing ref no / customer / pack / total so the owner
+// can find today's order without leaving this form.
+function populateCostingEntryOrderPicker() {
+  const sel = $('ceOrderId');
+  if (!sel) return;
+  const current = sel.value;
+  const recent = (orders || []).slice(0, 200);
+  sel.innerHTML = '<option value="">— None —</option>' + recent.map(o => {
+    const label = `${o.orderRefNo || ('#' + String(o.id).slice(0, 8))} — ${o.customerName || 'N/A'} — ${o.product}g x${o.qty} — Rs. ${o.total}`;
+    return `<option value="${o.id}">${label.replace(/</g, '&lt;')}</option>`;
+  }).join('');
+  if (current && recent.some(o => String(o.id) === String(current))) sel.value = current;
+}
+window.populateCostingEntryOrderPicker = populateCostingEntryOrderPicker;
+
+// Picking an order fills Sale Type + Final Product + Income from that
+// order automatically (only overwrites Income if it's still 0, so a manual
+// figure the owner already typed is never clobbered).
+function onCostingEntryOrderPick() {
+  const sel = $('ceOrderId');
+  if (!sel || !sel.value) return;
+  const o = (orders || []).find(x => String(x.id) === String(sel.value));
+  if (!o) return;
+  const productSel = $('ceFinalProduct');
+  if (productSel && [...productSel.options].some(opt => opt.value === String(o.product))) {
+    productSel.value = String(o.product);
+  }
+  const saleTypeSel = $('ceSaleType');
+  if (saleTypeSel && saleTypeSel.value === 'unsold') saleTypeSel.value = 'retail';
+  const incomeEl = $('ceIncome');
+  if (incomeEl && (Number(incomeEl.value) || 0) === 0) incomeEl.value = o.total;
+  const qtyEl = $('ceOutputQty');
+  if (qtyEl && (Number(qtyEl.value) || 0) === 0) qtyEl.value = o.qty;
+}
+window.onCostingEntryOrderPick = onCostingEntryOrderPick;
+
+async function saveCostingEntry() {
+  if (userRole !== 'owner') { alert('Only the owner can save costing entries.'); return; }
+  if (!currentUser) { alert('Please login first.'); return; }
+
+  const date = $('ceDate').value || todayIso();
+  const umbalakadaType = $('ceType').value;
+  const pricePerKg = Number($('cePricePerKg').value) || 0;
+  const purchasedKg = Number($('cePurchasedKg').value) || 0;
+  const grindOutputKg = Number($('ceGrindOutputKg').value) || 0;
+  const usedUmbalakadaKg = Number($('ceUsedUmbalakadaKg').value) || 0;
+  const usedDustKg = Number($('ceUsedDustKg').value) || 0;
+  const finalProductG = Number($('ceFinalProduct').value) || 0;
+  const outputQty = Number($('ceOutputQty').value) || 0;
+  const saleType = $('ceSaleType').value;
+  const orderId = $('ceOrderId').value || null;
+  const income = Number($('ceIncome').value) || 0;
+  const notes = $('ceNotes').value.trim();
+
+  if (purchasedKg <= 0 && grindOutputKg <= 0 && usedUmbalakadaKg <= 0) {
+    alert('Enter at least Purchased, Grind Output or Used Umbalakada kg.');
+    return;
+  }
+
+  const row = {
+    owner_id: currentUser.id,
+    entry_date: date,
+    umbalakada_type: umbalakadaType,
+    price_per_kg: pricePerKg,
+    purchased_kg: purchasedKg,
+    grind_output_kg: grindOutputKg,
+    used_umbalakada_kg: usedUmbalakadaKg,
+    used_dust_kg: usedDustKg,
+    final_product_g: finalProductG,
+    output_qty: outputQty,
+    sale_type: saleType,
+    order_id: orderId,
+    income,
+    notes,
+    created_by: currentUser.id
+  };
+
+  if (!(await ensureFreshSession())) return;
+  let savedEntry = null;
+  try {
+    const { data, error } = await supabase.from('costing_entries').insert(row).select().single();
+    if (error) throw error;
+    savedEntry = data;
+  } catch (e) {
+    console.error('Save costing entry error:', e);
+    const missingTable = /relation .* does not exist/i.test(e?.message || '');
+    alert('❌ Could not save entry: ' + (e?.message || String(e)) + (missingTable ? '\n\nThe costing_entries table hasn\'t been created in Supabase yet — see the SQL setup comment above saveCostingEntry() in app.js.' : ''));
+    return;
+  }
+
+  // Income > 0 -> mirror straight into Sales so it lands in Income/Sales
+  // reporting automatically, without a separate manual Sales entry.
+  if (income > 0) {
+    const linkedOrder = orderId ? (orders || []).find(o => String(o.id) === String(orderId)) : null;
+    const productLabel = PACKS && PACKS[finalProductG] ? PACKS[finalProductG].label : (finalProductG ? finalProductG + 'g' : 'Umbalakada Product');
+    const saleTypeLabel = { retail: 'Retail', wholesale: 'Wholesale', distributor: 'Distributor', unsold: 'Unsold' }[saleType] || saleType;
+    const qtyForSale = outputQty > 0 ? outputQty : 1;
+    const materialCost = usedUmbalakadaKg * pricePerKg;
+    const saleRow = {
+      user_id: businessId,
+      sale_date: date,
+      product_name: `${productLabel} Umbalakada (${saleTypeLabel})`,
+      customer_name: linkedOrder ? linkedOrder.customerName : null,
+      quantity: qtyForSale,
+      unit_price: income / qtyForSale,
+      total_amount: income,
+      cost_amount: materialCost,
+      wage_amount: 0,
+      marketing_channel: null,
+      marketing_cost: 0,
+      amount_paid: income,
+      notes: `Auto-generated from Costing Tab entry (${date})${linkedOrder ? ' — linked to order ' + (linkedOrder.orderRefNo || linkedOrder.id) : ''}`,
+      created_by: currentUser.id,
+      payment_method: 'cash'
+    };
+    try {
+      let { data: saleData, error: saleErr } = await supabase.from('sales').insert(saleRow).select().single();
+      if (saleErr && /column|schema|does not exist/i.test(saleErr.message || '')) {
+        const fallback = { ...saleRow }; delete fallback.product_id;
+        ({ data: saleData, error: saleErr } = await supabase.from('sales').insert(fallback).select().single());
+      }
+      if (saleErr) throw saleErr;
+      sales.unshift(dbSaleToLocal(saleData));
+      const { data: updated, error: updErr } = await supabase.from('costing_entries')
+        .update({ sale_id: saleData.id }).eq('id', savedEntry.id).select().single();
+      if (!updErr && updated) savedEntry = updated;
+    } catch (e) {
+      console.warn('Costing entry saved, but auto-mirroring to Sales failed:', e?.message || e);
+      updateStatus('⚠️ Entry saved, but income could not be mirrored to Sales: ' + (e?.message || String(e)));
+    }
+  }
+
+  costingEntries.unshift(dbCostingEntryToLocal(savedEntry));
+  renderCostingEntries();
+  if (typeof renderCostingGrindOutputChart === 'function') renderCostingGrindOutputChart();
+
+  // Reset the form (keep the date so a run of entries for the same day is fast).
+  $('cePurchasedKg').value = 0; $('ceGrindOutputKg').value = 0; $('ceUsedUmbalakadaKg').value = 0;
+  $('ceUsedDustKg').value = 0; $('ceOutputQty').value = 0; $('ceIncome').value = 0; $('ceNotes').value = '';
+  $('ceSaleType').value = 'unsold'; $('ceOrderId').value = '';
+
+  updateStatus('✅ Costing entry saved' + (income > 0 ? ' — income sent to Sales/Income' : ''));
+}
+window.saveCostingEntry = saveCostingEntry;
+
+function renderCostingEntries() {
+  const body = $('costingEntriesBody');
+  if (!body) return;
+  const typeLabels = { linna: 'Linna', balaya: 'Balaya', premium: 'Premium Mix' };
+  const saleTypeLabels = { unsold: 'Not sold', retail: 'Retail', wholesale: 'Wholesale', distributor: 'Distributor' };
+
+  if (costingEntries.length === 0) {
+    body.innerHTML = '<tr><td colspan="12" style="text-align:center;opacity:.6;">No costing entries yet — add one above.</td></tr>';
+  } else {
+    body.innerHTML = costingEntries.map(e => {
+      const order = e.orderId ? (orders || []).find(o => String(o.id) === String(e.orderId)) : null;
+      const orderLabel = order ? (order.orderRefNo || ('#' + String(order.id).slice(0, 8))) : '—';
+      return `<tr>
+        <td>${e.date}</td>
+        <td>${typeLabels[e.umbalakadaType] || e.umbalakadaType}</td>
+        <td class="num">Rs. ${fmt2(e.pricePerKg)}</td>
+        <td class="num">${fmt2(e.purchasedKg)} kg</td>
+        <td class="num">${fmt2(e.grindOutputKg)} kg</td>
+        <td class="num">${fmt2(e.usedUmbalakadaKg)} kg</td>
+        <td class="num">${fmt2(e.usedDustKg)} kg</td>
+        <td>${e.finalProductG ? (PACKS && PACKS[e.finalProductG] ? PACKS[e.finalProductG].label : e.finalProductG + 'g') : '—'}</td>
+        <td>${saleTypeLabels[e.saleType] || e.saleType}</td>
+        <td>${orderLabel}</td>
+        <td class="num">Rs. ${fmt2(e.income)}</td>
+        <td><button class="btn btn-sm btn-danger" onclick="deleteCostingEntry('${e.id}')" title="Delete"><i class="business-icon icon-inline" data-lucide="trash-2" aria-hidden="true"></i></button></td>
+      </tr>`;
+    }).join('');
+  }
+
+  const sums = costingEntries.reduce((acc, e) => {
+    acc.purchased += e.purchasedKg; acc.used += e.usedUmbalakadaKg; acc.dust += e.usedDustKg; acc.income += e.income;
+    return acc;
+  }, { purchased: 0, used: 0, dust: 0, income: 0 });
+  if ($('ceSumPurchasedKg')) $('ceSumPurchasedKg').textContent = fmt2(sums.purchased) + ' kg';
+  if ($('ceSumUsedKg')) $('ceSumUsedKg').textContent = fmt2(sums.used) + ' kg';
+  if ($('ceSumDustKg')) $('ceSumDustKg').textContent = fmt2(sums.dust) + ' kg';
+  if ($('ceSumIncome')) $('ceSumIncome').textContent = 'Rs. ' + fmt2(sums.income);
+
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+window.renderCostingEntries = renderCostingEntries;
+
+async function deleteCostingEntry(id) {
+  if (userRole !== 'owner') return;
+  const entry = costingEntries.find(e => String(e.id) === String(id));
+  if (!entry) return;
+  const alsoSale = entry.saleId ? ' This also removes its matching income record from Sales.' : '';
+  if (!confirm('Delete this costing entry?' + alsoSale)) return;
+  try {
+    const { error } = await supabase.from('costing_entries').delete().eq('id', id).eq('owner_id', currentUser.id);
+    if (error) throw error;
+    if (entry.saleId) {
+      await supabase.from('sales').delete().eq('id', entry.saleId);
+      sales = sales.filter(s => String(s.id) !== String(entry.saleId));
+    }
+    costingEntries = costingEntries.filter(e => String(e.id) !== String(id));
+    renderCostingEntries();
+    updateStatus('🗑️ Costing entry deleted');
+  } catch (e) {
+    alert('❌ Could not delete entry: ' + (e?.message || String(e)));
+  }
+}
+window.deleteCostingEntry = deleteCostingEntry;
 
 // Small average helper — used by the Week-over-Week and Anomaly Check cards
 // below. Ignores null/undefined entries (e.g. a day with groundKg = 0 has no
@@ -11895,6 +12201,10 @@ function activateAppTab(tabId){
     // Daily Costing & Trends sub-tab reads dailyProductionLogCache — load it
     // in case the user opens Costing before ever visiting Production/Income.
     loadDailyProductionLog().then(() => renderCostingGrindOutputChart());
+    // Umbalakada → Order Costing sub-tab needs Orders (for the link picker)
+    // and its own saved entries.
+    loadOrdersFromCloud().then(() => populateCostingEntryOrderPicker());
+    loadCostingEntriesFromCloud().then(renderCostingEntries);
   }
   if (tabId === 'monthly-summary') { updateMonthlySummary(); }
   if (tabId === 'analytics') { renderAnalytics(); }
