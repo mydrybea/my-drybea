@@ -1955,17 +1955,26 @@
     <div class="card">
       <h2><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="sparkles" aria-hidden="true"></i></span><span>Dynamic Pricing Suggestions</span></h2>
       <p class="pro-subtitle gold">Live suggested prices based on the fish costs & mix ratio set above.</p>
-      <div class="field" style="max-width:220px;">
-        <label>Target Margin <span class="hint">(%)</span></label>
-        <input type="number" id="dpTargetMargin" value="25" min="0" max="90" oninput="renderDynamicPricing()">
+      <div style="display:flex;gap:12px;flex-wrap:wrap;">
+        <div class="field" style="max-width:220px;">
+          <label>Target Margin <span class="hint">(%)</span></label>
+          <input type="number" id="dpTargetMargin" value="25" min="0" max="90" oninput="renderDynamicPricing()">
+        </div>
+        <div class="field" style="max-width:220px;">
+          <label>Price Basis</label>
+          <select id="dpPriceBasis" onchange="onDpBasisChange()">
+            <option value="mrp">MRP</option>
+            <option value="wholesale">Wholesale</option>
+          </select>
+        </div>
       </div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Pack</th><th class="num">Current MRP</th><th class="num">Current Cost</th><th class="num">Current Margin</th><th class="num">Suggested Price</th><th class="num">Suggestion</th></tr></thead>
+          <thead><tr><th>Pack</th><th class="num" id="dpCurrentPriceHeader">Current MRP</th><th class="num">Current Cost</th><th class="num">Current Margin</th><th class="num">Suggested Price</th><th class="num">Suggestion</th></tr></thead>
           <tbody id="dynamicPricingBody"></tbody>
         </table>
       </div>
-      <div class="monthly-summary-note">Recalculates instantly whenever fish prices or the mix ratio change above. Suggested price is what's needed to hit your target margin after 5% packing labour — it does not change your actual selling price automatically.</div>
+      <div class="monthly-summary-note">Recalculates instantly whenever fish prices or the mix ratio change above. Tap "MRP" or "Wholesale" above to switch which price the table calculates against, and edit any price directly in the table — it saves automatically. Suggested price is what's needed to hit your target margin after 5% packing labour — it does not change your actual selling price automatically.</div>
     </div>
     </div>
     <!-- /costingTab-pricing -->
@@ -3227,6 +3236,23 @@
       <div class="btn-row">
         <button class="btn btn-primary" id="productSaveBtn" onclick="saveProduct()"><i class="business-icon icon-inline" data-lucide="save" aria-hidden="true"></i> Save Product</button>
         <button class="btn" onclick="closeModal('productModal')">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Product Stock History Modal -->
+  <div class="modal-backdrop" id="stockHistoryModal">
+    <div class="modal">
+      <h3><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="clipboard-list" aria-hidden="true"></i></span><span id="stockHistoryTitle">Stock History</span></h3>
+      <p class="pro-subtitle green">Every restock, adjustment and sale that changed this product's stock.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>When</th><th>Type</th><th class="num">Change</th><th class="num">Stock After</th><th>Note</th></tr></thead>
+          <tbody id="stockHistoryBody"></tbody>
+        </table>
+      </div>
+      <div class="btn-row">
+        <button class="btn" onclick="closeModal('stockHistoryModal')">Close</button>
       </div>
     </div>
   </div>

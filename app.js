@@ -1716,6 +1716,21 @@ let state = {
   premiumGrindYield: 65,
   dashQty: {50:1000, 100:500, 500:50, 1000:50},
   dashSp: {50:170, 100:350, 500:1750, 1000:3500},
+  // Editable per-pack MRP & Wholesale prices, shown/edited in the Dynamic
+  // Pricing Suggestions table. Defaults match the original hard-coded
+  // PACKS[key].mrp constants so nothing changes until the owner edits them.
+  // getPackPrice() below is the single place that reads these (with a
+  // fallback to PACKS[key].mrp for safety), so any future call site can
+  // switch to editable pricing just by going through that helper.
+  packPrices: {
+    50:   { mrp: 170,  wholesale: 170 },
+    100:  { mrp: 350,  wholesale: 350 },
+    500:  { mrp: 1750, wholesale: 1750 },
+    1000: { mrp: 3500, wholesale: 3500 }
+  },
+  // Which of the two prices above the Dynamic Pricing Suggestions table is
+  // currently calculating against — toggled by the owner via #dpPriceBasis.
+  dpPriceBasis: 'mrp',
   overhead: {...DEFAULT_FIXED},
   production: {
     rawLinna: 180, rawBalaya: 250, rawKawalam: 60,
@@ -1826,6 +1841,86 @@ function getGrindYields() {
     premium: clampFrac(s.premiumGrindYield, PREMIUM_USABLE)
   };
 }
+
+// Returns the owner-editable MRP or Wholesale price for a pack size,
+// falling back to the original hard-coded PACKS[key].mrp constant if the
+// state doesn't have it yet (older saved state, or a bad/blank value).
+// basis is 'mrp' or 'wholesale'; defaults to whatever the Dynamic Pricing
+// table is currently set to (state.dpPriceBasis).
+function getPackPrice(sizeKey, basis) {
+  basis = basis || state.dpPriceBasis || 'mrp';
+  const entry = (state.packPrices && state.packPrices[sizeKey]) || {};
+  const val = Number(entry[basis]);
+  if (isFinite(val) && val > 0) return val;
+  return PACKS[sizeKey].mrp;
+}
+
+// Owner edits an MRP/Wholesale price cell in the Dynamic Pricing table.
+// Persists into state.packPrices immediately (so the UI/local save never
+// waits on the network), then best-effort mirrors it into the dedicated
+// pack_prices Supabase table too (see supabase-setup-pack-pricing-and-
+// inventory.sql). If that table hasn't been created yet, this silently
+// no-ops — the app_data JSON blob already keeps the value safe either way.
+function updatePackPrice(sizeKey, basis, value) {
+  if (!state.packPrices) state.packPrices = {};
+  if (!state.packPrices[sizeKey]) state.packPrices[sizeKey] = { mrp: PACKS[sizeKey].mrp, wholesale: PACKS[sizeKey].mrp };
+  const n = Number(value);
+  state.packPrices[sizeKey][basis] = isFinite(n) && n >= 0 ? n : 0;
+  renderDynamicPricing();
+  onDataChange();
+  syncPackPriceToCloud(sizeKey);
+}
+window.updatePackPrice = updatePackPrice;
+
+async function syncPackPriceToCloud(sizeKey) {
+  if (!currentUser) return;
+  const entry = state.packPrices[sizeKey];
+  try {
+    const { error } = await supabase.from('pack_prices').upsert({
+      owner_id: businessId,
+      pack_size_g: Number(sizeKey),
+      mrp: entry.mrp,
+      wholesale: entry.wholesale,
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'owner_id,pack_size_g' });
+    if (error) throw error;
+  } catch (e) {
+    // pack_prices table not created yet on this project — state is still
+    // safely saved in the app_data JSON blob via onDataChange() above.
+    console.warn('Cloud pack price sync skipped (run supabase-setup-pack-pricing-and-inventory.sql to enable):', e.message || e);
+  }
+}
+
+// Pulls the dedicated pack_prices rows (if the table exists) into state on
+// login/app start, so they win over an older cached app_data JSON value —
+// the dedicated table is the source of truth once it's set up.
+async function loadPackPricesFromCloud() {
+  if (!currentUser) return;
+  try {
+    const { data, error } = await supabase.from('pack_prices').select('*').eq('owner_id', businessId);
+    if (error) throw error;
+    if (!data || data.length === 0) return;
+    if (!state.packPrices) state.packPrices = {};
+    data.forEach(row => {
+      state.packPrices[row.pack_size_g] = { mrp: Number(row.mrp) || 0, wholesale: Number(row.wholesale) || 0 };
+    });
+    renderDynamicPricing();
+  } catch (e) {
+    // Table doesn't exist yet — keep using whatever's already in state
+    // (from the app_data JSON blob / hard-coded defaults).
+    console.warn('Load pack prices error (run supabase-setup-pack-pricing-and-inventory.sql to enable):', e.message || e);
+  }
+}
+window.loadPackPricesFromCloud = loadPackPricesFromCloud;
+
+// Owner switches which price the Dynamic Pricing table calculates against.
+function onDpBasisChange() {
+  const el = $('dpPriceBasis');
+  state.dpPriceBasis = el ? el.value : 'mrp';
+  renderDynamicPricing();
+  onDataChange();
+}
+window.onDpBasisChange = onDpBasisChange;
 
 function calculatePack(sizeKey, linnaPrice, balayaPrice, premiumPrice, mixPct, mode, targetProfit, customSp) {
   const p = PACKS[sizeKey];
@@ -2144,19 +2239,34 @@ function renderDynamicPricing() {
   const targetMargin = targetMarginEl ? (Number(targetMarginEl.value) || 0) : 25;
   const mix = getMixPct();
 
+  // Which price basis the owner has selected — MRP or Wholesale. Keeps the
+  // <select> in sync in case renderDynamicPricing() was called from
+  // somewhere other than the select's own onchange (e.g. after loading
+  // state from the cloud).
+  const basisEl = $('dpPriceBasis');
+  const basis = state.dpPriceBasis || 'mrp';
+  if (basisEl && basisEl.value !== basis) basisEl.value = basis;
+  const basisLabel = basis === 'wholesale' ? 'Wholesale' : 'MRP';
+  const headerEl = $('dpCurrentPriceHeader');
+  if (headerEl) headerEl.textContent = `Current ${basisLabel}`;
+
   const rows = Object.keys(PACKS).map(k => {
     const p = PACKS[k];
+    const currentPrice = getPackPrice(k, basis);
     let r;
     try {
-      r = calculatePack(k, state.linnaPrice, state.balayaPrice, state.kawalamPrice, mix, 'mrp', 0, 0);
+      // Feed the owner's editable price in via 'sp' mode instead of the
+      // hard-coded PACKS[k].mrp, so Current Cost/Margin/Suggestion all
+      // react to whichever price (MRP or Wholesale) is selected.
+      r = calculatePack(k, state.linnaPrice, state.balayaPrice, state.kawalamPrice, mix, 'sp', 0, currentPrice);
     } catch (e) { return null; }
     const currentCost = r.totalCost;
-    const currentMargin = p.mrp > 0 ? ((p.mrp - currentCost) / p.mrp) * 100 : 0;
+    const currentMargin = currentPrice > 0 ? ((currentPrice - currentCost) / currentPrice) * 100 : 0;
     // Solve sp such that: sp = baseCost + sp*PACKING_LABOUR_PCT + sp*(targetMargin/100)
     const denom = 1 - PACKING_LABOUR_PCT - (targetMargin / 100);
     const suggestedSp = denom > 0 ? r.baseCost / denom : null;
-    const diff = suggestedSp !== null ? suggestedSp - p.mrp : null;
-    return { label: p.label, mrp: p.mrp, cost: currentCost, margin: currentMargin, suggestedSp, diff };
+    const diff = suggestedSp !== null ? suggestedSp - currentPrice : null;
+    return { key: k, label: p.label, price: currentPrice, cost: currentCost, margin: currentMargin, suggestedSp, diff };
   }).filter(Boolean);
 
   tbody.innerHTML = rows.map(row => {
@@ -2173,7 +2283,7 @@ function renderDynamicPricing() {
     }
     return `<tr>
       <td>${row.label}</td>
-      <td class="num">${fmt(row.mrp)}</td>
+      <td class="num"><input type="number" class="editable-sp" value="${row.price}" style="width:90px;min-height:32px;text-align:right;" onchange="updatePackPrice('${row.key}','${basis}',this.value)"></td>
       <td class="num">${fmt(row.cost)}</td>
       <td class="num" style="color:${marginColor};font-weight:700;">${fmt2(row.margin)}%</td>
       <td class="num">${row.suggestedSp !== null ? fmt(row.suggestedSp) : '—'}</td>
@@ -3898,6 +4008,7 @@ function dbProductToLocal(p) {
     imageUrl: p.image_url || '',
     wholesalePrice: Number(p.wholesale_price) || 0,
     retailPrice: Number(p.retail_price) || 0,
+    stockQty: Number(p.stock_qty) || 0,
     active: p.active !== false,
     createdAt: p.created_at || new Date().toISOString(),
   };
@@ -3940,8 +4051,12 @@ function renderProducts() {
       <div style="font-weight:700;margin-top:8px;font-size:.85rem;">${p.name}</div>
       <div style="font-size:.72rem;opacity:.7;margin-top:4px;">Wholesale: Rs. ${p.wholesalePrice.toLocaleString()}</div>
       <div style="font-size:.72rem;opacity:.7;">Retail: Rs. ${p.retailPrice.toLocaleString()}</div>
+      <div style="font-size:.78rem;font-weight:700;margin-top:4px;color:${p.stockQty <= 0 ? '#d45d55' : (p.stockQty <= 10 ? '#c98a1a' : '#0a8f43')};">Stock: ${p.stockQty.toLocaleString()}${p.stockQty <= 0 ? ' · Out of stock' : (p.stockQty <= 10 ? ' · Low' : '')}</div>
       ${isOwner ? `<div class="btn-row" style="margin-top:8px;justify-content:flex-end;">
         ${actionMenuHTML([
+          { label: 'Restock', icon: '📦', onclick: `restockProduct('${p.id}')` },
+          { label: 'Adjust Stock', icon: '🛠️', onclick: `adjustProductStockPrompt('${p.id}')` },
+          { label: 'Stock History', icon: '🧾', onclick: `openStockHistory('${p.id}')` },
           { label: 'Edit', icon: '✏️', onclick: `openEditProduct('${p.id}')` },
           { label: 'Delete', icon: '🗑️', danger: true, onclick: `deleteProduct('${p.id}')` }
         ])}
@@ -3949,6 +4064,97 @@ function renderProducts() {
     </div>
   `).join('');
 }
+
+// ==================== PRODUCT INVENTORY — RESTOCK / ADJUST / HISTORY ====================
+// All stock changes go through adjust_product_stock() in Supabase (one
+// atomic update + history row — see supabase-setup-pack-pricing-and-
+// inventory.sql). If that SQL hasn't been run yet on this project, the
+// call fails cleanly and the owner sees exactly what to do next; nothing
+// else in the app (sales, products) is affected either way.
+async function applyStockMovement(productId, delta, movementType, note, saleId) {
+  if (!productId || !delta) return;
+  if (!(await ensureFreshSession())) return;
+  try {
+    const { error } = await withSessionRetry(() => supabase.rpc('adjust_product_stock', {
+      p_product_id: productId,
+      p_owner_id: businessId,
+      p_delta: delta,
+      p_movement_type: movementType,
+      p_note: note || null,
+      p_sale_id: saleId || null
+    }));
+    if (error) throw error;
+    await loadProductsFromCloud();
+    renderProducts();
+  } catch (e) {
+    console.warn('Stock movement skipped (run supabase-setup-pack-pricing-and-inventory.sql to enable inventory tracking):', e.message || e);
+  }
+}
+window.applyStockMovement = applyStockMovement;
+
+async function restockProduct(id) {
+  if (userRole !== 'owner') { alert('Only the business owner can manage stock.'); return; }
+  const p = products.find(x => String(x.id) === String(id));
+  if (!p) return;
+  const qtyStr = prompt(`Restock "${p.name}" — how many units are you adding? (Current stock: ${p.stockQty})`, '');
+  if (qtyStr === null) return;
+  const qty = Number(qtyStr);
+  if (!isFinite(qty) || qty <= 0) { alert('Enter a positive quantity.'); return; }
+  const note = prompt('Note (optional) — e.g. supplier name or batch:', '') || null;
+  await applyStockMovement(id, qty, 'restock', note);
+  updateStatus('✅ Stock added');
+}
+window.restockProduct = restockProduct;
+
+async function adjustProductStockPrompt(id) {
+  if (userRole !== 'owner') { alert('Only the business owner can manage stock.'); return; }
+  const p = products.find(x => String(x.id) === String(id));
+  if (!p) return;
+  const deltaStr = prompt(`Adjust stock for "${p.name}" (Current stock: ${p.stockQty}).\nEnter a positive number to add, or a negative number to remove (e.g. -5 for damaged/lost stock):`, '');
+  if (deltaStr === null) return;
+  const delta = Number(deltaStr);
+  if (!isFinite(delta) || delta === 0) { alert('Enter a non-zero number.'); return; }
+  const note = prompt('Reason for this adjustment:', '') || null;
+  await applyStockMovement(id, delta, 'adjustment', note);
+  updateStatus('✅ Stock adjusted');
+}
+window.adjustProductStockPrompt = adjustProductStockPrompt;
+
+async function openStockHistory(id) {
+  const p = products.find(x => String(x.id) === String(id));
+  if (!p) return;
+  $('stockHistoryTitle').textContent = `Stock History — ${p.name}`;
+  $('stockHistoryBody').innerHTML = '<tr><td colspan="5" style="text-align:center;opacity:.6;">Loading…</td></tr>';
+  $('stockHistoryModal').classList.add('active');
+  try {
+    const { data, error } = await supabase
+      .from('product_stock_movements')
+      .select('*')
+      .eq('product_id', id)
+      .eq('owner_id', businessId)
+      .order('created_at', { ascending: false })
+      .limit(100);
+    if (error) throw error;
+    if (!data || data.length === 0) {
+      $('stockHistoryBody').innerHTML = '<tr><td colspan="5" style="text-align:center;opacity:.6;">No stock movements yet.</td></tr>';
+      return;
+    }
+    const typeLabel = { restock: '📦 Restock', sale: '🛒 Sale', adjustment: '🛠️ Adjustment' };
+    $('stockHistoryBody').innerHTML = data.map(m => `
+      <tr>
+        <td>${new Date(m.created_at).toLocaleString()}</td>
+        <td>${typeLabel[m.movement_type] || m.movement_type}</td>
+        <td class="num" style="color:${m.quantity_delta < 0 ? '#d45d55' : '#0a8f43'};font-weight:700;">${m.quantity_delta > 0 ? '+' : ''}${m.quantity_delta}</td>
+        <td class="num">${m.resulting_stock}</td>
+        <td>${m.note || '—'}</td>
+      </tr>
+    `).join('');
+  } catch (e) {
+    console.error('Load stock history error:', e);
+    $('stockHistoryBody').innerHTML = `<tr><td colspan="5" style="text-align:center;opacity:.6;">Could not load history — run supabase-setup-pack-pricing-and-inventory.sql if you haven't yet.</td></tr>`;
+  }
+}
+window.openStockHistory = openStockHistory;
 
 function openNewProduct() {
   if (userRole !== 'owner') { alert('Only the business owner can manage products.'); return; }
@@ -5500,6 +5706,7 @@ function dbSaleToLocal(s) {
     id: s.id,
     date: s.sale_date,
     product: s.product_name,
+    productId: s.product_id || null,
     customer: s.customer_name || '',
     qty: Number(s.quantity) || 0,
     unitPrice: Number(s.unit_price) || 0,
@@ -5655,6 +5862,7 @@ async function saveSale() {
   if (paid > 0 && paymentMethod === 'deposit' && !depositRef) { alert('Enter the deposit slip / reference number!'); return; }
 
   const matchedProduct = products.find(p => p.name === product);
+  const oldSale = editId ? sales.find(s => s.id === editId) : null;
   const row = {
     user_id: businessId,
     sale_date: date,
@@ -5710,6 +5918,23 @@ async function saveSale() {
   renderSales();
   closeModal('saleModal');
   updateStatus(editId ? '✅ Sale updated' : '✅ Sale saved to diary');
+
+  // Inventory reconciliation — deduct/adjust stock for whichever product
+  // this sale is now tied to. Runs after the sale itself is safely saved,
+  // and never blocks or rolls back the sale if inventory isn't set up yet.
+  const newProductId = matchedProduct ? matchedProduct.id : null;
+  const newSaleId = editId || (sales[0] && sales[0].id);
+  if (editId && oldSale) {
+    if (oldSale.productId && oldSale.productId === newProductId) {
+      const delta = (oldSale.qty || 0) - qty; // net stock change vs the original deduction
+      if (delta !== 0) await applyStockMovement(newProductId, delta, 'sale', `Sale updated (${date})`, newSaleId);
+    } else {
+      if (oldSale.productId) await applyStockMovement(oldSale.productId, oldSale.qty || 0, 'adjustment', `Sale product changed away from this item (${date})`, newSaleId);
+      if (newProductId) await applyStockMovement(newProductId, -qty, 'sale', `Sale updated (${date})`, newSaleId);
+    }
+  } else if (!editId && newProductId) {
+    await applyStockMovement(newProductId, -qty, 'sale', `Sale on ${date}${customer ? ' to ' + customer : ''}`, newSaleId);
+  }
 }
 
 async function deleteSale(id) {
@@ -5717,6 +5942,7 @@ async function deleteSale(id) {
   if (!confirm('Delete this sale entry?')) return;
   if (!currentUser) { alert('Please login first.'); return; }
   if (!(await ensureFreshSession())) return;
+  const existing = sales.find(s => s.id === id);
   try {
     const { error } = await supabase.from('sales').delete().eq('id', id);
     if (error) throw error;
@@ -5728,6 +5954,9 @@ async function deleteSale(id) {
   sales = sales.filter(s => s.id !== id);
   renderSales();
   updateStatus('🗑️ Sale deleted');
+  if (existing && existing.productId && existing.qty) {
+    await applyStockMovement(existing.productId, existing.qty, 'adjustment', `Sale deleted (${existing.date})`, id);
+  }
 }
 
 // Quick action: collect the full pending balance in one tap.
@@ -9273,6 +9502,18 @@ function loadState() {
   Object.keys(productionDefaults).forEach(k => {
     if (state.production[k] === undefined) state.production[k] = productionDefaults[k];
   });
+  // Backfill editable MRP/Wholesale pricing for state saved before this
+  // feature existed — one pack at a time, so a partially-saved object
+  // (e.g. only some sizes edited) doesn't lose the sizes it already has.
+  if (!state.packPrices) state.packPrices = {};
+  Object.keys(PACKS).forEach(key => {
+    const existing = state.packPrices[key] || {};
+    state.packPrices[key] = {
+      mrp: isFinite(Number(existing.mrp)) && Number(existing.mrp) > 0 ? Number(existing.mrp) : PACKS[key].mrp,
+      wholesale: isFinite(Number(existing.wholesale)) && Number(existing.wholesale) > 0 ? Number(existing.wholesale) : PACKS[key].mrp
+    };
+  });
+  if (state.dpPriceBasis !== 'mrp' && state.dpPriceBasis !== 'wholesale') state.dpPriceBasis = 'mrp';
 }
 function loadHistory() { try { history = JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; } catch(e) { history = []; } }
 function loadOrders() { try { orders = JSON.parse(localStorage.getItem(ORDERS_KEY)) || []; } catch(e) { orders = []; } }
@@ -9410,7 +9651,7 @@ async function cloudLoad() {
     renderHistory();
     saveAll();
     // customers/orders/expenses live in their own tables — refresh those too
-    await Promise.all([userRole==='owner'?loadCustomersFromCloud():Promise.resolve(), loadOrdersFromCloud(), loadExpensesFromCloud(), loadProductsFromCloud()]);
+    await Promise.all([userRole==='owner'?loadCustomersFromCloud():Promise.resolve(), loadOrdersFromCloud(), loadExpensesFromCloud(), loadProductsFromCloud(), userRole==='owner'?loadPackPricesFromCloud():Promise.resolve()]);
     renderOrders();
     renderCustomers();
     renderDelivery();
