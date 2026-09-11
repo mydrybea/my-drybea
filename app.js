@@ -2015,92 +2015,78 @@ function getUmbalakadaTypePrice(t) {
   return Number(t.price) || 0;
 }
 
-// Core types keep their price wired to the main Raw Materials fields
-// (Costing tab) so every existing calculation stays in sync either way the
-// owner edits it. Custom varieties store price directly on the entry.
-function onUmbalakadaTypePriceInput(id, value) {
-  const t = ensureUmbalakadaTypes().find(x => x.id === id);
-  if (!t) return;
-  const n = Math.max(Number(value) || 0, 0);
-  if (t.id === 'linna') { state.linnaPrice = n; if ($('linnaPrice')) $('linnaPrice').value = n; }
-  else if (t.id === 'balaya') { state.balayaPrice = n; if ($('balayaPrice')) $('balayaPrice').value = n; }
-  else if (t.id === 'kawalam') { state.kawalamPrice = n; if ($('kawalamPrice')) $('kawalamPrice').value = n; }
-  else { t.price = n; }
-  recalcUmbalakadaGrindTotals();
-  onDataChange();
-}
-window.onUmbalakadaTypePriceInput = onUmbalakadaTypePriceInput;
+// ==================== PRODUCTION LOG ⇄ TODAY'S PURCHASE (live sync) ====================
+// This used to be a second manual entry table ("Umbalakada Varieties &
+// Prices") that duplicated what the owner already types into the Costing
+// tab's "Today's Umbalakada Purchase" sub-tab. Removed in favour of this:
+// whatever purchase round(s) are saved for today in daily_purchase_log
+// (saveDailyPurchaseEntry() — multiple rounds/day allowed) are aggregated
+// here and pushed straight into the Daily Production Log's grind & dust
+// fields automatically. No re-typing, and it re-syncs the moment a new
+// purchase round is saved/deleted or this data is reloaded — see the
+// syncUmbalakadaGroundFromPurchaseLog() call sites (saveDailyPurchaseEntry,
+// deleteDailyPurchaseEntry, switchCostingTab('daypurchase'), and the
+// Production tab's tab-open handler).
+let umbalakadaTodaysPurchasePriceByType = {}; // { linna, balaya, kawalam } -> weighted avg Rs./kg actually paid today
+let lastPurchaseSyncEntryCount = 0;
 
-function onUmbalakadaTypeNameInput(id, value) {
-  const t = ensureUmbalakadaTypes().find(x => x.id === id);
-  // Core three keep their fixed label — "Linna"/"Balaya"/"Premium Mix" is
-  // what the Quick Profit Calculator, quotes and PDFs already say, so
-  // renaming them here would silently mismatch the rest of the app. Only
-  // custom varieties can be renamed.
-  if (!t || t.core) return;
-  const name = (value || '').trim();
-  if (name) t.name = name;
-  saveAll();
-  if (currentUser) cloudSaveSilent();
-  renderUmbalakadaTypesTable();
-}
-window.onUmbalakadaTypeNameInput = onUmbalakadaTypeNameInput;
+function syncUmbalakadaGroundFromPurchaseLog() {
+  const today = todayIso();
+  const todays = (dailyPurchaseLogCache || []).filter(r => r.log_date === today);
+  lastPurchaseSyncEntryCount = todays.length;
 
-function addUmbalakadaType() {
-  if (userRole !== 'owner') { alert('Only the owner can add Umbalakada varieties.'); return; }
-  const nameEl = $('umbNewTypeName'), priceEl = $('umbNewTypePrice');
-  if (!nameEl) return;
-  const name = (nameEl.value || '').trim();
-  const price = Math.max(Number(priceEl && priceEl.value) || 0, 0);
-  if (!name) { alert('Enter a variety name.'); return; }
-  const list = ensureUmbalakadaTypes();
-  if (list.some(t => t.name.toLowerCase() === name.toLowerCase())) { alert('That variety is already in your list.'); return; }
-  const id = 'custom_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-  list.push({ id, name, price, core: false });
-  nameEl.value = '';
-  if (priceEl) priceEl.value = '';
-  renderUmbalakadaTypesTable();
-  saveAll();
-  if (currentUser) cloudSaveSilent();
-  updateStatus(`✅ Added "${name}" to Umbalakada varieties`);
-}
-window.addUmbalakadaType = addUmbalakadaType;
+  const sums = {
+    linna: { kg: 0, value: 0 },
+    balaya: { kg: 0, value: 0 },
+    kawalam: { kg: 0, value: 0 }
+  };
+  let totalPurchasedKg = 0, totalGrindOutputKg = 0, totalDustRecoveredKg = 0, totalDustReusedKg = 0;
 
-function removeUmbalakadaType(id) {
-  if (userRole !== 'owner') return;
-  const list = ensureUmbalakadaTypes();
-  const t = list.find(x => x.id === id);
-  // The 3 core types can't be removed — too much of the app (pricing
-  // engine, quotes, PDFs) is built around them always existing.
-  if (!t || t.core) return;
-  if (!confirm(`Remove "${t.name}" from your Umbalakada varieties?`)) return;
-  state.umbalakadaTypes = list.filter(x => x.id !== id);
-  delete umbalakadaGroundTodayByType[id];
-  renderUmbalakadaTypesTable();
-  saveAll();
-  if (currentUser) cloudSaveSilent();
-  updateStatus(`🗑️ Removed "${t.name}"`);
-}
-window.removeUmbalakadaType = removeUmbalakadaType;
+  todays.forEach(r => {
+    sums.linna.kg += Number(r.qty_linna) || 0;
+    sums.linna.value += (Number(r.qty_linna) || 0) * (Number(r.price_linna) || 0);
+    sums.balaya.kg += Number(r.qty_balaya) || 0;
+    sums.balaya.value += (Number(r.qty_balaya) || 0) * (Number(r.price_balaya) || 0);
+    sums.kawalam.kg += Number(r.qty_premium) || 0;
+    sums.kawalam.value += (Number(r.qty_premium) || 0) * (Number(r.price_premium) || 0);
+    totalPurchasedKg += Number(r.total_kg) || 0;
+    totalGrindOutputKg += Number(r.grind_output_kg) || 0;
+    totalDustRecoveredKg += Number(r.dust_recovered_kg) || 0;
+    totalDustReusedKg += Number(r.dust_reused_kg) || 0;
+  });
 
-function onUmbalakadaGroundKgInput(id, value) {
-  const n = Math.max(Number(value) || 0, 0);
-  umbalakadaGroundTodayByType[id] = n;
-  recalcUmbalakadaGrindTotals();
-}
-window.onUmbalakadaGroundKgInput = onUmbalakadaGroundKgInput;
+  umbalakadaGroundTodayByType = { linna: sums.linna.kg, balaya: sums.balaya.kg, kawalam: sums.kawalam.kg };
+  umbalakadaTodaysPurchasePriceByType = {
+    linna: sums.linna.kg > 0 ? sums.linna.value / sums.linna.kg : 0,
+    balaya: sums.balaya.kg > 0 ? sums.balaya.value / sums.balaya.kg : 0,
+    kawalam: sums.kawalam.kg > 0 ? sums.kawalam.value / sums.kawalam.kg : 0
+  };
 
-// Sums today's per-variety kg into the "Umbalakada Ground Today" field the
-// Grinding & Dust dust-loss math already reads, and works out a real
-// weighted-average price/kg from what was actually ground today — more
-// accurate than the fixed Mix Ratio assumption once this table is filled in.
+  // Auto-fill Grinding & Dust from the purchase entries — same derivation
+  // the Costing tab's calculator uses (dust = purchased − grind output).
+  // Only overwrites once there's actually something saved for today, so an
+  // owner's manual correction isn't clobbered by an empty sync.
+  if (todays.length > 0) {
+    const dustGeneratedKg = Math.max(totalPurchasedKg - totalGrindOutputKg, 0);
+    const dustUsedKg = totalDustReusedKg + totalDustRecoveredKg;
+    if ($('dpDustGeneratedKg')) $('dpDustGeneratedKg').value = Math.round(dustGeneratedKg * 100) / 100;
+    if ($('dpDustUsedKg')) $('dpDustUsedKg').value = Math.round(dustUsedKg * 100) / 100;
+  }
+
+  renderUmbalakadaPurchaseSyncTable();
+}
+window.syncUmbalakadaGroundFromPurchaseLog = syncUmbalakadaGroundFromPurchaseLog;
+
+// Sums today's per-variety kg (from the sync above) into the "Umbalakada
+// Ground Today" field the Grinding & Dust dust-loss math already reads, and
+// works out a real weighted-average price/kg actually paid today.
 function recalcUmbalakadaGrindTotals() {
-  const list = ensureUmbalakadaTypes();
+  const list = ensureUmbalakadaTypes().filter(t => t.core);
   let totalKg = 0, totalValue = 0;
   const breakdown = [];
   list.forEach(t => {
     const kg = Number(umbalakadaGroundTodayByType[t.id]) || 0;
-    const price = getUmbalakadaTypePrice(t);
+    const price = Number(umbalakadaTodaysPurchasePriceByType[t.id]) || getUmbalakadaTypePrice(t);
     totalKg += kg;
     totalValue += kg * price;
     if (kg > 0) breakdown.push({ id: t.id, name: t.name, price, kg });
@@ -2117,29 +2103,32 @@ function recalcUmbalakadaGrindTotals() {
 }
 window.recalcUmbalakadaGrindTotals = recalcUmbalakadaGrindTotals;
 
-function renderUmbalakadaTypesTable() {
+// Read-only display — the 3 core varieties, priced and weighed from today's
+// actual saved purchase entries. Nothing here is hand-typed any more.
+function renderUmbalakadaPurchaseSyncTable() {
   const tbody = $('umbTypesBody');
   if (!tbody) return;
-  const list = ensureUmbalakadaTypes();
-  tbody.innerHTML = list.map(t => {
-    const price = getUmbalakadaTypePrice(t);
-    const kg = umbalakadaGroundTodayByType[t.id] || '';
-    const nameCell = t.core
-      ? `<strong>${t.name}</strong>`
-      : `<input type="text" value="${t.name}" style="min-width:120px;" onchange="onUmbalakadaTypeNameInput('${t.id}', this.value)">`;
-    const deleteCell = (t.core || userRole !== 'owner') ? '' :
-      `<button type="button" class="btn btn-sm" title="Remove variety" onclick="removeUmbalakadaType('${t.id}')"><i class="business-icon icon-inline" data-lucide="trash-2" aria-hidden="true"></i></button>`;
+  const rows = ensureUmbalakadaTypes().filter(t => t.core);
+  tbody.innerHTML = rows.map(t => {
+    const kg = Number(umbalakadaGroundTodayByType[t.id]) || 0;
+    const price = Number(umbalakadaTodaysPurchasePriceByType[t.id]) || 0;
     return `<tr>
-      <td>${nameCell}</td>
-      <td><div class="input-prefix" style="max-width:130px;"><span>Rs.</span><input type="number" min="0" value="${price}" onchange="onUmbalakadaTypePriceInput('${t.id}', this.value)"></div></td>
-      <td><input type="number" min="0" step="0.1" value="${kg}" placeholder="0" style="max-width:110px;" oninput="onUmbalakadaGroundKgInput('${t.id}', this.value)"></td>
-      <td>${deleteCell}</td>
+      <td><strong>${t.name}</strong></td>
+      <td>${price > 0 ? fmt(price) : '<span style="opacity:.5;">—</span>'}</td>
+      <td>${kg > 0 ? fmt2(kg) + ' kg' : '<span style="opacity:.5;">0 kg</span>'}</td>
     </tr>`;
   }).join('');
-  if (window.lucide) lucide.createIcons();
+
+  const noteEl = $('umbSyncNote');
+  if (noteEl) {
+    noteEl.textContent = lastPurchaseSyncEntryCount > 0
+      ? `🔄 Synced live from ${lastPurchaseSyncEntryCount} purchase update${lastPurchaseSyncEntryCount > 1 ? 's' : ''} saved today in the Costing tab's "Today's Umbalakada Purchase".`
+      : `No purchase entries saved for today yet — add one in the Costing tab's "Today's Umbalakada Purchase" sub-tab and it'll show up here automatically.`;
+  }
+
   recalcUmbalakadaGrindTotals();
 }
-window.renderUmbalakadaTypesTable = renderUmbalakadaTypesTable;
+window.renderUmbalakadaPurchaseSyncTable = renderUmbalakadaPurchaseSyncTable;
 
 function getAllocatedOverheadPerPack() {
   let totalPacks = 0;
@@ -2521,7 +2510,7 @@ function switchCostingTab(tab) {
     calcDailyPurchase();
     const logDateEl = $('dpbLogDate');
     if (logDateEl && !logDateEl.value) logDateEl.value = todayIso();
-    loadDailyPurchaseLog().then(renderDailyPurchaseHistory);
+    loadDailyPurchaseLog().then(() => { renderDailyPurchaseHistory(); syncUmbalakadaGroundFromPurchaseLog(); });
   }
   if (tab === 'orderbuy') calcOrderToBuy();
   if (tab === 'breakdown') renderCostBreakdown();
@@ -3094,7 +3083,8 @@ async function saveDailyPurchaseEntry() {
     dailyPurchaseLogCache.unshift(data);
     if ($('dpbLogNote')) $('dpbLogNote').value = '';
     renderDailyPurchaseHistory();
-    updateStatus('✅ Purchase entry saved to history');
+    syncUmbalakadaGroundFromPurchaseLog(); // push straight into the Daily Production Log in real time
+    updateStatus('✅ Purchase entry saved to history — Daily Production Log updated automatically');
   } catch (e) {
     console.error('Save daily purchase entry error:', e);
     const missingTable = /relation .* does not exist/i.test(e?.message || '');
@@ -3111,6 +3101,7 @@ async function deleteDailyPurchaseEntry(id) {
     if (error) throw error;
     dailyPurchaseLogCache = dailyPurchaseLogCache.filter(r => String(r.id) !== String(id));
     renderDailyPurchaseHistory();
+    syncUmbalakadaGroundFromPurchaseLog(); // re-sync in case today's entry was removed
     updateStatus('🗑️ Purchase entry deleted');
   } catch (e) {
     alert('❌ Could not delete entry: ' + (e?.message || String(e)));
@@ -4367,7 +4358,7 @@ function calcProduction() {
   lastProdAvgCostPerKg = avgCostPerKg;
   lastProdAvgMarketPrice = avgFinPrice;
   lastProdAvgProfitPerKg = avgProfitPerKg;
-  renderUmbalakadaTypesTable(); // also refreshes core-type prices if edited elsewhere
+  renderUmbalakadaPurchaseSyncTable(); // local re-render only — cloud sync happens via syncUmbalakadaGroundFromPurchaseLog()
   updateDailyProductionSummaryLive();
 
   const colors = getChartColors();
@@ -4579,11 +4570,10 @@ function updateDailyProductionSummaryLive() {
   const dustSalePrice = Number($('dpDustSalePrice') && $('dpDustSalePrice').value) || 0;
   const dustRemovedKg = Math.max(dustGeneratedKg - dustUsedKg, 0);
 
-  // Weighted average Umbalakada price/kg. If the owner has filled in the
-  // Umbalakada Varieties & Prices table above with today's actual grind mix,
-  // use that real weighted average (accurate across any number of
-  // varieties); otherwise fall back to the fixed Mix Ratio assumption from
-  // the Costing tab's Raw Materials card, same as before.
+  // Weighted average Umbalakada price/kg. If today's actual purchase has
+  // synced in from the Costing tab (syncUmbalakadaGroundFromPurchaseLog()),
+  // use that real weighted average; otherwise fall back to the fixed Mix
+  // Ratio assumption from the Costing tab's Raw Materials card, same as before.
   const mix = getMixPct();
   const breakdownTotalKg = Number(window.umbalakadaBreakdownTotalKg) || 0;
   const avgUmbalakadaPricePerKg = breakdownTotalKg > 0
@@ -13780,6 +13770,7 @@ function activateAppTab(tabId){
       renderSellerLedger();
     });
     loadDailyProductionLog().then(() => { renderDailyProductionLog(); updateIngredientVarianceAlert(lastProdIngredientsCostPerKg); });
+    loadDailyPurchaseLog().then(() => syncUmbalakadaGroundFromPurchaseLog());
     loadProductionBatchesFromCloud().then(renderProductionBatches);
   }
   if (tabId === 'distributor-home') { showSkeletons('distributor-home'); loadDistributorCommissionClaims().then(renderDistributorHome); }
