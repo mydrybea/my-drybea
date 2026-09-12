@@ -1732,9 +1732,9 @@ let state = {
   // currently calculating against — toggled by the owner via #dpPriceBasis.
   dpPriceBasis: 'mrp',
   // Pack size (g) -> catalog product id (Products tab), set via "Link Packs
-  // to Store Products" on the Daily Costing & Trends sub-tab. Once set,
-  // logging (or deleting) a Daily Product Batch automatically moves that
-  // product's Stock via applyStockMovement() — see addDailyProductBatch().
+  // to Store Products" on the Production tab. Once set, logging (or
+  // deleting) a Daily Product Batch automatically moves that product's
+  // Stock via applyStockMovement() — see addDailyProductBatch().
   packProductMap: { 50: '', 100: '', 500: '', 1000: '' },
   overhead: {...DEFAULT_FIXED},
   // Umbalakada varieties tracked in the Production tab's Daily Production
@@ -2498,14 +2498,13 @@ function calcScenario() {
 // "daily"   = live Grind→Output snapshot + monthly trend chart, sourced
 // from the same dailyProductionLogCache the Production tab uses.
 function switchCostingTab(tab) {
-  ['pricing', 'daily', 'daypurchase', 'readymade', 'orderbuy', 'breakdown'].forEach(t => {
+  ['pricing', 'daypurchase', 'readymade', 'orderbuy', 'breakdown'].forEach(t => {
     const panel = $(`costingTab-${t}`);
     if (panel) panel.style.display = (t === tab) ? '' : 'none';
   });
   document.querySelectorAll('.costing-subtab').forEach(btn => {
     btn.classList.toggle('btn-primary', btn.getAttribute('data-costing-tab') === tab);
   });
-  if (tab === 'daily') { renderCostingGrindOutputChart(); populatePackProductMapSelects(); renderDailyStoreHistory(); }
   if (tab === 'daypurchase') {
     calcDailyPurchase();
     const logDateEl = $('dpbLogDate');
@@ -2666,10 +2665,10 @@ function renderCostBreakdown() {
 }
 window.renderCostBreakdown = renderCostBreakdown;
 
-// Today's Grind→Output stat cards + the monthly trend chart, in the Costing
-// tab's "Daily Costing & Trends" sub-tab. Reads the same dailyProductionLogCache
-// that Production tab's Daily Production Log populates (umbalakada_ground_kg,
-// kg_produced per log_date) — no separate fetch or table needed.
+// Today's Grind→Output stat cards + the monthly trend chart. Used to power
+// the Costing tab's "Daily Costing & Trends" sub-tab (removed) — left
+// defined since it's still referenced by a couple of internal recompute
+// paths, but it no-ops immediately since its DOM targets no longer exist.
 function renderCostingGrindOutputChart() {
   const groundEl = $('costingGrindTodayKg'), outputEl = $('costingOutputTodayKg'),
         yieldEl = $('costingYieldTodayPct'), noteEl = $('costingGrindOutputNote'),
@@ -3410,13 +3409,13 @@ function calcOrderToBuy() {
 }
 window.calcOrderToBuy = calcOrderToBuy;
 
-// ==================== COSTING TAB — "ADD PRODUCT" BATCH LOG (today's pack output) ====================
-// Lets the owner log today's pack output right from the Costing tab's
-// "Output by Product" card — ADDITIVELY. Each "Add Batch" inserts its own
-// row into daily_product_batches (a separate table, one row per batch, as
-// many batches/day as you like). The sum of today's batches is then written
-// to production_cost_log.output_qty_* via a partial upsert (only those
-// columns — grind/dust/cost fields already saved for today are untouched).
+// ==================== "ADD PRODUCT" BATCH LOG (today's pack output) ====================
+// Lets the owner log today's pack output — ADDITIVELY. Each "Add Batch"
+// inserts its own row into daily_product_batches (a separate table, one row
+// per batch, as many batches/day as you like). The sum of today's batches is
+// then written to production_cost_log.output_qty_* via a partial upsert
+// (only those columns — grind/dust/cost fields already saved for today are
+// untouched).
 // NOTE: the Production tab's "Daily Production Log" → "Save Today's
 // Snapshot" still writes output_qty_* directly from its own manual fields —
 // if that's saved AFTER batches were added here, it will overwrite the
@@ -3424,13 +3423,15 @@ window.calcOrderToBuy = calcOrderToBuy;
 // the other for a given day to avoid the two fighting over today's total.
 let dailyProductBatchesCache = [];
 
-// ==================== PACK → STORE PRODUCT LINKING + DAILY STORE ====================
-// Bridges "how much did I produce today" (Daily Production Log / batches,
-// above) with the real Product catalog's Stock (Products tab). Nothing new
-// in Supabase is needed — the mapping lives in state.packProductMap (synced
-// via the existing app_data blob), and stock changes go through the SAME
+// ==================== PACK → STORE PRODUCT LINKING ====================
+// Bridges "how much did I produce today" (the batch log above) with the
+// real Product catalog's Stock (Products tab). Nothing new in Supabase is
+// needed — the mapping lives in state.packProductMap (synced via the
+// existing app_data blob), and stock changes go through the SAME
 // applyStockMovement()/adjust_product_stock() RPC the Restock/Adjust Stock
-// buttons already use on the Products tab.
+// buttons already use on the Products tab. Lives on the Production tab (see
+// "Link Packs to Store Products" there) — it only has an effect through the
+// "Add Product" batch log below, so the two stay together.
 function populatePackProductMapSelects() {
   Object.keys(PACKS).forEach(key => {
     const sel = $('ppmMap' + key);
@@ -3450,7 +3451,6 @@ function onPackProductMapChange() {
     if (sel) state.packProductMap[key] = sel.value;
   });
   onDataChange();
-  renderDailyStoreHistory();
 }
 window.onPackProductMapChange = onPackProductMapChange;
 
@@ -3467,43 +3467,6 @@ async function applyPackBatchStockMovements(qtyByKey, note, sign) {
     }
   }
 }
-
-// Day-by-day table on the Daily Costing & Trends sub-tab — reuses
-// dailyProductionLogCache (already loaded for the month by the Production
-// tab / renderCostingGrindOutputChart), so no extra fetch needed. "Current
-// Stock" is each linked product's live stock right now, not a historical
-// snapshot for that day (Stock History on the Products tab has the
-// day-by-day movement log if that level of detail is needed).
-function renderDailyStoreHistory() {
-  const body = $('dailyStoreHistoryBody');
-  if (!body) return;
-  const entries = [...(dailyProductionLogCache || [])].sort((a, b) => b.log_date.localeCompare(a.log_date));
-  if (entries.length === 0) {
-    body.innerHTML = '<tr><td colspan="6" style="text-align:center;opacity:.5;padding:14px;">No production logged yet this month.</td></tr>';
-    return;
-  }
-  const map = state.packProductMap || {};
-  const stockSummary = Object.keys(PACKS)
-    .filter(key => map[key])
-    .map(key => {
-      const p = (products || []).find(pr => String(pr.id) === String(map[key]));
-      return p ? `${PACKS[key].label}: ${p.stockQty}` : null;
-    })
-    .filter(Boolean)
-    .join(' · ') || '—';
-
-  body.innerHTML = entries.map(e => `<tr>
-    <td>${e.log_date}</td>
-    <td class="num">${Number(e.output_qty_50) || 0}</td>
-    <td class="num">${Number(e.output_qty_100) || 0}</td>
-    <td class="num">${Number(e.output_qty_500) || 0}</td>
-    <td class="num">${Number(e.output_qty_1000) || 0}</td>
-    <td class="num">${stockSummary}</td>
-  </tr>`).join('');
-}
-window.renderDailyStoreHistory = renderDailyStoreHistory;
-
-
 
 async function loadDailyProductBatches() {
   if (!currentUser || userRole !== 'owner') { dailyProductBatchesCache = []; return dailyProductBatchesCache; }
@@ -3638,7 +3601,6 @@ async function addDailyProductBatch() {
     if ($('adpNote')) $('adpNote').value = '';
     await recomputeTodayProductOutput();
     renderDailyProductBatchList();
-    renderDailyStoreHistory();
     updateStatus("✅ Batch added — linked products restocked");
   } catch (e) {
     console.error('Add daily product batch error:', e);
@@ -3662,7 +3624,6 @@ async function deleteDailyProductBatch(id) {
     }
     await recomputeTodayProductOutput();
     renderDailyProductBatchList();
-    renderDailyStoreHistory();
     updateStatus('🗑️ Batch deleted — linked stock reversed');
   } catch (e) {
     alert('❌ Could not delete batch: ' + (e?.message || String(e)));
@@ -4609,7 +4570,7 @@ function updateDailyProductionSummaryLive() {
 
   // ---- Grind Breakdown by Fish Type (Today) — auto-split from groundKg
   // using the current Fish Mix Ratio (Pricing & Scenarios above), no extra
-  // typing needed. Shown in the Costing tab's Daily Costing & Trends sub-tab.
+  // typing needed. Saved alongside today's snapshot for later reference.
   const linnaGroundKg = groundKg * mix.linna;
   const balayaGroundKg = groundKg * mix.balaya;
   const premiumGroundKg = groundKg * mix.kawalam;
@@ -13831,9 +13792,6 @@ function activateAppTab(tabId){
     loadDailyProductionLog().then(() => renderIncomeDailyDustSummary());
   }
   if (tabId === 'calculator') {
-    // Daily Costing & Trends sub-tab reads dailyProductionLogCache — load it
-    // in case the user opens Costing before ever visiting Production/Income.
-    loadDailyProductionLog().then(() => renderCostingGrindOutputChart());
     // Umbalakada → Order Costing sub-tab needs Orders (for the link picker)
     // and its own saved entries.
     loadOrdersFromCloud().then(() => populateCostingEntryOrderPicker());
@@ -13876,6 +13834,11 @@ function activateAppTab(tabId){
     loadDailyProductionLog().then(() => { renderDailyProductionLog(); updateIngredientVarianceAlert(lastProdIngredientsCostPerKg); });
     loadDailyPurchaseLog().then(() => syncUmbalakadaGroundFromPurchaseLog());
     loadProductionBatchesFromCloud().then(renderProductionBatches);
+    // "Link Packs to Store Products" (moved here from the old Costing tab
+    // "Daily Costing & Trends" sub-tab) — needs the product list for its
+    // dropdowns; products are already loaded app-wide at login, so no
+    // extra fetch needed here.
+    populatePackProductMapSelects();
   }
   if (tabId === 'distributor-home') { showSkeletons('distributor-home'); loadDistributorCommissionClaims().then(renderDistributorHome); }
   if (tabId === 'my-income') { loadDistributorCommissionClaims().then(renderProductAgentPage); }

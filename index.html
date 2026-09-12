@@ -1773,7 +1773,6 @@
         <div class="costing-subtab-group">
           <span class="costing-subtab-group-label"><span class="costing-subtab-step">3</span> Plan &amp; Review</span>
           <div class="costing-subtab-group-btns">
-            <button type="button" class="btn btn-sm costing-subtab" data-costing-tab="daily" onclick="switchCostingTab('daily')"><i class="business-icon icon-inline" data-lucide="line-chart" aria-hidden="true"></i> Daily Costing &amp; Trends</button>
             <button type="button" class="btn btn-sm costing-subtab" data-costing-tab="orderbuy" onclick="switchCostingTab('orderbuy')"><i class="business-icon icon-inline" data-lucide="shopping-cart" aria-hidden="true"></i> Order → What to Buy</button>
             <button type="button" class="btn btn-sm costing-subtab" data-costing-tab="breakdown" onclick="switchCostingTab('breakdown')"><i class="business-icon icon-inline" data-lucide="pie-chart" aria-hidden="true"></i> Cost Breakdown</button>
           </div>
@@ -1994,99 +1993,6 @@
     </div>
     </div>
     <!-- /costingTab-pricing -->
-
-    <!-- ============ COSTING TAB — DAILY COSTING & TRENDS (sub-tab) ============ -->
-    <div id="costingTab-daily" style="display:none;">
-      <div class="card">
-        <h2><span class="pro-title-icon orange" aria-hidden="true"><i class="business-icon" data-lucide="wind" aria-hidden="true"></i></span><span>Today's Grind → Output</span></h2>
-        <p class="pro-subtitle orange">Live snapshot from today's Daily Production Log entry (Production tab). Log today's numbers there and they show up here automatically.</p>
-        <div class="stat-grid">
-          <div class="stat"><div class="k">Umbalakada Ground Today</div><div class="v" id="costingGrindTodayKg">0 kg</div></div>
-          <div class="stat accent"><div class="k">Finished Output Today</div><div class="v" id="costingOutputTodayKg">0 kg</div></div>
-          <div class="stat good" id="costingYieldTodayCard"><div class="k">Output Yield</div><div class="v" id="costingYieldTodayPct">0%</div></div>
-        </div>
-        <div class="monthly-summary-note" id="costingGrindOutputNote">No Daily Production Log entry for today yet — add one from the Production tab.</div>
-
-        <h3 style="color:var(--green);margin:16px 0 8px;">🐟 Grind Breakdown by Fish Type (Today)</h3>
-        <p class="sub" style="margin:0 0 10px;">Today's total ground kg, split by the current Fish Mix Ratio (set in Pricing &amp; Scenarios above) — no extra typing needed.</p>
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>Fish Type</th><th class="num">Mix %</th><th class="num">Ground (kg)</th></tr></thead>
-            <tbody id="costingGrindByTypeBody"></tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- Anomaly Check — hidden by default via JS unless something is flagged -->
-      <div class="card" id="costingAnomalyCard" style="display:none;border:1px solid #f59e0b;">
-        <h2><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="alert-triangle" aria-hidden="true"></i></span><span>Worth Double-Checking</span></h2>
-        <p class="pro-subtitle gold">Today's numbers compared against your recent average — just a nudge, not an error.</p>
-        <div id="costingAnomalyNote"></div>
-      </div>
-
-      <div class="card">
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap;">
-          <div style="flex:1;min-width:220px;">
-            <h2><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="package-check" aria-hidden="true"></i></span><span>Output by Product — Profit (Today)</span></h2>
-            <p class="pro-subtitle gold">Today's pack quantities, priced at current fish costs &amp; MRP — updates live whenever prices or the mix change.</p>
-          </div>
-          <button type="button" class="btn btn-primary btn-sm" style="margin-top:2px;" onclick="openAddDailyProductModal()"><i class="business-icon icon-inline" data-lucide="plus" aria-hidden="true"></i> Add Product</button>
-        </div>
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>Pack</th><th class="num">Qty Today</th><th class="num">Cost/Pack</th><th class="num">Profit/Pack</th><th class="num">Total Profit</th></tr></thead>
-            <tbody id="costingOutputByProductBody"></tbody>
-          </table>
-        </div>
-        <div class="monthly-summary-note" id="costingOutputByProductTotal">No pack quantities added for today yet — tap "Add Product" above, or enter them in the Production tab.</div>
-      </div>
-
-      <div class="card">
-        <h2><span class="pro-title-icon teal" aria-hidden="true"><i class="business-icon" data-lucide="link" aria-hidden="true"></i></span><span>Link Packs to Store Products</span></h2>
-        <p class="pro-subtitle teal">One-time setup: pick which catalog product (Products tab) each pack size restocks. Once linked, every batch you log below (or delete) automatically adds to — or reverses from — that product's Stock, so the Products tab always shows what's actually on the shelf.</p>
-        <div class="grid-2" id="ppmGrid">
-          <div class="field"><label>50g Packs →</label><select id="ppmMap50" onchange="onPackProductMapChange()"><option value="">— Not linked —</option></select></div>
-          <div class="field"><label>100g Packs →</label><select id="ppmMap100" onchange="onPackProductMapChange()"><option value="">— Not linked —</option></select></div>
-          <div class="field"><label>500g Packs →</label><select id="ppmMap500" onchange="onPackProductMapChange()"><option value="">— Not linked —</option></select></div>
-          <div class="field"><label>1kg Packs →</label><select id="ppmMap1000" onchange="onPackProductMapChange()"><option value="">— Not linked —</option></select></div>
-        </div>
-        <div class="monthly-summary-note" id="ppmNote">Packs left "Not linked" won't touch Product Stock — everything else on this page still works as before.</div>
-      </div>
-
-      <div class="card">
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap;">
-          <div style="flex:1;min-width:220px;">
-            <h2><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="warehouse" aria-hidden="true"></i></span><span>Daily Store — Production History</span></h2>
-            <p class="pro-subtitle gold">What was produced each day, and the linked product's stock right now — scroll back through the month.</p>
-          </div>
-        </div>
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>Date</th><th class="num">50g</th><th class="num">100g</th><th class="num">500g</th><th class="num">1kg</th><th class="num">Current Stock (linked products)</th></tr></thead>
-            <tbody id="dailyStoreHistoryBody"><tr><td colspan="6" style="text-align:center;opacity:.5;padding:14px;">No production logged yet this month.</td></tr></tbody>
-          </table>
-        </div>
-      </div>
-
-      <div class="card">
-        <h2><span class="pro-title-icon teal" aria-hidden="true"><i class="business-icon" data-lucide="calendar-range" aria-hidden="true"></i></span><span>This Week vs Last Week</span></h2>
-        <p class="pro-subtitle teal">Rolling 7-day totals — Ground, Output and Profit — compared to the 7 days before that.</p>
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>Metric</th><th class="num">This Week</th><th class="num">Last Week</th><th class="num">Change</th></tr></thead>
-            <tbody id="costingWowBody"></tbody>
-          </table>
-        </div>
-        <div class="monthly-summary-note" id="costingWowNote"></div>
-      </div>
-
-      <div class="card">
-        <h2><span class="pro-title-icon purple" aria-hidden="true"><i class="business-icon" data-lucide="chart-no-axes-combined" aria-hidden="true"></i></span><span>Grind vs Output — This Month</span></h2>
-        <p class="pro-subtitle purple">Umbalakada fed into grinding each day vs the finished product that came out — same entries as the Production tab's Daily Production Log.</p>
-        <div class="chart-wrap"><canvas id="costingGrindOutputChart"></canvas></div>
-      </div>
-    </div>
-    <!-- /costingTab-daily -->
 
 
     <!-- ============ COSTING TAB — TODAY'S PURCHASE → BEST PACK (sub-tab) ============ -->
@@ -2711,7 +2617,7 @@
       <p class="sub" id="dpDustSuggestNote" style="margin:4px 0 0;"></p>
 
       <h3 style="color:var(--green);margin:16px 0 8px;">📦 Output by Product (Today)</h3>
-      <p class="sub" style="margin:0 0 10px;">How many of each pack size actually came out of today's batch — feeds the per-product profit breakdown on the Costing tab's Daily Costing &amp; Trends sub-tab.</p>
+      <p class="sub" style="margin:0 0 10px;">How many of each pack size actually came out of today's batch.</p>
       <div class="grid-2">
         <div class="field"><label>50g Packs</label><input type="number" id="dpOutQty50" value="0" min="0" step="1" oninput="updateDailyProductionSummaryLive()"></div>
         <div class="field"><label>100g Packs</label><input type="number" id="dpOutQty100" value="0" min="0" step="1" oninput="updateDailyProductionSummaryLive()"></div>
@@ -2753,6 +2659,30 @@
           <tbody id="dpLogBody"><tr><td colspan="9" style="text-align:center;opacity:.5;padding:20px;">No entries yet this month.</td></tr></tbody>
         </table>
       </div>
+    </div>
+
+    <!-- ============ LINK PACKS TO STORE PRODUCTS ============ -->
+    <!-- Moved here from the old Costing tab "Daily Costing & Trends" sub-tab
+         (removed). Bridges "how much did I produce today" with the real
+         Product catalog's Stock (Products tab) — see
+         populatePackProductMapSelects() / onPackProductMapChange() /
+         applyPackBatchStockMovements() in app.js. The "Add Today's Product
+         Batch" button below is what actually moves stock — a linked pack
+         with no batch logged against it just sits there with no effect. -->
+    <div class="card" style="margin-top:16px;">
+      <h2><span class="pro-title-icon teal" aria-hidden="true"><i class="business-icon" data-lucide="link" aria-hidden="true"></i></span><span>Link Packs to Store Products</span></h2>
+      <p class="pro-subtitle teal">One-time setup: pick which catalog product (Products tab) each pack size restocks. Once linked, every batch you log below (or delete) automatically adds to — or reverses from — that product's Stock, so the Products tab always shows what's actually on the shelf.</p>
+      <div class="grid-2" id="ppmGrid">
+        <div class="field"><label>50g Packs →</label><select id="ppmMap50" onchange="onPackProductMapChange()"><option value="">— Not linked —</option></select></div>
+        <div class="field"><label>100g Packs →</label><select id="ppmMap100" onchange="onPackProductMapChange()"><option value="">— Not linked —</option></select></div>
+        <div class="field"><label>500g Packs →</label><select id="ppmMap500" onchange="onPackProductMapChange()"><option value="">— Not linked —</option></select></div>
+        <div class="field"><label>1kg Packs →</label><select id="ppmMap1000" onchange="onPackProductMapChange()"><option value="">— Not linked —</option></select></div>
+      </div>
+      <div class="monthly-summary-note" id="ppmNote">Packs left "Not linked" won't touch Product Stock — everything else on this page still works as before.</div>
+      <div class="btn-row" style="margin-top:14px;" data-owner-only>
+        <button type="button" class="btn btn-primary btn-sm" onclick="openAddDailyProductModal()"><i class="business-icon icon-inline" data-lucide="plus" aria-hidden="true"></i> Add Today's Product Batch</button>
+      </div>
+      <small style="display:block;margin-top:6px;opacity:.65;">Logs a separate timestamped batch (on top of the "Output by Product" numbers above) and moves linked products' Stock immediately — as many batches a day as you like.</small>
     </div>
 
     <!-- ============ DAILY FISH PURCHASE BILLS ============ -->
