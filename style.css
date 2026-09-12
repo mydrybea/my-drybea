@@ -3021,14 +3021,27 @@ html[data-theme="light"] .home-action.gold{background:linear-gradient(180deg,#ff
   background:linear-gradient(180deg,rgba(13,26,21,.92),rgba(6,14,11,.96));
   border:1px solid rgba(255,255,255,.08);
   border-radius:18px;
-  padding:6px;
+  padding:14px 16px 12px;
   margin-bottom:16px;
   box-shadow:0 14px 34px rgba(0,0,0,.35), 0 0 0 1px rgba(16,185,129,.06);
-  overflow-x:auto;
 }
-.costing-subtabs{ display:flex !important; gap:4px !important; flex-wrap:nowrap !important; }
+.costing-subtabs{ display:flex !important; flex-wrap:wrap !important; align-items:flex-start; gap:18px !important; }
+.costing-subtab-group{ display:flex; flex-direction:column; gap:7px; flex:1 1 220px; min-width:200px; }
+.costing-subtab-group + .costing-subtab-group{ border-left:1px solid rgba(255,255,255,.09); padding-left:18px; }
+.costing-subtab-group-label{
+  display:flex; align-items:center; gap:7px;
+  font-size:.68rem; font-weight:800; letter-spacing:.05em; text-transform:uppercase;
+  color:rgba(191,233,211,.65); padding-left:2px;
+}
+.costing-subtab-step{
+  display:inline-flex; align-items:center; justify-content:center;
+  width:16px; height:16px; border-radius:50%;
+  background:linear-gradient(135deg,#10b981,#a3e635);
+  color:#06140f; font-size:.62rem; font-weight:900;
+}
+.costing-subtab-group-btns{ display:flex; flex-wrap:wrap; gap:4px !important; }
 .costing-subtab{
-  flex:1 1 0 !important; min-width:150px; white-space:nowrap;
+  flex:1 1 auto !important; min-width:150px; white-space:nowrap;
   justify-content:center !important;
   background:transparent !important; border:none !important; box-shadow:none !important;
   color:rgba(210,229,220,.6) !important; font-weight:700 !important;
@@ -3046,6 +3059,8 @@ html[data-theme="light"] .costing-tabs-shell{
   border-color:rgba(8,127,67,.14);
   box-shadow:0 14px 32px rgba(16,48,32,.10);
 }
+html[data-theme="light"] .costing-subtab-group + .costing-subtab-group{ border-left-color:rgba(8,127,67,.12); }
+html[data-theme="light"] .costing-subtab-group-label{ color:rgba(8,80,50,.55); }
 html[data-theme="light"] .costing-subtab{ color:#7c8d84 !important; }
 html[data-theme="light"] .costing-subtab:hover{ background:rgba(8,127,67,.06) !important; }
 html[data-theme="light"] .costing-subtab.btn-primary{
@@ -3053,8 +3068,13 @@ html[data-theme="light"] .costing-subtab.btn-primary{
   color:#08512b !important;
   box-shadow:0 6px 16px rgba(8,127,67,.14), inset 0 0 0 1px rgba(8,127,67,.14) !important;
 }
+@media(max-width:900px){
+  .costing-subtab-group + .costing-subtab-group{ border-left:none; padding-left:0; }
+}
 @media(max-width:700px){
-  .costing-subtabs{ flex-wrap:wrap !important; }
+  .costing-tabs-shell{ padding:12px 10px 10px; }
+  .costing-subtabs{ gap:12px !important; }
+  .costing-subtab-group{ flex:1 1 100%; }
   .costing-subtab{ min-width:0; flex:1 1 auto !important; font-size:.7rem !important; padding:9px 8px !important; }
 }
 

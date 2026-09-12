@@ -1751,17 +1751,33 @@
   <!-- ============ CALCULATOR TAB ============ -->
   <section id="calculator" class="tab-panel" role="tabpanel" style="display:none;">
 
-    <!-- Sub-tabs: Pricing/Scenarios logic vs the live daily grind→output trend
-         (see switchCostingTab in app.js). Keeps the "what should I charge"
-         inputs separate from the "what actually happened today" view. -->
+    <!-- Sub-tabs: grouped into a 3-step workflow so a new user isn't facing
+         6 flat buttons — set prices, then log today's purchase (either
+         method), then plan/review. Purely a layout grouping: switchCostingTab
+         in app.js still keys off data-costing-tab, unaffected by DOM order. -->
     <div class="costing-tabs-shell">
       <div id="costingSubTabs" class="costing-subtabs">
-        <button type="button" class="btn btn-sm costing-subtab btn-primary" data-costing-tab="pricing" onclick="switchCostingTab('pricing')"><i class="business-icon icon-inline" data-lucide="calculator" aria-hidden="true"></i> Pricing &amp; Scenarios</button>
-        <button type="button" class="btn btn-sm costing-subtab" data-costing-tab="daily" onclick="switchCostingTab('daily')"><i class="business-icon icon-inline" data-lucide="line-chart" aria-hidden="true"></i> Daily Costing &amp; Trends</button>
-        <button type="button" class="btn btn-sm costing-subtab" data-costing-tab="daypurchase" onclick="switchCostingTab('daypurchase')"><i class="business-icon icon-inline" data-lucide="scale" aria-hidden="true"></i> Today's Purchase → Best Pack</button>
-        <button type="button" class="btn btn-sm costing-subtab" data-costing-tab="readymade" onclick="switchCostingTab('readymade')"><i class="business-icon icon-inline" data-lucide="receipt-text" aria-hidden="true"></i> Ready-Made Purchase</button>
-        <button type="button" class="btn btn-sm costing-subtab" data-costing-tab="orderbuy" onclick="switchCostingTab('orderbuy')"><i class="business-icon icon-inline" data-lucide="shopping-cart" aria-hidden="true"></i> Order → What to Buy</button>
-        <button type="button" class="btn btn-sm costing-subtab" data-costing-tab="breakdown" onclick="switchCostingTab('breakdown')"><i class="business-icon icon-inline" data-lucide="pie-chart" aria-hidden="true"></i> Cost Breakdown</button>
+        <div class="costing-subtab-group">
+          <span class="costing-subtab-group-label"><span class="costing-subtab-step">1</span> Set Your Prices</span>
+          <div class="costing-subtab-group-btns">
+            <button type="button" class="btn btn-sm costing-subtab btn-primary" data-costing-tab="pricing" onclick="switchCostingTab('pricing')"><i class="business-icon icon-inline" data-lucide="calculator" aria-hidden="true"></i> Pricing &amp; Scenarios</button>
+          </div>
+        </div>
+        <div class="costing-subtab-group">
+          <span class="costing-subtab-group-label"><span class="costing-subtab-step">2</span> Log Today's Purchase</span>
+          <div class="costing-subtab-group-btns">
+            <button type="button" class="btn btn-sm costing-subtab" data-costing-tab="daypurchase" onclick="switchCostingTab('daypurchase')"><i class="business-icon icon-inline" data-lucide="scale" aria-hidden="true"></i> Today's Purchase → Best Pack</button>
+            <button type="button" class="btn btn-sm costing-subtab" data-costing-tab="readymade" onclick="switchCostingTab('readymade')"><i class="business-icon icon-inline" data-lucide="receipt-text" aria-hidden="true"></i> Ready-Made Purchase</button>
+          </div>
+        </div>
+        <div class="costing-subtab-group">
+          <span class="costing-subtab-group-label"><span class="costing-subtab-step">3</span> Plan &amp; Review</span>
+          <div class="costing-subtab-group-btns">
+            <button type="button" class="btn btn-sm costing-subtab" data-costing-tab="daily" onclick="switchCostingTab('daily')"><i class="business-icon icon-inline" data-lucide="line-chart" aria-hidden="true"></i> Daily Costing &amp; Trends</button>
+            <button type="button" class="btn btn-sm costing-subtab" data-costing-tab="orderbuy" onclick="switchCostingTab('orderbuy')"><i class="business-icon icon-inline" data-lucide="shopping-cart" aria-hidden="true"></i> Order → What to Buy</button>
+            <button type="button" class="btn btn-sm costing-subtab" data-costing-tab="breakdown" onclick="switchCostingTab('breakdown')"><i class="business-icon icon-inline" data-lucide="pie-chart" aria-hidden="true"></i> Cost Breakdown</button>
+          </div>
+        </div>
       </div>
     </div>
 
