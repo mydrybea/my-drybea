@@ -582,7 +582,7 @@
       <p class="pro-subtitle green">Actual orders, actual fish bills, actual expenses and actual finished output — no estimates.</p>
       <div class="income-grid">
         <div class="card income-card"><span>Real Revenue</span><strong id="realIncomeRevenue">Rs. 0</strong><small>From actual orders</small></div>
-        <div class="card income-card"><span>Real Raw Fish Cost</span><strong id="realIncomeRawCost">Rs. 0</strong><small>From fish purchase bills</small></div>
+        <div class="card income-card"><span>Real Raw Material Cost</span><strong id="realIncomeRawCost">Rs. 0</strong><small>Fish bills + ready-made purchases</small></div>
         <div class="card income-card"><span>Real Other Expenses</span><strong id="realIncomeOtherExp">Rs. 0</strong><small>Everything else logged</small></div>
         <div class="card income-card income-highlight"><span>Real Net Profit</span><strong id="realIncomeNet">Rs. 0</strong><small>Revenue − all real costs</small></div>
       </div>
@@ -590,6 +590,7 @@
         <div><span>Real Margin</span><strong id="realIncomeMargin">0%</strong></div>
         <div><span>Finished Output (Completed Batches)</span><strong id="realIncomeOutputKg">0 kg</strong></div>
         <div><span>Real Cost/kg Produced</span><strong id="realIncomeCostPerKg">Rs. 0</strong></div>
+        <div><span>— of which Ready-Made (This Month)</span><strong id="realIncomeReadymadeCost">Rs. 0</strong></div>
         <button class="btn btn-primary" data-open-tab="production" data-ribbon="true">Open Production</button>
       </div>
       <small style="display:block;margin-top:8px;opacity:.6;">Tip: tick "linked fish bills" when starting a Production Batch and its Real Cost/kg will show ✅ once completed — otherwise it falls back to the estimate.</small>
@@ -610,6 +611,20 @@
         <button class="btn btn-primary" data-open-tab="production" data-ribbon="true">Open Production</button>
       </div>
       <small style="display:block;margin-top:8px;opacity:.6;" id="incomeDustSummaryNote">No Daily Production Log snapshot saved for today yet — figures show the most recent saved day.</small>
+    </div>
+
+    <div class="card">
+      <h2><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="receipt-text" aria-hidden="true"></i></span><span>Ready-Made Umbalakada Purchase (Today)</span></h2>
+      <p class="pro-subtitle green">Live from the Costing tab — for days you bought it in ready-made instead of grinding your own.</p>
+      <div class="income-grid">
+        <div class="card income-card income-highlight"><span>Bought Today</span><strong id="incomeReadymadeToday">Rs. 0</strong><small>Total bill amount(s)</small></div>
+        <div class="card income-card"><span>Qty Bought Today</span><strong id="incomeReadymadeTodayQty">0 kg</strong><small>Across all today's bills</small></div>
+        <div class="card income-card"><span>Seller(s)</span><strong id="incomeReadymadeTodaySeller" style="font-size:1rem;">—</strong><small>Bought from today</small></div>
+      </div>
+      <div class="income-summary">
+        <button class="btn btn-primary" data-open-tab="calculator" data-ribbon="true">Open Costing</button>
+      </div>
+      <small style="display:block;margin-top:8px;opacity:.6;" id="incomeReadymadeNote">No ready-made purchase bills saved for today.</small>
     </div>
   </section>
 
@@ -1744,6 +1759,7 @@
         <button type="button" class="btn btn-sm costing-subtab btn-primary" data-costing-tab="pricing" onclick="switchCostingTab('pricing')"><i class="business-icon icon-inline" data-lucide="calculator" aria-hidden="true"></i> Pricing &amp; Scenarios</button>
         <button type="button" class="btn btn-sm costing-subtab" data-costing-tab="daily" onclick="switchCostingTab('daily')"><i class="business-icon icon-inline" data-lucide="line-chart" aria-hidden="true"></i> Daily Costing &amp; Trends</button>
         <button type="button" class="btn btn-sm costing-subtab" data-costing-tab="daypurchase" onclick="switchCostingTab('daypurchase')"><i class="business-icon icon-inline" data-lucide="scale" aria-hidden="true"></i> Today's Purchase → Best Pack</button>
+        <button type="button" class="btn btn-sm costing-subtab" data-costing-tab="readymade" onclick="switchCostingTab('readymade')"><i class="business-icon icon-inline" data-lucide="receipt-text" aria-hidden="true"></i> Ready-Made Purchase</button>
         <button type="button" class="btn btn-sm costing-subtab" data-costing-tab="orderbuy" onclick="switchCostingTab('orderbuy')"><i class="business-icon icon-inline" data-lucide="shopping-cart" aria-hidden="true"></i> Order → What to Buy</button>
         <button type="button" class="btn btn-sm costing-subtab" data-costing-tab="breakdown" onclick="switchCostingTab('breakdown')"><i class="business-icon icon-inline" data-lucide="pie-chart" aria-hidden="true"></i> Cost Breakdown</button>
       </div>
@@ -2210,6 +2226,38 @@
       </div>
     </div>
     <!-- /costingTab-daypurchase -->
+
+    <!-- ============ COSTING TAB — READY-MADE UMBALAKADA PURCHASE (sub-tab) ============ -->
+    <!-- For days the owner doesn't grind their own Umbalakada and instead buys
+         it ready-made/ground from another seller. Full bill/invoice — same
+         engine as the Production tab's Fish Bills (bill numbers, items,
+         seller name/phone, part-payment + balance, printable invoice,
+         mirrors into Expenses) — just tagged so it lists here separately.
+         Today's total feeds the Income tab live (see the Ready-Made card
+         there) and into the Real Income panel's cost total automatically. -->
+    <div id="costingTab-readymade" style="display:none;">
+      <div class="card">
+        <h2><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="receipt-text" aria-hidden="true"></i></span><span>Ready-Made Umbalakada Purchase</span></h2>
+        <p class="sub">Not grinding your own today? Log what you bought in ready-made from another seller here as a full bill — seller, items, part-payment, balance owed — and it flows into Expenses, the Seller Ledger, and the Income tab automatically, in real time.</p>
+        <div class="stat-grid">
+          <div class="stat accent"><div class="k">Bought Today</div><div class="v" id="rmTodayTotal">Rs. 0</div></div>
+          <div class="stat"><div class="k">Qty Bought Today</div><div class="v" id="rmTodayQtyKg">0 kg</div></div>
+          <div class="stat"><div class="k">Avg Price/kg Today</div><div class="v" id="rmTodayAvgPrice">Rs. 0</div></div>
+          <div class="stat"><div class="k">Bought This Month</div><div class="v" id="rmMonthTotal">Rs. 0</div></div>
+        </div>
+        <div class="btn-row" style="margin:12px 0;" data-owner-only>
+          <button type="button" class="btn btn-primary btn-sm" onclick="openNewFishBill('readymade_umbalakada')"><i class="business-icon icon-inline" data-lucide="plus" aria-hidden="true"></i> New Ready-Made Bill</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Bill No.</th><th>Date</th><th>Seller</th><th>Items</th><th>Total</th><th>Paid</th><th>Balance</th><th></th></tr></thead>
+            <tbody id="readymadeBillBody"></tbody>
+          </table>
+        </div>
+        <small style="display:block;margin-top:8px;opacity:.65;">Owed to a seller shows on the same Seller Ledger as Fish Bills (Production tab) — one balance per seller no matter which type of purchase it came from.</small>
+      </div>
+    </div>
+    <!-- /costingTab-readymade -->
 
     <!-- ============ COSTING TAB — ORDER → WHAT TO BUY (sub-tab) ============ -->
     <!-- Reverse of Quick Market Decision: instead of "what should I do with
@@ -2728,7 +2776,7 @@
   <!-- New Fish Bill Modal (multi-item) -->
   <div class="modal-backdrop" id="fishBillModal">
     <div class="modal" style="max-width:560px;">
-      <h3><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="receipt-text" aria-hidden="true"></i></span><span>New Fish Bill</span></h3><p class="pro-subtitle green">Bill No. <strong id="fbBillNoPreview">—</strong> — add every fish type bought from this seller today.</p>
+      <h3><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="receipt-text" aria-hidden="true"></i></span><span id="fbModalTitle">New Fish Bill</span></h3><p class="pro-subtitle green">Bill No. <strong id="fbBillNoPreview">—</strong> — <span id="fbModalSubtitle">add every fish type bought from this seller today.</span></p>
 
       <div class="grid-2">
         <div class="field">
@@ -2748,14 +2796,14 @@
       </div>
 
       <div class="field">
-        <label>Fish Items</label>
+        <label id="fbItemsLabel">Fish Items</label>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>Fish Type</th><th>Qty (kg)</th><th>Rs./kg</th><th>Subtotal</th><th></th></tr></thead>
+            <thead><tr><th id="fbItemsTypeHeader">Fish Type</th><th>Qty (kg)</th><th>Rs./kg</th><th>Subtotal</th><th></th></tr></thead>
             <tbody id="fbItemsBody"></tbody>
           </table>
         </div>
-        <button type="button" class="btn btn-sm" style="margin-top:8px;" onclick="addFishBillItemRow()"><i class="business-icon icon-inline" data-lucide="plus" aria-hidden="true"></i> Add Fish Item</button>
+        <button type="button" class="btn btn-sm" id="fbAddItemBtn" style="margin-top:8px;" onclick="addFishBillItemRow()"><i class="business-icon icon-inline" data-lucide="plus" aria-hidden="true"></i> Add Fish Item</button>
       </div>
 
       <div class="field">
@@ -2882,7 +2930,7 @@
   <div class="modal-backdrop" id="fishBillViewModal">
     <div class="modal" style="max-width:480px;">
       <div id="fishBillPrintArea">
-        <h3 style="margin-bottom:2px;"><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="receipt-text" aria-hidden="true"></i></span><span>Fish Purchase Bill</span></h3>
+        <h3 style="margin-bottom:2px;"><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="receipt-text" aria-hidden="true"></i></span><span id="fbvTitle">Fish Purchase Bill</span></h3>
         <p class="pro-subtitle green" id="fbvBillNo">Bill No. —</p>
         <div class="stat-grid" style="grid-template-columns:1fr 1fr;">
           <div class="stat"><div class="k">Date</div><div class="v" id="fbvDate" style="font-size:.95rem;">—</div></div>
@@ -2890,7 +2938,7 @@
         </div>
         <div class="table-wrap" style="margin-top:12px;">
           <table>
-            <thead><tr><th>Fish Type</th><th>Qty (kg)</th><th>Rs./kg</th><th>Subtotal</th></tr></thead>
+            <thead><tr><th id="fbvItemsHeader">Fish Type</th><th>Qty (kg)</th><th>Rs./kg</th><th>Subtotal</th></tr></thead>
             <tbody id="fbvItemsBody"></tbody>
           </table>
         </div>

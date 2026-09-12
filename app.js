@@ -2498,7 +2498,7 @@ function calcScenario() {
 // "daily"   = live Grind→Output snapshot + monthly trend chart, sourced
 // from the same dailyProductionLogCache the Production tab uses.
 function switchCostingTab(tab) {
-  ['pricing', 'daily', 'daypurchase', 'orderbuy', 'breakdown'].forEach(t => {
+  ['pricing', 'daily', 'daypurchase', 'readymade', 'orderbuy', 'breakdown'].forEach(t => {
     const panel = $(`costingTab-${t}`);
     if (panel) panel.style.display = (t === tab) ? '' : 'none';
   });
@@ -2511,6 +2511,9 @@ function switchCostingTab(tab) {
     const logDateEl = $('dpbLogDate');
     if (logDateEl && !logDateEl.value) logDateEl.value = todayIso();
     loadDailyPurchaseLog().then(() => { renderDailyPurchaseHistory(); syncUmbalakadaGroundFromPurchaseLog(); });
+  }
+  if (tab === 'readymade') {
+    loadFishBillsFromCloud().then(() => renderReadymadeBills());
   }
   if (tab === 'orderbuy') calcOrderToBuy();
   if (tab === 'breakdown') renderCostBreakdown();
@@ -4494,7 +4497,7 @@ function updateIngredientVarianceAlert(currentCostPerKg) {
 // correction is never clobbered by a bill entered later.
 function computeTodayRawFishKgFromBills() {
   return (fishBills || [])
-    .filter(b => isToday(b.date))
+    .filter(b => isToday(b.date) && b.purchaseType !== 'readymade_umbalakada')
     .reduce((sum, b) => sum + (b.items || []).reduce((s, it) => s + (Number(it.quantityKg) || 0), 0), 0);
 }
 
@@ -5733,6 +5736,7 @@ function dbFishBillToLocal(b, items) {
     id: b.id,
     billNo: b.bill_no,
     date: b.bill_date,
+    purchaseType: b.purchase_type || 'raw_fish', // 'raw_fish' | 'readymade_umbalakada'
     sellerName: b.seller_name,
     sellerPhone: b.seller_phone,
     total: Number(b.total_amount) || 0,
@@ -5797,10 +5801,11 @@ async function loadFishPaymentsFromCloud() {
   }
 }
 
-function generateFishBillNo(dateStr) {
+function generateFishBillNo(dateStr, type) {
   const d = (dateStr || new Date().toISOString().slice(0, 10)).replace(/-/g, '');
-  const countToday = fishBills.filter(b => b.billNo && b.billNo.includes(d)).length;
-  return `FB-${d}-${String(countToday + 1).padStart(3, '0')}`;
+  const prefix = type === 'readymade_umbalakada' ? 'RM' : 'FB';
+  const countToday = fishBills.filter(b => b.billNo && b.billNo.startsWith(`${prefix}-${d}`)).length;
+  return `${prefix}-${d}-${String(countToday + 1).padStart(3, '0')}`;
 }
 
 function knownSellers() {
@@ -5827,10 +5832,11 @@ function addFishBillItemRow(prefill) {
   const tbody = $('fbItemsBody');
   if (!tbody) return;
   const rowId = 'fbi_' + (++fishBillItemRowSeq);
+  const placeholder = window.currentFishBillType === 'readymade_umbalakada' ? 'e.g. Fine Ground Powder' : 'e.g. Skipjack Tuna';
   const tr = document.createElement('tr');
   tr.id = rowId;
   tr.innerHTML = `
-    <td><input type="text" class="fbi-type" placeholder="e.g. Skipjack Tuna" value="${prefill?.fishType || ''}" style="min-width:110px;"></td>
+    <td><input type="text" class="fbi-type" placeholder="${placeholder}" value="${prefill?.fishType || ''}" style="min-width:110px;"></td>
     <td><input type="number" class="fbi-qty" min="0" step="0.1" value="${prefill?.quantityKg || 0}" style="width:80px;" oninput="recalcFishBillTotal()"></td>
     <td><input type="number" class="fbi-price" min="0" value="${prefill?.pricePerKg || 0}" style="width:90px;" oninput="recalcFishBillTotal()"></td>
     <td class="fbi-subtotal" style="white-space:nowrap;">Rs. 0</td>
@@ -5865,11 +5871,22 @@ function recalcFishBillTotal() {
   $('fbBalance').value = Math.max(0, total - paid).toFixed(2);
 }
 
-function openNewFishBill() {
-  if (userRole !== 'owner') { alert('Only the owner can add a fish bill.'); return; }
+function openNewFishBill(type) {
+  const isReadymade = type === 'readymade_umbalakada';
+  if (userRole !== 'owner') { alert(`Only the owner can add a ${isReadymade ? 'purchase' : 'fish'} bill.`); return; }
+  window.currentFishBillType = isReadymade ? 'readymade_umbalakada' : 'raw_fish';
+
+  if ($('fbModalTitle')) $('fbModalTitle').textContent = isReadymade ? 'New Ready-Made Umbalakada Bill' : 'New Fish Bill';
+  if ($('fbModalSubtitle')) $('fbModalSubtitle').textContent = isReadymade
+    ? "add every grade of ready-made Umbalakada bought in today — for days you're buying it in instead of grinding your own."
+    : 'add every fish type bought from this seller today.';
+  if ($('fbItemsLabel')) $('fbItemsLabel').textContent = isReadymade ? 'Umbalakada Items' : 'Fish Items';
+  if ($('fbItemsTypeHeader')) $('fbItemsTypeHeader').textContent = isReadymade ? 'Grade / Description' : 'Fish Type';
+  if ($('fbAddItemBtn')) $('fbAddItemBtn').innerHTML = `<i class="business-icon icon-inline" data-lucide="plus" aria-hidden="true"></i> Add Item`;
+
   const today = new Date().toISOString().slice(0, 10);
   $('fbDate').value = today;
-  $('fbBillNoPreview').textContent = generateFishBillNo(today);
+  $('fbBillNoPreview').textContent = generateFishBillNo(today, window.currentFishBillType);
   $('fbSellerName').value = '';
   $('fbSellerPhone').value = '';
   $('fbItemsBody').innerHTML = '';
@@ -5880,10 +5897,13 @@ function openNewFishBill() {
   $('fbNotes').value = '';
   recalcFishBillTotal();
   populateSellerDatalists();
+  if (window.lucide) lucide.createIcons();
   $('fishBillModal').classList.add('active');
 }
+window.openNewFishBill = openNewFishBill;
 
 async function saveFishBill() {
+  const isReadymade = window.currentFishBillType === 'readymade_umbalakada';
   const date = $('fbDate').value || new Date().toISOString().slice(0, 10);
   const sellerName = $('fbSellerName').value.trim();
   const sellerPhone = $('fbSellerPhone').value.trim();
@@ -5903,20 +5923,22 @@ async function saveFishBill() {
 
   if (!currentUser) { alert('Please login first.'); return; }
   if (!sellerName || !sellerPhone) { alert('Enter the seller name and phone number.'); return; }
-  if (items.length === 0) { alert('Add at least one fish item with quantity and price.'); return; }
+  if (items.length === 0) { alert(`Add at least one ${isReadymade ? 'item' : 'fish item'} with quantity and price.`); return; }
   if (paidAmount > total) { alert('Amount given cannot be more than the bill total.'); return; }
   if (!(await ensureFreshSession())) return;
 
-  const billNo = generateFishBillNo(date);
+  const billNo = generateFishBillNo(date, window.currentFishBillType);
+  const expenseCategory = isReadymade ? 'Ready-Made Umbalakada' : 'Raw Fish';
 
-  // 1) Mirror the bill total into `expenses` (category "Raw Fish") so it
-  //    flows into Expenses + the Profit chart automatically.
+  // 1) Mirror the bill total into `expenses` (category "Raw Fish" or
+  //    "Ready-Made Umbalakada") so it flows into Expenses + the Profit
+  //    chart, and into the Income tab's Real Income panel, automatically.
   let linkedExpenseId = null;
   try {
     const itemSummary = items.map(it => `${it.fishType} ${it.quantityKg}kg`).join(', ');
     const { data: expData, error: expErr } = await supabase.from('expenses').insert({
       expense_date: date,
-      category: 'Raw Fish',
+      category: expenseCategory,
       description: `Bill ${billNo} — ${itemSummary} — ${sellerName}`,
       amount: total,
       created_by: currentUser.id
@@ -5937,6 +5959,7 @@ async function saveFishBill() {
       business_id: businessId,
       bill_no: billNo,
       bill_date: date,
+      purchase_type: window.currentFishBillType || 'raw_fish',
       seller_name: sellerName,
       seller_phone: sellerPhone,
       total_amount: total,
@@ -5975,12 +5998,13 @@ async function saveFishBill() {
 
   fishBills.unshift(dbFishBillToLocal(savedBill, savedItems));
   renderFishBills();
+  renderReadymadeBills();
   renderSellerLedger();
   renderProductCosting();
   renderExpenses();
   updateMonthlySummary();
   closeModal('fishBillModal');
-  updateStatus(`✅ Fish bill ${billNo} saved`);
+  updateStatus(isReadymade ? `✅ Ready-made purchase bill ${billNo} saved — Income tab updated` : `✅ Fish bill ${billNo} saved`);
 }
 
 async function deleteFishBill(id) {
@@ -6004,6 +6028,7 @@ async function deleteFishBill(id) {
   }
   fishBills = fishBills.filter(b => b.id !== id);
   renderFishBills();
+  renderReadymadeBills();
   renderSellerLedger();
   renderProductCosting();
   renderExpenses();
@@ -6015,6 +6040,9 @@ function viewFishBill(id) {
   const bill = fishBills.find(b => b.id === id);
   if (!bill) return;
   currentViewedFishBillId = id;
+  const isReadymade = bill.purchaseType === 'readymade_umbalakada';
+  if ($('fbvTitle')) $('fbvTitle').textContent = isReadymade ? 'Ready-Made Umbalakada Bill' : 'Fish Purchase Bill';
+  if ($('fbvItemsHeader')) $('fbvItemsHeader').textContent = isReadymade ? 'Grade / Description' : 'Fish Type';
   $('fbvBillNo').textContent = `Bill No. ${bill.billNo}`;
   $('fbvDate').textContent = bill.date;
   $('fbvSeller').textContent = `${bill.sellerName} (${bill.sellerPhone})`;
@@ -6034,18 +6062,20 @@ function viewFishBill(id) {
 function printFishBill(id) {
   const bill = fishBills.find(b => b.id === (id || currentViewedFishBillId));
   if (!bill) return;
+  const isReadymade = bill.purchaseType === 'readymade_umbalakada';
+  const docTitle = isReadymade ? 'Ready-Made Umbalakada Purchase Bill' : 'Fish Purchase Bill';
   const w = window.open('', '_blank', 'width=480,height=700');
   if (!w) { alert('Please allow pop-ups to print the bill.'); return; }
   const itemRows = bill.items.map(it => `
     <div class="row"><span>${it.fishType} — ${it.quantityKg}kg × ${fmt(it.pricePerKg)}</span><strong>${fmt(it.subtotal)}</strong></div>
   `).join('');
-  w.document.write(`<!doctype html><html><head><title>Fish Bill ${bill.billNo}</title><style>
+  w.document.write(`<!doctype html><html><head><title>${docTitle} ${bill.billNo}</title><style>
     body{font-family:Arial,sans-serif;padding:28px;color:#10231b}h1{margin:0;color:#059669;font-size:20px}h2{margin:4px 0 20px;font-size:15px;font-weight:600;color:#456}
     .box{border:1px solid #ddd;border-radius:12px;padding:16px;margin:12px 0}.row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee;font-size:14px}
     .total{font-size:17px;font-weight:800;color:#059669;border-top:2px solid #d4af37;border-bottom:0;margin-top:6px;padding-top:10px}
     .bad{color:#d45d55} small{color:#667} @media print{button{display:none}}
   </style></head><body>
-  <h1>Fish Purchase Bill</h1><h2>${bill.billNo} — ${bill.date}</h2>
+  <h1>${docTitle}</h1><h2>${bill.billNo} — ${bill.date}</h2>
   <div class="box"><strong>Seller:</strong> ${bill.sellerName}<br><strong>Phone:</strong> ${bill.sellerPhone}</div>
   <div class="box">${itemRows}
     <div class="row total"><span>Bill Total</span><strong>${fmt(bill.total)}</strong></div>
@@ -6118,11 +6148,12 @@ function sellerAggregate(sellerPhone) {
 
 function renderFishBills() {
   const tbody = $('fishBillBody');
+  const list = fishBills.filter(b => b.purchaseType !== 'readymade_umbalakada');
   if (tbody) {
-    if (fishBills.length === 0) {
+    if (list.length === 0) {
       tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;opacity:0.5;padding:20px;">No fish bills yet.</td></tr>';
     } else {
-      tbody.innerHTML = fishBills.map(b => {
+      tbody.innerHTML = list.map(b => {
         const itemsSummary = b.items.map(it => `${it.fishType} ${it.quantityKg}kg`).join(', ') || '—';
         return `
         <tr>
@@ -6145,8 +6176,8 @@ function renderFishBills() {
     }
   }
 
-  const todayBills = fishBills.filter(b => isToday(b.date));
-  const monthBills = fishBills.filter(b => isThisMonth(b.date));
+  const todayBills = list.filter(b => isToday(b.date));
+  const monthBills = list.filter(b => isThisMonth(b.date));
   const todayTotal = todayBills.reduce((s, b) => s + b.total, 0);
   const monthTotal = monthBills.reduce((s, b) => s + b.total, 0);
 
@@ -6163,6 +6194,72 @@ function renderFishBills() {
   calcRealIncome();
   syncDailyRawKgFromBills();
 }
+window.renderFishBills = renderFishBills;
+
+// ==================== READY-MADE UMBALAKADA PURCHASE (Costing tab) ====================
+// For days the owner doesn't grind their own Umbalakada and instead buys
+// it ready-made/ground from another seller. Same full bill/invoice engine
+// as the Fish Bills above (fish_bills + fish_bill_items, seller ledger,
+// payments, printable invoice) — just tagged purchase_type =
+// 'readymade_umbalakada' so it lists separately here instead of mixing
+// into the Production tab's raw-fish bills, while still counting toward
+// the real cost total on the Income tab (calcRealIncome() sums ALL
+// fish_bills regardless of type — see the "Real Raw Material Cost" card).
+function renderReadymadeBills() {
+  const tbody = $('readymadeBillBody');
+  const list = fishBills.filter(b => b.purchaseType === 'readymade_umbalakada');
+  if (tbody) {
+    if (list.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;opacity:0.5;padding:20px;">No ready-made purchase bills yet.</td></tr>';
+    } else {
+      tbody.innerHTML = list.map(b => {
+        const itemsSummary = b.items.map(it => `${it.fishType} ${it.quantityKg}kg`).join(', ') || '—';
+        return `
+        <tr>
+          <td>${b.billNo}</td>
+          <td>${b.date}</td>
+          <td>${b.sellerName}<br><small style="opacity:.65;">${b.sellerPhone}</small></td>
+          <td style="max-width:180px;">${itemsSummary}</td>
+          <td>${fmt(b.total)}</td>
+          <td>${fmt(b.paidAmount)}</td>
+          <td>${b.balance > 0.01 ? `<span class="badge badge-warn">${fmt(b.balance)}</span>` : `<span class="badge badge-good">Settled</span>`}</td>
+          <td style="white-space:nowrap;">
+            ${actionMenuHTML([
+              { label: 'View', icon: '👁️', onclick: `viewFishBill('${b.id}')` },
+              userRole === 'owner' ? { label: 'Delete', icon: '🗑️', danger: true, onclick: `deleteFishBill('${b.id}')` } : null
+            ])}
+          </td>
+        </tr>`;
+      }).join('');
+    }
+  }
+
+  const todayList = list.filter(b => isToday(b.date));
+  const monthList = list.filter(b => isThisMonth(b.date));
+  const todayTotal = todayList.reduce((s, b) => s + b.total, 0);
+  const monthTotal = monthList.reduce((s, b) => s + b.total, 0);
+  const todayQty = todayList.reduce((s, b) => s + b.items.reduce((si, it) => si + (Number(it.quantityKg) || 0), 0), 0);
+  const todayAvgPrice = todayQty > 0 ? todayTotal / todayQty : 0;
+  const sellerNamesToday = [...new Set(todayList.map(b => b.sellerName))];
+
+  const set = (id, v) => { const el = $(id); if (el) el.textContent = v; };
+  set('rmTodayTotal', fmt(todayTotal));
+  set('rmMonthTotal', fmt(monthTotal));
+  set('rmTodayQtyKg', fmt2(todayQty) + ' kg');
+  set('rmTodayAvgPrice', fmt(todayAvgPrice));
+
+  // ---- Income tab live card — same numbers, real time ----
+  set('incomeReadymadeToday', fmt(todayTotal));
+  set('incomeReadymadeTodayQty', fmt2(todayQty) + ' kg');
+  set('incomeReadymadeTodaySeller', sellerNamesToday.length ? sellerNamesToday.join(', ') : '—');
+  const noteEl = $('incomeReadymadeNote');
+  if (noteEl) {
+    noteEl.textContent = todayList.length > 0
+      ? `🔄 Synced live from ${todayList.length} ready-made purchase bill${todayList.length > 1 ? 's' : ''} saved today in the Costing tab.`
+      : 'No ready-made purchase bills saved for today.';
+  }
+}
+window.renderReadymadeBills = renderReadymadeBills;
 
 function renderSellerLedger() {
   const tbody = $('sellerLedgerBody');
@@ -11203,6 +11300,7 @@ function calcRealIncome() {
 
   const monthFishBills = (fishBills || []).filter(b => inMonth(b.date));
   const realRawCost = monthFishBills.reduce((s, b) => s + b.total, 0);
+  const realReadymadeCost = monthFishBills.filter(b => b.purchaseType === 'readymade_umbalakada').reduce((s, b) => s + b.total, 0);
 
   // Everything else the owner has logged as an expense this month, EXCLUDING
   // "Raw Fish" (already counted above via fishBills, to avoid double-counting
@@ -11225,6 +11323,7 @@ function calcRealIncome() {
   set('realIncomeMargin', realMargin.toFixed(1) + '%');
   set('realIncomeOutputKg', realOutputKg.toFixed(1) + ' kg');
   set('realIncomeCostPerKg', fmt(realCostPerKgProduced));
+  set('realIncomeReadymadeCost', fmt(realReadymadeCost));
 
   const netEl = $('realIncomeNet');
   if (netEl) netEl.style.color = realNetProfit >= 0 ? '#10b981' : '#f87171';
@@ -13726,6 +13825,7 @@ function activateAppTab(tabId){
     calcRealIncome();
     Promise.all([loadFishBillsFromCloud(), loadProductionBatchesFromCloud()]).then(() => {
       renderFishBills(); // also refreshes calcRealIncome() with real purchase data
+      renderReadymadeBills(); // live Ready-Made Umbalakada card on the Income tab
       renderProductionBatches(); // also refreshes calcRealIncome() with real output data
     });
     loadDailyProductionLog().then(() => renderIncomeDailyDustSummary());
@@ -13738,6 +13838,9 @@ function activateAppTab(tabId){
     // and its own saved entries.
     loadOrdersFromCloud().then(() => populateCostingEntryOrderPicker());
     loadCostingEntriesFromCloud().then(renderCostingEntries);
+    // Ready-Made Umbalakada Purchase sub-tab needs the same bills the
+    // Production tab uses, in case Costing is opened first.
+    loadFishBillsFromCloud().then(() => renderReadymadeBills());
   }
   if (tabId === 'monthly-summary') { updateMonthlySummary(); }
   if (tabId === 'analytics') { renderAnalytics(); }
@@ -13767,6 +13870,7 @@ function activateAppTab(tabId){
     calcProduction();
     Promise.all([loadFishBillsFromCloud(), loadFishPaymentsFromCloud()]).then(() => {
       renderFishBills();
+      renderReadymadeBills();
       renderSellerLedger();
     });
     loadDailyProductionLog().then(() => { renderDailyProductionLog(); updateIngredientVarianceAlert(lastProdIngredientsCostPerKg); });
