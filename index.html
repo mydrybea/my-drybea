@@ -57,16 +57,16 @@
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Noto+Sans+Sinhala:wght@300;400;500;600;700&family=Playfair+Display:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=Noto+Sans+Sinhala:wght@400;600;700&family=Playfair+Display:wght@700;800;900&display=swap" rel="stylesheet">
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"
-  onerror="var s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js';document.head.appendChild(s);"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"
+  onerror="var s=document.createElement('script');s.defer=true;s.src='https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js';document.head.appendChild(s);"></script>
 <!-- If jsDelivr is blocked/offline and the service worker hasn't cached this
      lib yet, this falls back to cdnjs so `Chart` is still defined and every
      chart in the app (prodChart, dpMonthlyChart, etc.) doesn't silently
      fail to render. -->
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
 <!-- ============================================================
      REAL PUSH NOTIFICATIONS (OneSignal Web Push)
@@ -97,10 +97,10 @@
     });
   });
 </script>
-<script src="https://unpkg.com/lucide@latest"></script>
+<script defer src="https://unpkg.com/lucide@latest"></script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-<script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+<script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script defer src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
 
 
 <link rel="stylesheet" href="style.css">
@@ -1787,15 +1787,15 @@
         <div class="grid-3">
           <div class="field">
             <label>Linna <span class="hint">(Rs./kg)</span></label>
-            <div class="input-prefix"><span>Rs.</span><input type="number" id="linnaPrice" value="1750" min="0" oninput="onDataChange()"></div>
+            <div class="input-prefix"><span>Rs.</span><input type="number" id="linnaPrice" value="1750" min="0" oninput="onCostingDataChange()"></div>
           </div>
           <div class="field">
             <label>Balaya <span class="hint">(Rs./kg)</span></label>
-            <div class="input-prefix"><span>Rs.</span><input type="number" id="balayaPrice" value="2200" min="0" oninput="onDataChange()"></div>
+            <div class="input-prefix"><span>Rs.</span><input type="number" id="balayaPrice" value="2200" min="0" oninput="onCostingDataChange()"></div>
           </div>
           <div class="field">
             <label>Premium Mix <span class="hint">(Rs./kg)</span></label>
-            <div class="input-prefix"><span>Rs.</span><input type="number" id="kawalamPrice" value="1000" min="0" oninput="onDataChange()"></div>
+            <div class="input-prefix"><span>Rs.</span><input type="number" id="kawalamPrice" value="1000" min="0" oninput="onCostingDataChange()"></div>
           </div>
         </div>
 
@@ -1842,15 +1842,15 @@
         <div class="grid-3">
           <div class="field">
             <label>Linna Grind Yield <span class="hint">(%)</span></label>
-            <input type="number" id="linnaGrindYield" value="80" min="1" max="100" oninput="onDataChange()">
+            <input type="number" id="linnaGrindYield" value="80" min="1" max="100" oninput="onCostingDataChange()">
           </div>
           <div class="field">
             <label>Balaya Grind Yield <span class="hint">(%)</span></label>
-            <input type="number" id="balayaGrindYield" value="90" min="1" max="100" oninput="onDataChange()">
+            <input type="number" id="balayaGrindYield" value="90" min="1" max="100" oninput="onCostingDataChange()">
           </div>
           <div class="field">
             <label>Premium Mix Grind Yield <span class="hint">(%)</span></label>
-            <input type="number" id="premiumGrindYield" value="65" min="1" max="100" oninput="onDataChange()">
+            <input type="number" id="premiumGrindYield" value="65" min="1" max="100" oninput="onCostingDataChange()">
           </div>
         </div>
 
@@ -1862,15 +1862,15 @@
         </div>
         <div class="field" id="targetProfitField" style="display:none;">
           <label>Target Profit <span class="hint">(Rs./pack)</span></label>
-          <div class="input-prefix"><span>Rs.</span><input type="number" id="targetProfit" value="30" min="0" oninput="onDataChange()"></div>
+          <div class="input-prefix"><span>Rs.</span><input type="number" id="targetProfit" value="30" min="0" oninput="onCostingDataChange()"></div>
         </div>
         <div class="field" id="customSpField" style="display:none;">
           <label>Custom Selling Price <span class="hint">(Rs./pack)</span></label>
-          <div class="input-prefix"><span>Rs.</span><input type="number" id="customSp" value="350" min="0" oninput="onDataChange()"></div>
+          <div class="input-prefix"><span>Rs.</span><input type="number" id="customSp" value="350" min="0" oninput="onCostingDataChange()"></div>
         </div>
         <div class="field">
           <label>Monthly Quantity</label>
-          <input type="number" id="monthlyQty" value="500" min="0" oninput="onDataChange()">
+          <input type="number" id="monthlyQty" value="500" min="0" oninput="onCostingDataChange()">
         </div>
         <div class="btn-row">
           <button class="btn btn-primary" onclick="saveOrder()"><i class="business-icon icon-inline" data-lucide="save" aria-hidden="true"></i> Save Order</button>
@@ -2375,7 +2375,7 @@
           </div>
           <div class="field">
             <label>Raw Fish Quantity <span class="hint">(kg)</span></label>
-            <input type="number" id="qcRawKg" value="100" min="0" oninput="onDataChange()">
+            <input type="number" id="qcRawKg" value="100" min="0" oninput="onProductionDataChange()">
           </div>
         </div>
         <div class="stat-grid" style="margin-top:12px;">
@@ -2402,15 +2402,15 @@
           <div class="grid-3">
             <div class="field">
               <label>Linna Raw</label>
-              <div class="input-prefix"><span>Rs.</span><input type="number" id="rawLinna" value="180" min="0" oninput="onDataChange()"></div>
+              <div class="input-prefix"><span>Rs.</span><input type="number" id="rawLinna" value="180" min="0" oninput="onProductionDataChange()"></div>
             </div>
             <div class="field">
               <label>Balaya Raw</label>
-              <div class="input-prefix"><span>Rs.</span><input type="number" id="rawBalaya" value="250" min="0" oninput="onDataChange()"></div>
+              <div class="input-prefix"><span>Rs.</span><input type="number" id="rawBalaya" value="250" min="0" oninput="onProductionDataChange()"></div>
             </div>
             <div class="field">
               <label>Premium Mix Raw</label>
-              <div class="input-prefix"><span>Rs.</span><input type="number" id="rawKawalam" value="60" min="0" oninput="onDataChange()"></div>
+              <div class="input-prefix"><span>Rs.</span><input type="number" id="rawKawalam" value="60" min="0" oninput="onProductionDataChange()"></div>
             </div>
           </div>
 
@@ -2418,15 +2418,15 @@
           <div class="grid-3">
             <div class="field">
               <label>Linna Yield</label>
-              <input type="number" id="yieldLinna" value="6" min="1" step="0.1" oninput="onDataChange()">
+              <input type="number" id="yieldLinna" value="6" min="1" step="0.1" oninput="onProductionDataChange()">
             </div>
             <div class="field">
               <label>Balaya Yield</label>
-              <input type="number" id="yieldBalaya" value="6" min="1" step="0.1" oninput="onDataChange()">
+              <input type="number" id="yieldBalaya" value="6" min="1" step="0.1" oninput="onProductionDataChange()">
             </div>
             <div class="field">
               <label>Premium Mix Yield</label>
-              <input type="number" id="yieldKawalam" value="7" min="1" step="0.1" oninput="onDataChange()">
+              <input type="number" id="yieldKawalam" value="7" min="1" step="0.1" oninput="onProductionDataChange()">
             </div>
           </div>
 
@@ -2434,7 +2434,7 @@
           <div class="grid-2">
             <div class="field">
               <label>Daily Raw Fish (kg)</label>
-              <input type="number" id="dailyRawKg" value="500" min="0" oninput="onDataChange()">
+              <input type="number" id="dailyRawKg" value="500" min="0" oninput="onProductionDataChange()">
               <div class="sub" id="dailyRawKgAutoNote" style="margin-top:4px;"></div>
               <button type="button" class="btn btn-sm" id="dailyRawKgSyncBtn" style="margin-top:6px;display:none;" onclick="applyDailyRawKgFromBills()">
                 <i class="business-icon icon-inline" data-lucide="refresh-cw" aria-hidden="true"></i> Use Today's Bills Total
@@ -2442,7 +2442,7 @@
             </div>
             <div class="field">
               <label>Working Days/Month</label>
-              <input type="number" id="workDays" value="22" min="1" oninput="onDataChange()">
+              <input type="number" id="workDays" value="22" min="1" oninput="onProductionDataChange()">
             </div>
           </div>
         </div>
@@ -2450,19 +2450,19 @@
         <div>
           <h3 style="color:var(--green);margin-bottom:8px;">💰 Monthly Overheads (Rs.)</h3>
           <div class="grid-3">
-            <div class="field"><label>Transport</label><input type="number" id="prodTransport" value="110000" min="0" oninput="onDataChange()"></div>
-            <div class="field"><label>Staff Salary</label><input type="number" id="prodWorkers" value="220000" min="0" oninput="onDataChange()"></div>
-            <div class="field"><label>Ice</label><input type="number" id="prodIce" value="35000" min="0" oninput="onDataChange()"></div>
-            <div class="field"><label>Firewood</label><input type="number" id="prodFirewood" value="30000" min="0" oninput="onDataChange()"></div>
-            <div class="field"><label>Other</label><input type="number" id="prodOther" value="220000" min="0" oninput="onDataChange()"></div>
+            <div class="field"><label>Transport</label><input type="number" id="prodTransport" value="110000" min="0" oninput="onProductionDataChange()"></div>
+            <div class="field"><label>Staff Salary</label><input type="number" id="prodWorkers" value="220000" min="0" oninput="onProductionDataChange()"></div>
+            <div class="field"><label>Ice</label><input type="number" id="prodIce" value="35000" min="0" oninput="onProductionDataChange()"></div>
+            <div class="field"><label>Firewood</label><input type="number" id="prodFirewood" value="30000" min="0" oninput="onProductionDataChange()"></div>
+            <div class="field"><label>Other</label><input type="number" id="prodOther" value="220000" min="0" oninput="onProductionDataChange()"></div>
           </div>
           <p class="sub" style="margin-top:-4px;">These are monthly totals, spread automatically across the month's finished output (kg) below.</p>
 
           <h3 style="color:var(--green);margin:16px 0 8px;">Finished Umbalakada Market Prices (Rs./kg)</h3>
           <div class="grid-3">
-            <div class="field"><label>Linna</label><input type="number" id="finLinna" value="1750" oninput="onDataChange()"></div>
-            <div class="field"><label>Balaya</label><input type="number" id="finBalaya" value="2200" oninput="onDataChange()"></div>
-            <div class="field"><label>Premium Mix</label><input type="number" id="finKawalam" value="1000" oninput="onDataChange()"></div>
+            <div class="field"><label>Linna</label><input type="number" id="finLinna" value="1750" oninput="onProductionDataChange()"></div>
+            <div class="field"><label>Balaya</label><input type="number" id="finBalaya" value="2200" oninput="onProductionDataChange()"></div>
+            <div class="field"><label>Premium Mix</label><input type="number" id="finKawalam" value="1000" oninput="onProductionDataChange()"></div>
           </div>
         </div>
       </div>
@@ -2475,38 +2475,38 @@
           <tbody>
             <tr>
               <td><strong>Salt</strong></td>
-              <td><input type="number" id="ingSaltPrice" value="120" min="0" oninput="onDataChange()"></td>
-              <td><input type="number" id="ingSaltGrams" value="0" min="0" step="0.1" oninput="onDataChange()"></td>
+              <td><input type="number" id="ingSaltPrice" value="120" min="0" oninput="onProductionDataChange()"></td>
+              <td><input type="number" id="ingSaltGrams" value="0" min="0" step="0.1" oninput="onProductionDataChange()"></td>
               <td class="num" id="ingSaltCost">Rs. 0</td>
             </tr>
             <tr>
               <td><strong>Garcinia (Goraka)</strong></td>
-              <td><input type="number" id="ingGorakaPrice" value="1200" min="0" oninput="onDataChange()"></td>
-              <td><input type="number" id="ingGorakaGrams" value="0" min="0" step="0.1" oninput="onDataChange()"></td>
+              <td><input type="number" id="ingGorakaPrice" value="1200" min="0" oninput="onProductionDataChange()"></td>
+              <td><input type="number" id="ingGorakaGrams" value="0" min="0" step="0.1" oninput="onProductionDataChange()"></td>
               <td class="num" id="ingGorakaCost">Rs. 0</td>
             </tr>
             <tr>
               <td><strong>Turmeric</strong></td>
-              <td><input type="number" id="ingTurmericPrice" value="1800" min="0" oninput="onDataChange()"></td>
-              <td><input type="number" id="ingTurmericGrams" value="0" min="0" step="0.1" oninput="onDataChange()"></td>
+              <td><input type="number" id="ingTurmericPrice" value="1800" min="0" oninput="onProductionDataChange()"></td>
+              <td><input type="number" id="ingTurmericGrams" value="0" min="0" step="0.1" oninput="onProductionDataChange()"></td>
               <td class="num" id="ingTurmericCost">Rs. 0</td>
             </tr>
             <tr>
               <td><strong>Cinnamon</strong></td>
-              <td><input type="number" id="ingCinnamonPrice" value="3500" min="0" oninput="onDataChange()"></td>
-              <td><input type="number" id="ingCinnamonGrams" value="0" min="0" step="0.1" oninput="onDataChange()"></td>
+              <td><input type="number" id="ingCinnamonPrice" value="3500" min="0" oninput="onProductionDataChange()"></td>
+              <td><input type="number" id="ingCinnamonGrams" value="0" min="0" step="0.1" oninput="onProductionDataChange()"></td>
               <td class="num" id="ingCinnamonCost">Rs. 0</td>
             </tr>
             <tr>
               <td><strong>Curry / Pandan Leaves</strong></td>
-              <td><input type="number" id="ingCurryLeafPrice" value="400" min="0" oninput="onDataChange()"></td>
-              <td><input type="number" id="ingCurryLeafGrams" value="0" min="0" step="0.1" oninput="onDataChange()"></td>
+              <td><input type="number" id="ingCurryLeafPrice" value="400" min="0" oninput="onProductionDataChange()"></td>
+              <td><input type="number" id="ingCurryLeafGrams" value="0" min="0" step="0.1" oninput="onProductionDataChange()"></td>
               <td class="num" id="ingCurryLeafCost">Rs. 0</td>
             </tr>
             <tr>
               <td><strong>Tamarind</strong></td>
-              <td><input type="number" id="ingTamarindPrice" value="900" min="0" oninput="onDataChange()"></td>
-              <td><input type="number" id="ingTamarindGrams" value="0" min="0" step="0.1" oninput="onDataChange()"></td>
+              <td><input type="number" id="ingTamarindPrice" value="900" min="0" oninput="onProductionDataChange()"></td>
+              <td><input type="number" id="ingTamarindGrams" value="0" min="0" step="0.1" oninput="onProductionDataChange()"></td>
               <td class="num" id="ingTamarindCost">Rs. 0</td>
             </tr>
           </tbody>
@@ -3660,10 +3660,10 @@
       <div class="accordion" id="overheadAcc">
         <div class="accordion-header" onclick="toggleAcc()">Edit Overheads ▼</div>
         <div class="accordion-body">
-          <div class="field"><label>Transport</label><input type="number" id="ohTransport" value="110000" oninput="onDataChange()"></div>
-          <div class="field"><label>Firewood</label><input type="number" id="ohFirewood" value="30000" oninput="onDataChange()"></div>
-          <div class="field"><label>Workers</label><input type="number" id="ohWorkers" value="220000" oninput="onDataChange()"></div>
-          <div class="field"><label>Other</label><input type="number" id="ohOther" value="220000" oninput="onDataChange()"></div>
+          <div class="field"><label>Transport</label><input type="number" id="ohTransport" value="110000" oninput="onProductionDataChange()"></div>
+          <div class="field"><label>Firewood</label><input type="number" id="ohFirewood" value="30000" oninput="onProductionDataChange()"></div>
+          <div class="field"><label>Workers</label><input type="number" id="ohWorkers" value="220000" oninput="onProductionDataChange()"></div>
+          <div class="field"><label>Other</label><input type="number" id="ohOther" value="220000" oninput="onProductionDataChange()"></div>
         </div>
       </div>
     </div>
@@ -4293,7 +4293,7 @@
 </div>
 
 
-<script src="app.js"></script>
+<script defer src="app.js"></script>
 
 </body>
 </html>

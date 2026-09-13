@@ -1,4 +1,4 @@
-/* ===== BRANDED LUXURY & MODERN DESIGN SYSTEM ===== */
+
 :root {
   --bg-primary: #040d0a;
   --bg-secondary: #0a1712;
@@ -58,7 +58,6 @@
   --green-subtle: rgba(16,185,129,0.06);
 }
 
-/* ===== RESET & BASE ===== */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 
 html {
@@ -93,7 +92,6 @@ body::before {
   z-index: 0;
 }
 
-/* ===== APP CONTAINER ===== */
 .app-container {
   position: relative;
   z-index: 1;
@@ -108,7 +106,6 @@ body::before {
 @media (min-width: 768px) { .app-container { padding: 16px; gap: 16px; } }
 @media (min-width: 1200px) { .app-container { padding: 24px; gap: 20px; } }
 
-/* ===== HEADER ===== */
 .header {
   background: linear-gradient(135deg, var(--bg-card) 0%, var(--bg-elevated) 100%);
   border: 1.5px solid var(--border-strong);
@@ -152,7 +149,6 @@ body::before {
   opacity: 0.5;
 }
 
-/* ===== BRAND / LOGO ===== */
 .brand {
   display: flex;
   align-items: center;
@@ -218,7 +214,6 @@ body::before {
   opacity: 0.9;
 }
 
-/* ===== HEADER ACTIONS ===== */
 .header-actions {
   display: flex;
   gap: 6px;
@@ -226,7 +221,6 @@ body::before {
   flex-wrap: wrap;
 }
 
-/* ===== BUTTONS ===== */
 .btn {
   padding: 8px 14px;
   border-radius: var(--radius-sm);
@@ -279,7 +273,6 @@ body::before {
 .btn-xs { padding: 4px 8px; font-size: 0.7rem; border-radius: 4px; }
 .btn:disabled{opacity:.55;cursor:wait;transform:none!important;box-shadow:none!important}
 
-/* ===== TABS ===== */
 .tabs {
   display: flex;
   gap: 4px;
@@ -327,7 +320,6 @@ body::before {
   color: var(--text-main);
 }
 
-/* ===== CARDS ===== */
 .card {
   background: var(--bg-card);
   border: 1px solid var(--border);
@@ -367,7 +359,6 @@ body::before {
   opacity: 0.85;
 }
 
-/* ===== GRIDS ===== */
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
 .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
@@ -394,7 +385,6 @@ body::before {
   .stat-grid { grid-template-columns: 1fr; }
 }
 
-/* ===== FORM FIELDS ===== */
 .field { margin-bottom: 14px; }
 
 .field label {
@@ -456,7 +446,6 @@ textarea { resize: vertical; min-height: 60px; }
 }
 .input-prefix input { padding-left: 36px; }
 
-/* ===== STAT CARDS ===== */
 .stat {
   background: var(--bg-secondary);
   border: 1px solid var(--border);
@@ -492,14 +481,6 @@ textarea { resize: vertical; min-height: 60px; }
 .stat.accent { border-left-color: var(--gold); }
 .stat.accent .v { color: var(--green); }
 
-/* ============================================================
-   ROW ACTION MENU (three-dot / kebab) — shared dropdown used for
-   Edit/Delete/etc. across every table, card grid and list in the
-   app (Sales, Customers, Orders, Products, Expenses, Fish Bills,
-   Production, Salary, Distributor Activity, Staff/Notices...).
-   Uses position:fixed (set via JS) so it always escapes scrollable
-   table-wrap/modal containers instead of being clipped.
-   ============================================================ */
 .action-menu { position: relative; display: inline-flex; }
 .action-menu-trigger {
   display: inline-flex; align-items: center; justify-content: center;
@@ -560,7 +541,6 @@ textarea { resize: vertical; min-height: 60px; }
 .action-menu-item .action-menu-icon { font-size: .95em; width: 1.1em; text-align: center; flex-shrink: 0; }
 td .action-menu, th .action-menu { display: inline-flex; }
 
-/* ===== TABLES ===== */
 .table-wrap {
   width: 100%;
   overflow-x: auto;
@@ -596,7 +576,6 @@ tr:hover td { background: var(--green-subtle); }
 td.num { text-align: right; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.8rem; }
 .total-row td { font-weight: 700; border-top: 2px solid var(--gold); background: var(--green-subtle); }
 
-/* ===== NET BANNER ===== */
 .net-banner {
   background: linear-gradient(135deg, #040d0a 0%, #0d281e 40%, #081a13 100%);
   border-radius: var(--radius);
@@ -633,11 +612,9 @@ td.num { text-align: right; font-family: 'SF Mono', 'Fira Code', monospace; font
 .net-banner .k { font-size: 0.82rem; opacity: 0.85; font-weight: 600; letter-spacing: 0.05em; }
 .net-banner .v { font-size: clamp(1.6rem, 5vw, 2.5rem); font-weight: 900; margin-top: 6px; color: var(--green); letter-spacing: -0.02em; }
 
-/* ===== CHART ===== */
 .chart-wrap { position: relative; height: 260px; width: 100%; margin-top: 12px; }
 @media (max-width: 480px) { .chart-wrap { height: 200px; } }
 
-/* ===== BADGES ===== */
 .badge {
   display: inline-flex;
   align-items: center;
@@ -657,7 +634,6 @@ td.num { text-align: right; font-family: 'SF Mono', 'Fira Code', monospace; font
 .badge-delivered { background: rgba(16,185,129,0.15); color: var(--green); border: 1px solid rgba(16,185,129,0.25); }
 .badge-cancelled { background: var(--bad-bg); color: var(--bad); border: 1px solid rgba(248,113,113,0.25); }
 
-/* ===== ACCORDION ===== */
 .accordion { border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; }
 
 .accordion-header {
@@ -677,7 +653,6 @@ td.num { text-align: right; font-family: 'SF Mono', 'Fira Code', monospace; font
 .accordion-body { display: none; padding: 16px; background: var(--bg-card); }
 .accordion.open .accordion-body { display: block; }
 
-/* ===== MODALS ===== */
 .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -717,7 +692,6 @@ td.num { text-align: right; font-family: 'SF Mono', 'Fira Code', monospace; font
 
 .modal h3 { color: var(--green); margin-bottom: 14px; font-size: 1.1rem; }
 
-/* ===== NEW ORDER MODAL (om- = order modal) ===== */
 .om-section { margin-bottom: 18px; }
 .om-section:last-of-type { margin-bottom: 0; }
 
@@ -803,7 +777,6 @@ td.num { text-align: right; font-family: 'SF Mono', 'Fira Code', monospace; font
 }
 .om-actions .btn-cancel-link:hover { color: var(--bad); background: transparent; transform: none; box-shadow: none; }
 
-/* ===== NOTICES ===== */
 .notice {
   background: var(--green-subtle);
   border: 1px solid rgba(16,185,129,0.25);
@@ -821,7 +794,6 @@ td.num { text-align: right; font-family: 'SF Mono', 'Fira Code', monospace; font
   color: var(--warn);
 }
 
-/* ===== MODE TOGGLE ===== */
 .mode-toggle { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
 .mode-toggle .btn { flex: 1; min-width: 80px; justify-content: center; }
 .mode-toggle .btn.active {
@@ -831,10 +803,8 @@ td.num { text-align: right; font-family: 'SF Mono', 'Fira Code', monospace; font
   font-weight: 700;
 }
 
-/* ===== BTN ROW ===== */
 .btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
 
-/* ===== FOOTER ===== */
 .footer {
   text-align: center;
   font-size: 0.75rem;
@@ -845,7 +815,6 @@ td.num { text-align: right; font-family: 'SF Mono', 'Fira Code', monospace; font
   margin-top: 8px;
 }
 
-/* ===== PRINT ===== */
 .print-header { display: none; }
 .invoice-print { display: none; }
 
@@ -859,12 +828,10 @@ td.num { text-align: right; font-family: 'SF Mono', 'Fira Code', monospace; font
   .invoice-print { display: block !important; }
 }
 
-/* ===== QR PANEL ===== */
 .qr-panel { display: none; text-align: center; margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--border); }
 .qr-panel.show { display: block; }
 .qr-panel img { border-radius: 10px; background: #fff; padding: 8px; max-width: 100%; height: auto; }
 
-/* ===== INVOICE PRINT ===== */
 .invoice-print .inv-card {
   border: 2px solid var(--gold);
   border-radius: var(--radius-sm);
@@ -898,7 +865,6 @@ td.num { text-align: right; font-family: 'SF Mono', 'Fira Code', monospace; font
 .invoice-print th, .invoice-print td { border: 1px solid #ddd; padding: 8px; text-align: left; }
 .invoice-print th { background: #f0f0f0; }
 
-/* ===== RESPONSIVE TWEAKS ===== */
 @media (max-width: 360px) {
   .app-container { padding: 8px; gap: 8px; }
   .header { padding: 10px 12px; gap: 8px; }
@@ -959,11 +925,6 @@ td.num { text-align: right; font-family: 'SF Mono', 'Fira Code', monospace; font
   to { opacity: 1; transform: translateY(0); }
 }
 
-
-/* ============================================================
-   MOBILE BUSINESS APP UI — DESIGN LAYER ONLY
-   Core calculation, database, auth and existing feature logic remain untouched.
-   ============================================================ */
 :root {
   --app-green: #0a8f43;
   --app-green-dark: #075d31;
@@ -1004,14 +965,13 @@ body::before { background:
 .icon-btn:active { transform:scale(.96); }
 .icon-btn.lock-btn { color:#9a7622; }
 .icon { width:20px; height:20px; display:block; position:relative; }
-/* Unified vector-style navigation icons (CSS only, no external icon library). */
+
 .nav-icon { width:20px; height:20px; display:block; position:relative; flex:0 0 auto; color:currentColor; }
 .nav-icon::before, .nav-icon::after { content:""; position:absolute; box-sizing:border-box; }
 .icon::before, .icon::after { content:""; position:absolute; box-sizing:border-box; }
 .icon-home::before { inset:4px 3px 2px; border:2px solid currentColor; border-top:0; border-radius:3px; }
 .icon-home::after { width:12px; height:12px; left:4px; top:1px; border-left:2px solid currentColor; border-top:2px solid currentColor; transform:rotate(45deg); }
 
-/* Quick Access icon system */
 .home-action .nav-icon::before, .home-action .nav-icon::after { content:""; position:absolute; box-sizing:border-box; }
 .home-action .nav-icon.icon-dashboard::before { left:2px; right:2px; bottom:2px; height:14px; border:2px solid currentColor; border-radius:3px; }
 .home-action .nav-icon.icon-dashboard::after { left:6px; bottom:6px; width:2px; height:6px; background:currentColor; box-shadow:5px -3px currentColor,10px -7px currentColor; }
@@ -1073,18 +1033,15 @@ body::before { background:
 .card h2 { color:#15221c; font-size:1rem; letter-spacing:-.02em; }
 .card h2::first-letter { color:var(--app-green); }
 
-/* Remove decorative/verbose headings from the old desktop presentation. */
 .print-header { display:none !important; }
 .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
 .card h2 { line-height:1.3; }
 .btn-primary { background:var(--app-green); color:#fff; box-shadow:0 7px 18px rgba(10,143,67,.18); }
 .btn-primary:hover { background:var(--app-green-dark); color:#fff; }
 
-/* Gold ribbon touch feedback */
 .gold-ribbon { position:absolute; top:-18px; left:-34%; width:24%; height:90px; pointer-events:none; opacity:0; transform:rotate(20deg); background:linear-gradient(90deg, transparent, rgba(245,231,163,.95), var(--app-gold), rgba(245,231,163,.95), transparent); filter:drop-shadow(0 0 8px rgba(215,173,61,.45)); }
 .icon-btn.ribbon-play .gold-ribbon { animation:goldRibbon .65s ease-out forwards; }
 @keyframes goldRibbon { 0%{left:-34%;opacity:0} 12%{opacity:1} 100%{left:125%;opacity:0} }
-
 
 .income-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:14px;}
 .income-card{min-height:132px;display:flex;flex-direction:column;justify-content:center;gap:6px;}
@@ -1106,8 +1063,6 @@ body::before { background:
 .profile-actions{display:flex;justify-content:center;gap:10px;margin-top:22px;flex-wrap:wrap;}
 @media(max-width:680px){.income-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;}.income-card{min-height:115px;padding:14px;}.income-card strong{font-size:1.08rem;}.income-card span{font-size:.6rem;}.income-card small{font-size:.62rem;}.income-summary{align-items:flex-start;}.app-container{padding-bottom:92px;}}
 
-/* ===== MOBILE-APP HOME STRUCTURE ===== */
-/* Reference-style Quick Access: compact task rows, like a premium mobile app checklist. */
 .quick-access-card{background:#fff;border:1px solid #e3ebe5;border-radius:22px;padding:10px;box-shadow:0 10px 30px rgba(18,45,31,.06);}
 .home-actions{display:flex;flex-direction:column;gap:7px;max-width:none;}
 .home-action{appearance:none;border:1px solid #e7eee9;background:#fff;border-radius:16px;min-height:72px;padding:9px 11px;display:grid;grid-template-columns:42px minmax(0,1fr) auto;align-items:center;gap:11px;text-align:left;cursor:pointer;position:relative;overflow:hidden;color:#15221c;transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease,background .18s ease;}
@@ -1169,7 +1124,7 @@ body::before { background:
 .app-nav{order:0;position:sticky;top:10px;width:100%;display:flex;gap:5px;margin:0 0 1px;}
 .app-nav .tab-btn{flex:1;min-width:0;}
 @media (min-width:681px){
-  .app-nav{position:sticky;top:10px;z-index:30;max-width:100%;} 
+  .app-nav{position:sticky;top:10px;z-index:30;max-width:100%;}
   .app-nav .tab-btn{min-height:48px;font-size:.76rem;}
   .home-actions{max-width:760px;}
 }
@@ -1201,7 +1156,6 @@ body::before { background:
   .mobile-greeting { margin-top:2px; }
 }
 
-/* ===== DATA STATUS INDICATOR ===== */
 .data-status {
   font-size: 0.7rem;
   padding: 4px 10px;
@@ -1224,12 +1178,6 @@ body::before { background:
 .data-status .dot.yellow { background: #fbbf24; }
 .data-status .dot.red { background: #f87171; }
 
-/* ============================================================
-   PROFESSIONAL RESPONSIVE QUICK ACCESS — DESIGN ONLY
-   IMPORTANT: no Supabase/auth/business logic is changed here.
-   Desktop = website workspace launcher
-   Mobile  = compact mobile-app launcher
-   ============================================================ */
 .quick-access-card{
   position:relative;
   padding:16px;
@@ -1351,7 +1299,6 @@ body::before { background:
 .home-action.gold .home-icon{background:#fff8df;color:#b88918;}
 .home-action.gold{border-color:#eee2bd;}
 
-/* Monthly Summary — live current-month business snapshot */
 .summary-action .home-icon{background:linear-gradient(145deg,#fff8df,#f6edcf);color:#9a7622;}
 .summary-action{border-color:#eadfbf;}
 .summary-action:hover{border-color:rgba(184,137,24,.35);box-shadow:0 15px 30px rgba(184,137,24,.10);}
@@ -1391,7 +1338,6 @@ body::before { background:
   .monthly-stat .ms-value{font-size:.98rem;}
 }
 
-/* Desktop: make the home screen feel like a real web dashboard. */
 @media (min-width:681px){
   .app-container{max-width:1180px;}
   .app-nav{
@@ -1410,7 +1356,6 @@ body::before { background:
   .home-actions{grid-template-columns:repeat(4,minmax(0,1fr));}
 }
 
-/* Mobile: retain the reference-app feeling without looking like a shrunken website. */
 @media (max-width:680px){
   .app-container{padding:9px 10px 92px;gap:11px;}
   .quick-access-card{padding:10px;border-radius:21px;box-shadow:0 10px 28px rgba(16,48,32,.065);}
@@ -1441,11 +1386,6 @@ body::before { background:
   .home-action small{font-size:.53rem;}
 }
 
-
-/* ============================================================
-   FINAL MY DRYBEA LIVE APP THEME — DESIGN ONLY
-   Keeps all existing application logic, auth and Supabase setup intact.
-   ============================================================ */
 :root{
   --app-green:#0a8f43;
   --app-green-deep:#067538;
@@ -1568,7 +1508,6 @@ body::before{
 .home-action.gold .home-icon,.summary-action .home-icon{background:linear-gradient(145deg,#fff9e8,#f8edcc);color:#aa821c;border-color:rgba(201,162,58,.18);}
 .home-action.gold,.summary-action{border-color:rgba(201,162,58,.20);}
 
-/* Give the business overview a refined brand surface without changing its data. */
 .monthly-summary-period,.profit-card,.dashboard-profit-card{
   background:linear-gradient(135deg,#062e1e 0%,#0a6e3a 62%,#0b8e47 100%);
   box-shadow:0 18px 42px rgba(6,74,39,.18);
@@ -1587,11 +1526,6 @@ body::before{
   .home-action{box-shadow:0 7px 18px rgba(12,65,38,.055);}
 }
 
-
-/* ============================================================
-   MY DRYBEA — SIGNATURE BRAND THEME / PREMIUM WEB + APP UI
-   Visual layer only. No data, auth, Supabase or business logic.
-   ============================================================ */
 :root{
   --drybea-forest:#063b25;
   --drybea-green:#079447;
@@ -1642,7 +1576,6 @@ body::before{
   background:linear-gradient(90deg,transparent,#f4df8c,transparent);opacity:.85;
 }
 
-/* Rich, color-coded tool identity. */
 .home-action:nth-child(1) .home-icon{background:linear-gradient(145deg,#e4f7ec,#ccefdc);color:#078b43;}
 .home-action:nth-child(2) .home-icon{background:linear-gradient(145deg,#eaf1ff,#dce8ff);color:#4775c7;}
 .home-action:nth-child(3) .home-icon{background:linear-gradient(145deg,#fff2df,#ffe4bd);color:#d18419;}
@@ -1674,7 +1607,6 @@ body::before{
 .home-action.primary{box-shadow:0 18px 38px rgba(7,148,71,.22),0 1px 0 rgba(255,255,255,.22) inset;}
 .home-action.gold .home-icon,.summary-action .home-icon{box-shadow:0 8px 18px rgba(201,163,58,.13);}
 
-/* Micro labels make the launcher feel like a professional business suite. */
 .home-action-copy{position:relative;}
 .home-action-copy::after{
   content:"OPEN";display:inline-flex;align-items:center;align-self:flex-start;
@@ -1715,11 +1647,6 @@ body::before{
   .home-action .home-icon{width:46px;height:46px;border-radius:14px;}
 }
 
-
-/* ============================================================
-   MY DRYBEA — FINAL EXECUTIVE UI POLISH
-   Visual-only layer. No data, auth, Supabase or business logic.
-   ============================================================ */
 :root{
   --brand-900:#063b25;
   --brand-800:#075f34;
@@ -1765,7 +1692,6 @@ body::before{
 .tab-btn{font-weight:750!important;color:#6b7972!important;}
 .tab-btn.active{box-shadow:0 8px 20px rgba(7,139,67,.18)!important;}
 
-/* Executive quick-access launcher */
 .home-actions-wrap{margin-top:4px;}
 .home-actions-title{
   margin:0 4px 11px!important;font-size:.68rem!important;letter-spacing:.16em!important;
@@ -1825,7 +1751,6 @@ body::before{
 .home-action.primary .quick-status{background:rgba(255,255,255,.10)!important;border-color:rgba(255,255,255,.28)!important;}
 .home-action.gold{border-color:#eadfbf!important;}
 
-/* More distinctive icon identities */
 .home-action:nth-child(1){color:#078b43}.home-action:nth-child(1) .home-icon{background:linear-gradient(145deg,#e8f8ef,#ccefdc)!important;color:#078b43!important;}
 .home-action:nth-child(2){color:#4675c7}.home-action:nth-child(2) .home-icon{background:linear-gradient(145deg,#edf3ff,#dbe7ff)!important;color:#4675c7!important;}
 .home-action:nth-child(3){color:#c77a16}.home-action:nth-child(3) .home-icon{background:linear-gradient(145deg,#fff4e3,#ffe5bf)!important;color:#c77a16!important;}
@@ -1835,7 +1760,6 @@ body::before{
 .home-action:nth-child(7){color:#168b82}.home-action:nth-child(7) .home-icon{background:linear-gradient(145deg,#e8f8f6,#cfeee9)!important;color:#168b82!important;}
 .home-action:nth-child(8){color:#087f40}.home-action:nth-child(8) .home-icon{background:linear-gradient(145deg,#eef9f1,#d9f0e0)!important;color:#087f40!important;}
 
-/* Business overview hierarchy */
 .home-section-head{margin-top:18px!important;margin-bottom:9px!important;}
 .home-section-head h3{font-size:.82rem!important;letter-spacing:-.01em!important;}
 .home-section-head span{font-size:.58rem!important;letter-spacing:.08em!important;text-transform:uppercase;}
@@ -1864,12 +1788,6 @@ body::before{
   .home-action:nth-child(8){grid-column:span 1;}
 }
 
-/* ---- id="drybea-kodexity-dark-theme" ---- */
-/* =========================================================
-   MY DRYBEA — DARK LUXURY APP THEME
-   Inspired by the supplied dark UI reference.
-   VISUAL ONLY: no auth, Supabase, data or business logic changes.
-   ========================================================= */
 :root{
   --kd-bg:#030807;
   --kd-bg2:#07110d;
@@ -1930,14 +1848,12 @@ body::before{
 .tab-btn.active{color:#07130d!important;background:linear-gradient(135deg,#4bdf91,#25b96e)!important;box-shadow:0 8px 25px rgba(38,202,117,.20)!important;}
 .tab-btn:hover:not(.active){color:#c6d5cd!important;background:rgba(255,255,255,.04)!important;}
 
-/* Greeting / section hierarchy */
 .app-container h2,.app-container h3,.app-container h4,.app-container strong{color:var(--kd-white);}
 .home-section-head h3{color:#eaf2ed!important;}
 .home-section-head span{color:#4bd891!important;}
 .home-actions-title{color:#7f9188!important;}
 .home-actions-title::after{color:#4dd791!important;}
 
-/* Quick Access — premium dark launcher */
 .quick-access-card{
   padding:14px!important;border-radius:25px!important;
   background:linear-gradient(145deg,rgba(11,24,18,.94),rgba(6,14,11,.90))!important;
@@ -1974,7 +1890,6 @@ body::before{
 .home-action.primary .quick-status{background:rgba(255,255,255,.08)!important;color:#dff8e9!important;}
 .home-action.primary strong{color:#fff!important;}.home-action.primary small{color:rgba(232,248,239,.66)!important;}
 
-/* Distinct icon colour accents — dark neon jewel tones */
 .home-action:nth-child(1){color:#55dc91!important}.home-action:nth-child(1) .home-icon{color:#58df95!important;background:rgba(63,214,132,.10)!important;}
 .home-action:nth-child(2){color:#72a9ff!important}.home-action:nth-child(2) .home-icon{color:#76aaff!important;background:rgba(82,139,255,.10)!important;border-color:rgba(82,139,255,.18)!important;}
 .home-action:nth-child(3){color:#f2b65e!important}.home-action:nth-child(3) .home-icon{color:#f3b95f!important;background:rgba(242,174,78,.10)!important;border-color:rgba(242,174,78,.18)!important;}
@@ -1984,7 +1899,6 @@ body::before{
 .home-action:nth-child(7){color:#5ed5c7!important}.home-action:nth-child(7) .home-icon{color:#5ed5c7!important;background:rgba(54,192,178,.10)!important;border-color:rgba(54,192,178,.18)!important;}
 .home-action:nth-child(8){color:#65dc98!important}.home-action:nth-child(8) .home-icon{color:#6ae19c!important;background:rgba(58,211,130,.10)!important;border-color:rgba(58,211,130,.18)!important;}
 
-/* Core cards / panels */
 .card,.monthly-summary-mini,.stat,.table-wrap,.profile-card,.form-card,.panel{
   background:linear-gradient(145deg,rgba(12,24,19,.95),rgba(7,15,12,.94))!important;
   color:var(--kd-white)!important;
@@ -2010,7 +1924,6 @@ label{color:#9aaba2!important;}
 .btn-primary:hover{background:linear-gradient(135deg,#4cde94,#1bb568)!important;}
 .btn-danger{background:rgba(194,61,61,.10)!important;border-color:rgba(248,113,113,.20)!important;color:#ff8e8e!important;}
 
-/* Hero / financial surfaces */
 .net-banner,.monthly-summary-period,.profit-card,.dashboard-profit-card{
   background:linear-gradient(135deg,#061a12 0%,#0a3b27 58%,#0c6240 100%)!important;
   border-color:rgba(72,213,139,.24)!important;
@@ -2027,14 +1940,11 @@ label{color:#9aaba2!important;}
 .monthly-summary-note{background:#09150f!important;color:#82938a!important;border:1px solid rgba(255,255,255,.06);}
 .monthly-summary-table td{border-color:rgba(255,255,255,.07)!important;color:#a9b8b0!important;}
 
-/* Tables / lists */
 table{color:#dfe9e4!important;}th{color:#7f9188!important;background:#09150f!important;}td{border-color:rgba(255,255,255,.065)!important;color:#cbd8d1!important;}
 .badge,.chip,.pill{background:rgba(72,213,139,.08)!important;border-color:rgba(72,213,139,.15)!important;color:#79dda6!important;}
 
-/* Gold ribbon keeps its brand interaction but becomes more luxurious */
 .ribbon-effect{background:linear-gradient(105deg,transparent 20%,rgba(216,184,90,.0) 35%,rgba(245,224,148,.78) 50%,rgba(216,184,90,.0) 65%,transparent 80%)!important;}
 
-/* Bottom mobile navigation */
 .bottom-nav,.mobile-bottom-nav{
   background:rgba(4,10,7,.90)!important;border-color:rgba(255,255,255,.09)!important;
   box-shadow:0 -18px 45px rgba(0,0,0,.55)!important;backdrop-filter:blur(10px)!important;-webkit-backdrop-filter:blur(10px)!important;
@@ -2042,7 +1952,6 @@ table{color:#dfe9e4!important;}th{color:#7f9188!important;background:#09150f!imp
 .bottom-nav .tab-btn,.mobile-bottom-nav .tab-btn{color:#73857c!important;}
 .bottom-nav .tab-btn.active,.mobile-bottom-nav .tab-btn.active{background:rgba(53,210,130,.10)!important;color:#5de19a!important;box-shadow:none!important;}
 
-/* Make separators and secondary text belong to the dark system */
 hr{border-color:rgba(255,255,255,.07)!important;}
 .muted,.text-muted,.small,.sub{color:#788a81!important;}
 .eyebrow{color:#5cdd97!important;}
@@ -2059,13 +1968,6 @@ hr{border-color:rgba(255,255,255,.07)!important;}
   .home-action .home-icon{width:43px!important;height:43px!important;}
 }
 
-
-/* =========================================================
-   MY DRYBEA — DAYLIGHT MODE
-   Same Kodexity-inspired visual language, reinterpreted for a
-   bright white / daylight business workspace.
-   Visual-only: no Supabase, auth, data or business logic changes.
-   ========================================================= */
 [data-theme="light"]{
   --kd-bg:#f7faf8;
   --kd-bg2:#eef5f1;
@@ -2143,7 +2045,6 @@ html[data-theme="light"] .tab-btn.active{
 }
 html[data-theme="light"] .tab-btn:hover:not(.active){color:#087f43!important;background:#edf8f2!important;}
 
-/* Bright launcher: white cards, crisp borders, restrained colour. */
 html[data-theme="light"] .quick-access-card{
   background:linear-gradient(145deg,rgba(255,255,255,.98),rgba(248,252,250,.95))!important;
   border-color:rgba(6,91,48,.11)!important;
@@ -2175,7 +2076,6 @@ html[data-theme="light"] .home-action.primary strong{color:#fff!important;}
 html[data-theme="light"] .home-action.primary small{color:rgba(255,255,255,.72)!important;}
 html[data-theme="light"] .home-action.primary .quick-status{background:rgba(255,255,255,.12)!important;border-color:rgba(255,255,255,.18)!important;color:#fff!important;}
 
-/* Keep the individual icon colour system in daylight mode. */
 html[data-theme="light"] .home-action:nth-child(1) .home-icon{background:linear-gradient(145deg,#e6f8ed,#d2f0df)!important;color:#087f43!important;}
 html[data-theme="light"] .home-action:nth-child(2) .home-icon{background:linear-gradient(145deg,#edf3ff,#dce8ff)!important;color:#4675c7!important;}
 html[data-theme="light"] .home-action:nth-child(3) .home-icon{background:linear-gradient(145deg,#fff4e3,#ffe5bf)!important;color:#c77a16!important;}
@@ -2266,7 +2166,6 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
   html[data-theme="light"] .home-action{background:linear-gradient(145deg,#fff,#f8fbf9)!important;}
 }
 
-/* ---- id="my-drybea-pro-title-system" ---- */
 .pro-title{display:flex!important;align-items:center;gap:12px;letter-spacing:-.02em;line-height:1.08;margin-bottom:7px!important}
 .pro-title-icon{width:34px;height:34px;min-width:34px;display:inline-grid;place-items:center;border-radius:11px;position:relative;color:var(--accent,#16a765);background:linear-gradient(145deg,rgba(22,167,101,.14),rgba(22,167,101,.04));border:1px solid rgba(22,167,101,.18);box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 7px 20px rgba(0,0,0,.08)}
 .pro-title-icon::after{content:"";position:absolute;inset:-4px;border-radius:14px;border:1px solid color-mix(in srgb,var(--accent,#16a765) 18%, transparent);opacity:.45;pointer-events:none}
@@ -2277,7 +2176,6 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
 .pro-subtitle.gold{--sub-accent:#c9a44d}.pro-subtitle.blue{--sub-accent:#4b9cff}.pro-subtitle.purple{--sub-accent:#9a72ff}.pro-subtitle.orange{--sub-accent:#ee9a3d}.pro-subtitle.teal{--sub-accent:#27b9b1}.pro-subtitle.slate{--sub-accent:#8fa3ad}
 @media(max-width:680px){.pro-title{gap:9px}.pro-title-icon{width:31px;height:31px;min-width:31px;border-radius:10px}.pro-subtitle{font-size:.72rem;margin-bottom:14px}}
 
-/* ---- id="my-drybea-sync-indicator" ---- */
 .sync-indicator{
   display:inline-flex;align-items:center;gap:8px;
   min-height:34px;padding:6px 10px 6px 9px;
@@ -2324,10 +2222,6 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
 @keyframes spin{to{transform:rotate(360deg)}}
 .mini-spin{display:inline-block;width:13px;height:13px;border:2px solid currentColor;border-top-color:transparent;border-radius:50%;vertical-align:-2px;margin-right:5px;opacity:.85;animation:spin .7s linear infinite}
 
-/* Attendance Start/End Day buttons — explicit "done" (already completed) and
-   "locked" (not available yet) looks. ID + class selectors so these always
-   win over the theme's !important .btn-primary/.btn-danger color rules,
-   instead of relying on generic opacity dimming that can look too subtle. */
 #attendStartBtn.attend-btn-done, #attendEndBtn.attend-btn-done,
 #attendStartBtn.attend-btn-done:hover, #attendEndBtn.attend-btn-done:hover{
   background:var(--bg-elevated) !important;
@@ -2353,12 +2247,6 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
   .sync-time{font-size:8px}
 }
 
-/* ---- id="business-class-icon-system" ---- */
-/* ============================================================
-   MY DRYBEA — WORLD BUSINESS-CLASS ICON SYSTEM
-   Lucide outline icons: clean, universal, executive SaaS language.
-   Visual layer only — no data/auth/business logic changes.
-   ============================================================ */
 .business-icon{
   width:20px;
   height:20px;
@@ -2406,7 +2294,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
 .home-action.primary .home-icon .business-icon{
   stroke-width:2;
 }
-/* Disable legacy CSS-pseudo icon drawings after migration. */
+
 .icon::before,.icon::after,
 .nav-icon::before,.nav-icon::after,
 .home-action .nav-icon::before,.home-action .nav-icon::after{
@@ -2414,7 +2302,7 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
   display:none!important;
 }
 <style id="staff-business-suite-css">
-/* Advanced MY STAFF management */
+
 .my-staff-toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.my-staff-toolbar .btn{min-height:38px}
 .staff-data-status{font-size:.7rem;color:var(--text-muted);margin-left:auto}
 .staff-edit-input{width:100%;min-width:90px;padding:7px 8px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text-main);font:inherit;font-size:.75rem}
@@ -2440,7 +2328,6 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
 {.staff-suite-grid{grid-template-columns:1fr 1fr}.commission-grid{grid-template-columns:1fr 1fr}}
 @media(max-width:520px){.staff-suite-grid{grid-template-columns:1fr 1fr}.commission-grid{grid-template-columns:1fr}.staff-suite-hero{padding:14px}}
 
-/* ===== APP NOTIFICATIONS (TOAST + SOUND) ===== */
 .app-notify-container{position:fixed;top:calc(12px + env(safe-area-inset-top,0px));right:12px;left:12px;z-index:9999;display:flex;flex-direction:column;align-items:flex-end;gap:10px;pointer-events:none;}
 @media(min-width:600px){.app-notify-container{left:auto;width:360px;}}
 .app-notify{pointer-events:auto;width:100%;max-width:360px;background:linear-gradient(135deg,var(--bg-card) 0%,var(--bg-elevated) 100%);border:1.5px solid var(--border-strong);border-radius:14px;box-shadow:var(--shadow-lg);padding:12px 14px;display:flex;gap:10px;align-items:flex-start;cursor:pointer;animation:appNotifyIn .28s cubic-bezier(0.4,0,0.2,1);}
@@ -2459,7 +2346,6 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
 .an-detail-row .an-k{color:var(--text-muted);flex:0 0 auto;}
 .an-detail-row .an-v{color:var(--text-main);font-weight:700;text-align:right;}
 
-/* ===== NOTIFICATION CENTER (header bell + list) ===== */
 #notifyCenterBtn{position:relative;}
 .notify-badge{
   position:absolute; top:-3px; right:-3px; min-width:16px; height:16px; padding:0 4px;
@@ -2470,7 +2356,6 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
 .notify-badge.show{display:flex;animation:notifyBadgePulse 1.8s ease-in-out infinite;}
 @keyframes notifyBadgePulse{0%,100%{box-shadow:0 0 0 2px var(--bg-card),0 0 0 0 rgba(248,113,113,0.55);}50%{box-shadow:0 0 0 2px var(--bg-card),0 0 0 5px rgba(248,113,113,0);}}
 
-/* ---- Notification Center header: title + sound toggle live together, one control ---- */
 .nc-header-row{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;}
 .nc-sound-toggle{
   display:flex;align-items:center;gap:6px;flex:0 0 auto;
@@ -2502,13 +2387,6 @@ html[data-theme="light"] td{border-color:#e5ece8!important;color:#30473c!importa
 .nc-empty{text-align:center;padding:30px 10px;color:var(--text-muted);font-size:.85rem;}
 .nc-empty i{display:block;margin:0 auto 10px;width:32px;height:32px;opacity:.5;}
 
-/* ---- id="world-class-quick-actions-css" ---- */
-/* NOTE: background/gold/primary tones below are LIGHT-THEME ONLY.
-   They used to be unscoped, which forced white/cream card
-   backgrounds even in dark mode (the app's default theme),
-   washing out the Costing/Production/Expenses tiles. The dark
-   theme already has its own correct .home-action styling earlier
-   in this file — this block must not compete with it. */
 .quick-access-card{box-shadow:0 18px 50px rgba(18,45,31,.08),inset 0 1px 0 rgba(255,255,255,.9)}
 .home-actions-title{display:flex;align-items:center;gap:9px;font-weight:900;letter-spacing:.12em;color:#5d7067!important}
 .home-actions-title::before{content:'';width:9px;height:9px;border-radius:50%;background:var(--app-green);box-shadow:0 0 0 5px rgba(10,143,67,.10)}
@@ -2526,8 +2404,6 @@ html[data-theme="light"] .home-action.gold{background:linear-gradient(180deg,#ff
 @media(max-width:700px){.salary-access-banner{align-items:flex-start;flex-direction:column}.salary-access-banner .btn{width:100%}}
 .app-nav.staff-nav .tab-btn[data-tab="my-salary"]{display:flex!important}
 
-/* ---- id="my-drybea-final-staff-owner-polish" ---- */
-/* FINAL OWNER / STAFF ACTION POLISH */
 .staff-ref-pill{display:inline-flex;align-items:center;padding:5px 9px;border-radius:999px;background:#eef8f1;border:1px solid #cfe7d7;color:#087b3e;font-size:.68rem;font-weight:900;letter-spacing:.04em;white-space:nowrap}
 .world-staff-actions{grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:12px!important}
 .world-staff-actions .staff-launch{position:relative;min-height:92px;padding:13px 14px;border-radius:18px;overflow:hidden;box-shadow:0 8px 22px rgba(15,55,35,.06)}
@@ -2539,8 +2415,6 @@ html[data-theme="light"] .home-action.gold{background:linear-gradient(180deg,#ff
 @media(max-width:900px){.world-staff-actions{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
 @media(max-width:520px){.world-staff-actions{grid-template-columns:1fr 1fr!important;gap:8px!important}.world-staff-actions .staff-launch{min-height:86px;padding:10px}.world-staff-actions .staff-launch small{font-size:.57rem}.owner-qahint{display:none}}
 
-/* ---- id="final-staff-four-nav" ---- */
-/* FINAL STAFF NAV — EXACTLY 4 BUTTONS */
 .app-nav.staff-nav .tab-btn{display:none!important;flex:1 1 0;min-width:0!important;justify-content:center}
 .app-nav.staff-nav .tab-btn[data-tab="staff-home"],
 .app-nav.staff-nav .tab-btn[data-tab="orders"],
@@ -2548,8 +2422,6 @@ html[data-theme="light"] .home-action.gold{background:linear-gradient(180deg,#ff
 .app-nav.staff-nav .tab-btn[data-tab="profile"]{display:flex!important}
 .app-nav.staff-nav{display:flex!important;gap:6px;overflow:hidden!important;flex-wrap:nowrap!important}
 
-/* ---- id="final-four-staff-nav-lock" ---- */
-/* MY DRYBEA — Staff navigation hard lock: exactly four visible buttons */
 @media(min-width:1px){
   body.staff-mode .app-nav.staff-nav .tab-btn{display:none!important;}
   body.staff-mode .app-nav.staff-nav .tab-btn[data-tab="staff-home"],
@@ -2558,11 +2430,9 @@ html[data-theme="light"] .home-action.gold{background:linear-gradient(180deg,#ff
   body.staff-mode .app-nav.staff-nav .tab-btn[data-tab="profile"]{display:flex!important;}
 }
 
-/* ---- id="secure-staff-sale-css" ---- */
 [data-staff-order-customer] .field{margin-bottom:10px}
 .staff-sale-ref{font-weight:950;letter-spacing:.08em}
 
-/* ---- id="header-command-console" ---- */
 :root{
   --console-parchment: #fbf7ee;
   --console-hairline: rgba(16,23,20,.09);
@@ -2579,7 +2449,6 @@ html[data-theme="light"] .home-action.gold{background:linear-gradient(180deg,#ff
   gap: 14px; flex-wrap: wrap;
 }
 
-/* ---- Brand ---- */
 .brand{ gap: 13px; }
 .brand-logo-wrap{ width:46px; height:46px; }
 .brand-logo{
@@ -2610,7 +2479,6 @@ html[data-theme="light"] .home-action.gold{background:linear-gradient(180deg,#ff
   box-shadow: 0 0 0 3px rgba(215,173,61,.16);
 }
 
-/* ---- Header actions: grouped toolbar + separated security control ---- */
 .header-actions{
   gap: 9px;
   align-items: center;
@@ -2651,11 +2519,9 @@ html[data-theme="light"] .home-action.gold{background:linear-gradient(180deg,#ff
 .security-label{ font-size:.72rem; font-weight:750; letter-spacing:.01em; }
 @media (max-width: 340px){ .security-label{ display:none; } .icon-btn.security-control{ width:38px; padding:0; } }
 
-/* ---- Ultra-minimal toolbar: Notifications, Theme, Login only ---- */
 .toolbar-item-hidden{ display:none !important; }
 .header-actions{ gap:0; }
 
-/* ---- Status strip: minimal single-line status readout ---- */
 .status-strip{
   display:flex; align-items:center; flex-wrap:wrap; gap:8px;
   margin-top: 8px; padding: 0 2px;
@@ -2668,7 +2534,6 @@ html[data-theme="light"] .home-action.gold{background:linear-gradient(180deg,#ff
   display:none;
 }
 
-    /* ---- SMART PAYROLL ---- */
     .smart-salary-card{background:linear-gradient(145deg,var(--bg-card),rgba(16,185,129,.055));border-color:rgba(16,185,129,.22)}.staff-readonly{user-select:none}.staff-readonly input,.staff-readonly select,.staff-readonly textarea{pointer-events:none;opacity:.75}
     .smart-salary-card .notice strong{font-size:.72rem;letter-spacing:.04em}
     .smart-salary-card .notice span{font-size:1rem;font-weight:800;color:var(--text-main)}
@@ -2676,7 +2541,7 @@ html[data-theme="light"] .home-action.gold{background:linear-gradient(180deg,#ff
       .smart-salary-card .grid-3{grid-template-columns:1fr 1fr}
       #smartSalaryMonth{width:100%!important}
     }
-    /* ---- Advance request pending badge on MY STAFF nav tab ---- */
+
     .tab-btn{ position:relative; }
     .nav-badge{
       position:absolute; top:2px; right:10px; min-width:16px; height:16px; padding:0 4px;
@@ -2685,11 +2550,11 @@ html[data-theme="light"] .home-action.gold{background:linear-gradient(180deg,#ff
       animation:navBadgePulse 1.6s ease-in-out infinite;
     }
     @keyframes navBadgePulse{ 0%,100%{ transform:scale(1);} 50%{ transform:scale(1.15);} }
-    /* ---- Staff dashboard tabs: scrollable bottom nav when many tabs are visible ---- */
+
     .app-nav.staff-nav{ overflow-x:auto; flex-wrap:nowrap; -webkit-overflow-scrolling:touch; scrollbar-width:none; }
     .app-nav.staff-nav::-webkit-scrollbar{ display:none; }
     .app-nav.staff-nav .tab-btn{ flex:0 0 auto; min-width:70px; }
-/* Staff navigation: My Salary is a staff-only navigation item. Other staff tools remain available from Staff Home. */
+
 .app-nav.staff-nav .tab-btn[data-tab="daily-pay"],
 .app-nav.staff-nav .tab-btn[data-tab="attendance"],
 .app-nav.staff-nav .tab-btn[data-tab="advance"],
@@ -2701,7 +2566,7 @@ html[data-theme="light"] .home-action.gold{background:linear-gradient(180deg,#ff
 .app-nav.staff-nav .tab-btn[data-tab="orders"],
 .app-nav.staff-nav .tab-btn[data-tab="my-salary"],
 .app-nav.staff-nav .tab-btn[data-tab="profile"]{display:flex!important;}
-    /* Staff navigation is controlled by applyRoleUI() after the Supabase profile loads. */
+
     .emoji-nav-icon{ font-size:16px; line-height:1; display:flex; align-items:center; justify-content:center; width:17px; height:17px; }
     .status-pill{ display:inline-flex; align-items:center; gap:6px; padding:5px 12px; border-radius:20px; font-size:.72rem; font-weight:800; }
     .status-pill.pending{ background:var(--warn-bg); color:var(--warn); }
@@ -2718,25 +2583,12 @@ html[data-theme="light"] .home-action.gold{background:linear-gradient(180deg,#ff
     .attend-time-save-btn:hover:not(:disabled){ background:var(--green-subtle); }
     .attend-time-save-btn:disabled{ opacity:.3; cursor:not-allowed; color:var(--text-muted); }
     .work-note-box textarea{ width:100%; min-height:90px; resize:vertical; font-family:var(--font); background:#07110d; color:var(--text-main); border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px 12px; }
-  
 
-/* ---- id="my-drybea-premium-global-nav" ---- */
-  /* ==========================================================================
-     MY DRYBEA — PREMIUM GLOBAL-APP BOTTOM NAVIGATION (final pass v2)
-     Visual + visibility rules only. No auth / Supabase / business logic touched.
-     • Owner bottom nav  → exactly 5 buttons: Home · Orders · Income · Cost · Profile
-       (My Staff and Daily Expenses stay one tap away via Home ▸ Owner Quick Actions)
-     • Staff bottom nav  → exactly 5 buttons: Staff Home · Orders · My Salary · Daily Expenses · Profile
-     ========================================================================== */
-
-  /* ---- exact 5-button rule per role (visibility ONLY — never forces display
-     on buttons the role logic in applyRoleUI() has already hidden) ---- */
   body .app-nav:not(.staff-nav) .tab-btn[data-tab="expenses"],
   body .app-nav:not(.staff-nav) .tab-btn[data-tab="my-staff"]{ display:none !important; }
   body .app-nav.staff-nav .tab-btn[data-tab="expenses"]{ display:flex !important; }
   body .app-nav.staff-nav .tab-btn[data-tab="calculator"]{ display:none !important; }
 
-  /* ---- floating glass capsule container ---- */
   body .app-nav{
     display:flex !important;
     align-items:stretch !important;
@@ -2758,7 +2610,6 @@ html[data-theme="light"] .home-action.gold{background:linear-gradient(180deg,#ff
     body .app-container{ padding-bottom:104px !important; }
   }
 
-  /* ---- buttons (layout/visuals only — display is left to role logic above) ---- */
   body .app-nav .tab-btn{
     flex:1 1 0 !important; min-width:0 !important;
     flex-direction:column !important; align-items:center !important; justify-content:center !important;
@@ -2777,7 +2628,6 @@ html[data-theme="light"] .home-action.gold{background:linear-gradient(180deg,#ff
   }
   body .app-nav .tab-btn:active{ transform:scale(.90) !important; }
 
-  /* pill that glides in behind the active icon — replaces the old solid green box */
   body .app-nav .tab-btn::before{
     content:'' !important; position:absolute !important; top:2px !important; left:50% !important;
     width:38px !important; height:30px !important; border-radius:14px !important;
@@ -2787,7 +2637,7 @@ html[data-theme="light"] .home-action.gold{background:linear-gradient(180deg,#ff
     transition:opacity .3s ease, transform .32s cubic-bezier(.34,1.56,.64,1) !important;
     z-index:0 !important;
   }
-  /* Neutralise the app's legacy solid-green .tab-btn.active box everywhere inside the nav */
+
   body .app-nav .tab-btn.active{ background:transparent !important; box-shadow:none !important; color:#eafff2 !important; font-weight:800 !important; }
   body .app-nav .tab-btn.active::before{ opacity:1 !important; transform:translate(-50%,0) scale(1) !important; }
   body .app-nav .tab-btn.active .business-icon{ color:#5eeca0 !important; transform:translateY(-1px) !important; }
@@ -2799,7 +2649,6 @@ html[data-theme="light"] .home-action.gold{background:linear-gradient(180deg,#ff
   }
   body .app-nav .tab-btn:hover:not(.active){ color:#bfe9d3 !important; background:transparent !important; }
 
-  /* ---- light theme variant ---- */
   html[data-theme="light"] body .app-nav{
     background:linear-gradient(180deg,#ffffff,#f3faf6) !important;
     border-color:rgba(8,127,67,.14) !important;
@@ -2814,25 +2663,13 @@ html[data-theme="light"] .home-action.gold{background:linear-gradient(180deg,#ff
   html[data-theme="light"] body .app-nav .tab-btn.active .business-icon{ color:#0a8f43 !important; }
   html[data-theme="light"] body .app-nav .tab-btn.active span{ color:#08512b !important; }
 
-  /* ---- desktop: sleek top capsule instead of stacked column ---- */
   @media(min-width:769px){
     body .app-nav .tab-btn{ flex-direction:row !important; min-height:46px !important; padding:10px 16px !important; font-size:.74rem !important; gap:7px !important; }
     body .app-nav .tab-btn::before{ width:100% !important; height:100% !important; top:0 !important; left:0 !important; transform:scale(.94) !important; border-radius:14px !important; }
     body .app-nav .tab-btn.active::before{ transform:scale(1) !important; }
     body .app-nav .tab-btn.active::after{ display:none !important; }
   }
-  
 
-/* ---- id="header-icon-creative-badge" ---- */
-/* ============================================================
-   OWNER HEADER — CREATIVE LOGO BADGE
-   The brand logo was a plain bordered square photo. This turns
-   it into a signature "seal": a slow rotating green/gold ring
-   plus a small premium sparkle mark in the corner. Pure
-   decoration on top of .brand-logo-wrap / .brand-logo — no ids,
-   onclick handlers or structure touched, so it works unchanged
-   on every page/role and in both light and dark theme.
-   ============================================================ */
 .brand-logo-wrap{
   position:relative !important;
   isolation:isolate !important;
@@ -2871,33 +2708,16 @@ html[data-theme="light"] .home-action.gold{background:linear-gradient(180deg,#ff
   .brand-logo-wrap::before{ animation:none !important; }
 }
 
-/* Header toolbar icons: a touch more craft without breaking the
-   deliberately minimal command-console toolbar. */
 .action-toolbar .icon-btn:hover{ color:var(--app-green,#0a8f43) !important; }
 #notifyCenterBtn .notify-badge{
   box-shadow:0 0 0 2px #fff, 0 0 10px rgba(239,68,68,.45) !important;
 }
 
-/* ---- id="home-dashboard-advanced-professional-theme" ---- */
-/* ============================================================
-   HOME (OWNER DASHBOARD) — ADVANCED PROFESSIONAL COLOR THEME
-   Builds on the existing quick-access-card / home-action /
-   net-banner system (see ids "world-class-quick-actions-css",
-   "drybea-kodexity-dark-theme"). Adds a premium gradient figure
-   on the Net Profit banner, a richer "control centre" chip and
-   a small live-status dot — additive only. The per-tile rainbow
-   icon colours (:nth-child rules), card structure and all
-   onclick/data-home-tab logic are untouched.
-   ============================================================ */
-
-/* Quick Actions panel: slightly more depth so it reads as a
-   dedicated command panel rather than a plain card. */
 .quick-access-card{
   box-shadow:0 20px 46px rgba(16,48,32,.10), inset 0 1px 0 rgba(255,255,255,.85) !important;
   border-color:rgba(10,143,67,.16) !important;
 }
 
-/* "CONTROL CENTRE" hint: from a flat gold pill to a rich chip */
 .owner-qahint{
   background:linear-gradient(120deg, var(--app-green-dark,#075d31), var(--app-green,#0a8f43)) !important;
   color:#fff !important;
@@ -2905,8 +2725,6 @@ html[data-theme="light"] .home-action.gold{background:linear-gradient(180deg,#ff
   box-shadow:0 4px 10px rgba(10,143,67,.28) !important;
 }
 
-/* "Live dashboard" section tag: small pulsing status dot for a
-   more advanced, monitoring-dashboard feel. */
 .home-section-head span{
   display:inline-flex !important; align-items:center !important; gap:5px !important;
   background:var(--app-green-soft,#eaf8ef) !important;
@@ -2925,8 +2743,6 @@ html[data-theme="light"] .home-action.gold{background:linear-gradient(180deg,#ff
   50%{ box-shadow:0 0 0 5px rgba(10,143,67,.06); }
 }
 
-/* Net Monthly Profit banner: premium gradient-clip figure so the
-   headline number reads like a finished fintech dashboard. */
 .net-banner{ position:relative !important; }
 .net-banner .v{
   background:linear-gradient(90deg, #ffffff 0%, #d9fbe6 45%, #fff3cf 100%) !important;
@@ -2939,17 +2755,6 @@ html[data-theme="light"] .home-action.gold{background:linear-gradient(180deg,#ff
   .home-section-head span::before{ animation:none !important; }
 }
 
-/* ---- id="costing-tab-professional-dashboard-redesign" ---- */
-/* ============================================================
-   OWNER — COSTING TAB — PROFESSIONAL DASHBOARD REDESIGN
-   Purely visual layer on top of the existing Costing tab
-   (#calculator). No calculation logic touched — the hero KPIs
-   are a read-only mirror of outSp/outProfit/outMargin/outCost
-   (see updateCostingHero() in app.js). Scoped to #calculator /
-   .costing-* classes so nothing outside the Costing tab changes.
-   ============================================================ */
-
-/* ---- Command-center hero banner ---- */
 .costing-hero{
   position:relative;
   background:linear-gradient(135deg,#063b25,#087f43 60%,#c9a44d);
@@ -3016,7 +2821,6 @@ html[data-theme="light"] .home-action.gold{background:linear-gradient(180deg,#ff
   .costing-hero-kpis{ grid-template-columns:1fr 1fr; }
 }
 
-/* ---- Segmented sub-tab switcher (Pricing / Daily / Entry) ---- */
 .costing-tabs-shell{
   background:linear-gradient(180deg,rgba(13,26,21,.92),rgba(6,14,11,.96));
   border:1px solid rgba(255,255,255,.08);
@@ -3078,7 +2882,6 @@ html[data-theme="light"] .costing-subtab.btn-primary{
   .costing-subtab{ min-width:0; flex:1 1 auto !important; font-size:.7rem !important; padding:9px 8px !important; }
 }
 
-/* ---- Cards inside the Costing tab: subtle top accent + a touch more depth ---- */
 #calculator .card{ position:relative; overflow:hidden; }
 #calculator .card::before{
   content:''; position:absolute; top:0; left:0; right:0; height:3px; z-index:1;
@@ -3086,7 +2889,6 @@ html[data-theme="light"] .costing-subtab.btn-primary{
   opacity:.55;
 }
 
-/* ---- Tables inside the Costing tab: clearer headers, zebra rows, hover ---- */
 #calculator .table-wrap table thead th{
   text-transform:uppercase !important; font-size:.62rem !important; letter-spacing:.05em !important;
   font-weight:800 !important;
@@ -3104,7 +2906,6 @@ html[data-theme="light"] #calculator .table-wrap table tbody tr:not(.total-row):
   background:rgba(8,127,67,.06);
 }
 
-/* ---- Pack Result stat grid: a bit more presence on the primary numbers ---- */
 #calculator .stat-grid .stat .v{ font-size:1.05rem; }
 #calculator .stat-grid .stat.accent .v,
 #calculator #profitStat .v{ font-size:1.18rem; }

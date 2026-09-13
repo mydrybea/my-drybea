@@ -38,7 +38,7 @@ importScripts('https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js');
 // returning users' phones "throw away every old cached copy and fetch
 // fresh." Forgetting to bump it means users can get stuck on an old cached
 // version even though you've updated the live site.
-const CACHE_VERSION = 'v22';
+const CACHE_VERSION = 'v25';
 const CACHE_NAME = `mydrybea-${CACHE_VERSION}`;
 
 // Files that make up the installable "app shell" — network-first.
@@ -68,7 +68,7 @@ const STATIC_LIBS = [
   'https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js',
   'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2',
   'https://unpkg.com/lucide@latest',
-  'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Noto+Sans+Sinhala:wght@300;400;500;600;700&family=Playfair+Display:wght@400;500;600;700;800;900&display=swap',
+  'https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=Noto+Sans+Sinhala:wght@400;600;700&family=Playfair+Display:wght@700;800;900&display=swap',
 ];
 
 // Any request whose URL includes this is live Supabase business data.

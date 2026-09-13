@@ -10721,9 +10721,7 @@ function saveAll() {
   updateStatus('Data saved locally');
 }
 
-function onDataChange() {
-  calcAll();
-  calcProduction();
+function scheduleAutoSave() {
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
     saveAll();
@@ -10734,6 +10732,35 @@ function onDataChange() {
     updateStatus('Data auto-saved');
     saveTimer = null;
   }, 800);
+}
+
+function onDataChange() {
+  calcAll();
+  calcProduction();
+  scheduleAutoSave();
+}
+
+// PERFORMANCE: the Costing (calculator) tab's own fields (prices, target
+// profit, custom SP, monthly qty, grind yields) only ever feed calcAll() —
+// calcProduction() never reads them. The old shared onDataChange() ran BOTH
+// on every keystroke here, which meant typing a price also silently
+// re-ran the entire Production Model calculation (2 chart updates, a table
+// rebuild, and a 'production-model-updated' event) for no reason every
+// single keystroke. This is what made the Costing tab feel slow while
+// typing. Wiring these fields to this instead fixes that without touching
+// onDataChange() itself (still used elsewhere for real full-state changes
+// like restoring a snapshot, where recalculating both is correct).
+function onCostingDataChange() {
+  calcAll();
+  scheduleAutoSave();
+}
+
+// Mirror fix for the Production tab's own fields (raw fish prices, yields,
+// overheads, ingredients, finished prices) — these never feed calcAll(),
+// so there's no need to also recompute the Costing tab on every keystroke.
+function onProductionDataChange() {
+  calcProduction();
+  scheduleAutoSave();
 }
 
 function updateStatus(msg) {
@@ -13562,9 +13589,11 @@ async function loadMyStaffOwnerData(){
   // renderOwnerAdvanceRequests() (called inside loadOwnerAdvanceRequests) already
   // fills BOTH the Profile tab table (#advOwnerBody) and the MY STAFF tab table
   // (#ownerStaffAdvanceBody) directly from Supabase, and updates the pending badge.
-  try{await loadOwnerAdvanceRequests();}catch(e){console.error('MY STAFF advance load:',e);}
-  try{await loadOwnerAttendanceToday();}catch(e){console.error('MY STAFF attendance load:',e);}
-  try{await loadOwnerPendingCorrections();}catch(e){console.error('MY STAFF corrections load:',e);}
+  await Promise.all([
+    loadOwnerAdvanceRequests().catch(e=>console.error('MY STAFF advance load:',e)),
+    loadOwnerAttendanceToday().catch(e=>console.error('MY STAFF attendance load:',e)),
+    loadOwnerPendingCorrections().catch(e=>console.error('MY STAFF corrections load:',e))
+  ]);
 }
 
 // ==================== OWNER: LIVE STAFF ATTENDANCE (today) ====================
@@ -13688,7 +13717,7 @@ async function decideAttendanceCorrection(id, approve) {
   }
 }
 
-async function refreshMyStaffPage(){if(!currentUser||userRole!=='owner')return;await loadStaffList();await populateStaffReferralSelectors();await loadMyStaffData(false);await loadCommissionClaims();renderOwnerStaffPerformance();renderOwnerStaffManagement();renderOwnerStaffUploads();await loadMyStaffOwnerData();}
+async function refreshMyStaffPage(){if(!currentUser||userRole!=='owner')return;await Promise.all([populateStaffReferralSelectors(),loadMyStaffData(false),loadCommissionClaims(),loadMyStaffOwnerData()]);renderOwnerStaffPerformance();renderOwnerStaffManagement();renderOwnerStaffUploads();}
 
 function refreshStaffHome(){
   if(!currentUser)return;const name=(userProfile&&userProfile.display_name)||currentUser.email?.split('@')[0]||'Staff Member';if($('staffHomeName'))$('staffHomeName').textContent=name;
@@ -13721,8 +13750,7 @@ async function refreshStaffWorkspaceData(tabId){
   const seq=++staffWorkspaceLoadSeq;
   try{
     if(['staff-home','orders','my-commission','my-tasks','announcements'].includes(tabId)){
-      await loadCommissionClaims();
-      await Promise.all([userRole==='owner'?loadCustomersFromCloud():Promise.resolve(),loadOrdersFromCloud(),cloudLoadStaffTasks(),cloudLoadNotices(),cloudLoadReferralUploads(),cloudLoadPerformance(new Date().toISOString().slice(0,7)),cloudLoadCommission(),loadProductsFromCloud()]);
+      await Promise.all([loadCommissionClaims(),userRole==='owner'?loadCustomersFromCloud():Promise.resolve(),loadOrdersFromCloud(),cloudLoadStaffTasks(),cloudLoadNotices(),cloudLoadReferralUploads(),cloudLoadPerformance(new Date().toISOString().slice(0,7)),cloudLoadCommission(),loadProductsFromCloud()]);
     }
     if(seq!==staffWorkspaceLoadSeq) return;
     renderStaffTasks(); renderStaffAnnouncements(); refreshMyCommission(); refreshStaffHome();
@@ -14141,6 +14169,8 @@ window.printInvoicePDF = printInvoicePDF;
 window.shareInvoiceWhatsApp = shareInvoiceWhatsApp;
 window.closeThisModal = closeThisModal;
 window.onDataChange = onDataChange;
+window.onCostingDataChange = onCostingDataChange;
+window.onProductionDataChange = onProductionDataChange;
 window.cloudSave = cloudSave;
 window.cloudLoad = cloudLoad;
 window.openAuthModal = openAuthModal;
