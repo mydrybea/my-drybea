@@ -3368,6 +3368,10 @@ window.sendQuickMarketToProduction = sendQuickMarketToProduction;
 // answers "how much of each type do I need to buy". Reuses calculatePack()
 // per pack, then scales its per-pack raw-weight/cost numbers by the order
 // qty — no separate math, so this always agrees with every other sub-tab.
+// Sells at the owner's live-editable MRP/Wholesale price (state.packPrices
+// via getPackPrice()) rather than the original hard-coded PACKS[key].mrp
+// constant, so profit here always matches whatever price is currently set
+// in Base Data / Dynamic Pricing — never goes stale after an edit there.
 function calcOrderToBuy() {
   const body = $('obBuyBody');
   if (!body) return; // sub-tab not in the DOM (older cached HTML)
@@ -3375,6 +3379,9 @@ function calcOrderToBuy() {
   const packSize = $('obPackSize').value;
   const qty = Number($('obQty').value) || 0;
   const mixChoice = $('obMix').value;
+  const basisEl = $('obPriceBasis');
+  const basis = basisEl ? basisEl.value : 'mrp';
+  const sellPrice = getPackPrice(packSize, basis);
 
   let mix, mixLabel;
   if (mixChoice === 'auto') {
@@ -3384,7 +3391,7 @@ function calcOrderToBuy() {
     QM_MIX_PRESETS.forEach(preset => {
       let r;
       try {
-        r = calculatePack(packSize, state.linnaPrice, state.balayaPrice, state.kawalamPrice, preset.mix, 'mrp', 0, 0);
+        r = calculatePack(packSize, state.linnaPrice, state.balayaPrice, state.kawalamPrice, preset.mix, 'sp', 0, sellPrice);
       } catch (e) { return; }
       if (!best || r.profit > best.profit) best = { preset, r };
     });
@@ -3402,7 +3409,7 @@ function calcOrderToBuy() {
 
   let r;
   try {
-    r = calculatePack(packSize, state.linnaPrice, state.balayaPrice, state.kawalamPrice, mix, 'mrp', 0, 0);
+    r = calculatePack(packSize, state.linnaPrice, state.balayaPrice, state.kawalamPrice, mix, 'sp', 0, sellPrice);
   } catch (e) { return; }
 
   const typeRows = [
@@ -3427,14 +3434,61 @@ function calcOrderToBuy() {
   const revenue = r.sp * qty;
   const profit = r.profit * qty;
 
+  // Per-pack figures — what ONE pack of this order costs, sells for, and
+  // earns. r.totalCost/r.sp/r.profit are already per-pack (pre-qty-scale).
+  $('obStatCostPerPack').textContent = fmt(r.totalCost);
+  $('obStatPricePerPack').textContent = fmt(r.sp);
+  $('obStatProfitPerPack').textContent = fmt(r.profit);
+  const profitPerPackEl = $('obStatProfitPerPack') && $('obStatProfitPerPack').closest('.stat');
+  if (profitPerPackEl) profitPerPackEl.classList.toggle('bad', r.profit < 0);
+
   $('obStatTotalCost').textContent = fmt(totalCost);
   $('obStatRevenue').textContent = fmt(revenue);
   $('obStatProfit').textContent = fmt(profit);
   $('obStatMargin').textContent = fmt2(r.margin) + '%';
   const profitStatEl = $('obStatProfit') && $('obStatProfit').closest('.stat');
   if (profitStatEl) profitStatEl.classList.toggle('bad', profit < 0);
+
+  renderOrderMixComparison(packSize, qty, mixLabel, sellPrice);
 }
 window.calcOrderToBuy = calcOrderToBuy;
+
+// ADVANCED — compares every preset fish mix against this order's exact pack
+// size, quantity & selling price (MRP or Wholesale, whichever "Sell At" is
+// set to), so the owner can see cost/profit-per-pack and total order profit
+// for each option side by side, instead of just trusting the "auto" pick.
+function renderOrderMixComparison(packSize, qty, activeMixLabel, sellPrice) {
+  const tbody = $('obMixCompareBody');
+  if (!tbody) return;
+
+  let best = null;
+  const rows = QM_MIX_PRESETS.map(preset => {
+    let r;
+    try {
+      r = calculatePack(packSize, state.linnaPrice, state.balayaPrice, state.kawalamPrice, preset.mix, 'sp', 0, sellPrice);
+    } catch (e) { return null; }
+    const row = { label: preset.label, costPerPack: r.totalCost, profitPerPack: r.profit, margin: r.margin, totalProfit: r.profit * qty };
+    if (!best || row.profitPerPack > best.profitPerPack) best = row;
+    return row;
+  }).filter(Boolean);
+
+  tbody.innerHTML = rows.map(row => {
+    const isBest = best && row.label === best.label;
+    const isActive = row.label === activeMixLabel;
+    let verdict = row.profitPerPack >= 0 ? '<span class="badge badge-good">Profit</span>' : '<span class="badge badge-bad">Loss</span>';
+    if (isBest) verdict = '<span class="badge badge-good">⭐ Best</span>';
+    if (isActive) verdict += ' <span class="badge">Selected</span>';
+    return `<tr${isBest ? ' style="background:rgba(14,164,114,.07);"' : ''}>
+      <td>${row.label}</td>
+      <td class="num">${fmt(row.costPerPack)}</td>
+      <td class="num">${fmt(row.profitPerPack)}</td>
+      <td class="num">${fmt2(row.margin)}%</td>
+      <td class="num">${fmt(row.totalProfit)}</td>
+      <td>${verdict}</td>
+    </tr>`;
+  }).join('');
+}
+window.renderOrderMixComparison = renderOrderMixComparison;
 
 // ==================== "ADD PRODUCT" BATCH LOG (today's pack output) ====================
 // Lets the owner log today's pack output — ADDITIVELY. Each "Add Batch"

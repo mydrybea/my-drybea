@@ -2219,6 +2219,13 @@
               <option value="4">20% Linna / 40% Balaya / 40% Premium</option>
             </select>
           </div>
+          <div class="field">
+            <label>Sell At</label>
+            <select id="obPriceBasis" onchange="calcOrderToBuy()">
+              <option value="mrp">Retail Price (MRP)</option>
+              <option value="wholesale">Wholesale Price</option>
+            </select>
+          </div>
         </div>
         <div class="monthly-summary-note" id="obMixNote"></div>
       </div>
@@ -2241,11 +2248,35 @@
           </table>
         </div>
 
-        <div class="stat-grid" style="margin-top:14px;">
+        <div class="pro-subtitle" style="margin-top:16px;margin-bottom:6px;">Per Pack</div>
+        <div class="stat-grid">
+          <div class="stat"><div class="k">Cost / Pack</div><div class="v" id="obStatCostPerPack">Rs. 0</div></div>
+          <div class="stat"><div class="k">Sell Price / Pack</div><div class="v" id="obStatPricePerPack">Rs. 0</div></div>
+          <div class="stat accent"><div class="k">Profit / Pack</div><div class="v" id="obStatProfitPerPack">Rs. 0</div></div>
+          <div class="stat"><div class="k">Margin</div><div class="v" id="obStatMargin">0%</div></div>
+        </div>
+
+        <div class="pro-subtitle" style="margin-top:16px;margin-bottom:6px;">This Order (Totals)</div>
+        <div class="stat-grid">
           <div class="stat"><div class="k">Total Cost (incl. grinding &amp; packing)</div><div class="v" id="obStatTotalCost">Rs. 0</div></div>
           <div class="stat"><div class="k">Expected Revenue</div><div class="v" id="obStatRevenue">Rs. 0</div></div>
           <div class="stat accent"><div class="k">Expected Profit</div><div class="v" id="obStatProfit">Rs. 0</div></div>
-          <div class="stat"><div class="k">Margin</div><div class="v" id="obStatMargin">0%</div></div>
+        </div>
+      </div>
+
+      <!-- ADVANCED: Mix Comparison — shows profit/pack, total order profit &
+           margin for EVERY preset mix at the chosen pack size, qty & price
+           basis, so the owner can see exactly why "auto" picked what it
+           picked (or manually pick a different mix with full visibility).
+           See calcOrderToBuy() in app.js — renders obMixCompareBody. -->
+      <div class="card" style="margin-top:16px;">
+        <h2><span class="pro-title-icon slate" aria-hidden="true"><i class="business-icon" data-lucide="scale" aria-hidden="true"></i></span><span>Advanced: Mix Comparison for This Order</span></h2>
+        <p class="pro-subtitle slate">Every fish-mix option compared side by side for this exact pack size, quantity &amp; selling price — see why the auto pick wins, or choose a different mix yourself.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Fish Mix</th><th class="num">Cost/Pack</th><th class="num">Profit/Pack</th><th class="num">Margin</th><th class="num">Total Order Profit</th><th>Verdict</th></tr></thead>
+            <tbody id="obMixCompareBody"></tbody>
+          </table>
         </div>
       </div>
     </div>
