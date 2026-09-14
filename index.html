@@ -2184,30 +2184,40 @@
     <!-- ============ COSTING TAB — ORDER → WHAT TO BUY (sub-tab) ============ -->
     <!-- Reverse of Quick Market Decision: instead of "what should I do with
          fish I'm being offered", this answers "I have an order — how much
-         of each type do I need to go and buy". Reuses calculatePack()
-         directly (same per-pack raw-weight math as every other sub-tab), so
-         the numbers always agree with Pricing & Scenarios. "Best Profit Mix
-         (auto)" reuses the QM_MIX_PRESETS list from Quick Market Decision to
-         pick whichever preset mix is most profitable for THIS pack size at
-         today's prices. See calcOrderToBuy() in app.js. -->
+         of each type do I need to go and buy". Supports a MIXED order across
+         all 4 pack sizes at once (e.g. 50g×10 / 100g×30 / 500g×15 / 1kg×2),
+         not just one size at a time — every stat below is a live aggregate
+         across whichever sizes have a qty > 0. Reuses calculatePack()
+         directly per size (same per-pack raw-weight math as every other
+         sub-tab), so the numbers always agree with Pricing & Scenarios, and
+         sells at the owner's live-editable MRP/Wholesale price (getPackPrice())
+         rather than a stale constant. "Best Profit Mix (auto)" reuses the
+         QM_MIX_PRESETS list from Quick Market Decision, picking whichever
+         preset mix gives the best TOTAL profit across the whole mixed order.
+         See calcOrderToBuy() / renderOrderMixComparison() in app.js. -->
     <div id="costingTab-orderbuy" style="display:none;">
       <div class="card">
-        <h2><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="shopping-cart" aria-hidden="true"></i></span><span>Today's Order</span></h2>
-        <p class="pro-subtitle green">Got an order? Enter the pack size &amp; quantity — see exactly how much of each type to buy, and what it'll cost.</p>
-        <div class="grid-3">
+        <h2><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="shopping-cart" aria-hidden="true"></i></span><span>Build Your Order</span></h2>
+        <p class="pro-subtitle green">Got an order? Enter how many packs of each size — mix sizes freely (e.g. 50g×10, 100g×30, 500g×15, 1kg×2) — and everything below updates instantly.</p>
+        <div class="grid-4">
           <div class="field">
-            <label>Pack Size</label>
-            <select id="obPackSize" onchange="calcOrderToBuy()">
-              <option value="50">50g</option>
-              <option value="100">100g</option>
-              <option value="500">500g</option>
-              <option value="1000">1kg</option>
-            </select>
+            <label>50g Pack <span class="hint">(qty)</span></label>
+            <input type="number" id="obQty50" value="0" min="0" step="1" placeholder="0" oninput="calcOrderToBuy()">
           </div>
           <div class="field">
-            <label>Order Qty <span class="hint">(packs)</span></label>
-            <input type="number" id="obQty" value="10" min="1" step="1" oninput="calcOrderToBuy()">
+            <label>100g Pack <span class="hint">(qty)</span></label>
+            <input type="number" id="obQty100" value="0" min="0" step="1" placeholder="0" oninput="calcOrderToBuy()">
           </div>
+          <div class="field">
+            <label>500g Pack <span class="hint">(qty)</span></label>
+            <input type="number" id="obQty500" value="0" min="0" step="1" placeholder="0" oninput="calcOrderToBuy()">
+          </div>
+          <div class="field">
+            <label>1kg Pack <span class="hint">(qty)</span></label>
+            <input type="number" id="obQty1000" value="0" min="0" step="1" placeholder="0" oninput="calcOrderToBuy()">
+          </div>
+        </div>
+        <div class="grid-2" style="margin-top:12px;">
           <div class="field">
             <label>Fish Mix</label>
             <select id="obMix" onchange="calcOrderToBuy()">
@@ -2228,11 +2238,27 @@
           </div>
         </div>
         <div class="monthly-summary-note" id="obMixNote"></div>
+        <div class="btn-row" style="margin-top:10px;">
+          <button class="btn" onclick="clearOrderToBuy()"><i class="business-icon icon-inline" data-lucide="rotate-ccw" aria-hidden="true"></i> Clear Order</button>
+        </div>
       </div>
 
       <div class="card" style="margin-top:16px;">
-        <h2><span class="pro-title-icon orange" aria-hidden="true"><i class="business-icon" data-lucide="basket" aria-hidden="true"></i></span><span>What to Buy</span></h2>
-        <p class="pro-subtitle orange">Raw Umbalakada needed per type — already inflated to cover grinding dust loss, so this is exactly how much to buy at the market.</p>
+        <h2><span class="pro-title-icon teal" aria-hidden="true"><i class="business-icon" data-lucide="chart-no-axes-combined" aria-hidden="true"></i></span><span>Order Summary</span></h2>
+        <p class="pro-subtitle teal">Live totals across every pack size in this order.</p>
+        <div class="stat-grid">
+          <div class="stat"><div class="k">Total Packs</div><div class="v" id="obStatTotalPacks">0</div></div>
+          <div class="stat"><div class="k">Umbalakada Required</div><div class="v" id="obStatTotalRawKg">0 kg</div></div>
+          <div class="stat"><div class="k">Total Cost</div><div class="v" id="obStatTotalCost">Rs. 0</div></div>
+          <div class="stat"><div class="k">Expected Revenue</div><div class="v" id="obStatRevenue">Rs. 0</div></div>
+          <div class="stat accent"><div class="k">Expected Profit</div><div class="v" id="obStatProfit">Rs. 0</div></div>
+          <div class="stat"><div class="k">Overall Margin</div><div class="v" id="obStatMargin">0%</div></div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:16px;">
+        <h2><span class="pro-title-icon orange" aria-hidden="true"><i class="business-icon" data-lucide="basket" aria-hidden="true"></i></span><span>What to Buy — Umbalakada Scenario</span></h2>
+        <p class="pro-subtitle orange">Raw Umbalakada needed per type, already inflated to cover grinding dust loss — exactly how much to buy at the market for this whole order.</p>
         <div class="table-wrap">
           <table>
             <thead><tr><th>Type</th><th class="num">Buy This Much (kg)</th><th class="num">Price/kg</th><th class="num">Cost (Rs.)</th></tr></thead>
@@ -2247,34 +2273,29 @@
             </tfoot>
           </table>
         </div>
+      </div>
 
-        <div class="pro-subtitle" style="margin-top:16px;margin-bottom:6px;">Per Pack</div>
-        <div class="stat-grid">
-          <div class="stat"><div class="k">Cost / Pack</div><div class="v" id="obStatCostPerPack">Rs. 0</div></div>
-          <div class="stat"><div class="k">Sell Price / Pack</div><div class="v" id="obStatPricePerPack">Rs. 0</div></div>
-          <div class="stat accent"><div class="k">Profit / Pack</div><div class="v" id="obStatProfitPerPack">Rs. 0</div></div>
-          <div class="stat"><div class="k">Margin</div><div class="v" id="obStatMargin">0%</div></div>
-        </div>
-
-        <div class="pro-subtitle" style="margin-top:16px;margin-bottom:6px;">This Order (Totals)</div>
-        <div class="stat-grid">
-          <div class="stat"><div class="k">Total Cost (incl. grinding &amp; packing)</div><div class="v" id="obStatTotalCost">Rs. 0</div></div>
-          <div class="stat"><div class="k">Expected Revenue</div><div class="v" id="obStatRevenue">Rs. 0</div></div>
-          <div class="stat accent"><div class="k">Expected Profit</div><div class="v" id="obStatProfit">Rs. 0</div></div>
+      <div class="card" style="margin-top:16px;">
+        <h2><span class="pro-title-icon blue" aria-hidden="true"><i class="business-icon" data-lucide="layout-grid" aria-hidden="true"></i></span><span>Breakdown by Pack Size</span></h2>
+        <p class="pro-subtitle blue">Cost, sell price &amp; profit for each pack size in this order — sizes with 0 qty are dimmed but still shown for reference.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Pack</th><th class="num">Qty</th><th class="num">Cost/Pack</th><th class="num">Sell/Pack</th><th class="num">Profit/Pack</th><th class="num">Margin</th><th class="num">Subtotal Profit</th></tr></thead>
+            <tbody id="obBreakdownBody"></tbody>
+          </table>
         </div>
       </div>
 
-      <!-- ADVANCED: Mix Comparison — shows profit/pack, total order profit &
-           margin for EVERY preset mix at the chosen pack size, qty & price
-           basis, so the owner can see exactly why "auto" picked what it
-           picked (or manually pick a different mix with full visibility).
-           See calcOrderToBuy() in app.js — renders obMixCompareBody. -->
+      <!-- ADVANCED: Mix Comparison — shows the TOTAL order profit & overall
+           margin for EVERY preset mix, applied across every pack size & qty
+           entered above, so the owner can see exactly why "auto" picked what
+           it picked (or manually pick a different mix with full visibility). -->
       <div class="card" style="margin-top:16px;">
         <h2><span class="pro-title-icon slate" aria-hidden="true"><i class="business-icon" data-lucide="scale" aria-hidden="true"></i></span><span>Advanced: Mix Comparison for This Order</span></h2>
-        <p class="pro-subtitle slate">Every fish-mix option compared side by side for this exact pack size, quantity &amp; selling price — see why the auto pick wins, or choose a different mix yourself.</p>
+        <p class="pro-subtitle slate">Every fish-mix option compared for this exact order (all pack sizes &amp; quantities combined) — see why the auto pick wins, or choose a different mix yourself.</p>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>Fish Mix</th><th class="num">Cost/Pack</th><th class="num">Profit/Pack</th><th class="num">Margin</th><th class="num">Total Order Profit</th><th>Verdict</th></tr></thead>
+            <thead><tr><th>Fish Mix</th><th class="num">Total Order Profit</th><th class="num">Overall Margin</th><th>Verdict</th></tr></thead>
             <tbody id="obMixCompareBody"></tbody>
           </table>
         </div>
