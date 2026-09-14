@@ -1883,6 +1883,7 @@ function updatePackPrice(sizeKey, basis, value) {
   const n = Number(value);
   state.packPrices[sizeKey][basis] = isFinite(n) && n >= 0 ? n : 0;
   renderDynamicPricing();
+  renderBaseDataPricing();
   onDataChange();
   syncPackPriceToCloud(sizeKey);
 }
@@ -1921,6 +1922,7 @@ async function loadPackPricesFromCloud() {
       state.packPrices[row.pack_size_g] = { mrp: Number(row.mrp) || 0, wholesale: Number(row.wholesale) || 0 };
     });
     renderDynamicPricing();
+    renderBaseDataPricing();
   } catch (e) {
     // Table doesn't exist yet — keep using whatever's already in state
     // (from the app_data JSON blob / hard-coded defaults).
@@ -2372,6 +2374,7 @@ function calcAll() {
   calcBulk();
   calcDashboard();
   renderDynamicPricing();
+  renderBaseDataPricing();
   renderGrindingDustAllPacksTable();
 }
 
@@ -2458,6 +2461,30 @@ function renderDynamicPricing() {
   }).join('');
 }
 window.renderDynamicPricing = renderDynamicPricing;
+
+// ==================== BASE DATA — OWNER-EDITABLE PRICING ====================
+// Options → Base Data tab. Reuses the exact same state.packPrices data and
+// updatePackPrice()/getPackPrice() helpers as the Dynamic Pricing Suggestions
+// table (Costing tab) — deliberately NOT a separate/duplicate price field, so
+// the two views (and the Dashboard, quotes, invoices — anything reading
+// getPackPrice()) can never drift out of sync with each other. Editing a
+// price here calls the same updatePackPrice(), which re-renders both tables,
+// saves to state and best-effort syncs to the pack_prices Supabase table.
+function renderBaseDataPricing() {
+  const tbody = $('baseDataPricingBody');
+  if (!tbody) return;
+  tbody.innerHTML = Object.keys(PACKS).map(k => {
+    const p = PACKS[k];
+    const mrp = getPackPrice(k, 'mrp');
+    const wholesale = getPackPrice(k, 'wholesale');
+    return `<tr>
+      <td>${p.label}</td>
+      <td class="num"><input type="number" class="editable-sp" value="${mrp}" min="0" style="width:110px;min-height:32px;text-align:right;" onchange="updatePackPrice('${k}','mrp',this.value)"></td>
+      <td class="num"><input type="number" class="editable-sp" value="${wholesale}" min="0" style="width:110px;min-height:32px;text-align:right;" onchange="updatePackPrice('${k}','wholesale',this.value)"></td>
+    </tr>`;
+  }).join('');
+}
+window.renderBaseDataPricing = renderBaseDataPricing;
 
 function calcScenario() {
   const sizeKey = state.packSize;
@@ -13828,6 +13855,7 @@ function activateAppTab(tabId){
     // Production tab uses, in case Costing is opened first.
     loadFishBillsFromCloud().then(() => renderReadymadeBills());
   }
+  if (tabId === 'data') { renderBaseDataPricing(); }
   if (tabId === 'monthly-summary') { updateMonthlySummary(); }
   if (tabId === 'analytics') { renderAnalytics(); }
   if (tabId === 'history') renderHistory();

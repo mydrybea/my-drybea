@@ -3634,7 +3634,7 @@
   <!-- ============ DATA TAB ============ -->
   <section id="data" class="tab-panel" style="display:none;" role="tabpanel">
     <div class="card">
-      <h2><span class="pro-title-icon slate" aria-hidden="true"><i class="business-icon" data-lucide="lock-keyhole" aria-hidden="true"></i></span><span>Base Data</span></h2><p class="pro-subtitle slate">Protected assumptions used by the system.</p>
+      <h2><span class="pro-title-icon slate" aria-hidden="true"><i class="business-icon" data-lucide="lock-keyhole" aria-hidden="true"></i></span><span>Base Data</span></h2><p class="pro-subtitle slate">Fixed pack specifications used by the costing &amp; grinding engine. Reference only — not editable.</p>
       <div class="table-wrap">
         <table>
           <thead><tr><th>Param</th><th>50g</th><th>100g</th><th>500g</th><th>1kg</th></tr></thead>
@@ -3643,7 +3643,6 @@
             <tr><td>Dust Weight</td><td>5g</td><td>10g</td><td>25g</td><td>50g</td></tr>
             <tr><td>Grinding Labour</td><td>Rs.2</td><td>Rs.4</td><td>Rs.20</td><td>Rs.40</td></tr>
             <tr><td>Packaging</td><td>Rs.13.5</td><td>Rs.43</td><td>Rs.130</td><td>Rs.140</td></tr>
-            <tr><td>MRP</td><td>Rs.170</td><td>Rs.350</td><td>Rs.1750</td><td>Rs.3500</td></tr>
           </tbody>
         </table>
       </div>
@@ -3652,6 +3651,21 @@
         Linna: 20% loss → 80% usable<br>
         Balaya: 10% loss → 90% usable<br>
         Premium Mix: 35% loss → 65% usable
+      </div>
+    </div>
+
+    <div class="card">
+      <h2><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="tag" aria-hidden="true"></i></span><span>Pricing — MRP &amp; Wholesale</span></h2><p class="pro-subtitle gold">Owner-editable. Set your Retail (MRP) and Wholesale selling price for each pack size — changes save instantly and apply across the whole system.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Pack</th><th class="num">Retail Price (MRP)</th><th class="num">Wholesale Price</th></tr></thead>
+          <tbody id="baseDataPricingBody">
+            <tr><td colspan="3" style="text-align:center;opacity:.5;padding:14px;">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="notice" style="margin-top:12px;">
+        <strong>🔗 Synced app-wide:</strong> These are the same prices used in Costing → Dynamic Pricing Suggestions, the Dashboard, quotes and invoices. Editing a price here (or there) updates everywhere instantly and saves to the cloud automatically.
       </div>
     </div>
 
