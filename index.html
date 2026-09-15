@@ -2664,9 +2664,33 @@
         <div class="field"><label>Dust Used / Recovered <span class="hint">(kg — auto-filled from today's purchase)</span></label><input type="number" id="dpDustUsedKg" value="0" min="0" step="0.1" oninput="updateDailyProductionSummaryLive()"></div>
       </div>
       <div class="grid-3">
-        <div class="field"><label>Dust Sale Price <span class="hint">(Rs./kg, if sold)</span></label><input type="number" id="dpDustSalePrice" value="0" min="0" step="0.01" oninput="updateDailyProductionSummaryLive()"></div>
+        <div class="field"><label>Dust Sale Price <span class="hint">(Rs./kg, if sold)</span></label><input type="number" id="dpDustSalePrice" value="0" min="0" step="0.01" oninput="renderGrindBatches();"></div>
       </div>
       <p class="sub" id="dpDustSuggestNote" style="margin:4px 0 0;"></p>
+
+      <h3 style="color:var(--green);margin:16px 0 8px;">🧪 Grind Batch Log — Actual Dust Measured (Today)</h3>
+      <p class="sub" style="margin:0 0 10px;">Log each grind as it happens: pick the fish type, how many kg went in, and how much dust actually came out on the scale (in grams) — e.g. Linna Umbalakada 1kg ground → 100g dust, Balaya Umbalakada 2kg ground → 20g dust, Mix 5kg ground → 1kg (1000g) dust. Real measured batches replace the estimated figures above automatically.</p>
+      <div class="grid-3">
+        <div class="field"><label>Fish Type</label><select id="dgbType"></select></div>
+        <div class="field"><label>Kg Ground</label><input type="number" id="dgbKg" min="0" step="0.1" placeholder="e.g. 1"></div>
+        <div class="field"><label>Dust Produced <span class="hint">(grams, measured)</span></label><input type="number" id="dgbDustG" min="0" step="1" placeholder="e.g. 100"></div>
+      </div>
+      <div class="btn-row" style="margin:6px 0 14px;">
+        <button class="btn btn-primary btn-sm" onclick="addGrindBatch()"><i class="business-icon icon-inline" data-lucide="plus" aria-hidden="true"></i> Add Batch</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Fish Type</th><th>Kg Ground</th><th>Dust Produced</th><th>Dust Yield %</th><th class="num">Dust Value (Rs.)</th><th></th></tr></thead>
+          <tbody id="grindBatchesBody"><tr><td colspan="6" style="text-align:center;opacity:.5;padding:14px;">No batches logged yet today — add one above after each grind.</td></tr></tbody>
+        </table>
+      </div>
+      <p class="sub" id="gbNote" style="margin:8px 0 0;"></p>
+      <div class="stat-grid" style="margin-top:10px;">
+        <div class="stat"><div class="k">Total Ground (Batches)</div><div class="v" id="gbTotalKg">0 kg</div></div>
+        <div class="stat"><div class="k">Total Dust (Batches)</div><div class="v" id="gbTotalDust">0 g</div></div>
+        <div class="stat"><div class="k">Avg Dust Yield %</div><div class="v" id="gbAvgYield">0%</div></div>
+        <div class="stat accent"><div class="k">Dust Value (at Dust Sale Price)</div><div class="v" id="gbDustValue">Rs. 0</div></div>
+      </div>
 
       <h3 style="color:var(--green);margin:16px 0 8px;">📦 Output by Product (Today)</h3>
       <p class="sub" style="margin:0 0 10px;">How many of each pack size actually came out of today's batch.</p>
@@ -2707,8 +2731,8 @@
       <h3 style="color:var(--green);margin:16px 0 8px;">🗓️ Daily Summary (This Month)</h3>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Date</th><th>Cost/kg</th><th>Price/kg</th><th class="num">Profit/kg</th><th>Kg Produced</th><th class="num">Dust Removed</th><th class="num">Total Profit</th><th class="num">Net Profit (Dust)</th><th></th></tr></thead>
-          <tbody id="dpLogBody"><tr><td colspan="9" style="text-align:center;opacity:.5;padding:20px;">No entries yet this month.</td></tr></tbody>
+          <thead><tr><th>Date</th><th>Cost/kg</th><th>Price/kg</th><th class="num">Profit/kg</th><th>Kg Produced</th><th class="num">Dust Removed</th><th class="num">Dust Value</th><th class="num">Total Profit</th><th class="num">Net Profit (Dust)</th><th></th></tr></thead>
+          <tbody id="dpLogBody"><tr><td colspan="10" style="text-align:center;opacity:.5;padding:20px;">No entries yet this month.</td></tr></tbody>
         </table>
       </div>
     </div>

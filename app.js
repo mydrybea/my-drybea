@@ -2132,6 +2132,131 @@ function renderUmbalakadaPurchaseSyncTable() {
 }
 window.renderUmbalakadaPurchaseSyncTable = renderUmbalakadaPurchaseSyncTable;
 
+// ==================== GRIND BATCH LOG (Actual Measured Dust) ====================
+// Real per-batch grinding records: the owner enters, after each grind, the
+// fish type + kg ground + dust actually produced (grams, weighed on a
+// scale) — e.g. "Linna 1kg → 100g dust", "Balaya 2kg → 20g dust", "Mix 5kg
+// → 1000g dust". This is what actually happened, not the theoretical
+// Grinding Yield % estimate the section above suggests — so once at least
+// one batch is logged for today, the batch totals take over from the
+// purchase-log auto-sync for "Umbalakada Ground Today" / "Dust Generated
+// Today" (real measured numbers beat estimates everywhere downstream:
+// dust waste cost, net dust impact, net profit incl. dust). Also shows a
+// per-batch and total "Dust Value" at the Dust Sale Price entered above —
+// this is the answer to "what is the dust actually worth". Saved per-day
+// in production_cost_log.grind_batches (jsonb) + dust_batches_value
+// (numeric) — see SQL comment above saveDailyProductionLog().
+let grindBatchesToday = [];
+let lastDustBatchesValueForSave = 0;
+
+function populateGrindBatchTypeOptions() {
+  const sel = $('dgbType');
+  if (!sel) return;
+  const prevValue = sel.value;
+  const types = ensureUmbalakadaTypes().filter(t => t.core);
+  sel.innerHTML = types.map(t => `<option value="${t.id}">${t.name} Umbalakada</option>`).join('')
+    + '<option value="mix">Mix (multiple types ground together)</option>';
+  if ([...sel.options].some(o => o.value === prevValue)) sel.value = prevValue;
+}
+window.populateGrindBatchTypeOptions = populateGrindBatchTypeOptions;
+
+function addGrindBatch() {
+  const typeSel = $('dgbType');
+  const kgEl = $('dgbKg');
+  const dustEl = $('dgbDustG');
+  const kg = Number(kgEl && kgEl.value) || 0;
+  const dustG = Number(dustEl && dustEl.value) || 0;
+  if (kg <= 0) { alert('Enter the kg of Umbalakada ground for this batch.'); return; }
+  if (dustG < 0) { alert('Enter a valid dust weight (grams).'); return; }
+  if (dustG > kg * 1000) { alert('Dust produced can\'t be more than the Umbalakada that went in — check the numbers.'); return; }
+  const typeId = typeSel ? typeSel.value : 'mix';
+  const typeName = typeSel && typeSel.selectedOptions.length ? typeSel.selectedOptions[0].textContent : 'Mix';
+  grindBatchesToday.push({
+    id: 'gb_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+    typeId, typeName, kg, dustG,
+    yieldPct: kg > 0 ? (dustG / (kg * 1000)) * 100 : 0
+  });
+  if (kgEl) kgEl.value = '';
+  if (dustEl) dustEl.value = '';
+  renderGrindBatches();
+  updateStatus(`✅ Batch added: ${fmt2(kg)}kg ${typeName} → ${fmt2(dustG)}g dust`);
+}
+window.addGrindBatch = addGrindBatch;
+
+function deleteGrindBatch(id) {
+  grindBatchesToday = grindBatchesToday.filter(b => b.id !== id);
+  renderGrindBatches();
+}
+window.deleteGrindBatch = deleteGrindBatch;
+
+function renderGrindBatches() {
+  const tbody = $('grindBatchesBody');
+  if (!tbody) return;
+  const dustSalePrice = Number($('dpDustSalePrice') && $('dpDustSalePrice').value) || 0;
+
+  if (grindBatchesToday.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;opacity:.5;padding:14px;">No batches logged yet today — add one above after each grind.</td></tr>';
+  } else {
+    tbody.innerHTML = grindBatchesToday.map(b => {
+      const valueRs = (b.dustG / 1000) * dustSalePrice;
+      return `<tr>
+        <td>${b.typeName}</td>
+        <td>${fmt2(b.kg)} kg</td>
+        <td>${fmt2(b.dustG)} g</td>
+        <td>${b.yieldPct.toFixed(1)}%</td>
+        <td class="num">${fmt(valueRs)}</td>
+        <td>${actionMenuHTML([
+          { label: 'Delete', icon: '🗑️', danger: true, onclick: `deleteGrindBatch('${b.id}')` }
+        ])}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  const totalKg = grindBatchesToday.reduce((s, b) => s + b.kg, 0);
+  const totalDustG = grindBatchesToday.reduce((s, b) => s + b.dustG, 0);
+  const avgYieldPct = totalKg > 0 ? (totalDustG / (totalKg * 1000)) * 100 : 0;
+  const totalDustValue = (totalDustG / 1000) * dustSalePrice;
+  lastDustBatchesValueForSave = totalDustValue;
+
+  const totalKgEl = $('gbTotalKg'), totalDustEl = $('gbTotalDust'), avgYieldEl = $('gbAvgYield'), dustValueEl = $('gbDustValue');
+  if (totalKgEl) totalKgEl.textContent = fmt2(totalKg) + ' kg';
+  if (totalDustEl) totalDustEl.textContent = fmt2(totalDustG) + ' g (' + fmt2(totalDustG / 1000) + ' kg)';
+  if (avgYieldEl) avgYieldEl.textContent = avgYieldPct.toFixed(1) + '%';
+  if (dustValueEl) dustValueEl.textContent = fmt(totalDustValue);
+
+  // Real measured batches beat the purchase-log estimate: once at least one
+  // batch exists today, push the real totals straight into the fields that
+  // drive the rest of the Grinding & Dust math (waste cost, net dust
+  // impact, net profit incl. dust) and the Daily Production Log save.
+  const noteEl = $('gbNote');
+  if (grindBatchesToday.length > 0) {
+    if ($('dpUmbalakadaGroundKg')) $('dpUmbalakadaGroundKg').value = fmt2(totalKg);
+    if ($('dpDustGeneratedKg')) $('dpDustGeneratedKg').value = fmt2(totalDustG / 1000);
+    if (noteEl) noteEl.textContent = `🔄 ${grindBatchesToday.length} batch${grindBatchesToday.length > 1 ? 'es' : ''} logged today — these real measured totals have replaced the estimated Umbalakada Ground / Dust Generated figures above.`;
+  } else if (noteEl) {
+    noteEl.textContent = 'Add a batch above after each grind — its real measured totals will replace the estimated figures above.';
+  }
+
+  updateDailyProductionSummaryLive();
+}
+window.renderGrindBatches = renderGrindBatches;
+
+// Restores today's batches after a page reload / tab reopen, from whatever
+// was last saved in today's production_cost_log row — never overwrites
+// batches already sitting unsaved in memory this session.
+function loadTodayGrindBatchesFromLog() {
+  populateGrindBatchTypeOptions();
+  if (grindBatchesToday.length === 0) {
+    const today = todayIso();
+    const rec = (dailyProductionLogCache || []).find(r => r.log_date === today);
+    if (rec && Array.isArray(rec.grind_batches) && rec.grind_batches.length > 0) {
+      grindBatchesToday = rec.grind_batches.map(b => ({ ...b }));
+    }
+  }
+  renderGrindBatches();
+}
+window.loadTodayGrindBatchesFromLog = loadTodayGrindBatchesFromLog;
+
 function getAllocatedOverheadPerPack() {
   let totalPacks = 0;
   Object.keys(PACKS).forEach(key => { totalPacks += state.dashQty[key] || 0; });
@@ -4476,6 +4601,7 @@ function calcProduction() {
   lastProdAvgMarketPrice = avgFinPrice;
   lastProdAvgProfitPerKg = avgProfitPerKg;
   renderUmbalakadaPurchaseSyncTable(); // local re-render only — cloud sync happens via syncUmbalakadaGroundFromPurchaseLog()
+  populateGrindBatchTypeOptions();
   updateDailyProductionSummaryLive();
 
   const colors = getChartColors();
@@ -4796,7 +4922,9 @@ async function saveDailyProductionLog() {
   //   ADD COLUMN IF NOT EXISTS output_qty_500 integer DEFAULT 0,
   //   ADD COLUMN IF NOT EXISTS output_qty_1000 integer DEFAULT 0,
   //   ADD COLUMN IF NOT EXISTS output_total_profit numeric DEFAULT 0,
-  //   ADD COLUMN IF NOT EXISTS umbalakada_variety_breakdown jsonb DEFAULT '[]'::jsonb;
+  //   ADD COLUMN IF NOT EXISTS umbalakada_variety_breakdown jsonb DEFAULT '[]'::jsonb,
+  //   ADD COLUMN IF NOT EXISTS grind_batches jsonb DEFAULT '[]'::jsonb,
+  //   ADD COLUMN IF NOT EXISTS dust_batches_value numeric DEFAULT 0;
   // (Existing owner_id-uuid RLS policy already covers these new columns —
   // no policy changes needed, this only adds columns to an already-owned row.)
   const row = {
@@ -4828,6 +4956,8 @@ async function saveDailyProductionLog() {
     net_dust_impact: lastNetDustImpactForSave,
     net_profit_incl_dust: totalProfit + lastNetDustImpactForSave,
     umbalakada_variety_breakdown: lastUmbalakadaBreakdownForSave,
+    grind_batches: grindBatchesToday,
+    dust_batches_value: lastDustBatchesValueForSave,
     notes,
     created_by: currentUser.id
   };
@@ -4917,7 +5047,7 @@ function renderDailyProductionLog() {
   const entries = [...dailyProductionLogCache].sort((a, b) => a.log_date.localeCompare(b.log_date));
 
   if (entries.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;opacity:.5;padding:20px;">No entries yet this month.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;opacity:.5;padding:20px;">No entries yet this month.</td></tr>';
   } else {
     tbody.innerHTML = [...entries].reverse().map(r => {
       const netProfitInclDust = r.net_profit_incl_dust !== undefined && r.net_profit_incl_dust !== null
@@ -4930,6 +5060,7 @@ function renderDailyProductionLog() {
         <td class="num"><span class="badge ${Number(r.profit_per_kg)>=0?'badge-good':'badge-bad'}">${fmt(r.profit_per_kg)}</span></td>
         <td>${Number(r.kg_produced || 0).toFixed(0)} kg</td>
         <td class="num">${Number(r.dust_removed_kg || 0).toFixed(2)} kg</td>
+        <td class="num">${fmt(r.dust_batches_value || 0)}</td>
         <td class="num">${fmt(r.total_profit)}</td>
         <td class="num"><span class="badge ${netProfitInclDust>=0?'badge-good':'badge-bad'}">${fmt(netProfitInclDust)}</span></td>
         <td>${userRole === 'owner' ? actionMenuHTML([
@@ -14013,7 +14144,7 @@ function activateAppTab(tabId){
       renderReadymadeBills();
       renderSellerLedger();
     });
-    loadDailyProductionLog().then(() => { renderDailyProductionLog(); updateIngredientVarianceAlert(lastProdIngredientsCostPerKg); });
+    loadDailyProductionLog().then(() => { renderDailyProductionLog(); updateIngredientVarianceAlert(lastProdIngredientsCostPerKg); loadTodayGrindBatchesFromLog(); });
     loadDailyPurchaseLog().then(() => syncUmbalakadaGroundFromPurchaseLog());
     loadProductionBatchesFromCloud().then(renderProductionBatches);
     // "Link Packs to Store Products" (moved here from the old Costing tab
