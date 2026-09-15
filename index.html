@@ -2631,69 +2631,71 @@
     <!-- ============ DAILY PRODUCTION COST LOG ============ -->
     <div class="card" style="margin-top:16px;">
       <h2><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="calendar-check" aria-hidden="true"></i></span><span>Daily Production Log</span></h2>
-      <p class="pro-subtitle gold">Save today's cost &amp; profit snapshot from the calculator above, then track profit day by day and month by month.</p>
+      <p class="pro-subtitle gold">Do this every day — takes 2 minutes. Follow Step 1 to Step 6, then Save. Everything below Save fills in by itself once you save.</p>
 
+      <h3 style="color:var(--green);margin:16px 0 8px;"><span style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:var(--green);color:#fff;font-weight:700;font-size:13px;margin-right:6px;vertical-align:middle;">1</span> Today's Basics</h3>
+      <p class="sub" style="margin:0 0 10px;">How much you made today, and the price you sold it at.</p>
       <div class="grid-3">
-        <div class="field"><label>Kg Produced Today (optional)</label><input type="number" id="dpKgProduced" value="0" min="0" oninput="updateDailyProductionSummaryLive()"></div>
+        <div class="field"><label>Kg Produced Today</label><input type="number" id="dpKgProduced" value="0" min="0" oninput="updateDailyProductionSummaryLive()"></div>
         <div class="field">
-          <label>Today's Selling Price /kg (optional override)</label>
+          <label>Selling Price /kg <span class="hint">(leave blank to use calculator price)</span></label>
           <input type="number" id="dpMarketPrice" min="0" step="0.01" placeholder="Auto from calculator" oninput="updateDailyProductionSummaryLive()">
         </div>
         <div class="field"><label>Note (optional)</label><input type="text" id="dpNote" placeholder="Optional notes..."></div>
       </div>
 
-      <h3 style="color:var(--green);margin:16px 0 8px;">🐟 Umbalakada Purchased &amp; Ground (Today)</h3>
-      <p class="sub" style="margin:0 0 10px;">Auto-synced live from the Costing tab's "Today's Umbalakada Purchase" — log the purchase there once and it flows into this snapshot automatically, no need to re-type it here.</p>
+      <h3 style="color:var(--green);margin:16px 0 8px;"><span style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:var(--green);color:#fff;font-weight:700;font-size:13px;margin-right:6px;vertical-align:middle;">2</span> Today's Fish Purchase <span class="hint">(fills in by itself)</span></h3>
+      <p class="sub" style="margin:0 0 10px;">This comes from what you already typed in the Costing tab's "Today's Umbalakada Purchase". You don't need to type it again here.</p>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Variety</th><th>Avg Price Paid Today (Rs./kg)</th><th>Qty Purchased/Ground Today</th></tr></thead>
+          <thead><tr><th>Variety</th><th>Price Paid Today (Rs./kg)</th><th>Qty Bought Today</th></tr></thead>
           <tbody id="umbTypesBody"></tbody>
         </table>
       </div>
       <p class="sub" id="umbSyncNote" style="margin:8px 0 0;"></p>
       <div class="stat-grid" style="margin-top:10px;">
-        <div class="stat"><div class="k">Total Ground Today</div><div class="v" id="umbTotalGroundKg">0 kg</div></div>
-        <div class="stat accent"><div class="k">Weighted Avg Price/kg</div><div class="v" id="umbAvgPricePerKg">Rs. 0</div></div>
+        <div class="stat"><div class="k">Total Bought Today</div><div class="v" id="umbTotalGroundKg">0 kg</div></div>
+        <div class="stat accent"><div class="k">Average Price/kg</div><div class="v" id="umbAvgPricePerKg">Rs. 0</div></div>
       </div>
 
-      <h3 style="color:var(--green);margin:16px 0 8px;">🌫️ Grinding &amp; Dust (Today)</h3>
-      <p class="sub" style="margin:0 0 10px;">Track today's actual grinding: how much Umbalakada went in, how much dust it produced, and how much of that dust was recovered (e.g. sold as fish powder) vs. truly wasted.</p>
+      <h3 style="color:var(--green);margin:16px 0 8px;"><span style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:var(--green);color:#fff;font-weight:700;font-size:13px;margin-right:6px;vertical-align:middle;">3</span> Dust Summary <span class="hint">(fills in by itself — you can change it)</span></h3>
+      <p class="sub" style="margin:0 0 10px;">How much dust came out of grinding, and how much you used or sold vs. threw away.</p>
       <div class="grid-3">
-        <div class="field"><label>Umbalakada Ground Today <span class="hint">(kg — auto-filled from today's purchase above; edit to override)</span></label><input type="number" id="dpUmbalakadaGroundKg" value="0" min="0" step="0.1" oninput="updateDailyProductionSummaryLive()"></div>
-        <div class="field"><label>Dust Generated Today <span class="hint">(kg — auto-filled from today's purchase)</span></label><input type="number" id="dpDustGeneratedKg" value="0" min="0" step="0.1" oninput="updateDailyProductionSummaryLive()"></div>
-        <div class="field"><label>Dust Used / Recovered <span class="hint">(kg — auto-filled from today's purchase)</span></label><input type="number" id="dpDustUsedKg" value="0" min="0" step="0.1" oninput="updateDailyProductionSummaryLive()"></div>
+        <div class="field"><label>Umbalakada Ground (kg)</label><input type="number" id="dpUmbalakadaGroundKg" value="0" min="0" step="0.1" oninput="updateDailyProductionSummaryLive()"></div>
+        <div class="field"><label>Dust Made (kg)</label><input type="number" id="dpDustGeneratedKg" value="0" min="0" step="0.1" oninput="updateDailyProductionSummaryLive()"></div>
+        <div class="field"><label>Dust Used or Sold (kg)</label><input type="number" id="dpDustUsedKg" value="0" min="0" step="0.1" oninput="updateDailyProductionSummaryLive()"></div>
       </div>
       <div class="grid-3">
-        <div class="field"><label>Dust Sale Price <span class="hint">(Rs./kg, if sold)</span></label><input type="number" id="dpDustSalePrice" value="0" min="0" step="0.01" oninput="renderGrindBatches();"></div>
+        <div class="field"><label>Dust Selling Price <span class="hint">(Rs./kg, if you sell it)</span></label><input type="number" id="dpDustSalePrice" value="0" min="0" step="0.01" oninput="renderGrindBatches();"></div>
       </div>
       <p class="sub" id="dpDustSuggestNote" style="margin:4px 0 0;"></p>
 
-      <h3 style="color:var(--green);margin:16px 0 8px;">🧪 Grind Batch Log — Actual Dust Measured (Today)</h3>
-      <p class="sub" style="margin:0 0 10px;">Log each grind as it happens: pick the fish type, how many kg went in, and how much dust actually came out on the scale (in grams) — e.g. Linna Umbalakada 1kg ground → 100g dust, Balaya Umbalakada 2kg ground → 20g dust, Mix 5kg ground → 1kg (1000g) dust. Real measured batches replace the estimated figures above automatically.</p>
+      <h3 style="color:var(--green);margin:16px 0 8px;"><span style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:var(--green);color:#fff;font-weight:700;font-size:13px;margin-right:6px;vertical-align:middle;">4</span> Add Each Grinding Round <span class="hint">(optional — for exact numbers)</span></h3>
+      <p class="sub" style="margin:0 0 10px;">Every time you grind fish, add it here — pick the type, how many kg went in, and how many grams of dust came out. Example: Linna 1kg → 100g dust. Add as many rounds as you did today; the totals below update automatically and replace Step 3's numbers.</p>
       <div class="grid-3">
         <div class="field"><label>Fish Type</label><select id="dgbType"></select></div>
         <div class="field"><label>Kg Ground</label><input type="number" id="dgbKg" min="0" step="0.1" placeholder="e.g. 1"></div>
-        <div class="field"><label>Dust Produced <span class="hint">(grams, measured)</span></label><input type="number" id="dgbDustG" min="0" step="1" placeholder="e.g. 100"></div>
+        <div class="field"><label>Dust Made <span class="hint">(grams)</span></label><input type="number" id="dgbDustG" min="0" step="1" placeholder="e.g. 100"></div>
       </div>
       <div class="btn-row" style="margin:6px 0 14px;">
-        <button class="btn btn-primary btn-sm" onclick="addGrindBatch()"><i class="business-icon icon-inline" data-lucide="plus" aria-hidden="true"></i> Add Batch</button>
+        <button class="btn btn-primary btn-sm" onclick="addGrindBatch()"><i class="business-icon icon-inline" data-lucide="plus" aria-hidden="true"></i> Add This Round</button>
       </div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Fish Type</th><th>Kg Ground</th><th>Dust Produced</th><th>Dust Yield %</th><th class="num">Dust Value (Rs.)</th><th></th></tr></thead>
-          <tbody id="grindBatchesBody"><tr><td colspan="6" style="text-align:center;opacity:.5;padding:14px;">No batches logged yet today — add one above after each grind.</td></tr></tbody>
+          <thead><tr><th>Fish Type</th><th>Kg Ground</th><th>Dust Made</th><th>Dust %</th><th class="num">Dust Worth (Rs.)</th><th></th></tr></thead>
+          <tbody id="grindBatchesBody"><tr><td colspan="6" style="text-align:center;opacity:.5;padding:14px;">Nothing added yet today — add a round above after each grind.</td></tr></tbody>
         </table>
       </div>
       <p class="sub" id="gbNote" style="margin:8px 0 0;"></p>
       <div class="stat-grid" style="margin-top:10px;">
-        <div class="stat"><div class="k">Total Ground (Batches)</div><div class="v" id="gbTotalKg">0 kg</div></div>
-        <div class="stat"><div class="k">Total Dust (Batches)</div><div class="v" id="gbTotalDust">0 g</div></div>
-        <div class="stat"><div class="k">Avg Dust Yield %</div><div class="v" id="gbAvgYield">0%</div></div>
-        <div class="stat accent"><div class="k">Dust Value (at Dust Sale Price)</div><div class="v" id="gbDustValue">Rs. 0</div></div>
+        <div class="stat"><div class="k">Total Ground</div><div class="v" id="gbTotalKg">0 kg</div></div>
+        <div class="stat"><div class="k">Total Dust</div><div class="v" id="gbTotalDust">0 g</div></div>
+        <div class="stat"><div class="k">Dust %</div><div class="v" id="gbAvgYield">0%</div></div>
+        <div class="stat accent"><div class="k">Dust Worth (Rs.)</div><div class="v" id="gbDustValue">Rs. 0</div></div>
       </div>
 
-      <h3 style="color:var(--green);margin:16px 0 8px;">📦 Output by Product (Today)</h3>
-      <p class="sub" style="margin:0 0 10px;">How many of each pack size actually came out of today's batch.</p>
+      <h3 style="color:var(--green);margin:16px 0 8px;"><span style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:var(--green);color:#fff;font-weight:700;font-size:13px;margin-right:6px;vertical-align:middle;">5</span> Packs Made Today</h3>
+      <p class="sub" style="margin:0 0 10px;">How many packs of each size came out.</p>
       <div class="grid-2">
         <div class="field"><label>50g Packs</label><input type="number" id="dpOutQty50" value="0" min="0" step="1" oninput="updateDailyProductionSummaryLive()"></div>
         <div class="field"><label>100g Packs</label><input type="number" id="dpOutQty100" value="0" min="0" step="1" oninput="updateDailyProductionSummaryLive()"></div>
@@ -2704,34 +2706,37 @@
       </div>
       <p class="sub" id="dpOutputByProductNote" style="margin:4px 0 0;"></p>
 
-      <div class="btn-row" style="margin:10px 0 16px;" data-owner-only>
-        <button class="btn btn-primary btn-sm" onclick="saveDailyProductionLog()"><i class="business-icon icon-inline" data-lucide="save" aria-hidden="true"></i> Save Today's Snapshot</button>
+      <h3 style="color:var(--green);margin:16px 0 8px;"><span style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:var(--green);color:#fff;font-weight:700;font-size:13px;margin-right:6px;vertical-align:middle;">6</span> Save</h3>
+      <div class="btn-row" style="margin:6px 0 20px;" data-owner-only>
+        <button class="btn btn-primary btn-sm" onclick="saveDailyProductionLog()"><i class="business-icon icon-inline" data-lucide="save" aria-hidden="true"></i> Save Today's Numbers</button>
       </div>
 
-      <h3 style="color:var(--green);margin-bottom:8px;">📋 Today's Summary</h3>
+      <div style="border-top:2px dashed var(--border, #e5e7eb);margin:6px 0 20px;"></div>
+
+      <h3 style="color:var(--green);margin-bottom:8px;">📋 Today's Result</h3>
       <div class="stat-grid">
-        <div class="stat"><div class="k">Today's Cost/kg</div><div class="v" id="dpTodayCost">Rs. 0</div></div>
-        <div class="stat"><div class="k">Today's Selling Price/kg</div><div class="v" id="dpTodayPrice">Rs. 0</div></div>
-        <div class="stat" id="dpTodayProfitCard"><div class="k">Today's Profit/kg</div><div class="v" id="dpTodayProfit">Rs. 0</div></div>
-        <div class="stat accent" id="dpTodayTotalCard"><div class="k">Today's Total Profit</div><div class="v" id="dpTodayTotal">Rs. 0</div></div>
-        <div class="stat" id="dpDustRemovedCard"><div class="k">Dust Removed (Net Waste)</div><div class="v" id="dpDustRemoved">0 kg</div></div>
-        <div class="stat" id="dpDustImpactCard"><div class="k">Net Dust Impact</div><div class="v" id="dpDustImpact">Rs. 0</div></div>
-        <div class="stat accent" id="dpNetProfitCard"><div class="k">Net Profit (incl. Dust)</div><div class="v" id="dpNetProfit">Rs. 0</div></div>
+        <div class="stat"><div class="k">Cost/kg</div><div class="v" id="dpTodayCost">Rs. 0</div></div>
+        <div class="stat"><div class="k">Selling Price/kg</div><div class="v" id="dpTodayPrice">Rs. 0</div></div>
+        <div class="stat" id="dpTodayProfitCard"><div class="k">Profit/kg</div><div class="v" id="dpTodayProfit">Rs. 0</div></div>
+        <div class="stat accent" id="dpTodayTotalCard"><div class="k">Total Profit Today</div><div class="v" id="dpTodayTotal">Rs. 0</div></div>
+        <div class="stat" id="dpDustRemovedCard"><div class="k">Dust Thrown Away</div><div class="v" id="dpDustRemoved">0 kg</div></div>
+        <div class="stat" id="dpDustImpactCard"><div class="k">Dust Gain/Loss (Rs.)</div><div class="v" id="dpDustImpact">Rs. 0</div></div>
+        <div class="stat accent" id="dpNetProfitCard"><div class="k">Real Profit (with Dust)</div><div class="v" id="dpNetProfit">Rs. 0</div></div>
       </div>
       <p class="sub" id="dpPriceSourceNote" style="margin:6px 0 0;"></p>
 
-      <h3 style="color:var(--green);margin:16px 0 8px;">📈 Monthly Profit Trend</h3>
+      <h3 style="color:var(--green);margin:16px 0 8px;">📈 This Month's Trend</h3>
       <div class="chart-wrap" style="height:320px;"><canvas id="dpMonthlyChart"></canvas></div>
-      <p class="sub" style="margin:6px 0 0;">Bars = cumulative profit this month (right axis). Lines = per-kg cost/price/profit for each saved day (left axis).</p>
+      <p class="sub" style="margin:6px 0 0;">Bars = running total profit this month. Lines = cost / price / profit per kg for each saved day.</p>
 
-      <h3 style="color:var(--green);margin:16px 0 8px;">🌫️ Daily Profit Summary — Incl. Dust Impact</h3>
+      <h3 style="color:var(--green);margin:16px 0 8px;">🌫️ Profit With Dust Included</h3>
       <div class="chart-wrap" style="height:280px;"><canvas id="dpDustProfitChart"></canvas></div>
-      <p class="sub" style="margin:6px 0 0;">Compares each saved day's Total Profit (before dust) against Net Profit (after dust waste cost and any dust recovery value).</p>
+      <p class="sub" style="margin:6px 0 0;">Compares each day's profit before dust vs. after accounting for dust thrown away or sold.</p>
 
-      <h3 style="color:var(--green);margin:16px 0 8px;">🗓️ Daily Summary (This Month)</h3>
+      <h3 style="color:var(--green);margin:16px 0 8px;">🗓️ All Days This Month</h3>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Date</th><th>Cost/kg</th><th>Price/kg</th><th class="num">Profit/kg</th><th>Kg Produced</th><th class="num">Dust Removed</th><th class="num">Dust Value</th><th class="num">Total Profit</th><th class="num">Net Profit (Dust)</th><th></th></tr></thead>
+          <thead><tr><th>Date</th><th>Cost/kg</th><th>Price/kg</th><th class="num">Profit/kg</th><th>Kg Produced</th><th class="num">Dust Thrown Away</th><th class="num">Dust Worth</th><th class="num">Total Profit</th><th class="num">Real Profit (Dust)</th><th></th></tr></thead>
           <tbody id="dpLogBody"><tr><td colspan="10" style="text-align:center;opacity:.5;padding:20px;">No entries yet this month.</td></tr></tbody>
         </table>
       </div>
