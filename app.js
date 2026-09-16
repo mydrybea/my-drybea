@@ -2321,8 +2321,67 @@ function renderGrindBatches() {
   }
 
   updateDailyProductionSummaryLive();
+  renderStockUpdateSummary();
 }
 window.renderGrindBatches = renderGrindBatches;
+
+// ==================== STAGE 6: STOCK — CONFIRMED MOVEMENTS TODAY ====================
+// Pure read-only summary for the Daily Production Log's "Stock" stage — it
+// doesn't move any stock itself (addGrindBatch()/deleteGrindBatch() and
+// applyPackBatchStockMovements() already do that immediately, via
+// applyStockMovement()/adjust_product_stock()). This just aggregates what
+// has already landed in Stock today, in one place, in plain language:
+//   - Grinding & Dust: summed straight from grindBatchesToday (each batch
+//     carries the productId/dustProductId that was actually stocked, so
+//     this always matches reality even if the Value Addition mapping has
+//     since changed).
+//   - Finished Product Batches: summed from dailyProductBatchesCache (today's
+//     logged "Add Today's Product Batch" entries) via computeTodayBatchSums(),
+//     matched against state.packProductMap the same way
+//     applyPackBatchStockMovements() does.
+function renderStockUpdateSummary() {
+  const body = $('stockUpdateSummaryBody');
+  if (!body) return;
+
+  const rows = [];
+  const productName = (id) => {
+    const p = (products || []).find(p => String(p.id) === String(id));
+    return p ? p.name : null;
+  };
+
+  // Grinding & Dust — aggregate usable kg / dust kg per linked product.
+  const grindTotals = {};
+  (grindBatchesToday || []).forEach(b => {
+    if (b.usableKg > 0 && b.productId) {
+      grindTotals[b.productId] = (grindTotals[b.productId] || 0) + b.usableKg;
+    }
+    if (b.dustG > 0 && b.dustProductId) {
+      grindTotals[b.dustProductId] = (grindTotals[b.dustProductId] || 0) + (b.dustG / 1000);
+    }
+  });
+  Object.keys(grindTotals).forEach(pid => {
+    const name = productName(pid);
+    if (name) rows.push({ name, qty: `${fmt2(grindTotals[pid])} kg`, from: 'Grinding & Dust' });
+  });
+
+  // Finished Product Batches — pack counts per linked product.
+  const packSums = (typeof computeTodayBatchSums === 'function') ? computeTodayBatchSums() : {};
+  const map = state.packProductMap || {};
+  Object.keys(PACKS || {}).forEach(key => {
+    const qty = Number(packSums[key]) || 0;
+    if (qty > 0 && map[key]) {
+      const name = productName(map[key]);
+      if (name) rows.push({ name, qty: `${qty} × ${(PACKS[key] && PACKS[key].label) || key}`, from: 'Finished Product Batches' });
+    }
+  });
+
+  if (rows.length === 0) {
+    body.innerHTML = '<tr><td colspan="3" style="text-align:center;opacity:.5;padding:14px;">No stock movements yet today — link products in Stage 4 (Value Addition) or Stage 5, then add a grinding round or product batch.</td></tr>';
+  } else {
+    body.innerHTML = rows.map(r => `<tr><td>${r.name}</td><td>${r.qty}</td><td style="opacity:.75;">${r.from}</td></tr>`).join('');
+  }
+}
+window.renderStockUpdateSummary = renderStockUpdateSummary;
 
 // Restores today's batches after a page reload / tab reopen, from whatever
 // was last saved in today's production_cost_log row — never overwrites
@@ -3970,6 +4029,7 @@ function renderDailyProductBatchList() {
     const totalParts = Object.keys(PACKS).map(key => `${sums[key] || 0}× ${PACKS[key].label}`).join(' · ');
     noteEl.textContent = `Total today (${batches.length} batch${batches.length === 1 ? '' : 'es'}): ${totalParts}`;
   }
+  renderStockUpdateSummary();
 }
 window.renderDailyProductBatchList = renderDailyProductBatchList;
 
@@ -14294,6 +14354,11 @@ function activateAppTab(tabId){
     // "Link Grinding to Store Products" — same idea, one step earlier in
     // the process (ground Umbalakada + dust, before packing).
     populateGrindProductMapSelects();
+    // Stage 6 "Stock — Confirmed Today": needs today's already-logged
+    // product batches (normally only fetched when the "Add Today's Product
+    // Batch" modal opens) so the summary is accurate as soon as the tab
+    // opens, not just after that modal has been used once.
+    loadDailyProductBatches().then(() => renderStockUpdateSummary());
   }
   if (tabId === 'distributor-home') { showSkeletons('distributor-home'); loadDistributorCommissionClaims().then(renderDistributorHome); }
   if (tabId === 'my-income') { loadDistributorCommissionClaims().then(renderProductAgentPage); }
