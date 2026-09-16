@@ -2198,6 +2198,7 @@ async function addGrindBatch() {
   if (kg <= 0) { alert('Enter the kg of Umbalakada ground for this batch.'); return; }
   if (dustG < 0) { alert('Enter a valid dust weight (grams).'); return; }
   if (dustG > kg * 1000) { alert('Dust produced can\'t be more than the Umbalakada that went in — check the numbers.'); return; }
+  clearStockMovementError();
   const typeId = typeSel ? typeSel.value : 'mix';
   const typeName = typeSel && typeSel.selectedOptions.length ? typeSel.selectedOptions[0].textContent : 'Mix';
   const priceKg = Number(priceEl && priceEl.value) || 0;
@@ -2219,27 +2220,85 @@ async function addGrindBatch() {
   if (dustEl) dustEl.value = '';
   if (priceEl) priceEl.value = '';
   renderGrindBatches();
-  updateStatus(`✅ Batch added: ${fmt2(kg)}kg ${typeName} → ${fmt2(dustG)}g dust`);
 
-  // Restock whatever's linked in "Link Grinding to Store Products" —
-  // silently skipped (no error, no alert) if that type/dust isn't linked to
-  // a product, same forgiving pattern as applyPackBatchStockMovements() for
-  // packs. Usable kg (kg ground minus dust) restocks the type's ground
-  // product; the dust grams restock the shared dust product.
-  if (usableKg > 0 && productId) {
-    await applyStockMovement(productId, usableKg, 'production', `Grind batch: ${typeName} — ${fmt2(usableKg)}kg usable`);
+  // Restock whatever's linked in Stage 4 (Value Addition). If a side isn't
+  // linked, that's not an error — but it's also no longer silent: a clear
+  // amber notice tells you exactly what to link, and "Apply Links to
+  // Today's Rounds" (Stage 4) can backfill this exact batch retroactively
+  // once you've linked it, with no need to delete and re-add.
+  const unlinkedParts = [];
+  let anyMovementFailed = false;
+  if (usableKg > 0) {
+    if (productId) {
+      const r = await applyStockMovement(productId, usableKg, 'production', `Grind batch: ${typeName} — ${fmt2(usableKg)}kg usable`);
+      if (!r.ok) anyMovementFailed = true;
+    } else {
+      unlinkedParts.push(`${typeName} (usable)`);
+    }
   }
-  if (dustG > 0 && dustProductId) {
-    await applyStockMovement(dustProductId, dustG / 1000, 'production', `Grind batch dust: ${typeName} — ${fmt2(dustG)}g`);
+  if (dustG > 0) {
+    if (dustProductId) {
+      const r = await applyStockMovement(dustProductId, dustG / 1000, 'production', `Grind batch dust: ${typeName} — ${fmt2(dustG)}g`);
+      if (!r.ok) anyMovementFailed = true;
+    } else {
+      unlinkedParts.push('Dust');
+    }
   }
+
+  if (anyMovementFailed) {
+    // applyStockMovement already put the specific reason in the banner.
+  } else if (unlinkedParts.length > 0) {
+    showStockLinkWarning(`Batch added, but ${unlinkedParts.join(' & ')} isn't linked to a product in Stage 4 (Value Addition), so Stock wasn't touched for it. Link it, then use "Apply Links to Today's Rounds" to backfill this batch.`);
+    updateStatus(`✅ Batch added (${unlinkedParts.join(', ')} not linked to stock)`);
+  } else {
+    updateStatus(`✅ Batch added: ${fmt2(kg)}kg ${typeName} → ${fmt2(dustG)}g dust — Stock updated`);
+  }
+  renderStockUpdateSummary();
 }
 window.addGrindBatch = addGrindBatch;
+
+// Re-applies today's Value Addition links to any grind round that was
+// logged before it had a product linked (or before the link existed at
+// all). Only touches batches whose stamped productId/dustProductId is
+// still empty — batches that already stocked something are left alone, so
+// this can be clicked as many times as needed without double-counting.
+async function relinkTodayGrindBatches() {
+  clearStockMovementError();
+  const map = state.grindProductMap || {};
+  let updated = 0, stillUnlinked = 0, failed = 0;
+  for (const b of grindBatchesToday) {
+    let touched = false;
+    if (b.usableKg > 0 && !b.productId && map[b.typeId]) {
+      const r = await applyStockMovement(map[b.typeId], b.usableKg, 'production', `Grind batch (backfilled): ${b.typeName} — ${fmt2(b.usableKg)}kg usable`);
+      if (r.ok) { b.productId = map[b.typeId]; touched = true; } else { failed++; }
+    }
+    if (b.dustG > 0 && !b.dustProductId && map.dust) {
+      const r = await applyStockMovement(map.dust, b.dustG / 1000, 'production', `Grind batch dust (backfilled): ${b.typeName} — ${fmt2(b.dustG)}g`);
+      if (r.ok) { b.dustProductId = map.dust; touched = true; } else { failed++; }
+    }
+    if (touched) updated++;
+    if ((b.usableKg > 0 && !b.productId) || (b.dustG > 0 && !b.dustProductId)) stillUnlinked++;
+  }
+  renderGrindBatches();
+  renderStockUpdateSummary();
+  if (failed > 0) {
+    // Banner already shows the specific error from applyStockMovement.
+  } else if (updated === 0) {
+    showStockLinkWarning(stillUnlinked > 0
+      ? 'Nothing to backfill yet — link the missing type(s)/dust in Stage 4 first, then click this again.'
+      : 'Everything today is already linked and stocked — nothing to backfill.');
+  } else {
+    updateStatus(`✅ Backfilled Stock for ${updated} round${updated > 1 ? 's' : ''} today.`);
+  }
+}
+window.relinkTodayGrindBatches = relinkTodayGrindBatches;
 
 async function deleteGrindBatch(id) {
   const batch = grindBatchesToday.find(b => b.id === id);
   grindBatchesToday = grindBatchesToday.filter(b => b.id !== id);
   renderGrindBatches();
   if (!batch) return;
+  clearStockMovementError();
   // Reverse using the productId(s) stamped onto the batch itself at the
   // moment it was added — not today's current mapping — so deleting an old
   // batch always undoes exactly what it originally added, even if the
@@ -2250,6 +2309,7 @@ async function deleteGrindBatch(id) {
   if (batch.dustG > 0 && batch.dustProductId) {
     await applyStockMovement(batch.dustProductId, -(batch.dustG / 1000), 'adjustment', `Grind batch dust deleted: ${batch.typeName}`);
   }
+  renderStockUpdateSummary();
 }
 window.deleteGrindBatch = deleteGrindBatch;
 
@@ -2351,34 +2411,47 @@ function renderStockUpdateSummary() {
 
   // Grinding & Dust — aggregate usable kg / dust kg per linked product.
   const grindTotals = {};
+  let grindUnlinkedUsableKg = 0, grindUnlinkedDustG = 0;
   (grindBatchesToday || []).forEach(b => {
-    if (b.usableKg > 0 && b.productId) {
-      grindTotals[b.productId] = (grindTotals[b.productId] || 0) + b.usableKg;
+    if (b.usableKg > 0) {
+      if (b.productId) grindTotals[b.productId] = (grindTotals[b.productId] || 0) + b.usableKg;
+      else grindUnlinkedUsableKg += b.usableKg;
     }
-    if (b.dustG > 0 && b.dustProductId) {
-      grindTotals[b.dustProductId] = (grindTotals[b.dustProductId] || 0) + (b.dustG / 1000);
+    if (b.dustG > 0) {
+      if (b.dustProductId) grindTotals[b.dustProductId] = (grindTotals[b.dustProductId] || 0) + (b.dustG / 1000);
+      else grindUnlinkedDustG += b.dustG;
     }
   });
   Object.keys(grindTotals).forEach(pid => {
     const name = productName(pid);
-    if (name) rows.push({ name, qty: `${fmt2(grindTotals[pid])} kg`, from: 'Grinding & Dust' });
+    if (name) rows.push({ name, qty: `${fmt2(grindTotals[pid])} kg`, from: 'Grinding & Dust', ok: true });
   });
+  if (grindUnlinkedUsableKg > 0) {
+    rows.push({ name: 'Not linked yet', qty: `${fmt2(grindUnlinkedUsableKg)} kg usable`, from: 'Grinding — fix in Stage 4', ok: false });
+  }
+  if (grindUnlinkedDustG > 0) {
+    rows.push({ name: 'Not linked yet', qty: `${fmt2(grindUnlinkedDustG)} g dust`, from: 'Dust — fix in Stage 4', ok: false });
+  }
 
   // Finished Product Batches — pack counts per linked product.
   const packSums = (typeof computeTodayBatchSums === 'function') ? computeTodayBatchSums() : {};
   const map = state.packProductMap || {};
   Object.keys(PACKS || {}).forEach(key => {
     const qty = Number(packSums[key]) || 0;
-    if (qty > 0 && map[key]) {
-      const name = productName(map[key]);
-      if (name) rows.push({ name, qty: `${qty} × ${(PACKS[key] && PACKS[key].label) || key}`, from: 'Finished Product Batches' });
+    if (qty > 0) {
+      if (map[key]) {
+        const name = productName(map[key]);
+        if (name) rows.push({ name, qty: `${qty} × ${(PACKS[key] && PACKS[key].label) || key}`, from: 'Finished Product Batches', ok: true });
+      } else {
+        rows.push({ name: 'Not linked yet', qty: `${qty} × ${(PACKS[key] && PACKS[key].label) || key}`, from: 'Finished Product — fix in Stage 5', ok: false });
+      }
     }
   });
 
   if (rows.length === 0) {
     body.innerHTML = '<tr><td colspan="3" style="text-align:center;opacity:.5;padding:14px;">No stock movements yet today — link products in Stage 4 (Value Addition) or Stage 5, then add a grinding round or product batch.</td></tr>';
   } else {
-    body.innerHTML = rows.map(r => `<tr><td>${r.name}</td><td>${r.qty}</td><td style="opacity:.75;">${r.from}</td></tr>`).join('');
+    body.innerHTML = rows.map(r => `<tr style="${r.ok ? '' : 'background:rgba(234,179,8,.08);'}"><td style="${r.ok ? '' : 'color:#b45309;font-weight:700;'}">${r.ok ? '✅' : '⚠️'} ${r.name}</td><td>${r.qty}</td><td style="opacity:.75;">${r.from}</td></tr>`).join('');
   }
 }
 window.renderStockUpdateSummary = renderStockUpdateSummary;
@@ -3932,16 +4005,26 @@ window.onPackProductMapChange = onPackProductMapChange;
 
 // For each pack size in qtyByKey with qty > 0 and a linked product, moves
 // that qty of Stock (sign=+1 for a batch added, -1 to reverse one deleted).
-// Silently skips unlinked sizes — never blocks the batch save/delete itself.
+// Unlinked sizes never block the batch save/delete itself, but are now
+// reported back so the caller can tell the owner exactly what didn't reach
+// Stock and why, instead of just saying "done".
 async function applyPackBatchStockMovements(qtyByKey, note, sign) {
   const map = state.packProductMap || {};
+  const unlinked = [];
+  let anyFailed = false;
   for (const key of Object.keys(PACKS)) {
     const qty = Number(qtyByKey[key]) || 0;
     const productId = map[key];
-    if (qty > 0 && productId) {
-      await applyStockMovement(productId, qty * sign, 'production', note || `${PACKS[key].label} — daily production`);
+    if (qty > 0) {
+      if (productId) {
+        const r = await applyStockMovement(productId, qty * sign, 'production', note || `${PACKS[key].label} — daily production`);
+        if (!r.ok) anyFailed = true;
+      } else {
+        unlinked.push(PACKS[key].label);
+      }
     }
   }
+  return { unlinked, anyFailed };
 }
 
 async function loadDailyProductBatches() {
@@ -4069,16 +4152,25 @@ async function addDailyProductBatch() {
   };
 
   if (!(await ensureFreshSession())) return;
+  clearStockMovementError();
   try {
     const { data, error } = await supabase.from('daily_product_batches').insert(row).select().single();
     if (error) throw error;
     dailyProductBatchesCache.push(data);
-    await applyPackBatchStockMovements(qtyByKey, note ? `Batch: ${note}` : 'Daily production batch', 1);
+    const { unlinked, anyFailed } = await applyPackBatchStockMovements(qtyByKey, note ? `Batch: ${note}` : 'Daily production batch', 1);
     Object.keys(PACKS).forEach(key => { const el = $('adpQty' + key); if (el) el.value = 0; });
     if ($('adpNote')) $('adpNote').value = '';
     await recomputeTodayProductOutput();
     renderDailyProductBatchList();
-    updateStatus("✅ Batch added — linked products restocked");
+    if (anyFailed) {
+      // Banner already shows the specific error from applyStockMovement.
+      updateStatus('⚠️ Batch added — some Stock updates failed, see notice above');
+    } else if (unlinked.length > 0) {
+      showStockLinkWarning(`Batch added, but ${unlinked.join(', ')} isn't linked to a product in Stage 5 (Link Packs to Store Products), so Stock wasn't touched for it. Link it above, then add another batch to fix it going forward — this batch itself won't backfill automatically.`);
+      updateStatus(`✅ Batch added (${unlinked.join(', ')} not linked to stock)`);
+    } else {
+      updateStatus("✅ Batch added — linked products restocked");
+    }
   } catch (e) {
     console.error('Add daily product batch error:', e);
     const missingTable = /relation .* does not exist/i.test(e?.message || '');
@@ -4090,6 +4182,7 @@ window.addDailyProductBatch = addDailyProductBatch;
 async function deleteDailyProductBatch(id) {
   if (userRole !== 'owner') return;
   if (!confirm('Delete this batch?')) return;
+  clearStockMovementError();
   try {
     const batch = (dailyProductBatchesCache || []).find(b => String(b.id) === String(id));
     const { error } = await withSessionRetry(() => supabase.from('daily_product_batches').delete().eq('id', id).eq('owner_id', currentUser.id));
@@ -5584,14 +5677,93 @@ function renderProducts() {
 }
 
 // ==================== PRODUCT INVENTORY — RESTOCK / ADJUST / HISTORY ====================
-// All stock changes go through adjust_product_stock() in Supabase (one
-// atomic update + history row — see supabase-setup-pack-pricing-and-
-// inventory.sql). If that SQL hasn't been run yet on this project, the
-// call fails cleanly and the owner sees exactly what to do next; nothing
-// else in the app (sales, products) is affected either way.
+// All stock changes go through adjust_product_stock() in Supabase when it's
+// available (one atomic update + history row — see supabase-setup-pack-
+// pricing-and-inventory.sql). If that function hasn't been installed on this
+// project yet, applyStockMovement() now falls back to doing the same two
+// writes itself (update products.stock_qty, insert a product_stock_movements
+// row) instead of silently giving up — so Stock updates either way. Any
+// failure that survives both paths is surfaced visibly (see
+// showStockMovementError below) instead of only going to the console, so
+// "why didn't my stock update" is never a silent mystery again.
+let lastStockMovementError = null;
+
+function showStockMovementError(msg) {
+  lastStockMovementError = msg;
+  const banner = $('stockMovementErrorBanner');
+  if (banner) {
+    banner.style.display = 'block';
+    banner.className = 'dpl-stock-banner dpl-stock-error';
+    banner.innerHTML = `⚠️ ${msg} <span class="dpl-stock-dismiss" onclick="clearStockMovementError()">Dismiss</span>`;
+  }
+  console.error('Stock movement failed:', msg);
+}
+window.showStockMovementError = showStockMovementError;
+
+// Not a failure — just "this didn't reach Stock because nothing's linked
+// yet", which used to be completely silent. Same banner spot, amber instead
+// of red, so it reads as "go fix this" rather than "something broke".
+function showStockLinkWarning(msg) {
+  const banner = $('stockMovementErrorBanner');
+  if (banner) {
+    banner.style.display = 'block';
+    banner.className = 'dpl-stock-banner dpl-stock-warning';
+    banner.innerHTML = `ℹ️ ${msg} <span class="dpl-stock-dismiss" onclick="clearStockMovementError()">Dismiss</span>`;
+  }
+}
+window.showStockLinkWarning = showStockLinkWarning;
+
+function clearStockMovementError() {
+  lastStockMovementError = null;
+  const banner = $('stockMovementErrorBanner');
+  if (banner) { banner.style.display = 'none'; banner.innerHTML = ''; banner.className = 'dpl-stock-banner'; }
+}
+window.clearStockMovementError = clearStockMovementError;
+
+// Looks like the RPC function itself is missing from this Supabase project
+// (as opposed to a real error, e.g. RLS/permission/network) — PGRST202 /
+// "Could not find the function" / "does not exist" are Postgres/PostgREST's
+// wording for "no function with that name+signature".
+function isMissingRpcError(e) {
+  const msg = String((e && (e.message || e.details || e.hint)) || e || '').toLowerCase();
+  const code = e && e.code;
+  return code === 'PGRST202' || code === '42883' ||
+    msg.includes('could not find the function') || msg.includes('does not exist') ||
+    msg.includes('schema cache');
+}
+
+// Direct fallback used only when the adjust_product_stock() RPC isn't
+// installed: read the product's current stock, write the new total, and log
+// the same history row the RPC would have written. Same net effect, two
+// requests instead of one atomic call.
+async function applyStockMovementDirect(productId, delta, movementType, note, saleId) {
+  const { data: prod, error: readErr } = await supabase
+    .from('products').select('stock_qty').eq('id', productId).eq('user_id', businessId).single();
+  if (readErr) throw readErr;
+  const resultingStock = Number(prod.stock_qty || 0) + Number(delta);
+  const { error: updErr } = await supabase
+    .from('products').update({ stock_qty: resultingStock }).eq('id', productId).eq('user_id', businessId);
+  if (updErr) throw updErr;
+  // Best-effort history row — if this table also doesn't exist yet, the
+  // stock update above has still gone through, so we don't throw here.
+  try {
+    await supabase.from('product_stock_movements').insert({
+      product_id: productId, owner_id: businessId, movement_type: movementType,
+      quantity_delta: delta, resulting_stock: resultingStock, note: note || null, sale_id: saleId || null
+    });
+  } catch (histErr) {
+    console.warn('Stock updated, but history row could not be logged:', histErr?.message || histErr);
+  }
+  return resultingStock;
+}
+
 async function applyStockMovement(productId, delta, movementType, note, saleId) {
-  if (!productId || !delta) return;
-  if (!(await ensureFreshSession())) return;
+  if (!productId) { return { ok: false, reason: 'no-product' }; }
+  if (!delta) { return { ok: false, reason: 'zero-delta' }; }
+  if (!(await ensureFreshSession())) {
+    showStockMovementError('Not logged in / session expired — reload and log in again, then retry.');
+    return { ok: false, reason: 'no-session' };
+  }
   try {
     const { error } = await withSessionRetry(() => supabase.rpc('adjust_product_stock', {
       p_product_id: productId,
@@ -5604,8 +5776,22 @@ async function applyStockMovement(productId, delta, movementType, note, saleId) 
     if (error) throw error;
     await loadProductsFromCloud();
     renderProducts();
+    return { ok: true, via: 'rpc' };
   } catch (e) {
-    console.warn('Stock movement skipped (run supabase-setup-pack-pricing-and-inventory.sql to enable inventory tracking):', e.message || e);
+    if (isMissingRpcError(e)) {
+      // Function not installed on this project — fall back automatically.
+      try {
+        await applyStockMovementDirect(productId, delta, movementType, note, saleId);
+        await loadProductsFromCloud();
+        renderProducts();
+        return { ok: true, via: 'fallback' };
+      } catch (e2) {
+        showStockMovementError(`Stock update failed for this product — ${e2.message || e2}`);
+        return { ok: false, reason: 'fallback-failed', error: e2 };
+      }
+    }
+    showStockMovementError(`Stock update failed — ${e.message || e}`);
+    return { ok: false, reason: 'rpc-error', error: e };
   }
 }
 window.applyStockMovement = applyStockMovement;
