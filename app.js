@@ -4202,6 +4202,462 @@ async function deleteDailyProductBatch(id) {
 window.deleteDailyProductBatch = deleteDailyProductBatch;
 
 
+// ==================== PRODUCTION TAB — UMBALAKADA CHIPS: MIXED GRIND & CUSTOM PACKAGING ====================
+// Separate from the Daily Production Log pipeline above (which grinds each
+// Umbalakada type on its own and only packages into the four fixed pack
+// sizes 50g/100g/500g/1kg). This section is for grinding any MIX of
+// Linna / Balaya / Premium Mix together in one batch — 7 possible combos,
+// each batch priced fresh per kg on its own — building up a running "chip
+// stock" (kg) per combo. That chip stock then gets packaged into any
+// custom product (owner's own name, weight & price — e.g. "50g Pack" @
+// Rs.20 or "100g Bottle" @ Rs.30), which restocks the real Product catalog
+// via the same applyStockMovement()/adjust_product_stock() RPC (with its
+// direct-write fallback) everything else in the app already uses.
+//
+// REQUIRED ONE-TIME SUPABASE SETUP (run once in the SQL editor):
+//
+//   create table if not exists public.chip_grind_batches (
+//     id uuid primary key default gen_random_uuid(),
+//     owner_id uuid not null references auth.users(id) on delete cascade,
+//     batch_date date not null default current_date,
+//     combo_key text not null,              -- e.g. 'linna_balaya'
+//     combo_label text not null,            -- e.g. 'Linna & Balaya'
+//     price_per_kg numeric not null default 0,
+//     input_kg numeric not null default 0,
+//     output_kg numeric not null default 0, -- kg of chips that came out
+//     note text,
+//     created_by uuid not null references auth.users(id),
+//     created_at timestamptz not null default now()
+//   );
+//   alter table public.chip_grind_batches enable row level security;
+//   create policy "Owner can manage own chip grind batches"
+//     on public.chip_grind_batches for all
+//     using (owner_id = auth.uid()) with check (owner_id = auth.uid());
+//   create index if not exists chip_grind_batches_owner_date_idx
+//     on public.chip_grind_batches(owner_id, batch_date);
+//
+//   create table if not exists public.chip_stock_balances (
+//     id uuid primary key default gen_random_uuid(),
+//     owner_id uuid not null references auth.users(id) on delete cascade,
+//     combo_key text not null,
+//     combo_label text not null,
+//     balance_kg numeric not null default 0, -- running total, all days
+//     updated_at timestamptz not null default now(),
+//     unique (owner_id, combo_key)
+//   );
+//   alter table public.chip_stock_balances enable row level security;
+//   create policy "Owner can manage own chip stock balances"
+//     on public.chip_stock_balances for all
+//     using (owner_id = auth.uid()) with check (owner_id = auth.uid());
+//
+//   create table if not exists public.chip_packaging_batches (
+//     id uuid primary key default gen_random_uuid(),
+//     owner_id uuid not null references auth.users(id) on delete cascade,
+//     batch_date date not null default current_date,
+//     combo_key text not null,
+//     combo_label text not null,
+//     product_id uuid references public.products(id) on delete set null,
+//     product_name text not null,
+//     pack_weight_g numeric not null default 0,
+//     qty integer not null default 0,
+//     kg_used numeric not null default 0,
+//     selling_price numeric not null default 0,
+//     note text,
+//     created_by uuid not null references auth.users(id),
+//     created_at timestamptz not null default now()
+//   );
+//   alter table public.chip_packaging_batches enable row level security;
+//   create policy "Owner can manage own chip packaging batches"
+//     on public.chip_packaging_batches for all
+//     using (owner_id = auth.uid()) with check (owner_id = auth.uid());
+//   create index if not exists chip_packaging_batches_owner_date_idx
+//     on public.chip_packaging_batches(owner_id, batch_date);
+
+const CHIP_COMBO_TYPES = [
+  { id: 'linna',   field: 'cgbLinna',   label: 'Linna' },
+  { id: 'balaya',  field: 'cgbBalaya',  label: 'Balaya' },
+  { id: 'premium', field: 'cgbPremium', label: 'Premium Mix' }
+];
+
+let chipGrindBatchesCache = [];      // today's grind batches
+let chipPackagingBatchesCache = [];  // today's packaging batches
+let chipStockBalances = {};          // combo_key -> { label, kg } — running total, all days
+
+// Reads the ticked Linna/Balaya/Premium Mix checkboxes and returns the
+// combo they describe (any of the 7 non-empty combinations), or null if
+// nothing is ticked yet.
+function getSelectedChipCombo() {
+  const picked = CHIP_COMBO_TYPES.filter(t => $(t.field) && $(t.field).checked);
+  if (picked.length === 0) return null;
+  return { key: picked.map(t => t.id).join('_'), label: picked.map(t => t.label).join(' & ') };
+}
+
+function updateChipGrindComboPreview() {
+  const el = $('cgbComboPreview');
+  if (!el) return;
+  const combo = getSelectedChipCombo();
+  el.textContent = combo ? `Combo: ${combo.label}` : 'Pick at least one type above.';
+}
+window.updateChipGrindComboPreview = updateChipGrindComboPreview;
+
+async function loadChipStockBalances() {
+  chipStockBalances = {};
+  if (!currentUser || userRole !== 'owner') return chipStockBalances;
+  try {
+    const { data, error } = await withSessionRetry(() => supabase.from('chip_stock_balances')
+      .select('*').eq('owner_id', businessId));
+    if (error) throw error;
+    (data || []).forEach(r => {
+      chipStockBalances[r.combo_key] = { label: r.combo_label, kg: Number(r.balance_kg) || 0 };
+    });
+  } catch (e) {
+    console.warn('Chip stock balances load skipped:', e?.message || e);
+  }
+  return chipStockBalances;
+}
+window.loadChipStockBalances = loadChipStockBalances;
+
+async function loadChipGrindBatchesToday() {
+  if (!currentUser || userRole !== 'owner') { chipGrindBatchesCache = []; return chipGrindBatchesCache; }
+  try {
+    const { data, error } = await withSessionRetry(() => supabase.from('chip_grind_batches')
+      .select('*').eq('owner_id', businessId).eq('batch_date', todayIso()).order('created_at', { ascending: true }));
+    if (error) throw error;
+    chipGrindBatchesCache = data || [];
+  } catch (e) {
+    console.warn('Chip grind batches load skipped:', e?.message || e);
+    chipGrindBatchesCache = [];
+  }
+  return chipGrindBatchesCache;
+}
+window.loadChipGrindBatchesToday = loadChipGrindBatchesToday;
+
+async function loadChipPackagingBatchesToday() {
+  if (!currentUser || userRole !== 'owner') { chipPackagingBatchesCache = []; return chipPackagingBatchesCache; }
+  try {
+    const { data, error } = await withSessionRetry(() => supabase.from('chip_packaging_batches')
+      .select('*').eq('owner_id', businessId).eq('batch_date', todayIso()).order('created_at', { ascending: true }));
+    if (error) throw error;
+    chipPackagingBatchesCache = data || [];
+  } catch (e) {
+    console.warn('Chip packaging batches load skipped:', e?.message || e);
+    chipPackagingBatchesCache = [];
+  }
+  return chipPackagingBatchesCache;
+}
+window.loadChipPackagingBatchesToday = loadChipPackagingBatchesToday;
+
+// No Postgres RPC needed for this one — same read-then-write fallback style
+// applyStockMovementDirect() uses when adjust_product_stock() isn't
+// installed. Balance is clamped at 0 (kg can't go negative in real life).
+async function adjustChipStockBalance(comboKey, comboLabel, deltaKg) {
+  if (!(await ensureFreshSession())) throw new Error('Not logged in / session expired.');
+  const { data: existing, error: readErr } = await supabase
+    .from('chip_stock_balances').select('*').eq('owner_id', businessId).eq('combo_key', comboKey).maybeSingle();
+  if (readErr) throw readErr;
+  const newBalance = Math.max(0, Number((existing && existing.balance_kg) || 0) + Number(deltaKg));
+  if (existing) {
+    const { error } = await supabase.from('chip_stock_balances')
+      .update({ balance_kg: newBalance, combo_label: comboLabel, updated_at: new Date().toISOString() })
+      .eq('id', existing.id);
+    if (error) throw error;
+  } else {
+    const { error } = await supabase.from('chip_stock_balances')
+      .insert({ owner_id: businessId, combo_key: comboKey, combo_label: comboLabel, balance_kg: newBalance });
+    if (error) throw error;
+  }
+  chipStockBalances[comboKey] = { label: comboLabel, kg: newBalance };
+  return newBalance;
+}
+
+function renderChipStockTable() {
+  const body = $('chipStockBody');
+  if (body) {
+    const entries = Object.keys(chipStockBalances)
+      .map(k => ({ key: k, ...chipStockBalances[k] }))
+      .filter(e => e.kg > 0.001)
+      .sort((a, b) => b.kg - a.kg);
+    body.innerHTML = entries.length === 0
+      ? `<tr><td colspan="2" style="text-align:center;opacity:.5;padding:14px;">Grind a batch above to build up chip stock.</td></tr>`
+      : entries.map(e => `<tr><td>${e.label}</td><td class="num">${e.kg.toFixed(2)} kg</td></tr>`).join('');
+  }
+  populateChipComboSelect();
+}
+window.renderChipStockTable = renderChipStockTable;
+
+function populateChipComboSelect() {
+  const sel = $('cpkCombo');
+  if (!sel) return;
+  const current = sel.value;
+  const entries = Object.keys(chipStockBalances)
+    .map(k => ({ key: k, ...chipStockBalances[k] }))
+    .filter(e => e.kg > 0.001)
+    .sort((a, b) => a.label.localeCompare(b.label));
+  sel.innerHTML = '<option value="">— Select a combo —</option>' +
+    entries.map(e => `<option value="${e.key}">${e.label} (${e.kg.toFixed(2)} kg available)</option>`).join('');
+  if (entries.some(e => e.key === current)) sel.value = current;
+  updateChipPackagingKgNeeded();
+}
+window.populateChipComboSelect = populateChipComboSelect;
+
+function renderChipGrindBatchesList() {
+  const body = $('chipGrindBatchesBody'), noteEl = $('chipGrindListNote');
+  if (body) {
+    const batches = chipGrindBatchesCache || [];
+    body.innerHTML = batches.length === 0
+      ? `<tr><td colspan="5" style="text-align:center;opacity:.5;padding:14px;">No grind batches added yet today.</td></tr>`
+      : batches.map(b => `<tr>
+          <td>${b.combo_label}</td>
+          <td>Rs. ${(Number(b.price_per_kg) || 0).toLocaleString()}</td>
+          <td>${Number(b.input_kg) || 0} kg</td>
+          <td>${Number(b.output_kg) || 0} kg</td>
+          <td><button type="button" class="btn btn-xs btn-danger" onclick="deleteChipGrindBatch('${b.id}')"><i class="business-icon icon-inline" data-lucide="trash-2" aria-hidden="true"></i></button></td>
+        </tr>`).join('');
+    if (noteEl) {
+      const totalIn = batches.reduce((s, b) => s + (Number(b.input_kg) || 0), 0);
+      const totalOut = batches.reduce((s, b) => s + (Number(b.output_kg) || 0), 0);
+      noteEl.textContent = batches.length
+        ? `Total today (${batches.length} batch${batches.length === 1 ? '' : 'es'}): ${totalIn.toFixed(2)} kg in → ${totalOut.toFixed(2)} kg chips out`
+        : '';
+    }
+  }
+  renderChipStockTable();
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+window.renderChipGrindBatchesList = renderChipGrindBatchesList;
+
+function renderChipPackagingBatchesList() {
+  const body = $('chipPackagingBatchesBody'), noteEl = $('chipPackagingListNote');
+  if (!body) return;
+  const batches = chipPackagingBatchesCache || [];
+  body.innerHTML = batches.length === 0
+    ? `<tr><td colspan="7" style="text-align:center;opacity:.5;padding:14px;">No products packaged yet today.</td></tr>`
+    : batches.map(b => `<tr>
+        <td>${b.combo_label}</td>
+        <td>${b.product_name}</td>
+        <td>${Number(b.pack_weight_g) || 0} g</td>
+        <td>${Number(b.qty) || 0}</td>
+        <td>${(Number(b.kg_used) || 0).toFixed(2)} kg</td>
+        <td class="num">Rs. ${(Number(b.selling_price) || 0).toLocaleString()}</td>
+        <td><button type="button" class="btn btn-xs btn-danger" onclick="deleteChipPackagingBatch('${b.id}')"><i class="business-icon icon-inline" data-lucide="trash-2" aria-hidden="true"></i></button></td>
+      </tr>`).join('');
+  if (noteEl) {
+    const totalQty = batches.reduce((s, b) => s + (Number(b.qty) || 0), 0);
+    const totalKg = batches.reduce((s, b) => s + (Number(b.kg_used) || 0), 0);
+    noteEl.textContent = batches.length
+      ? `Total today (${batches.length} batch${batches.length === 1 ? '' : 'es'}): ${totalQty} unit${totalQty === 1 ? '' : 's'}, ${totalKg.toFixed(2)} kg of chips used`
+      : '';
+  }
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+window.renderChipPackagingBatchesList = renderChipPackagingBatchesList;
+
+function populateChipProductDatalist() {
+  const dl = $('cpkProductList');
+  if (!dl) return;
+  dl.innerHTML = (products || []).map(p => `<option value="${p.name.replace(/"/g, '&quot;')}">`).join('');
+}
+window.populateChipProductDatalist = populateChipProductDatalist;
+
+// If the typed name matches an existing catalog product, quietly suggest
+// its retail price (only when the price field is still empty, so it never
+// overwrites a price the owner already typed).
+function onChipPackagingProductPick() {
+  const nameEl = $('cpkProductName'), priceEl = $('cpkPrice');
+  if (!nameEl) return;
+  const val = nameEl.value.trim();
+  const match = (products || []).find(p => p.name === val);
+  if (match && priceEl && !priceEl.value) {
+    priceEl.value = match.retailPrice || match.wholesalePrice || '';
+  }
+}
+window.onChipPackagingProductPick = onChipPackagingProductPick;
+
+function updateChipPackagingKgNeeded() {
+  const el = $('cpkKgNeeded');
+  if (!el) return;
+  const comboKey = ($('cpkCombo') && $('cpkCombo').value) || '';
+  const weightG = Number($('cpkWeightG') && $('cpkWeightG').value) || 0;
+  const qty = Number($('cpkQty') && $('cpkQty').value) || 0;
+  const kgNeeded = (weightG * qty) / 1000;
+  if (!comboKey) {
+    el.textContent = kgNeeded > 0 ? `Needs ${kgNeeded.toFixed(2)} kg of chips — pick a combo above.` : '';
+    return;
+  }
+  const available = (chipStockBalances[comboKey] && chipStockBalances[comboKey].kg) || 0;
+  if (kgNeeded <= 0) { el.textContent = `${available.toFixed(2)} kg available for this combo.`; return; }
+  el.textContent = kgNeeded > available
+    ? `⚠️ Needs ${kgNeeded.toFixed(2)} kg — only ${available.toFixed(2)} kg available for this combo.`
+    : `Needs ${kgNeeded.toFixed(2)} kg of ${available.toFixed(2)} kg available.`;
+}
+window.updateChipPackagingKgNeeded = updateChipPackagingKgNeeded;
+
+async function addChipGrindBatch() {
+  if (userRole !== 'owner') { alert('Only the owner can log grinding.'); return; }
+  if (!currentUser) { alert('Please login first.'); return; }
+  const combo = getSelectedChipCombo();
+  if (!combo) { alert('Pick at least one type (Linna / Balaya / Premium Mix) for this batch.'); return; }
+  const pricePerKg = Number($('cgbPricePerKg') && $('cgbPricePerKg').value) || 0;
+  const inputKg = Number($('cgbInputKg') && $('cgbInputKg').value) || 0;
+  const outputKg = Number($('cgbOutputKg') && $('cgbOutputKg').value) || 0;
+  if (inputKg <= 0) { alert('Enter how many kg were fed into this grind.'); return; }
+  if (outputKg <= 0) { alert('Enter how many kg of chips came out of this grind.'); return; }
+  const note = ($('cgbNote') && $('cgbNote').value.trim()) || null;
+
+  const row = {
+    owner_id: businessId, batch_date: todayIso(), combo_key: combo.key, combo_label: combo.label,
+    price_per_kg: pricePerKg, input_kg: inputKg, output_kg: outputKg, note, created_by: currentUser.id
+  };
+  if (!(await ensureFreshSession())) return;
+  try {
+    const { data, error } = await supabase.from('chip_grind_batches').insert(row).select().single();
+    if (error) throw error;
+    chipGrindBatchesCache.push(data);
+    await adjustChipStockBalance(combo.key, combo.label, outputKg);
+
+    CHIP_COMBO_TYPES.forEach(t => { if ($(t.field)) $(t.field).checked = false; });
+    if ($('cgbPricePerKg')) $('cgbPricePerKg').value = '';
+    if ($('cgbInputKg')) $('cgbInputKg').value = 1;
+    if ($('cgbOutputKg')) $('cgbOutputKg').value = '';
+    if ($('cgbNote')) $('cgbNote').value = '';
+    updateChipGrindComboPreview();
+    renderChipGrindBatchesList();
+    updateStatus(`✅ Grind batch added — ${outputKg} kg ${combo.label} chips in stock`);
+  } catch (e) {
+    console.error('Add chip grind batch error:', e);
+    const missingTable = /relation .* does not exist/i.test(e?.message || '');
+    alert('❌ Could not add grind batch: ' + (e?.message || String(e)) + (missingTable ? '\n\nThe chip_grind_batches / chip_stock_balances tables haven\'t been created in Supabase yet — run the SQL setup for this feature.' : ''));
+  }
+}
+window.addChipGrindBatch = addChipGrindBatch;
+
+async function deleteChipGrindBatch(id) {
+  if (userRole !== 'owner') return;
+  if (!confirm('Delete this grind batch? Its chip output will be removed from Chip Stock.')) return;
+  try {
+    const batch = (chipGrindBatchesCache || []).find(b => String(b.id) === String(id));
+    if (!(await ensureFreshSession())) return;
+    const { error } = await withSessionRetry(() => supabase.from('chip_grind_batches').delete().eq('id', id).eq('owner_id', businessId));
+    if (error) throw error;
+    chipGrindBatchesCache = chipGrindBatchesCache.filter(b => String(b.id) !== String(id));
+    if (batch) await adjustChipStockBalance(batch.combo_key, batch.combo_label, -(Number(batch.output_kg) || 0));
+    renderChipGrindBatchesList();
+    updateStatus('🗑️ Grind batch deleted — chip stock reversed');
+  } catch (e) {
+    alert('❌ Could not delete grind batch: ' + (e?.message || String(e)));
+  }
+}
+window.deleteChipGrindBatch = deleteChipGrindBatch;
+
+async function packageChipsIntoProduct() {
+  if (userRole !== 'owner') { alert('Only the owner can package products.'); return; }
+  if (!currentUser) { alert('Please login first.'); return; }
+  const comboKey = ($('cpkCombo') && $('cpkCombo').value) || '';
+  if (!comboKey) { alert('Pick which combo\'s chip stock to package.'); return; }
+  const comboLabel = (chipStockBalances[comboKey] && chipStockBalances[comboKey].label) || comboKey;
+  const productName = ($('cpkProductName') && $('cpkProductName').value.trim()) || '';
+  if (!productName) { alert('Enter a product name.'); return; }
+  const weightG = Number($('cpkWeightG') && $('cpkWeightG').value) || 0;
+  const qty = Number($('cpkQty') && $('cpkQty').value) || 0;
+  const price = Number($('cpkPrice') && $('cpkPrice').value) || 0;
+  if (weightG <= 0) { alert('Enter the pack weight in grams.'); return; }
+  if (qty <= 0) { alert('Enter how many units to make.'); return; }
+
+  const kgNeeded = (weightG * qty) / 1000;
+  const available = (chipStockBalances[comboKey] && chipStockBalances[comboKey].kg) || 0;
+  if (kgNeeded > available + 0.0001) {
+    alert(`Not enough chip stock — needs ${kgNeeded.toFixed(2)} kg but only ${available.toFixed(2)} kg of ${comboLabel} chips is available.`);
+    return;
+  }
+
+  const note = ($('cpkNote') && $('cpkNote').value.trim()) || null;
+  if (!(await ensureFreshSession())) return;
+
+  try {
+    // Match an existing catalog product by name (case-insensitive), or
+    // create a new one — same catalog every other tab reads from.
+    let productId;
+    const existingProduct = (products || []).find(p => p.name.toLowerCase() === productName.toLowerCase());
+    if (existingProduct) {
+      productId = existingProduct.id;
+    } else {
+      const { data: newProd, error: newProdErr } = await supabase.from('products')
+        .insert({ user_id: businessId, name: productName, wholesale_price: price, retail_price: price, active: true })
+        .select().single();
+      if (newProdErr) throw newProdErr;
+      productId = newProd.id;
+      await loadProductsFromCloud();
+    }
+
+    const stockResult = await applyStockMovement(productId, qty, 'production', note ? `Chips batch: ${note}` : `${comboLabel} chips — ${productName}`);
+    if (!stockResult.ok) {
+      alert('⚠️ Product batch not saved — Stock update failed. See notice above and try again.');
+      return;
+    }
+
+    const row = {
+      owner_id: businessId, batch_date: todayIso(), combo_key: comboKey, combo_label: comboLabel,
+      product_id: productId, product_name: productName, pack_weight_g: weightG, qty, kg_used: kgNeeded,
+      selling_price: price, note, created_by: currentUser.id
+    };
+    const { data, error } = await supabase.from('chip_packaging_batches').insert(row).select().single();
+    if (error) throw error;
+    chipPackagingBatchesCache.push(data);
+    await adjustChipStockBalance(comboKey, comboLabel, -kgNeeded);
+
+    if ($('cpkProductName')) $('cpkProductName').value = '';
+    if ($('cpkWeightG')) $('cpkWeightG').value = '';
+    if ($('cpkQty')) $('cpkQty').value = '';
+    if ($('cpkPrice')) $('cpkPrice').value = '';
+    if ($('cpkNote')) $('cpkNote').value = '';
+    populateChipProductDatalist();
+    renderChipPackagingBatchesList();
+    updateStatus(`✅ ${qty} × "${productName}" added to Stock`);
+  } catch (e) {
+    console.error('Package chips into product error:', e);
+    const missingTable = /relation .* does not exist/i.test(e?.message || '');
+    alert('❌ Could not package chips: ' + (e?.message || String(e)) + (missingTable ? '\n\nThe chip_packaging_batches table hasn\'t been created in Supabase yet — run the SQL setup for this feature.' : ''));
+  }
+}
+window.packageChipsIntoProduct = packageChipsIntoProduct;
+
+async function deleteChipPackagingBatch(id) {
+  if (userRole !== 'owner') return;
+  if (!confirm('Delete this product batch? Stock will be reduced back and the chip stock restored.')) return;
+  try {
+    const batch = (chipPackagingBatchesCache || []).find(b => String(b.id) === String(id));
+    if (!(await ensureFreshSession())) return;
+    const { error } = await withSessionRetry(() => supabase.from('chip_packaging_batches').delete().eq('id', id).eq('owner_id', businessId));
+    if (error) throw error;
+    chipPackagingBatchesCache = chipPackagingBatchesCache.filter(b => String(b.id) !== String(id));
+    if (batch) {
+      if (batch.product_id) {
+        await applyStockMovement(batch.product_id, -(Number(batch.qty) || 0), 'adjustment', 'Chips product batch deleted — stock reversed');
+      }
+      await adjustChipStockBalance(batch.combo_key, batch.combo_label, Number(batch.kg_used) || 0);
+    }
+    renderChipPackagingBatchesList();
+    updateStatus('🗑️ Product batch deleted — stock & chip stock reversed');
+  } catch (e) {
+    alert('❌ Could not delete product batch: ' + (e?.message || String(e)));
+  }
+}
+window.deleteChipPackagingBatch = deleteChipPackagingBatch;
+
+// Called once when the Production tab opens — loads the running chip
+// stock + today's two batch logs, then renders everything.
+async function initChipGrindingSection() {
+  if (!currentUser || userRole !== 'owner') return;
+  await loadChipStockBalances();
+  await Promise.all([loadChipGrindBatchesToday(), loadChipPackagingBatchesToday()]);
+  populateChipProductDatalist();
+  updateChipGrindComboPreview();
+  renderChipGrindBatchesList();
+  renderChipPackagingBatchesList();
+}
+window.initChipGrindingSection = initChipGrindingSection;
+
+
 // ==================== COSTING TAB — UMBALAKADA → ORDER COSTING ENTRY ====================
 // One-place daily entry chaining the whole story together: today's
 // Umbalakada purchase (type & price/kg) -> grind output & dust used ->
@@ -14545,6 +15001,9 @@ function activateAppTab(tabId){
     // Batch" modal opens) so the summary is accurate as soon as the tab
     // opens, not just after that modal has been used once.
     loadDailyProductBatches().then(() => renderStockUpdateSummary());
+    // Umbalakada Chips — Mixed Grind & Custom Packaging (separate from the
+    // pipeline above): running chip stock + today's grind/packaging logs.
+    initChipGrindingSection();
   }
   if (tabId === 'distributor-home') { showSkeletons('distributor-home'); loadDistributorCommissionClaims().then(renderDistributorHome); }
   if (tabId === 'my-income') { loadDistributorCommissionClaims().then(renderProductAgentPage); }
