@@ -2134,18 +2134,28 @@ window.renderUmbalakadaPurchaseSyncTable = renderUmbalakadaPurchaseSyncTable;
 
 // ==================== GRIND BATCH LOG (Actual Measured Dust) ====================
 // Real per-batch grinding records: the owner enters, after each grind, the
-// fish type + kg ground + dust actually produced (grams, weighed on a
-// scale) — e.g. "Linna 1kg → 100g dust", "Balaya 2kg → 20g dust", "Mix 5kg
-// → 1000g dust". This is what actually happened, not the theoretical
-// Grinding Yield % estimate the section above suggests — so once at least
-// one batch is logged for today, the batch totals take over from the
-// purchase-log auto-sync for "Umbalakada Ground Today" / "Dust Generated
-// Today" (real measured numbers beat estimates everywhere downstream:
-// dust waste cost, net dust impact, net profit incl. dust). Also shows a
-// per-batch and total "Dust Value" at the Dust Sale Price entered above —
-// this is the answer to "what is the dust actually worth". Saved per-day
-// in production_cost_log.grind_batches (jsonb) + dust_batches_value
-// (numeric) — see SQL comment above saveDailyProductionLog().
+// fish type + kg ground + price/kg + dust actually produced (grams, weighed
+// on a scale) — e.g. "Linna 1kg @ Rs.850 → 100g dust", "Balaya 2kg → 20g
+// dust", "Mix 5kg → 1000g dust". This is what actually happened, not the
+// theoretical Grinding Yield % estimate the section above suggests — so
+// once at least one batch is logged for today, the batch totals take over
+// from the purchase-log auto-sync for "Umbalakada Ground Today" / "Dust
+// Generated Today" (real measured numbers beat estimates everywhere
+// downstream: dust waste cost, net dust impact, net profit incl. dust).
+// Also shows a per-batch and total "Dust Value" at the Dust Sale Price
+// entered above — this is the answer to "what is the dust actually worth".
+// Each batch also carries its own raw cost (kg × price/kg) and usable kg
+// (kg ground minus dust) — and, if linked below in "Link Grinding to Store
+// Products", the exact product(s) it restocked (see GRIND BATCH → PRODUCT
+// STOCK LINKING further down: usable kg restocks the type's linked ground
+// product, dust restocks the shared dust product, via the same
+// applyStockMovement()/adjust_product_stock() RPC the Products tab and Pack
+// linking already use — so the Products tab's Stock and stock history
+// always reflect what actually came out of grinding). Saved per-day in
+// production_cost_log.grind_batches (jsonb) + dust_batches_value (numeric)
+// — see SQL comment above saveDailyProductionLog(); no new columns needed
+// for the price/usable-kg/product-link fields, they just ride along inside
+// each batch's jsonb object.
 let grindBatchesToday = [];
 let lastDustBatchesValueForSave = 0;
 
@@ -2157,13 +2167,32 @@ function populateGrindBatchTypeOptions() {
   sel.innerHTML = types.map(t => `<option value="${t.id}">${t.name} Umbalakada</option>`).join('')
     + '<option value="mix">Mix (multiple types ground together)</option>';
   if ([...sel.options].some(o => o.value === prevValue)) sel.value = prevValue;
+  prefillGrindBatchPrice();
 }
 window.populateGrindBatchTypeOptions = populateGrindBatchTypeOptions;
 
-function addGrindBatch() {
+// Auto-fills the Price/kg field from the type's current purchase price
+// (state.linnaPrice/balayaPrice/kawalamPrice via getUmbalakadaTypePrice) the
+// moment a fish type is picked — still fully editable, since what was
+// actually paid for *this* grind can differ from today's default price.
+function prefillGrindBatchPrice() {
+  const typeSel = $('dgbType');
+  const priceEl = $('dgbPrice');
+  if (!typeSel || !priceEl) return;
+  const types = ensureUmbalakadaTypes();
+  const t = types.find(x => x.id === typeSel.value);
+  if (t) {
+    const p = getUmbalakadaTypePrice(t);
+    if (p) priceEl.value = p;
+  }
+}
+window.prefillGrindBatchPrice = prefillGrindBatchPrice;
+
+async function addGrindBatch() {
   const typeSel = $('dgbType');
   const kgEl = $('dgbKg');
   const dustEl = $('dgbDustG');
+  const priceEl = $('dgbPrice');
   const kg = Number(kgEl && kgEl.value) || 0;
   const dustG = Number(dustEl && dustEl.value) || 0;
   if (kg <= 0) { alert('Enter the kg of Umbalakada ground for this batch.'); return; }
@@ -2171,21 +2200,56 @@ function addGrindBatch() {
   if (dustG > kg * 1000) { alert('Dust produced can\'t be more than the Umbalakada that went in — check the numbers.'); return; }
   const typeId = typeSel ? typeSel.value : 'mix';
   const typeName = typeSel && typeSel.selectedOptions.length ? typeSel.selectedOptions[0].textContent : 'Mix';
-  grindBatchesToday.push({
+  const priceKg = Number(priceEl && priceEl.value) || 0;
+  const usableKg = Math.max(0, kg - (dustG / 1000));
+  const map = state.grindProductMap || {};
+  const productId = map[typeId] || '';
+  const dustProductId = map.dust || '';
+
+  const batch = {
     id: 'gb_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
-    typeId, typeName, kg, dustG,
-    yieldPct: kg > 0 ? (dustG / (kg * 1000)) * 100 : 0
-  });
+    typeId, typeName, kg, dustG, priceKg,
+    rawCost: kg * priceKg,
+    usableKg,
+    yieldPct: kg > 0 ? (dustG / (kg * 1000)) * 100 : 0,
+    productId, dustProductId
+  };
+  grindBatchesToday.push(batch);
   if (kgEl) kgEl.value = '';
   if (dustEl) dustEl.value = '';
+  if (priceEl) priceEl.value = '';
   renderGrindBatches();
   updateStatus(`✅ Batch added: ${fmt2(kg)}kg ${typeName} → ${fmt2(dustG)}g dust`);
+
+  // Restock whatever's linked in "Link Grinding to Store Products" —
+  // silently skipped (no error, no alert) if that type/dust isn't linked to
+  // a product, same forgiving pattern as applyPackBatchStockMovements() for
+  // packs. Usable kg (kg ground minus dust) restocks the type's ground
+  // product; the dust grams restock the shared dust product.
+  if (usableKg > 0 && productId) {
+    await applyStockMovement(productId, usableKg, 'production', `Grind batch: ${typeName} — ${fmt2(usableKg)}kg usable`);
+  }
+  if (dustG > 0 && dustProductId) {
+    await applyStockMovement(dustProductId, dustG / 1000, 'production', `Grind batch dust: ${typeName} — ${fmt2(dustG)}g`);
+  }
 }
 window.addGrindBatch = addGrindBatch;
 
-function deleteGrindBatch(id) {
+async function deleteGrindBatch(id) {
+  const batch = grindBatchesToday.find(b => b.id === id);
   grindBatchesToday = grindBatchesToday.filter(b => b.id !== id);
   renderGrindBatches();
+  if (!batch) return;
+  // Reverse using the productId(s) stamped onto the batch itself at the
+  // moment it was added — not today's current mapping — so deleting an old
+  // batch always undoes exactly what it originally added, even if the
+  // Link Grinding to Store Products mapping has since changed.
+  if (batch.usableKg > 0 && batch.productId) {
+    await applyStockMovement(batch.productId, -batch.usableKg, 'adjustment', `Grind batch deleted: ${batch.typeName}`);
+  }
+  if (batch.dustG > 0 && batch.dustProductId) {
+    await applyStockMovement(batch.dustProductId, -(batch.dustG / 1000), 'adjustment', `Grind batch dust deleted: ${batch.typeName}`);
+  }
 }
 window.deleteGrindBatch = deleteGrindBatch;
 
@@ -2195,16 +2259,30 @@ function renderGrindBatches() {
   const dustSalePrice = Number($('dpDustSalePrice') && $('dpDustSalePrice').value) || 0;
 
   if (grindBatchesToday.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;opacity:.5;padding:14px;">No batches logged yet today — add one above after each grind.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;opacity:.5;padding:14px;">No batches logged yet today — add one above after each grind.</td></tr>';
   } else {
     tbody.innerHTML = grindBatchesToday.map(b => {
       const valueRs = (b.dustG / 1000) * dustSalePrice;
+      const usableKg = b.usableKg != null ? b.usableKg : Math.max(0, b.kg - b.dustG / 1000);
+      const priceKg = b.priceKg || 0;
+      const stockedParts = [];
+      if (b.productId) {
+        const gp = (products || []).find(p => String(p.id) === String(b.productId));
+        if (gp) stockedParts.push(gp.name);
+      }
+      if (b.dustProductId) {
+        const dp = (products || []).find(p => String(p.id) === String(b.dustProductId));
+        if (dp) stockedParts.push(dp.name + ' (dust)');
+      }
+      const stockedTo = stockedParts.length ? stockedParts.join(', ') : '<span style="opacity:.45;">Not linked</span>';
       return `<tr>
         <td>${b.typeName}</td>
         <td>${fmt2(b.kg)} kg</td>
+        <td>${priceKg ? fmt(priceKg) : '—'}</td>
         <td>${fmt2(b.dustG)} g</td>
-        <td>${b.yieldPct.toFixed(1)}%</td>
+        <td>${fmt2(usableKg)} kg</td>
         <td class="num">${fmt(valueRs)}</td>
+        <td style="font-size:.82rem;">${stockedTo}</td>
         <td>${actionMenuHTML([
           { label: 'Delete', icon: '🗑️', danger: true, onclick: `deleteGrindBatch('${b.id}')` }
         ])}</td>
@@ -2214,15 +2292,20 @@ function renderGrindBatches() {
 
   const totalKg = grindBatchesToday.reduce((s, b) => s + b.kg, 0);
   const totalDustG = grindBatchesToday.reduce((s, b) => s + b.dustG, 0);
+  const totalUsableKg = grindBatchesToday.reduce((s, b) => s + (b.usableKg != null ? b.usableKg : Math.max(0, b.kg - b.dustG / 1000)), 0);
+  const totalRawCost = grindBatchesToday.reduce((s, b) => s + (b.rawCost != null ? b.rawCost : (b.kg * (b.priceKg || 0))), 0);
   const avgYieldPct = totalKg > 0 ? (totalDustG / (totalKg * 1000)) * 100 : 0;
   const totalDustValue = (totalDustG / 1000) * dustSalePrice;
   lastDustBatchesValueForSave = totalDustValue;
 
   const totalKgEl = $('gbTotalKg'), totalDustEl = $('gbTotalDust'), avgYieldEl = $('gbAvgYield'), dustValueEl = $('gbDustValue');
+  const totalUsableEl = $('gbTotalUsable'), totalRawCostEl = $('gbTotalRawCost');
   if (totalKgEl) totalKgEl.textContent = fmt2(totalKg) + ' kg';
   if (totalDustEl) totalDustEl.textContent = fmt2(totalDustG) + ' g (' + fmt2(totalDustG / 1000) + ' kg)';
   if (avgYieldEl) avgYieldEl.textContent = avgYieldPct.toFixed(1) + '%';
   if (dustValueEl) dustValueEl.textContent = fmt(totalDustValue);
+  if (totalUsableEl) totalUsableEl.textContent = fmt2(totalUsableKg) + ' kg';
+  if (totalRawCostEl) totalRawCostEl.textContent = fmt(totalRawCost);
 
   // Real measured batches beat the purchase-log estimate: once at least one
   // batch exists today, push the real totals straight into the fields that
@@ -2256,6 +2339,62 @@ function loadTodayGrindBatchesFromLog() {
   renderGrindBatches();
 }
 window.loadTodayGrindBatchesFromLog = loadTodayGrindBatchesFromLog;
+
+// ==================== GRIND BATCH → PRODUCT STOCK LINKING ====================
+// Bridges each measured Grind Batch above with the real Product catalog's
+// Stock (Products tab) — the exact same applyStockMovement()/
+// adjust_product_stock() RPC "Link Packs to Store Products" already uses.
+// Two independent, optional links:
+//   1. Per Umbalakada type -> a "Ground Umbalakada" product
+//      (state.grindProductMap[typeId]). Each batch's USABLE kg (kg ground
+//      minus dust) restocks that product — the actual flake going into
+//      packs.
+//   2. Dust -> one shared "Umbalakada Dust" product
+//      (state.grindProductMap.dust), since dust from every type is usually
+//      collected and sold/used together as one item.
+// Nothing new in Supabase is needed — the mapping lives in
+// state.grindProductMap (synced via the existing app_data blob), same as
+// state.packProductMap. The productId(s) actually used are stamped onto
+// each batch record at the moment it's added (see addGrindBatch()), so a
+// later change to this mapping never breaks the reversal math for batches
+// already logged (see deleteGrindBatch()).
+function populateGrindProductMapSelects() {
+  const grid = $('gpmGrid');
+  const dustSel = $('gpmMapDust');
+  if (!grid && !dustSel) return;
+  const optionsHtml = '<option value="">— Not linked —</option>' +
+    (products || []).map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+  if (grid) {
+    const types = ensureUmbalakadaTypes().filter(t => t.core);
+    const rows = [...types.map(t => ({ id: t.id, label: t.name + ' Umbalakada →' })),
+                  { id: 'mix', label: 'Mix (multiple types) →' }];
+    grid.innerHTML = rows.map(r => `<div class="field"><label>${r.label}</label><select id="gpmMap_${r.id}" onchange="onGrindProductMapChange()"></select></div>`).join('');
+    rows.forEach(r => {
+      const sel = $('gpmMap_' + r.id);
+      if (!sel) return;
+      sel.innerHTML = optionsHtml;
+      sel.value = (state.grindProductMap && state.grindProductMap[r.id]) || '';
+    });
+  }
+  if (dustSel) {
+    dustSel.innerHTML = optionsHtml;
+    dustSel.value = (state.grindProductMap && state.grindProductMap.dust) || '';
+  }
+}
+window.populateGrindProductMapSelects = populateGrindProductMapSelects;
+
+function onGrindProductMapChange() {
+  if (!state.grindProductMap) state.grindProductMap = {};
+  const types = ensureUmbalakadaTypes().filter(t => t.core);
+  [...types.map(t => t.id), 'mix'].forEach(id => {
+    const sel = $('gpmMap_' + id);
+    if (sel) state.grindProductMap[id] = sel.value;
+  });
+  const dustSel = $('gpmMapDust');
+  if (dustSel) state.grindProductMap.dust = dustSel.value;
+  onDataChange();
+}
+window.onGrindProductMapChange = onGrindProductMapChange;
 
 function getAllocatedOverheadPerPack() {
   let totalPacks = 0;
@@ -14152,6 +14291,9 @@ function activateAppTab(tabId){
     // dropdowns; products are already loaded app-wide at login, so no
     // extra fetch needed here.
     populatePackProductMapSelects();
+    // "Link Grinding to Store Products" — same idea, one step earlier in
+    // the process (ground Umbalakada + dust, before packing).
+    populateGrindProductMapSelects();
   }
   if (tabId === 'distributor-home') { showSkeletons('distributor-home'); loadDistributorCommissionClaims().then(renderDistributorHome); }
   if (tabId === 'my-income') { loadDistributorCommissionClaims().then(renderProductAgentPage); }

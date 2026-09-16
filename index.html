@@ -2672,9 +2672,10 @@
 
       <h3 style="color:var(--green);margin:16px 0 8px;"><span style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:var(--green);color:#fff;font-weight:700;font-size:13px;margin-right:6px;vertical-align:middle;">4</span> Add Each Grinding Round <span class="hint">(optional — for exact numbers)</span></h3>
       <p class="sub" style="margin:0 0 10px;">Every time you grind fish, add it here — pick the type, how many kg went in, and how many grams of dust came out. Example: Linna 1kg → 100g dust. Add as many rounds as you did today; the totals below update automatically and replace Step 3's numbers.</p>
-      <div class="grid-3">
-        <div class="field"><label>Fish Type</label><select id="dgbType"></select></div>
+      <div class="grid-4">
+        <div class="field"><label>Fish Type</label><select id="dgbType" onchange="prefillGrindBatchPrice()"></select></div>
         <div class="field"><label>Kg Ground</label><input type="number" id="dgbKg" min="0" step="0.1" placeholder="e.g. 1"></div>
+        <div class="field"><label>Price /kg <span class="hint">(auto-filled, editable)</span></label><input type="number" id="dgbPrice" min="0" step="0.01" placeholder="e.g. 850"></div>
         <div class="field"><label>Dust Made <span class="hint">(grams)</span></label><input type="number" id="dgbDustG" min="0" step="1" placeholder="e.g. 100"></div>
       </div>
       <div class="btn-row" style="margin:6px 0 14px;">
@@ -2682,16 +2683,36 @@
       </div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Fish Type</th><th>Kg Ground</th><th>Dust Made</th><th>Dust %</th><th class="num">Dust Worth (Rs.)</th><th></th></tr></thead>
-          <tbody id="grindBatchesBody"><tr><td colspan="6" style="text-align:center;opacity:.5;padding:14px;">Nothing added yet today — add a round above after each grind.</td></tr></tbody>
+          <thead><tr><th>Fish Type</th><th>Kg Ground</th><th>Price/kg</th><th>Dust Made</th><th>Usable Kg</th><th class="num">Dust Worth (Rs.)</th><th>Stocked To</th><th></th></tr></thead>
+          <tbody id="grindBatchesBody"><tr><td colspan="8" style="text-align:center;opacity:.5;padding:14px;">Nothing added yet today — add a round above after each grind.</td></tr></tbody>
         </table>
       </div>
       <p class="sub" id="gbNote" style="margin:8px 0 0;"></p>
       <div class="stat-grid" style="margin-top:10px;">
         <div class="stat"><div class="k">Total Ground</div><div class="v" id="gbTotalKg">0 kg</div></div>
+        <div class="stat"><div class="k">Total Usable</div><div class="v" id="gbTotalUsable">0 kg</div></div>
         <div class="stat"><div class="k">Total Dust</div><div class="v" id="gbTotalDust">0 g</div></div>
         <div class="stat"><div class="k">Dust %</div><div class="v" id="gbAvgYield">0%</div></div>
         <div class="stat accent"><div class="k">Dust Worth (Rs.)</div><div class="v" id="gbDustValue">Rs. 0</div></div>
+        <div class="stat accent"><div class="k">Raw Cost (Rs.)</div><div class="v" id="gbTotalRawCost">Rs. 0</div></div>
+      </div>
+
+      <!-- ============ GRIND → PRODUCT STOCK LINKING ============ -->
+      <!-- Bridges each Grinding Round above with the real Product catalog's
+           Stock (Products tab) — same applyStockMovement()/
+           adjust_product_stock() RPC "Link Packs to Store Products" uses.
+           See populateGrindProductMapSelects()/onGrindProductMapChange()/
+           addGrindBatch()/deleteGrindBatch() in app.js. Dropdowns are built
+           by JS, not hard-coded. -->
+      <div class="card" style="margin-top:16px;">
+        <h2><span class="pro-title-icon teal" aria-hidden="true"><i class="business-icon" data-lucide="link" aria-hidden="true"></i></span><span>Link Grinding to Store Products</span></h2>
+        <p class="pro-subtitle teal">One-time setup: pick which catalog product each Umbalakada type's ground (usable) output restocks, and which product the dust restocks. Once linked, every grinding round you add above (or delete) automatically updates that product's Stock — so the Products tab always matches what actually came out of grinding today.</p>
+        <div class="grid-2" id="gpmGrid"></div>
+        <div class="field" style="margin-top:10px;">
+          <label>Dust (all types) →</label>
+          <select id="gpmMapDust" onchange="onGrindProductMapChange()"><option value="">— Not linked —</option></select>
+        </div>
+        <div class="monthly-summary-note" id="gpmNote">Types left "Not linked" won't touch Product Stock — the numbers above still work as before either way.</div>
       </div>
 
       <h3 style="color:var(--green);margin:16px 0 8px;"><span style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:var(--green);color:#fff;font-weight:700;font-size:13px;margin-right:6px;vertical-align:middle;">5</span> Packs Made Today</h3>
