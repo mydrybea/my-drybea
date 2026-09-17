@@ -2167,63 +2167,126 @@ window.renderUmbalakadaPurchaseSyncTable = renderUmbalakadaPurchaseSyncTable;
 let grindBatchesToday = [];
 let lastDustBatchesValueForSave = 0;
 
-// Renders the Linna / Balaya / Premium Mix tick-boxes for a grind round —
-// any combination can be ticked (just Linna, just Premium, Linna+Balaya,
-// all three, etc.) since a single grind round can genuinely mix types.
-// Whatever combo comes out is ONE thing on the shelf ("Umbalakada Chips"),
-// so unlike before there's no per-type product link anymore — see
-// populateGrindProductMapSelects().
-function populateGrindBatchTypeOptions() {
-  const wrap = $('dgbTypeChecks');
+// ==================== GRINDING PRICE LIST (per-combo Rs./kg, set once) ====================
+// The owner grinds Umbalakada in different combinations — Linna alone,
+// Balaya alone, Premium Mix alone, or any pairing/triple of them — and the
+// real grinding price per kg genuinely differs by combo (it isn't just the
+// average of the individual types' purchase prices). Stored in
+// state.grindComboPrices (synced via the existing app_data blob, same
+// pattern as state.grindProductMap / state.chipPackTypes) as
+// {comboKey: price}, comboKey = sorted core type ids joined with '+'
+// (e.g. 'balaya', 'linna+balaya', 'linna+balaya+kawalam').
+function ensureGrindComboPrices() {
+  if (!state.grindComboPrices || typeof state.grindComboPrices !== 'object') state.grindComboPrices = {};
+  return state.grindComboPrices;
+}
+window.ensureGrindComboPrices = ensureGrindComboPrices;
+
+// Canonical, order-independent key for a set of core type ids —
+// ['kawalam','linna'] and ['linna','kawalam'] both resolve to
+// 'kawalam+linna'.
+function grindComboKey(typeIds) {
+  return (typeIds || []).slice().sort().join('+');
+}
+window.grindComboKey = grindComboKey;
+
+// All 7 non-empty combinations of the 3 core types — single types first,
+// then pairs, then all three. This is the one master list the whole
+// combo-centric Grinding section is built from.
+function getAllGrindCombos() {
+  const types = ensureUmbalakadaTypes().filter(t => t.core);
+  const byId = {}; types.forEach(t => byId[t.id] = t.name);
+  const ids = types.map(t => t.id); // usually ['linna','balaya','kawalam']
+  const pairs = [];
+  for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) pairs.push([ids[i], ids[j]]);
+  const triple = ids.length === 3 ? [[ids[0], ids[1], ids[2]]] : [];
+  const combos = [...ids.map(id => [id]), ...pairs, ...triple];
+  return combos.map(c => ({ key: grindComboKey(c), ids: c, label: c.map(id => byId[id] || id).join(' & ') }));
+}
+window.getAllGrindCombos = getAllGrindCombos;
+
+function onGrindComboPriceInput(key) {
+  const el = $('ccPrice_' + key);
+  if (!el) return;
+  const prices = ensureGrindComboPrices();
+  const v = el.value === '' ? null : Number(el.value);
+  if (v == null || !isFinite(v) || v < 0) delete prices[key];
+  else prices[key] = v;
+  onDataChange();
+}
+window.onGrindComboPriceInput = onGrindComboPriceInput;
+
+// ==================== COMBO-CENTRIC GRINDING (Stage 2) ====================
+// Each of the 7 combos is its own mini production line — its own saved
+// Price/kg, its own quick "add a round" inputs, and its own live totals for
+// today (kg ground, usable kg, dust, raw cost) — instead of one flat form
+// shared by every combo. Every combo's usable output still restocks the
+// SAME single "Umbalakada Chips" product (Stage 4 link) and dust restocks
+// the same shared dust product — this is purely a workflow/visual
+// reorganization around how the owner actually thinks about grinding, not
+// a change to what gets stocked. See renderComboCards()/addGrindBatch()/
+// deleteGrindBatch().
+function renderComboCards() {
+  const wrap = $('comboCardsWrap');
   if (!wrap) return;
-  const types = ensureUmbalakadaTypes().filter(t => t.core);
-  const prevChecked = {};
-  types.forEach(t => { const el = $('dgbType_' + t.id); if (el) prevChecked[t.id] = el.checked; });
-  wrap.innerHTML = types.map(t =>
-    `<label style="display:inline-flex;align-items:center;gap:6px;margin:4px 14px 4px 0;font-weight:600;font-size:.85rem;"><input type="checkbox" id="dgbType_${t.id}" value="${t.id}" onchange="prefillGrindBatchPrice()" style="width:16px;height:16px;"> ${t.name}</label>`
-  ).join('');
-  types.forEach(t => { const el = $('dgbType_' + t.id); if (el) el.checked = !!prevChecked[t.id]; });
-  prefillGrindBatchPrice();
-}
-window.populateGrindBatchTypeOptions = populateGrindBatchTypeOptions;
+  const combos = getAllGrindCombos();
+  const saved = ensureGrindComboPrices();
+  const dustSalePrice = Number($('dpDustSalePrice') && $('dpDustSalePrice').value) || 0;
 
-// Returns the ticked core types for the current grind round, e.g.
-// [{id:'linna',name:'Linna'}, {id:'balaya',name:'Balaya'}] for a combo grind.
-function getCheckedGrindTypes() {
-  const types = ensureUmbalakadaTypes().filter(t => t.core);
-  return types.filter(t => { const el = $('dgbType_' + t.id); return el && el.checked; });
-}
-window.getCheckedGrindTypes = getCheckedGrindTypes;
+  wrap.innerHTML = combos.map(c => {
+    const batches = grindBatchesToday.filter(b => (b.comboKey || grindComboKey(b.typeIds || [])) === c.key);
+    const kg = batches.reduce((s, b) => s + b.kg, 0);
+    const dustG = batches.reduce((s, b) => s + b.dustG, 0);
+    const usableKg = batches.reduce((s, b) => s + (b.usableKg != null ? b.usableKg : Math.max(0, b.kg - b.dustG / 1000)), 0);
+    const rawCost = batches.reduce((s, b) => s + (b.rawCost != null ? b.rawCost : b.kg * (b.priceKg || 0)), 0);
+    const priceVal = saved[c.key] != null ? saved[c.key] : '';
+    const roundsHtml = batches.length ? batches.map(b => `
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:5px 0;border-bottom:1px dashed var(--border,#e5e7eb);font-size:.82rem;">
+        <span>${fmt2(b.kg)} kg @ Rs.${fmt(b.priceKg || 0)}/kg → ${fmt2(b.dustG)} g dust</span>
+        <button type="button" class="btn btn-xs btn-danger" onclick="deleteGrindBatch('${b.id}')"><i class="business-icon icon-inline" data-lucide="trash-2" aria-hidden="true"></i></button>
+      </div>`).join('') : '<p class="sub" style="margin:4px 0 0;opacity:.6;">No rounds logged yet today.</p>';
 
-// Auto-suggests the Price/kg field as the simple average of every ticked
-// type's current purchase price (state.linnaPrice/balayaPrice/kawalamPrice
-// via getUmbalakadaTypePrice) — still fully editable, since what a mixed
-// grind round actually cost can differ from this average.
-function prefillGrindBatchPrice() {
-  const priceEl = $('dgbPrice');
-  if (!priceEl) return;
-  const checked = getCheckedGrindTypes();
-  if (checked.length === 0) return;
-  const prices = checked.map(t => getUmbalakadaTypePrice(t)).filter(p => p > 0);
-  if (prices.length > 0) priceEl.value = (prices.reduce((a, b) => a + b, 0) / prices.length).toFixed(2);
+    return `
+    <div class="dpl-sub-card" style="margin-bottom:12px;">
+      <h4 style="margin:0 0 8px;font-size:.95rem;">${c.label}</h4>
+      <div class="grid-3">
+        <div class="field"><label>Price /kg (Rs.)</label><input type="number" min="0" step="0.01" id="ccPrice_${c.key}" value="${priceVal}" placeholder="e.g. 900" oninput="onGrindComboPriceInput('${c.key}')"></div>
+        <div class="field"><label>Kg Ground</label><input type="number" min="0" step="0.1" id="ccKg_${c.key}" placeholder="e.g. 1"></div>
+        <div class="field"><label>Dust <span class="hint">(grams)</span></label><input type="number" min="0" step="1" id="ccDustG_${c.key}" placeholder="e.g. 100"></div>
+      </div>
+      <div class="btn-row" style="margin:6px 0 10px;">
+        <button type="button" class="btn btn-primary btn-sm" onclick="addGrindBatch('${c.key}')"><i class="business-icon icon-inline" data-lucide="plus" aria-hidden="true"></i> Add Round</button>
+      </div>
+      <div class="stat-grid" style="margin-bottom:8px;">
+        <div class="stat"><div class="k">Ground Today</div><div class="v">${fmt2(kg)} kg</div></div>
+        <div class="stat"><div class="k">Usable</div><div class="v">${fmt2(usableKg)} kg</div></div>
+        <div class="stat"><div class="k">Dust</div><div class="v">${fmt2(dustG)} g</div></div>
+        <div class="stat accent"><div class="k">Raw Cost</div><div class="v">${fmt(rawCost)}</div></div>
+      </div>
+      ${roundsHtml}
+    </div>`;
+  }).join('');
 }
-window.prefillGrindBatchPrice = prefillGrindBatchPrice;
+window.renderComboCards = renderComboCards;
 
-async function addGrindBatch() {
-  const kgEl = $('dgbKg');
-  const dustEl = $('dgbDustG');
-  const priceEl = $('dgbPrice');
+async function addGrindBatch(comboKey) {
+  const kgEl = $('ccKg_' + comboKey);
+  const dustEl = $('ccDustG_' + comboKey);
   const kg = Number(kgEl && kgEl.value) || 0;
   const dustG = Number(dustEl && dustEl.value) || 0;
-  const checkedTypes = getCheckedGrindTypes();
-  if (checkedTypes.length === 0) { alert('Tick at least one Umbalakada type (Linna / Balaya / Premium Mix) for this grind round — tick more than one if it was a mixed grind.'); return; }
-  if (kg <= 0) { alert('Enter the kg of Umbalakada ground for this batch.'); return; }
+  const types = ensureUmbalakadaTypes().filter(t => t.core);
+  const ids = String(comboKey || '').split('+').filter(Boolean);
+  const checkedTypes = types.filter(t => ids.includes(t.id));
+  if (checkedTypes.length === 0) { alert('Unknown combo — refresh the page and try again.'); return; }
+  if (kg <= 0) { alert('Enter the kg ground for this combo.'); return; }
   if (dustG < 0) { alert('Enter a valid dust weight (grams).'); return; }
   if (dustG > kg * 1000) { alert('Dust produced can\'t be more than the Umbalakada that went in — check the numbers.'); return; }
+  const saved = ensureGrindComboPrices();
+  const priceKg = Number(saved[comboKey]) || 0;
+  if (priceKg <= 0) { alert("Set this combo's Price/kg first — the field at the top of its card."); return; }
   clearStockMovementError();
   const typeIds = checkedTypes.map(t => t.id);
-  const typeName = checkedTypes.map(t => t.name).join(' + ');
-  const priceKg = Number(priceEl && priceEl.value) || 0;
+  const typeName = checkedTypes.map(t => t.name).join(' & ');
   const usableKg = Math.max(0, kg - (dustG / 1000));
   const map = state.grindProductMap || {};
   // Every combo's usable output restocks the SAME single "Umbalakada Chips"
@@ -2234,7 +2297,7 @@ async function addGrindBatch() {
 
   const batch = {
     id: 'gb_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
-    typeIds, typeName, kg, dustG, priceKg,
+    comboKey, typeIds, typeName, kg, dustG, priceKg,
     rawCost: kg * priceKg,
     usableKg,
     yieldPct: kg > 0 ? (dustG / (kg * 1000)) * 100 : 0,
@@ -2243,8 +2306,8 @@ async function addGrindBatch() {
   grindBatchesToday.push(batch);
   if (kgEl) kgEl.value = '';
   if (dustEl) dustEl.value = '';
-  if (priceEl) priceEl.value = '';
   renderGrindBatches();
+  renderComboCards();
 
   // Restock whatever's linked in Stage 4 (Value Addition). If a side isn't
   // linked, that's not an error — but it's also no longer silent: a clear
@@ -2409,6 +2472,7 @@ function renderGrindBatches() {
     noteEl.textContent = 'Add a batch above after each grind — its real measured totals will replace the estimated figures above.';
   }
 
+  renderComboCards();
   updateDailyProductionSummaryLive();
   renderStockUpdateSummary();
 }
@@ -2510,7 +2574,7 @@ window.renderStockUpdateSummary = renderStockUpdateSummary;
 // was last saved in today's production_cost_log row — never overwrites
 // batches already sitting unsaved in memory this session.
 function loadTodayGrindBatchesFromLog() {
-  populateGrindBatchTypeOptions();
+  renderComboCards();
   if (grindBatchesToday.length === 0) {
     const today = todayIso();
     const rec = (dailyProductionLogCache || []).find(r => r.log_date === today);
@@ -5188,7 +5252,7 @@ function calcProduction() {
   lastProdAvgMarketPrice = avgFinPrice;
   lastProdAvgProfitPerKg = avgProfitPerKg;
   renderUmbalakadaPurchaseSyncTable(); // local re-render only — cloud sync happens via syncUmbalakadaGroundFromPurchaseLog()
-  populateGrindBatchTypeOptions();
+  renderComboCards();
   updateDailyProductionSummaryLive();
 
   const colors = getChartColors();
