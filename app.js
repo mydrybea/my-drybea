@@ -7884,9 +7884,98 @@ function dbSaleToLocal(s) {
     chequeStatus: s.cheque_status || 'pending',
     depositBank: s.deposit_bank || '',
     depositRef: s.deposit_ref || '',
-    depositDate: s.deposit_date || ''
+    depositDate: s.deposit_date || '',
+    linkedOrderId: s.linked_order_id || null
   };
 }
+
+// ---- SQL setup (run once — lets a delivered Order auto-log itself into
+// the Sales Diary, and stops the same order being logged twice) ----
+// ALTER TABLE sales ADD COLUMN IF NOT EXISTS linked_order_id uuid REFERENCES orders(id) ON DELETE SET NULL;
+// CREATE INDEX IF NOT EXISTS sales_linked_order_id_idx ON sales(linked_order_id);
+// If a driver confirming delivery ever fails silently to create the Sales
+// row (check the browser console for "Auto-log sale ... failed"), it's
+// almost always the sales table's RLS INSERT policy only allowing
+// user_id = auth.uid() — widen it to also allow a driver assigned to that
+// order, e.g.:
+// CREATE POLICY "driver_can_log_delivered_sale" ON sales FOR INSERT
+//   WITH CHECK (EXISTS (SELECT 1 FROM orders o WHERE o.id = linked_order_id AND o.assigned_driver_id = auth.uid()));
+// (The owner's own session will also pick up anything a driver's insert
+// missed within ~10 minutes via the realtime backstop in
+// refreshCommissionRealtime() below, so this is a nice-to-have, not a hard
+// requirement, for the feature to work end to end.)
+//
+// Turns a just-delivered Order straight into one or more Sales Diary
+// entries — one row per product in the order — the moment it's marked
+// delivered, from WHICHEVER session (owner, driver, or the owner's own app
+// re-syncing) sees that transition first. Safe to call more than once for
+// the same order: it checks for an existing linked_order_id row first.
+// Accepts either the camelCase local `orders` shape (owner-side) or the
+// raw snake_case row shape used by the driver's `myDeliveries` list.
+async function autoLogSaleFromDeliveredOrder(order) {
+  if (!currentUser || !order || !order.id) return;
+  try {
+    const { data: existing, error: exErr } = await supabase.from('sales')
+      .select('id').eq('linked_order_id', order.id).limit(1);
+    if (exErr && !/column|schema|does not exist/i.test(exErr.message || '')) throw exErr;
+    if (Array.isArray(existing) && existing.length > 0) return; // already logged for this order
+  } catch (e) {
+    console.warn('Sales duplicate-check skipped (will still try to log):', e?.message || e);
+  }
+
+  const items = Array.isArray(order.items) && order.items.length
+    ? order.items
+    : [{
+        name: `Umbalakada (${order.product_size_g ?? order.product ?? 0}g Pack)`,
+        productId: order.product_id ?? order.productId ?? null,
+        qty: Number(order.qty) || 0,
+        unitPrice: Number(order.unit_price ?? order.unitPrice) || 0,
+        total: Number(order.total) || 0
+      }];
+  const isCod = (order.payment_method || order.paymentMethod || 'cod') === 'cod';
+  const codCollectedVal = order.cod_collected != null ? order.cod_collected : (order.codCollected != null ? order.codCollected : null);
+  const paidAll = isCod ? Number(codCollectedVal != null ? codCollectedVal : order.total) || 0 : Number(order.total) || 0;
+  const dateStr = (order.delivered_at || order.deliveredAt) ? String(order.delivered_at || order.deliveredAt).slice(0, 10) : todayIso();
+  const customerName = order.customer_name_snapshot || order.customerName || getCustomerName(order.customer_id || order.customerId) || null;
+  const orderRef = order.order_ref_no || order.orderRefNo || order.id;
+  const totalAcrossItems = items.reduce((s, it) => s + (Number(it.total) || 0), 0) || 1;
+
+  for (const it of items) {
+    const share = (Number(it.total) || 0) / totalAcrossItems;
+    const row = {
+      user_id: businessId,
+      sale_date: dateStr,
+      product_name: it.name || 'Umbalakada Product',
+      product_id: it.productId || null,
+      customer_name: customerName,
+      quantity: it.qty,
+      unit_price: it.unitPrice,
+      total_amount: it.total,
+      cost_amount: 0,
+      wage_amount: 0,
+      marketing_channel: null,
+      marketing_cost: 0,
+      amount_paid: Math.round(paidAll * share),
+      notes: `Auto-logged on delivery — Order ${orderRef}`,
+      created_by: currentUser.id,
+      payment_method: 'cash',
+      linked_order_id: order.id
+    };
+    try {
+      let { data, error } = await supabase.from('sales').insert(row).select().single();
+      if (error && /column|schema|does not exist/i.test(error.message || '')) {
+        const fallback = { ...row }; delete fallback.product_id; delete fallback.linked_order_id;
+        ({ data, error } = await supabase.from('sales').insert(fallback).select().single());
+      }
+      if (error) throw error;
+      sales.unshift(dbSaleToLocal(data));
+    } catch (e) {
+      console.warn('Auto-log sale from delivered order failed:', e?.message || e);
+    }
+  }
+  if (typeof renderSales === 'function') renderSales();
+}
+window.autoLogSaleFromDeliveredOrder = autoLogSaleFromDeliveredOrder;
 
 async function loadSalesFromCloud() {
   if (!currentUser) return;
@@ -9165,7 +9254,7 @@ async function cycleStatus(index) {
   updateMonthlySummary();
   // Commission only becomes real once delivery actually happens, and never
   // happens if the order gets cancelled first — see finalizeDistributorCommissionForOrder().
-  if (newStatus === 'delivered') finalizeDistributorCommissionForOrder(order.id, 'approved');
+  if (newStatus === 'delivered') { finalizeDistributorCommissionForOrder(order.id, 'approved'); autoLogSaleFromDeliveredOrder(order); }
   else if (newStatus === 'cancelled') finalizeDistributorCommissionForOrder(order.id, 'rejected');
   // Stock was committed the moment this order was created (see createOrder()).
   // Cancelling it releases that stock back to the shelf; reviving a
@@ -10135,6 +10224,7 @@ async function confirmBatchDelivery() {
         const { error } = await withSessionRetry(() => supabase.from('orders').update(update).eq('id', o.id).eq('assigned_driver_id', currentUser.id));
         if (error) throw error;
         finalizeDistributorCommissionForOrder(o.id, 'approved');
+        autoLogSaleFromDeliveredOrder({ ...o, ...update });
         if (activeTrip && String(activeTrip.orderId) === String(o.id)) activeTrip = null;
         Object.assign(o, update);
         return { id: o.id, ok: true };
@@ -10688,6 +10778,7 @@ async function confirmDelivery() {
     const { error } = await withSessionRetry(() => supabase.from('orders').update(update).eq('id', o.id).eq('assigned_driver_id', currentUser.id));
     if (error) throw error;
     finalizeDistributorCommissionForOrder(o.id, 'approved');
+    autoLogSaleFromDeliveredOrder({ ...o, ...update });
 
     if (activeTrip && String(activeTrip.orderId) === String(o.id)) { activeTrip = null; updateLiveTripKmUI(); }
     Object.assign(o, update);
@@ -13513,6 +13604,17 @@ async function refreshCommissionRealtime(){
   try{
     await loadCommissionClaims();
     await loadOrdersFromCloud();
+    // Realtime backstop for the Sales Diary: catches a delivery confirmed
+    // from ANOTHER device (a driver's phone, or another tab) within the
+    // last few minutes, in case that session's own direct
+    // autoLogSaleFromDeliveredOrder() call couldn't write to `sales`
+    // itself (see the RLS note above that function). Scoped to "recently
+    // delivered" only, so this stays a cheap check, not a full resync.
+    try {
+      const recentCutoff = Date.now() - 10 * 60 * 1000;
+      const recentlyDelivered = (orders || []).filter(o => o.status === 'delivered' && o.deliveredAt && new Date(o.deliveredAt).getTime() > recentCutoff);
+      for (const o of recentlyDelivered) await autoLogSaleFromDeliveredOrder(o);
+    } catch (e) { console.warn('Sales realtime backstop skipped:', e); }
     try{ await loadStaffList(); }catch(e){}
     try{ await loadMyStaffData(false); }catch(e){}
     // A distributor placing (or being marked delivered for) an order from
