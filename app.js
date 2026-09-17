@@ -1765,6 +1765,14 @@ let state = {
 };
 let history = [];
 let orders = [];
+// Multi-product cart for the New Order modal — lets one order carry several
+// different products/sizes (e.g. 2× 50g Pack + 1× 100g Bottle) instead of
+// being limited to one product per order. The field(s) currently showing in
+// the Product & Quantity section are always the "line being edited"; adding
+// another product pushes that line into this cart and clears the fields for
+// the next one. See addAnotherOrderProduct()/getCurrentOrderLineItem() and
+// createOrder() below.
+let orderCart = [];
 let customers = [];
 let products = [];
 let productImageFile = null;
@@ -2159,57 +2167,74 @@ window.renderUmbalakadaPurchaseSyncTable = renderUmbalakadaPurchaseSyncTable;
 let grindBatchesToday = [];
 let lastDustBatchesValueForSave = 0;
 
+// Renders the Linna / Balaya / Premium Mix tick-boxes for a grind round —
+// any combination can be ticked (just Linna, just Premium, Linna+Balaya,
+// all three, etc.) since a single grind round can genuinely mix types.
+// Whatever combo comes out is ONE thing on the shelf ("Umbalakada Chips"),
+// so unlike before there's no per-type product link anymore — see
+// populateGrindProductMapSelects().
 function populateGrindBatchTypeOptions() {
-  const sel = $('dgbType');
-  if (!sel) return;
-  const prevValue = sel.value;
+  const wrap = $('dgbTypeChecks');
+  if (!wrap) return;
   const types = ensureUmbalakadaTypes().filter(t => t.core);
-  sel.innerHTML = types.map(t => `<option value="${t.id}">${t.name} Umbalakada</option>`).join('')
-    + '<option value="mix">Mix (multiple types ground together)</option>';
-  if ([...sel.options].some(o => o.value === prevValue)) sel.value = prevValue;
+  const prevChecked = {};
+  types.forEach(t => { const el = $('dgbType_' + t.id); if (el) prevChecked[t.id] = el.checked; });
+  wrap.innerHTML = types.map(t =>
+    `<label style="display:inline-flex;align-items:center;gap:6px;margin:4px 14px 4px 0;font-weight:600;font-size:.85rem;"><input type="checkbox" id="dgbType_${t.id}" value="${t.id}" onchange="prefillGrindBatchPrice()" style="width:16px;height:16px;"> ${t.name}</label>`
+  ).join('');
+  types.forEach(t => { const el = $('dgbType_' + t.id); if (el) el.checked = !!prevChecked[t.id]; });
   prefillGrindBatchPrice();
 }
 window.populateGrindBatchTypeOptions = populateGrindBatchTypeOptions;
 
-// Auto-fills the Price/kg field from the type's current purchase price
-// (state.linnaPrice/balayaPrice/kawalamPrice via getUmbalakadaTypePrice) the
-// moment a fish type is picked — still fully editable, since what was
-// actually paid for *this* grind can differ from today's default price.
+// Returns the ticked core types for the current grind round, e.g.
+// [{id:'linna',name:'Linna'}, {id:'balaya',name:'Balaya'}] for a combo grind.
+function getCheckedGrindTypes() {
+  const types = ensureUmbalakadaTypes().filter(t => t.core);
+  return types.filter(t => { const el = $('dgbType_' + t.id); return el && el.checked; });
+}
+window.getCheckedGrindTypes = getCheckedGrindTypes;
+
+// Auto-suggests the Price/kg field as the simple average of every ticked
+// type's current purchase price (state.linnaPrice/balayaPrice/kawalamPrice
+// via getUmbalakadaTypePrice) — still fully editable, since what a mixed
+// grind round actually cost can differ from this average.
 function prefillGrindBatchPrice() {
-  const typeSel = $('dgbType');
   const priceEl = $('dgbPrice');
-  if (!typeSel || !priceEl) return;
-  const types = ensureUmbalakadaTypes();
-  const t = types.find(x => x.id === typeSel.value);
-  if (t) {
-    const p = getUmbalakadaTypePrice(t);
-    if (p) priceEl.value = p;
-  }
+  if (!priceEl) return;
+  const checked = getCheckedGrindTypes();
+  if (checked.length === 0) return;
+  const prices = checked.map(t => getUmbalakadaTypePrice(t)).filter(p => p > 0);
+  if (prices.length > 0) priceEl.value = (prices.reduce((a, b) => a + b, 0) / prices.length).toFixed(2);
 }
 window.prefillGrindBatchPrice = prefillGrindBatchPrice;
 
 async function addGrindBatch() {
-  const typeSel = $('dgbType');
   const kgEl = $('dgbKg');
   const dustEl = $('dgbDustG');
   const priceEl = $('dgbPrice');
   const kg = Number(kgEl && kgEl.value) || 0;
   const dustG = Number(dustEl && dustEl.value) || 0;
+  const checkedTypes = getCheckedGrindTypes();
+  if (checkedTypes.length === 0) { alert('Tick at least one Umbalakada type (Linna / Balaya / Premium Mix) for this grind round — tick more than one if it was a mixed grind.'); return; }
   if (kg <= 0) { alert('Enter the kg of Umbalakada ground for this batch.'); return; }
   if (dustG < 0) { alert('Enter a valid dust weight (grams).'); return; }
   if (dustG > kg * 1000) { alert('Dust produced can\'t be more than the Umbalakada that went in — check the numbers.'); return; }
   clearStockMovementError();
-  const typeId = typeSel ? typeSel.value : 'mix';
-  const typeName = typeSel && typeSel.selectedOptions.length ? typeSel.selectedOptions[0].textContent : 'Mix';
+  const typeIds = checkedTypes.map(t => t.id);
+  const typeName = checkedTypes.map(t => t.name).join(' + ');
   const priceKg = Number(priceEl && priceEl.value) || 0;
   const usableKg = Math.max(0, kg - (dustG / 1000));
   const map = state.grindProductMap || {};
-  const productId = map[typeId] || '';
+  // Every combo's usable output restocks the SAME single "Umbalakada Chips"
+  // product — Linna, Balaya, Premium Mix, or any mix of them, all become
+  // one product line on the shelf, not separate per-type stock.
+  const productId = map.chips || '';
   const dustProductId = map.dust || '';
 
   const batch = {
     id: 'gb_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
-    typeId, typeName, kg, dustG, priceKg,
+    typeIds, typeName, kg, dustG, priceKg,
     rawCost: kg * priceKg,
     usableKg,
     yieldPct: kg > 0 ? (dustG / (kg * 1000)) * 100 : 0,
@@ -2230,10 +2255,10 @@ async function addGrindBatch() {
   let anyMovementFailed = false;
   if (usableKg > 0) {
     if (productId) {
-      const r = await applyStockMovement(productId, usableKg, 'production', `Grind batch: ${typeName} — ${fmt2(usableKg)}kg usable`);
+      const r = await applyStockMovement(productId, usableKg, 'production', `Grind batch: ${typeName} — ${fmt2(usableKg)}kg usable → Umbalakada Chips`);
       if (!r.ok) anyMovementFailed = true;
     } else {
-      unlinkedParts.push(`${typeName} (usable)`);
+      unlinkedParts.push('Umbalakada Chips');
     }
   }
   if (dustG > 0) {
@@ -2251,7 +2276,7 @@ async function addGrindBatch() {
     showStockLinkWarning(`Batch added, but ${unlinkedParts.join(' & ')} isn't linked to a product in Stage 4 (Value Addition), so Stock wasn't touched for it. Link it, then use "Apply Links to Today's Rounds" to backfill this batch.`);
     updateStatus(`✅ Batch added (${unlinkedParts.join(', ')} not linked to stock)`);
   } else {
-    updateStatus(`✅ Batch added: ${fmt2(kg)}kg ${typeName} → ${fmt2(dustG)}g dust — Stock updated`);
+    updateStatus(`✅ Batch added: ${fmt2(kg)}kg ${typeName} → ${fmt2(usableKg)}kg Chips, ${fmt2(dustG)}g dust — Stock updated`);
   }
   renderStockUpdateSummary();
 }
@@ -2268,9 +2293,13 @@ async function relinkTodayGrindBatches() {
   let updated = 0, stillUnlinked = 0, failed = 0;
   for (const b of grindBatchesToday) {
     let touched = false;
-    if (b.usableKg > 0 && !b.productId && map[b.typeId]) {
-      const r = await applyStockMovement(map[b.typeId], b.usableKg, 'production', `Grind batch (backfilled): ${b.typeName} — ${fmt2(b.usableKg)}kg usable`);
-      if (r.ok) { b.productId = map[b.typeId]; touched = true; } else { failed++; }
+    // New combo batches always restock the single Chips product; a batch
+    // saved before this change (single b.typeId, no b.typeIds) falls back
+    // to whatever that type's old per-type link was, if it still exists.
+    const targetProductId = map.chips || (b.typeId ? map[b.typeId] : '');
+    if (b.usableKg > 0 && !b.productId && targetProductId) {
+      const r = await applyStockMovement(targetProductId, b.usableKg, 'production', `Grind batch (backfilled): ${b.typeName} — ${fmt2(b.usableKg)}kg usable`);
+      if (r.ok) { b.productId = targetProductId; touched = true; } else { failed++; }
     }
     if (b.dustG > 0 && !b.dustProductId && map.dust) {
       const r = await applyStockMovement(map.dust, b.dustG / 1000, 'production', `Grind batch dust (backfilled): ${b.typeName} — ${fmt2(b.dustG)}g`);
@@ -2448,6 +2477,27 @@ function renderStockUpdateSummary() {
     }
   });
 
+  // Custom Chips Packing Batches — pack/bottle counts per linked product.
+  const chipPackTypes = ensureChipPackTypes();
+  const chipPackTotals = {};
+  (dailyChipsPackBatchesCache || []).forEach(b => {
+    const qtys = b.pack_qtys || {};
+    chipPackTypes.forEach(t => {
+      const qty = Number(qtys[t.id]) || 0;
+      if (qty > 0 && t.productId) chipPackTotals[t.productId] = chipPackTotals[t.productId] || {};
+      if (qty > 0 && t.productId) chipPackTotals[t.productId][t.id] = (chipPackTotals[t.productId][t.id] || 0) + qty;
+    });
+  });
+  Object.keys(chipPackTotals).forEach(pid => {
+    const name = productName(pid);
+    if (!name) return;
+    const parts = Object.keys(chipPackTotals[pid]).map(tid => {
+      const t = chipPackTypes.find(x => x.id === tid);
+      return `${chipPackTotals[pid][tid]} × ${t ? t.name : 'pack'}`;
+    });
+    rows.push({ name, qty: parts.join(', '), from: 'Chips Packing (Stage 5)', ok: true });
+  });
+
   if (rows.length === 0) {
     body.innerHTML = '<tr><td colspan="3" style="text-align:center;opacity:.5;padding:14px;">No stock movements yet today — link products in Stage 4 (Value Addition) or Stage 5, then add a grinding round or product batch.</td></tr>';
   } else {
@@ -2497,16 +2547,15 @@ function populateGrindProductMapSelects() {
   const optionsHtml = '<option value="">— Not linked —</option>' +
     (products || []).map(p => `<option value="${p.id}">${p.name}</option>`).join('');
   if (grid) {
-    const types = ensureUmbalakadaTypes().filter(t => t.core);
-    const rows = [...types.map(t => ({ id: t.id, label: t.name + ' Umbalakada →' })),
-                  { id: 'mix', label: 'Mix (multiple types) →' }];
-    grid.innerHTML = rows.map(r => `<div class="field"><label>${r.label}</label><select id="gpmMap_${r.id}" onchange="onGrindProductMapChange()"></select></div>`).join('');
-    rows.forEach(r => {
-      const sel = $('gpmMap_' + r.id);
-      if (!sel) return;
+    // Every grind combo — Linna, Balaya, Premium Mix, or any mix of them —
+    // restocks the SAME single product ("Umbalakada Chips"), since that's
+    // one product line on the shelf regardless of which raw types went in.
+    grid.innerHTML = `<div class="field"><label>Umbalakada Chips (all grind combos) →</label><select id="gpmMap_chips" onchange="onGrindProductMapChange()"></select></div>`;
+    const sel = $('gpmMap_chips');
+    if (sel) {
       sel.innerHTML = optionsHtml;
-      sel.value = (state.grindProductMap && state.grindProductMap[r.id]) || '';
-    });
+      sel.value = (state.grindProductMap && state.grindProductMap.chips) || '';
+    }
   }
   if (dustSel) {
     dustSel.innerHTML = optionsHtml;
@@ -2517,11 +2566,8 @@ window.populateGrindProductMapSelects = populateGrindProductMapSelects;
 
 function onGrindProductMapChange() {
   if (!state.grindProductMap) state.grindProductMap = {};
-  const types = ensureUmbalakadaTypes().filter(t => t.core);
-  [...types.map(t => t.id), 'mix'].forEach(id => {
-    const sel = $('gpmMap_' + id);
-    if (sel) state.grindProductMap[id] = sel.value;
-  });
+  const sel = $('gpmMap_chips');
+  if (sel) state.grindProductMap.chips = sel.value;
   const dustSel = $('gpmMapDust');
   if (dustSel) state.grindProductMap.dust = dustSel.value;
   onDataChange();
@@ -4027,6 +4073,255 @@ async function applyPackBatchStockMovements(qtyByKey, note, sign) {
   return { unlinked, anyFailed };
 }
 
+// ==================== CUSTOM CHIPS PACK / BOTTLE TYPES ====================
+// Lets the owner define their OWN packing units for Umbalakada Chips — any
+// name/weight they actually use (e.g. "50g Pack", "100g Bottle", "250g
+// Jar") — instead of being limited to the 4 fixed PACKS sizes above. PACKS
+// stays untouched on purpose: it still drives the Costing tab's pricing /
+// quotes engine, which is a separate concern from "how do I pack today's
+// Chips into stock". Stored in state.chipPackTypes (synced via the app_data
+// blob, same as state.grindProductMap / state.packProductMap).
+function ensureChipPackTypes() {
+  if (!Array.isArray(state.chipPackTypes)) state.chipPackTypes = [];
+  return state.chipPackTypes;
+}
+window.ensureChipPackTypes = ensureChipPackTypes;
+
+function addChipPackType() {
+  const nameEl = $('cptNewName'), weightEl = $('cptNewWeight');
+  const name = (nameEl && nameEl.value.trim()) || '';
+  const weightG = Number(weightEl && weightEl.value) || 0;
+  if (!name) { alert('Enter a name for this pack/bottle size (e.g. "50g Pack", "100g Bottle").'); return; }
+  if (weightG <= 0) { alert('Enter the weight in grams for this pack/bottle size.'); return; }
+  ensureChipPackTypes().push({ id: 'cpt_' + Date.now() + '_' + Math.floor(Math.random() * 1000), name, weightG, productId: '' });
+  if (nameEl) nameEl.value = '';
+  if (weightEl) weightEl.value = '';
+  onDataChange();
+  renderChipPackTypesManager();
+  renderChipsPackingInputs();
+}
+window.addChipPackType = addChipPackType;
+
+function deleteChipPackType(id) {
+  if (!confirm('Remove this pack/bottle size? Batches already logged with it keep their history — only new batches stop offering it.')) return;
+  state.chipPackTypes = ensureChipPackTypes().filter(t => t.id !== id);
+  onDataChange();
+  renderChipPackTypesManager();
+  renderChipsPackingInputs();
+}
+window.deleteChipPackType = deleteChipPackType;
+
+function onChipPackTypeProductChange(id) {
+  const sel = $('cptProduct_' + id);
+  const t = ensureChipPackTypes().find(x => x.id === id);
+  if (t && sel) t.productId = sel.value;
+  onDataChange();
+}
+window.onChipPackTypeProductChange = onChipPackTypeProductChange;
+
+function renderChipPackTypesManager() {
+  const body = $('cptListBody');
+  if (!body) return;
+  const list = ensureChipPackTypes();
+  const optionsHtml = '<option value="">— Not linked —</option>' + (products || []).map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+  if (list.length === 0) {
+    body.innerHTML = '<tr><td colspan="4" style="text-align:center;opacity:.5;padding:14px;">No pack/bottle sizes defined yet — add one above (e.g. "50g Pack", "100g Bottle").</td></tr>';
+    return;
+  }
+  body.innerHTML = list.map(t => `
+    <tr>
+      <td>${t.name}</td>
+      <td>${t.weightG}g</td>
+      <td><select id="cptProduct_${t.id}" onchange="onChipPackTypeProductChange('${t.id}')">${optionsHtml}</select></td>
+      <td><button type="button" class="btn btn-xs btn-danger" onclick="deleteChipPackType('${t.id}')"><i class="business-icon icon-inline" data-lucide="trash-2" aria-hidden="true"></i></button></td>
+    </tr>`).join('');
+  list.forEach(t => { const sel = $('cptProduct_' + t.id); if (sel) sel.value = t.productId || ''; });
+}
+window.renderChipPackTypesManager = renderChipPackTypesManager;
+
+// ==================== PACK TODAY'S CHIPS (dynamic, per custom size) ====================
+// Consumes stock from the single "Umbalakada Chips" product (Stage 4 link)
+// and adds stock to whichever product each custom pack/bottle size is
+// linked to — the same applyStockMovement()/adjust_product_stock() RPC
+// everything else in this pipeline already uses.
+let dailyChipsPackBatchesCache = [];
+
+function renderChipsPackingInputs() {
+  const wrap = $('cpkQtyGrid');
+  if (!wrap) return;
+  const list = ensureChipPackTypes();
+  if (list.length === 0) {
+    wrap.innerHTML = '<p class="sub" style="margin:0;">Define at least one pack/bottle size above first.</p>';
+    return;
+  }
+  wrap.innerHTML = list.map(t => `<div class="field"><label>${t.name} <span class="hint">(${t.weightG}g)</span></label><input type="number" id="cpkQty_${t.id}" value="0" min="0" step="1"></div>`).join('');
+}
+window.renderChipsPackingInputs = renderChipsPackingInputs;
+
+async function loadDailyChipsPackBatches() {
+  if (!currentUser || userRole !== 'owner') { dailyChipsPackBatchesCache = []; renderChipsPackBatchList(); return dailyChipsPackBatchesCache; }
+  try {
+    const { data, error } = await withSessionRetry(() => supabase.from('daily_chips_pack_batches')
+      .select('*').eq('owner_id', currentUser.id).eq('log_date', todayIso()).order('created_at', { ascending: true }));
+    if (error) throw error;
+    dailyChipsPackBatchesCache = data || [];
+  } catch (e) {
+    console.warn('Daily chips pack batches load skipped:', e?.message || e);
+    dailyChipsPackBatchesCache = [];
+  }
+  renderChipsPackBatchList();
+  return dailyChipsPackBatchesCache;
+}
+window.loadDailyChipsPackBatches = loadDailyChipsPackBatches;
+
+function renderChipsPackBatchList() {
+  const body = $('cpkBatchListBody'), noteEl = $('cpkBatchTotalsNote');
+  if (!body) return;
+  const batches = dailyChipsPackBatchesCache || [];
+  const list = ensureChipPackTypes();
+  const nameById = {}; list.forEach(t => { nameById[t.id] = t.name; });
+  if (batches.length === 0) {
+    body.innerHTML = '<tr><td colspan="4" style="text-align:center;opacity:.5;padding:14px;">No packing batches logged yet today.</td></tr>';
+  } else {
+    body.innerHTML = batches.map(b => {
+      const time = b.created_at ? new Date(b.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—';
+      const qtys = b.pack_qtys || {};
+      const parts = Object.keys(qtys).filter(k => Number(qtys[k]) > 0).map(k => `${qtys[k]}× ${nameById[k] || 'Removed size'}`);
+      return `<tr><td>${time}</td><td>${parts.join(', ') || '—'}</td><td>${fmt2(b.chips_kg_used || 0)} kg</td><td><button type="button" class="btn btn-xs btn-danger" onclick="deleteChipsPackBatch('${b.id}')"><i class="business-icon icon-inline" data-lucide="trash-2" aria-hidden="true"></i></button></td></tr>`;
+    }).join('');
+  }
+  if (noteEl) {
+    const totalKg = batches.reduce((s, b) => s + (Number(b.chips_kg_used) || 0), 0);
+    noteEl.textContent = `Total Chips packed today: ${fmt2(totalKg)} kg across ${batches.length} batch${batches.length === 1 ? '' : 'es'}.`;
+  }
+  renderStockUpdateSummary();
+}
+window.renderChipsPackBatchList = renderChipsPackBatchList;
+
+// ---- SQL setup (run once in Supabase before this can save) ----
+// CREATE TABLE IF NOT EXISTS daily_chips_pack_batches (
+//   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+//   owner_id uuid NOT NULL,
+//   log_date date NOT NULL,
+//   pack_qtys jsonb NOT NULL DEFAULT '{}'::jsonb,
+//   chips_kg_used numeric NOT NULL DEFAULT 0,
+//   note text,
+//   created_by uuid,
+//   created_at timestamptz NOT NULL DEFAULT now()
+// );
+// ALTER TABLE daily_chips_pack_batches ENABLE ROW LEVEL SECURITY;
+// CREATE POLICY "owner_all_chips_pack_batches" ON daily_chips_pack_batches
+//   FOR ALL USING (owner_id = auth.uid()) WITH CHECK (owner_id = auth.uid());
+async function addChipsPackBatch() {
+  if (userRole !== 'owner') { alert('Only the owner can add a packing batch.'); return; }
+  if (!currentUser) { alert('Please login first.'); return; }
+  const list = ensureChipPackTypes();
+  if (list.length === 0) { alert('Define at least one pack/bottle size first (above).'); return; }
+
+  const qtyById = {};
+  let anyQty = false, kgUsed = 0;
+  list.forEach(t => {
+    const el = $('cpkQty_' + t.id);
+    const qty = Number(el && el.value) || 0;
+    qtyById[t.id] = qty;
+    if (qty > 0) { anyQty = true; kgUsed += (qty * t.weightG) / 1000; }
+  });
+  if (!anyQty) { alert('Enter at least one pack/bottle quantity for this batch.'); return; }
+
+  const noteEl = $('cpkNote');
+  const note = (noteEl && noteEl.value.trim()) || null;
+  const row = {
+    owner_id: currentUser.id,
+    log_date: todayIso(),
+    pack_qtys: qtyById,
+    chips_kg_used: kgUsed,
+    note,
+    created_by: currentUser.id
+  };
+
+  if (!(await ensureFreshSession())) return;
+  clearStockMovementError();
+  try {
+    const { data, error } = await supabase.from('daily_chips_pack_batches').insert(row).select().single();
+    if (error) throw error;
+    dailyChipsPackBatchesCache.push(data);
+
+    const map = state.grindProductMap || {};
+    const chipsProductId = map.chips || '';
+    let anyFailed = false;
+    const unlinked = [];
+    // Deduct the Chips consumed from the shared Chips product's stock.
+    if (kgUsed > 0) {
+      if (chipsProductId) {
+        const r = await applyStockMovement(chipsProductId, -kgUsed, 'production', note ? `Packed: ${note}` : 'Umbalakada Chips packed into sizes');
+        if (!r.ok) anyFailed = true;
+      } else {
+        unlinked.push('Umbalakada Chips (link it in Stage 4)');
+      }
+    }
+    // Add each packed size's qty to its own linked product's stock.
+    for (const t of list) {
+      const qty = qtyById[t.id] || 0;
+      if (qty <= 0) continue;
+      if (t.productId) {
+        const r = await applyStockMovement(t.productId, qty, 'production', note ? `Packed: ${note}` : `${t.name} — daily packing`);
+        if (!r.ok) anyFailed = true;
+      } else {
+        unlinked.push(t.name);
+      }
+    }
+
+    list.forEach(t => { const el = $('cpkQty_' + t.id); if (el) el.value = 0; });
+    if (noteEl) noteEl.value = '';
+    renderChipsPackBatchList();
+    if (anyFailed) {
+      updateStatus('⚠️ Batch added — some Stock updates failed, see notice above');
+    } else if (unlinked.length > 0) {
+      showStockLinkWarning(`Batch added, but ${unlinked.join(', ')} isn't linked to a product, so Stock wasn't touched for it.`);
+      updateStatus(`✅ Batch added (${unlinked.join(', ')} not linked to stock)`);
+    } else {
+      updateStatus('✅ Packing batch added — Chips reduced, linked products restocked');
+    }
+  } catch (e) {
+    console.error('Add chips pack batch error:', e);
+    const missingTable = /relation .* does not exist/i.test(e?.message || '');
+    alert('❌ Could not add batch: ' + (e?.message || String(e)) + (missingTable ? '\n\nThe daily_chips_pack_batches table hasn\'t been created in Supabase yet — see the SQL setup comment above addChipsPackBatch() in app.js.' : ''));
+  }
+}
+window.addChipsPackBatch = addChipsPackBatch;
+
+async function deleteChipsPackBatch(id) {
+  if (userRole !== 'owner') return;
+  if (!confirm('Delete this packing batch? Stock will be reversed.')) return;
+  clearStockMovementError();
+  try {
+    const batch = (dailyChipsPackBatchesCache || []).find(b => String(b.id) === String(id));
+    const { error } = await withSessionRetry(() => supabase.from('daily_chips_pack_batches').delete().eq('id', id).eq('owner_id', currentUser.id));
+    if (error) throw error;
+    dailyChipsPackBatchesCache = dailyChipsPackBatchesCache.filter(b => String(b.id) !== String(id));
+    if (batch) {
+      const map = state.grindProductMap || {};
+      const chipsProductId = map.chips || '';
+      if (chipsProductId && batch.chips_kg_used) {
+        await applyStockMovement(chipsProductId, Number(batch.chips_kg_used) || 0, 'adjustment', 'Packing batch deleted — Chips restored');
+      }
+      const list = ensureChipPackTypes();
+      const qtys = batch.pack_qtys || {};
+      for (const t of list) {
+        const qty = Number(qtys[t.id]) || 0;
+        if (qty > 0 && t.productId) {
+          await applyStockMovement(t.productId, -qty, 'adjustment', 'Packing batch deleted — reversed');
+        }
+      }
+    }
+    renderChipsPackBatchList();
+    updateStatus('🗑️ Packing batch deleted — stock reversed');
+  } catch (e) {
+    alert('❌ Could not delete batch: ' + (e?.message || String(e)));
+  }
+}
+window.deleteChipsPackBatch = deleteChipsPackBatch;
+
 async function loadDailyProductBatches() {
   if (!currentUser || userRole !== 'owner') { dailyProductBatchesCache = []; return dailyProductBatchesCache; }
   try {
@@ -4200,462 +4495,6 @@ async function deleteDailyProductBatch(id) {
   }
 }
 window.deleteDailyProductBatch = deleteDailyProductBatch;
-
-
-// ==================== PRODUCTION TAB — UMBALAKADA CHIPS: MIXED GRIND & CUSTOM PACKAGING ====================
-// Separate from the Daily Production Log pipeline above (which grinds each
-// Umbalakada type on its own and only packages into the four fixed pack
-// sizes 50g/100g/500g/1kg). This section is for grinding any MIX of
-// Linna / Balaya / Premium Mix together in one batch — 7 possible combos,
-// each batch priced fresh per kg on its own — building up a running "chip
-// stock" (kg) per combo. That chip stock then gets packaged into any
-// custom product (owner's own name, weight & price — e.g. "50g Pack" @
-// Rs.20 or "100g Bottle" @ Rs.30), which restocks the real Product catalog
-// via the same applyStockMovement()/adjust_product_stock() RPC (with its
-// direct-write fallback) everything else in the app already uses.
-//
-// REQUIRED ONE-TIME SUPABASE SETUP (run once in the SQL editor):
-//
-//   create table if not exists public.chip_grind_batches (
-//     id uuid primary key default gen_random_uuid(),
-//     owner_id uuid not null references auth.users(id) on delete cascade,
-//     batch_date date not null default current_date,
-//     combo_key text not null,              -- e.g. 'linna_balaya'
-//     combo_label text not null,            -- e.g. 'Linna & Balaya'
-//     price_per_kg numeric not null default 0,
-//     input_kg numeric not null default 0,
-//     output_kg numeric not null default 0, -- kg of chips that came out
-//     note text,
-//     created_by uuid not null references auth.users(id),
-//     created_at timestamptz not null default now()
-//   );
-//   alter table public.chip_grind_batches enable row level security;
-//   create policy "Owner can manage own chip grind batches"
-//     on public.chip_grind_batches for all
-//     using (owner_id = auth.uid()) with check (owner_id = auth.uid());
-//   create index if not exists chip_grind_batches_owner_date_idx
-//     on public.chip_grind_batches(owner_id, batch_date);
-//
-//   create table if not exists public.chip_stock_balances (
-//     id uuid primary key default gen_random_uuid(),
-//     owner_id uuid not null references auth.users(id) on delete cascade,
-//     combo_key text not null,
-//     combo_label text not null,
-//     balance_kg numeric not null default 0, -- running total, all days
-//     updated_at timestamptz not null default now(),
-//     unique (owner_id, combo_key)
-//   );
-//   alter table public.chip_stock_balances enable row level security;
-//   create policy "Owner can manage own chip stock balances"
-//     on public.chip_stock_balances for all
-//     using (owner_id = auth.uid()) with check (owner_id = auth.uid());
-//
-//   create table if not exists public.chip_packaging_batches (
-//     id uuid primary key default gen_random_uuid(),
-//     owner_id uuid not null references auth.users(id) on delete cascade,
-//     batch_date date not null default current_date,
-//     combo_key text not null,
-//     combo_label text not null,
-//     product_id uuid references public.products(id) on delete set null,
-//     product_name text not null,
-//     pack_weight_g numeric not null default 0,
-//     qty integer not null default 0,
-//     kg_used numeric not null default 0,
-//     selling_price numeric not null default 0,
-//     note text,
-//     created_by uuid not null references auth.users(id),
-//     created_at timestamptz not null default now()
-//   );
-//   alter table public.chip_packaging_batches enable row level security;
-//   create policy "Owner can manage own chip packaging batches"
-//     on public.chip_packaging_batches for all
-//     using (owner_id = auth.uid()) with check (owner_id = auth.uid());
-//   create index if not exists chip_packaging_batches_owner_date_idx
-//     on public.chip_packaging_batches(owner_id, batch_date);
-
-const CHIP_COMBO_TYPES = [
-  { id: 'linna',   field: 'cgbLinna',   label: 'Linna' },
-  { id: 'balaya',  field: 'cgbBalaya',  label: 'Balaya' },
-  { id: 'premium', field: 'cgbPremium', label: 'Premium Mix' }
-];
-
-let chipGrindBatchesCache = [];      // today's grind batches
-let chipPackagingBatchesCache = [];  // today's packaging batches
-let chipStockBalances = {};          // combo_key -> { label, kg } — running total, all days
-
-// Reads the ticked Linna/Balaya/Premium Mix checkboxes and returns the
-// combo they describe (any of the 7 non-empty combinations), or null if
-// nothing is ticked yet.
-function getSelectedChipCombo() {
-  const picked = CHIP_COMBO_TYPES.filter(t => $(t.field) && $(t.field).checked);
-  if (picked.length === 0) return null;
-  return { key: picked.map(t => t.id).join('_'), label: picked.map(t => t.label).join(' & ') };
-}
-
-function updateChipGrindComboPreview() {
-  const el = $('cgbComboPreview');
-  if (!el) return;
-  const combo = getSelectedChipCombo();
-  el.textContent = combo ? `Combo: ${combo.label}` : 'Pick at least one type above.';
-}
-window.updateChipGrindComboPreview = updateChipGrindComboPreview;
-
-async function loadChipStockBalances() {
-  chipStockBalances = {};
-  if (!currentUser || userRole !== 'owner') return chipStockBalances;
-  try {
-    const { data, error } = await withSessionRetry(() => supabase.from('chip_stock_balances')
-      .select('*').eq('owner_id', businessId));
-    if (error) throw error;
-    (data || []).forEach(r => {
-      chipStockBalances[r.combo_key] = { label: r.combo_label, kg: Number(r.balance_kg) || 0 };
-    });
-  } catch (e) {
-    console.warn('Chip stock balances load skipped:', e?.message || e);
-  }
-  return chipStockBalances;
-}
-window.loadChipStockBalances = loadChipStockBalances;
-
-async function loadChipGrindBatchesToday() {
-  if (!currentUser || userRole !== 'owner') { chipGrindBatchesCache = []; return chipGrindBatchesCache; }
-  try {
-    const { data, error } = await withSessionRetry(() => supabase.from('chip_grind_batches')
-      .select('*').eq('owner_id', businessId).eq('batch_date', todayIso()).order('created_at', { ascending: true }));
-    if (error) throw error;
-    chipGrindBatchesCache = data || [];
-  } catch (e) {
-    console.warn('Chip grind batches load skipped:', e?.message || e);
-    chipGrindBatchesCache = [];
-  }
-  return chipGrindBatchesCache;
-}
-window.loadChipGrindBatchesToday = loadChipGrindBatchesToday;
-
-async function loadChipPackagingBatchesToday() {
-  if (!currentUser || userRole !== 'owner') { chipPackagingBatchesCache = []; return chipPackagingBatchesCache; }
-  try {
-    const { data, error } = await withSessionRetry(() => supabase.from('chip_packaging_batches')
-      .select('*').eq('owner_id', businessId).eq('batch_date', todayIso()).order('created_at', { ascending: true }));
-    if (error) throw error;
-    chipPackagingBatchesCache = data || [];
-  } catch (e) {
-    console.warn('Chip packaging batches load skipped:', e?.message || e);
-    chipPackagingBatchesCache = [];
-  }
-  return chipPackagingBatchesCache;
-}
-window.loadChipPackagingBatchesToday = loadChipPackagingBatchesToday;
-
-// No Postgres RPC needed for this one — same read-then-write fallback style
-// applyStockMovementDirect() uses when adjust_product_stock() isn't
-// installed. Balance is clamped at 0 (kg can't go negative in real life).
-async function adjustChipStockBalance(comboKey, comboLabel, deltaKg) {
-  if (!(await ensureFreshSession())) throw new Error('Not logged in / session expired.');
-  const { data: existing, error: readErr } = await supabase
-    .from('chip_stock_balances').select('*').eq('owner_id', businessId).eq('combo_key', comboKey).maybeSingle();
-  if (readErr) throw readErr;
-  const newBalance = Math.max(0, Number((existing && existing.balance_kg) || 0) + Number(deltaKg));
-  if (existing) {
-    const { error } = await supabase.from('chip_stock_balances')
-      .update({ balance_kg: newBalance, combo_label: comboLabel, updated_at: new Date().toISOString() })
-      .eq('id', existing.id);
-    if (error) throw error;
-  } else {
-    const { error } = await supabase.from('chip_stock_balances')
-      .insert({ owner_id: businessId, combo_key: comboKey, combo_label: comboLabel, balance_kg: newBalance });
-    if (error) throw error;
-  }
-  chipStockBalances[comboKey] = { label: comboLabel, kg: newBalance };
-  return newBalance;
-}
-
-function renderChipStockTable() {
-  const body = $('chipStockBody');
-  if (body) {
-    const entries = Object.keys(chipStockBalances)
-      .map(k => ({ key: k, ...chipStockBalances[k] }))
-      .filter(e => e.kg > 0.001)
-      .sort((a, b) => b.kg - a.kg);
-    body.innerHTML = entries.length === 0
-      ? `<tr><td colspan="2" style="text-align:center;opacity:.5;padding:14px;">Grind a batch above to build up chip stock.</td></tr>`
-      : entries.map(e => `<tr><td>${e.label}</td><td class="num">${e.kg.toFixed(2)} kg</td></tr>`).join('');
-  }
-  populateChipComboSelect();
-}
-window.renderChipStockTable = renderChipStockTable;
-
-function populateChipComboSelect() {
-  const sel = $('cpkCombo');
-  if (!sel) return;
-  const current = sel.value;
-  const entries = Object.keys(chipStockBalances)
-    .map(k => ({ key: k, ...chipStockBalances[k] }))
-    .filter(e => e.kg > 0.001)
-    .sort((a, b) => a.label.localeCompare(b.label));
-  sel.innerHTML = '<option value="">— Select a combo —</option>' +
-    entries.map(e => `<option value="${e.key}">${e.label} (${e.kg.toFixed(2)} kg available)</option>`).join('');
-  if (entries.some(e => e.key === current)) sel.value = current;
-  updateChipPackagingKgNeeded();
-}
-window.populateChipComboSelect = populateChipComboSelect;
-
-function renderChipGrindBatchesList() {
-  const body = $('chipGrindBatchesBody'), noteEl = $('chipGrindListNote');
-  if (body) {
-    const batches = chipGrindBatchesCache || [];
-    body.innerHTML = batches.length === 0
-      ? `<tr><td colspan="5" style="text-align:center;opacity:.5;padding:14px;">No grind batches added yet today.</td></tr>`
-      : batches.map(b => `<tr>
-          <td>${b.combo_label}</td>
-          <td>Rs. ${(Number(b.price_per_kg) || 0).toLocaleString()}</td>
-          <td>${Number(b.input_kg) || 0} kg</td>
-          <td>${Number(b.output_kg) || 0} kg</td>
-          <td><button type="button" class="btn btn-xs btn-danger" onclick="deleteChipGrindBatch('${b.id}')"><i class="business-icon icon-inline" data-lucide="trash-2" aria-hidden="true"></i></button></td>
-        </tr>`).join('');
-    if (noteEl) {
-      const totalIn = batches.reduce((s, b) => s + (Number(b.input_kg) || 0), 0);
-      const totalOut = batches.reduce((s, b) => s + (Number(b.output_kg) || 0), 0);
-      noteEl.textContent = batches.length
-        ? `Total today (${batches.length} batch${batches.length === 1 ? '' : 'es'}): ${totalIn.toFixed(2)} kg in → ${totalOut.toFixed(2)} kg chips out`
-        : '';
-    }
-  }
-  renderChipStockTable();
-  if (typeof lucide !== 'undefined') lucide.createIcons();
-}
-window.renderChipGrindBatchesList = renderChipGrindBatchesList;
-
-function renderChipPackagingBatchesList() {
-  const body = $('chipPackagingBatchesBody'), noteEl = $('chipPackagingListNote');
-  if (!body) return;
-  const batches = chipPackagingBatchesCache || [];
-  body.innerHTML = batches.length === 0
-    ? `<tr><td colspan="7" style="text-align:center;opacity:.5;padding:14px;">No products packaged yet today.</td></tr>`
-    : batches.map(b => `<tr>
-        <td>${b.combo_label}</td>
-        <td>${b.product_name}</td>
-        <td>${Number(b.pack_weight_g) || 0} g</td>
-        <td>${Number(b.qty) || 0}</td>
-        <td>${(Number(b.kg_used) || 0).toFixed(2)} kg</td>
-        <td class="num">Rs. ${(Number(b.selling_price) || 0).toLocaleString()}</td>
-        <td><button type="button" class="btn btn-xs btn-danger" onclick="deleteChipPackagingBatch('${b.id}')"><i class="business-icon icon-inline" data-lucide="trash-2" aria-hidden="true"></i></button></td>
-      </tr>`).join('');
-  if (noteEl) {
-    const totalQty = batches.reduce((s, b) => s + (Number(b.qty) || 0), 0);
-    const totalKg = batches.reduce((s, b) => s + (Number(b.kg_used) || 0), 0);
-    noteEl.textContent = batches.length
-      ? `Total today (${batches.length} batch${batches.length === 1 ? '' : 'es'}): ${totalQty} unit${totalQty === 1 ? '' : 's'}, ${totalKg.toFixed(2)} kg of chips used`
-      : '';
-  }
-  if (typeof lucide !== 'undefined') lucide.createIcons();
-}
-window.renderChipPackagingBatchesList = renderChipPackagingBatchesList;
-
-function populateChipProductDatalist() {
-  const dl = $('cpkProductList');
-  if (!dl) return;
-  dl.innerHTML = (products || []).map(p => `<option value="${p.name.replace(/"/g, '&quot;')}">`).join('');
-}
-window.populateChipProductDatalist = populateChipProductDatalist;
-
-// If the typed name matches an existing catalog product, quietly suggest
-// its retail price (only when the price field is still empty, so it never
-// overwrites a price the owner already typed).
-function onChipPackagingProductPick() {
-  const nameEl = $('cpkProductName'), priceEl = $('cpkPrice');
-  if (!nameEl) return;
-  const val = nameEl.value.trim();
-  const match = (products || []).find(p => p.name === val);
-  if (match && priceEl && !priceEl.value) {
-    priceEl.value = match.retailPrice || match.wholesalePrice || '';
-  }
-}
-window.onChipPackagingProductPick = onChipPackagingProductPick;
-
-function updateChipPackagingKgNeeded() {
-  const el = $('cpkKgNeeded');
-  if (!el) return;
-  const comboKey = ($('cpkCombo') && $('cpkCombo').value) || '';
-  const weightG = Number($('cpkWeightG') && $('cpkWeightG').value) || 0;
-  const qty = Number($('cpkQty') && $('cpkQty').value) || 0;
-  const kgNeeded = (weightG * qty) / 1000;
-  if (!comboKey) {
-    el.textContent = kgNeeded > 0 ? `Needs ${kgNeeded.toFixed(2)} kg of chips — pick a combo above.` : '';
-    return;
-  }
-  const available = (chipStockBalances[comboKey] && chipStockBalances[comboKey].kg) || 0;
-  if (kgNeeded <= 0) { el.textContent = `${available.toFixed(2)} kg available for this combo.`; return; }
-  el.textContent = kgNeeded > available
-    ? `⚠️ Needs ${kgNeeded.toFixed(2)} kg — only ${available.toFixed(2)} kg available for this combo.`
-    : `Needs ${kgNeeded.toFixed(2)} kg of ${available.toFixed(2)} kg available.`;
-}
-window.updateChipPackagingKgNeeded = updateChipPackagingKgNeeded;
-
-async function addChipGrindBatch() {
-  if (userRole !== 'owner') { alert('Only the owner can log grinding.'); return; }
-  if (!currentUser) { alert('Please login first.'); return; }
-  const combo = getSelectedChipCombo();
-  if (!combo) { alert('Pick at least one type (Linna / Balaya / Premium Mix) for this batch.'); return; }
-  const pricePerKg = Number($('cgbPricePerKg') && $('cgbPricePerKg').value) || 0;
-  const inputKg = Number($('cgbInputKg') && $('cgbInputKg').value) || 0;
-  const outputKg = Number($('cgbOutputKg') && $('cgbOutputKg').value) || 0;
-  if (inputKg <= 0) { alert('Enter how many kg were fed into this grind.'); return; }
-  if (outputKg <= 0) { alert('Enter how many kg of chips came out of this grind.'); return; }
-  const note = ($('cgbNote') && $('cgbNote').value.trim()) || null;
-
-  const row = {
-    owner_id: businessId, batch_date: todayIso(), combo_key: combo.key, combo_label: combo.label,
-    price_per_kg: pricePerKg, input_kg: inputKg, output_kg: outputKg, note, created_by: currentUser.id
-  };
-  if (!(await ensureFreshSession())) return;
-  try {
-    const { data, error } = await supabase.from('chip_grind_batches').insert(row).select().single();
-    if (error) throw error;
-    chipGrindBatchesCache.push(data);
-    await adjustChipStockBalance(combo.key, combo.label, outputKg);
-
-    CHIP_COMBO_TYPES.forEach(t => { if ($(t.field)) $(t.field).checked = false; });
-    if ($('cgbPricePerKg')) $('cgbPricePerKg').value = '';
-    if ($('cgbInputKg')) $('cgbInputKg').value = 1;
-    if ($('cgbOutputKg')) $('cgbOutputKg').value = '';
-    if ($('cgbNote')) $('cgbNote').value = '';
-    updateChipGrindComboPreview();
-    renderChipGrindBatchesList();
-    updateStatus(`✅ Grind batch added — ${outputKg} kg ${combo.label} chips in stock`);
-  } catch (e) {
-    console.error('Add chip grind batch error:', e);
-    const missingTable = /relation .* does not exist/i.test(e?.message || '');
-    alert('❌ Could not add grind batch: ' + (e?.message || String(e)) + (missingTable ? '\n\nThe chip_grind_batches / chip_stock_balances tables haven\'t been created in Supabase yet — run the SQL setup for this feature.' : ''));
-  }
-}
-window.addChipGrindBatch = addChipGrindBatch;
-
-async function deleteChipGrindBatch(id) {
-  if (userRole !== 'owner') return;
-  if (!confirm('Delete this grind batch? Its chip output will be removed from Chip Stock.')) return;
-  try {
-    const batch = (chipGrindBatchesCache || []).find(b => String(b.id) === String(id));
-    if (!(await ensureFreshSession())) return;
-    const { error } = await withSessionRetry(() => supabase.from('chip_grind_batches').delete().eq('id', id).eq('owner_id', businessId));
-    if (error) throw error;
-    chipGrindBatchesCache = chipGrindBatchesCache.filter(b => String(b.id) !== String(id));
-    if (batch) await adjustChipStockBalance(batch.combo_key, batch.combo_label, -(Number(batch.output_kg) || 0));
-    renderChipGrindBatchesList();
-    updateStatus('🗑️ Grind batch deleted — chip stock reversed');
-  } catch (e) {
-    alert('❌ Could not delete grind batch: ' + (e?.message || String(e)));
-  }
-}
-window.deleteChipGrindBatch = deleteChipGrindBatch;
-
-async function packageChipsIntoProduct() {
-  if (userRole !== 'owner') { alert('Only the owner can package products.'); return; }
-  if (!currentUser) { alert('Please login first.'); return; }
-  const comboKey = ($('cpkCombo') && $('cpkCombo').value) || '';
-  if (!comboKey) { alert('Pick which combo\'s chip stock to package.'); return; }
-  const comboLabel = (chipStockBalances[comboKey] && chipStockBalances[comboKey].label) || comboKey;
-  const productName = ($('cpkProductName') && $('cpkProductName').value.trim()) || '';
-  if (!productName) { alert('Enter a product name.'); return; }
-  const weightG = Number($('cpkWeightG') && $('cpkWeightG').value) || 0;
-  const qty = Number($('cpkQty') && $('cpkQty').value) || 0;
-  const price = Number($('cpkPrice') && $('cpkPrice').value) || 0;
-  if (weightG <= 0) { alert('Enter the pack weight in grams.'); return; }
-  if (qty <= 0) { alert('Enter how many units to make.'); return; }
-
-  const kgNeeded = (weightG * qty) / 1000;
-  const available = (chipStockBalances[comboKey] && chipStockBalances[comboKey].kg) || 0;
-  if (kgNeeded > available + 0.0001) {
-    alert(`Not enough chip stock — needs ${kgNeeded.toFixed(2)} kg but only ${available.toFixed(2)} kg of ${comboLabel} chips is available.`);
-    return;
-  }
-
-  const note = ($('cpkNote') && $('cpkNote').value.trim()) || null;
-  if (!(await ensureFreshSession())) return;
-
-  try {
-    // Match an existing catalog product by name (case-insensitive), or
-    // create a new one — same catalog every other tab reads from.
-    let productId;
-    const existingProduct = (products || []).find(p => p.name.toLowerCase() === productName.toLowerCase());
-    if (existingProduct) {
-      productId = existingProduct.id;
-    } else {
-      const { data: newProd, error: newProdErr } = await supabase.from('products')
-        .insert({ user_id: businessId, name: productName, wholesale_price: price, retail_price: price, active: true })
-        .select().single();
-      if (newProdErr) throw newProdErr;
-      productId = newProd.id;
-      await loadProductsFromCloud();
-    }
-
-    const stockResult = await applyStockMovement(productId, qty, 'production', note ? `Chips batch: ${note}` : `${comboLabel} chips — ${productName}`);
-    if (!stockResult.ok) {
-      alert('⚠️ Product batch not saved — Stock update failed. See notice above and try again.');
-      return;
-    }
-
-    const row = {
-      owner_id: businessId, batch_date: todayIso(), combo_key: comboKey, combo_label: comboLabel,
-      product_id: productId, product_name: productName, pack_weight_g: weightG, qty, kg_used: kgNeeded,
-      selling_price: price, note, created_by: currentUser.id
-    };
-    const { data, error } = await supabase.from('chip_packaging_batches').insert(row).select().single();
-    if (error) throw error;
-    chipPackagingBatchesCache.push(data);
-    await adjustChipStockBalance(comboKey, comboLabel, -kgNeeded);
-
-    if ($('cpkProductName')) $('cpkProductName').value = '';
-    if ($('cpkWeightG')) $('cpkWeightG').value = '';
-    if ($('cpkQty')) $('cpkQty').value = '';
-    if ($('cpkPrice')) $('cpkPrice').value = '';
-    if ($('cpkNote')) $('cpkNote').value = '';
-    populateChipProductDatalist();
-    renderChipPackagingBatchesList();
-    updateStatus(`✅ ${qty} × "${productName}" added to Stock`);
-  } catch (e) {
-    console.error('Package chips into product error:', e);
-    const missingTable = /relation .* does not exist/i.test(e?.message || '');
-    alert('❌ Could not package chips: ' + (e?.message || String(e)) + (missingTable ? '\n\nThe chip_packaging_batches table hasn\'t been created in Supabase yet — run the SQL setup for this feature.' : ''));
-  }
-}
-window.packageChipsIntoProduct = packageChipsIntoProduct;
-
-async function deleteChipPackagingBatch(id) {
-  if (userRole !== 'owner') return;
-  if (!confirm('Delete this product batch? Stock will be reduced back and the chip stock restored.')) return;
-  try {
-    const batch = (chipPackagingBatchesCache || []).find(b => String(b.id) === String(id));
-    if (!(await ensureFreshSession())) return;
-    const { error } = await withSessionRetry(() => supabase.from('chip_packaging_batches').delete().eq('id', id).eq('owner_id', businessId));
-    if (error) throw error;
-    chipPackagingBatchesCache = chipPackagingBatchesCache.filter(b => String(b.id) !== String(id));
-    if (batch) {
-      if (batch.product_id) {
-        await applyStockMovement(batch.product_id, -(Number(batch.qty) || 0), 'adjustment', 'Chips product batch deleted — stock reversed');
-      }
-      await adjustChipStockBalance(batch.combo_key, batch.combo_label, Number(batch.kg_used) || 0);
-    }
-    renderChipPackagingBatchesList();
-    updateStatus('🗑️ Product batch deleted — stock & chip stock reversed');
-  } catch (e) {
-    alert('❌ Could not delete product batch: ' + (e?.message || String(e)));
-  }
-}
-window.deleteChipPackagingBatch = deleteChipPackagingBatch;
-
-// Called once when the Production tab opens — loads the running chip
-// stock + today's two batch logs, then renders everything.
-async function initChipGrindingSection() {
-  if (!currentUser || userRole !== 'owner') return;
-  await loadChipStockBalances();
-  await Promise.all([loadChipGrindBatchesToday(), loadChipPackagingBatchesToday()]);
-  populateChipProductDatalist();
-  updateChipGrindComboPreview();
-  renderChipGrindBatchesList();
-  renderChipPackagingBatchesList();
-}
-window.initChipGrindingSection = initChipGrindingSection;
 
 
 // ==================== COSTING TAB — UMBALAKADA → ORDER COSTING ENTRY ====================
@@ -5994,6 +5833,7 @@ function dbOrderToLocal(o) {
     customerPhone: o.customer_phone_snapshot || '',
     orderRefNo: o.order_ref_no || null,
     productId: o.product_id || null,
+    items: Array.isArray(o.items) ? o.items : null,
     product: String(o.product_size_g),
     qty: Number(o.qty),
     unitPrice: Number(o.unit_price),
@@ -6520,6 +6360,69 @@ function selectOrderProduct(id) {
   renderOrderProductPicker();
   if (typeof updateOrderTotal === 'function') updateOrderTotal();
 }
+
+// ==================== MULTI-PRODUCT ORDER CART ====================
+// Reads the Product & Quantity section's CURRENT fields as one line item —
+// null if nothing usable is entered (qty 0). Used both to preview the
+// running total and, at submit time, as the final (possibly only) item.
+function getCurrentOrderLineItem() {
+  const qty = Math.max(0, Number($('orderQty')?.value) || 0);
+  const unitPrice = Math.max(0, Number($('orderUnitPrice')?.value) || 0);
+  if (qty <= 0 || unitPrice <= 0) return null;
+  const productId = $('orderProductId') ? $('orderProductId').value || null : null;
+  const sizeG = Number($('orderProduct')?.value) || 0;
+  const product = productId ? products.find(p => String(p.id) === String(productId)) : null;
+  const name = product ? product.name : `Umbalakada (${sizeG}g Pack)`;
+  return { productId, name, sizeG, qty, unitPrice, total: qty * unitPrice };
+}
+window.getCurrentOrderLineItem = getCurrentOrderLineItem;
+
+// Pushes the current Product & Quantity fields into the cart as a completed
+// line, then clears those fields so the next product can be picked. If
+// nothing is entered yet, this is a no-op with a nudge — it never adds a
+// blank line.
+function addAnotherOrderProduct() {
+  const item = getCurrentOrderLineItem();
+  if (!item) { alert('Pick a product/size and enter a quantity first.'); return; }
+  orderCart.push(item);
+  if ($('orderProductId')) $('orderProductId').value = '';
+  if ($('orderProduct')) $('orderProduct').value = '50';
+  syncOrderSizeChips();
+  renderOrderProductPicker();
+  if ($('orderQty')) $('orderQty').value = 1;
+  if ($('orderUnitPrice')) $('orderUnitPrice').value = '';
+  renderOrderCartList();
+  updateOrderTotal();
+}
+window.addAnotherOrderProduct = addAnotherOrderProduct;
+
+function removeOrderCartItem(idx) {
+  orderCart.splice(idx, 1);
+  renderOrderCartList();
+  updateOrderTotal();
+}
+window.removeOrderCartItem = removeOrderCartItem;
+
+function resetOrderCart() {
+  orderCart = [];
+  renderOrderCartList();
+}
+window.resetOrderCart = resetOrderCart;
+
+function renderOrderCartList() {
+  const wrap = $('orderCartListWrap');
+  const body = $('orderCartList');
+  if (!wrap || !body) return;
+  if (orderCart.length === 0) { wrap.style.display = 'none'; body.innerHTML = ''; return; }
+  wrap.style.display = 'block';
+  body.innerHTML = orderCart.map((it, idx) => `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 10px;border:1px solid var(--border-color,#3333);border-radius:8px;margin-bottom:6px;font-size:.8rem;">
+      <div><strong>${escapeHtmlSafe(it.name)}</strong><br><span style="opacity:.7;">${it.qty} × Rs. ${it.unitPrice.toLocaleString()} = Rs. ${it.total.toLocaleString()}</span></div>
+      <button type="button" class="btn btn-xs btn-danger" onclick="removeOrderCartItem(${idx})" aria-label="Remove"><i class="business-icon icon-inline" data-lucide="x" aria-hidden="true"></i></button>
+    </div>`).join('');
+  if (window.lucide) lucide.createIcons({ attrs: { 'stroke-width': 1.9, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' } });
+}
+window.renderOrderCartList = renderOrderCartList;
 
 // ==================== SUPABASE-BACKED EXPENSES ====================
 let expenses = [];
@@ -8796,11 +8699,16 @@ function stepOrderQty(delta) {
 function updateOrderTotal() {
   const qty = Math.max(0, Number($('orderQty')?.value) || 0);
   const price = Math.max(0, Number($('orderUnitPrice')?.value) || 0);
-  const total = qty * price;
+  const currentLineTotal = qty * price;
+  const cartTotal = orderCart.reduce((s, it) => s + it.total, 0);
+  const total = cartTotal + currentLineTotal;
+  const itemCount = orderCart.length + (currentLineTotal > 0 ? 1 : 0);
   const totalEl = $('orderTotalValue');
   const subEl = $('orderTotalSub');
   if (totalEl) totalEl.textContent = (typeof fmt === 'function') ? fmt(total) : ('Rs. ' + total);
-  if (subEl) subEl.textContent = qty + ' × ' + ((typeof fmt === 'function') ? fmt(price) : ('Rs. ' + price));
+  if (subEl) subEl.textContent = itemCount > 1
+    ? `${itemCount} products`
+    : (qty + ' × ' + ((typeof fmt === 'function') ? fmt(price) : ('Rs. ' + price)));
   updateDistributorCommissionPreview();
 }
 
@@ -8825,7 +8733,8 @@ function updateDistributorCommissionPreview() {
   if (!distId || typeof computeDistributorCommissionRate !== 'function') { box.style.display = 'none'; return; }
   const qty = Math.max(0, Number($('orderQty')?.value) || 0);
   const price = Math.max(0, Number($('orderUnitPrice')?.value) || 0);
-  const total = qty * price;
+  const cartTotal = orderCart.reduce((s, it) => s + it.total, 0);
+  const total = cartTotal + (qty * price);
   const rate = computeDistributorCommissionRate(distId, total);
   const amount = Math.round(total * rate);
   const fmtVal = (v) => (typeof fmt === 'function') ? fmt(v) : ('Rs. ' + v);
@@ -8853,6 +8762,8 @@ function onOrderCustomerChange() {
 }
 
 function openNewOrder() {
+  resetOrderCart();
+  const cartBlock=document.querySelector('[data-owner-order-cart]');
   const staffBlock=document.querySelector('[data-staff-order-customer]');
   const ownerBlock=document.querySelector('[data-owner-order-customer]');
   const paymentBlock=document.querySelector('[data-owner-order-payment]');
@@ -8860,6 +8771,7 @@ function openNewOrder() {
   const distSelectBlock=document.querySelector('[data-owner-dist-select-block]');
   const distSelfBlock=document.querySelector('[data-distributor-self-block]');
   if(userRole==='staff'){
+    if(cartBlock) cartBlock.style.display='none';
     if(staffBlock) staffBlock.style.display='';
     if(ownerBlock) ownerBlock.style.display='none';
     if(paymentBlock) paymentBlock.style.display='none';
@@ -8867,6 +8779,7 @@ function openNewOrder() {
     if($('staffOrderCustomerName')) $('staffOrderCustomerName').value='';
     if($('staffOrderCustomerPhone')) $('staffOrderCustomerPhone').value='';
   } else {
+    if(cartBlock) cartBlock.style.display='';
     if(staffBlock) staffBlock.style.display='none';
     if(ownerBlock) ownerBlock.style.display='';
     if(paymentBlock) paymentBlock.style.display='';
@@ -8953,18 +8866,26 @@ function editCustomer(id) {
 }
 window.editCustomer = editCustomer;
 
+// ---- SQL setup (run once in Supabase to enable multi-product orders) ----
+// ALTER TABLE orders ADD COLUMN IF NOT EXISTS items jsonb;
+// Existing single-product orders keep working untouched — `items` is only
+// populated for orders created after this migration; older orders fall
+// back to their existing product_id/qty/unit_price columns everywhere
+// (see dbOrderToLocal(), reverseOrderItemsStock(), viewInvoice()).
 async function createOrder() {
   const product = $('orderProduct').value;
   const qty = Number($('orderQty').value) || 0;
   const unitPrice = Number($('orderUnitPrice').value) || 0;
   const notes = $('orderNotes').value.trim();
-  if (qty <= 0) { alert('Quantity must be at least 1!'); return; }
-  if (unitPrice <= 0) { alert('Unit price required!'); return; }
   if (!currentUser) { alert('Please login first.'); return; }
   if (!(await ensureFreshSession())) return;
 
   // STAFF MODE: no customer master list. The sale itself owns the customer snapshot.
+  // Server RPC takes one product/qty/price per sale — the multi-product cart
+  // below is an owner-mode feature only, so staff sales stay single-item.
   if (userRole === 'staff') {
+    if (qty <= 0) { alert('Quantity must be at least 1!'); return; }
+    if (unitPrice <= 0) { alert('Unit price required!'); return; }
     const customerName = $('staffOrderCustomerName')?.value.trim() || '';
     const customerPhone = $('staffOrderCustomerPhone')?.value.trim() || '';
     const address = $('orderAddress').value.trim();
@@ -9016,7 +8937,14 @@ async function createOrder() {
     return;
   }
 
-  // OWNER MODE: existing customer master workflow remains available.
+  // OWNER MODE: existing customer master workflow, now with multi-product
+  // support — whatever's sitting in the cart PLUS whatever's currently
+  // filled into the Product & Quantity fields becomes the final item list,
+  // so a single-product order still needs zero extra clicks.
+  const currentLine = getCurrentOrderLineItem();
+  const items = currentLine ? [...orderCart, currentLine] : [...orderCart];
+  if (items.length === 0) { alert('Add a product, quantity and unit price first!'); return; }
+
   const customerId = $('orderCustomer').value;
   const address = $('orderAddress').value.trim() || getCustomerAddress(customerId);
   // A distributor-attributed sale doesn't need a customer on the master list —
@@ -9031,20 +8959,38 @@ async function createOrder() {
     referralStaffId = $('orderReferralStaffSelect').value;
     referralStaffReference = (staffListCache||[]).find(s=>String(s.id)===String(referralStaffId))?.staff_reference || null;
   }
-  const total = qty * unitPrice;
+  const total = items.reduce((s, it) => s + it.total, 0);
+  const totalQty = items.reduce((s, it) => s + it.qty, 0);
+  // Legacy single-item columns (product_size_g/product_id/qty/unit_price) —
+  // kept filled for a 1-product order exactly as before, so nothing that
+  // reads those columns elsewhere (reports, delivery view) breaks. For a
+  // genuine multi-product order they hold a best-effort summary; the real
+  // breakdown lives in `items`.
+  const singleItem = items.length === 1 ? items[0] : null;
   const paymentMethod = $('orderPaymentMethod')?.value === 'prepaid' ? 'prepaid' : 'cod';
-  const productId = $('orderProductId') ? $('orderProductId').value || null : null;
-  const row = { id: generateOrderId(), user_id: businessId, customer_id: customerId || null, product_size_g: Number(product)||0, product_id: productId, qty, unit_price:unitPrice, total, address, notes, status:'pending', created_by:currentUser.id, referral_staff_id:referralStaffId, referral_staff_reference:referralStaffReference, referral_status:referralStaffId?'pending_verification':'none', payment_method:paymentMethod };
+  const itemsForDb = items.map(it => ({ productId: it.productId, name: it.name, sizeG: it.sizeG, qty: it.qty, unitPrice: it.unitPrice, total: it.total }));
+  const row = {
+    id: generateOrderId(), user_id: businessId, customer_id: customerId || null,
+    product_size_g: singleItem ? (singleItem.sizeG || 0) : 0,
+    product_id: singleItem ? singleItem.productId : null,
+    qty: totalQty,
+    unit_price: singleItem ? singleItem.unitPrice : (totalQty > 0 ? total / totalQty : 0),
+    total, address, notes, status:'pending', created_by:currentUser.id,
+    referral_staff_id:referralStaffId, referral_staff_reference:referralStaffReference,
+    referral_status:referralStaffId?'pending_verification':'none', payment_method:paymentMethod,
+    items: itemsForDb
+  };
   try {
     let { data, error } = await withSessionRetry(() => supabase.from('orders').insert(row).select().single());
     if (error && /column|schema|does not exist/i.test(error.message||'')) {
-      // products-feature-setup.sql not run yet on this project — retry without product_id.
-      const fallback = {...row}; delete fallback.product_id;
+      // products-feature-setup.sql (product_id) and/or the newer `items`
+      // column not run yet on this project — retry without whichever's missing.
+      const fallback = {...row}; delete fallback.product_id; delete fallback.items;
       ({ data, error } = await withSessionRetry(() => supabase.from('orders').insert(fallback).select().single()));
     }
     if (error) throw error;
     if (referralStaffId) {
-      const claim = { owner_id: businessId, staff_id:String(referralStaffId), staff_reference:referralStaffReference||'', order_id:String(data.id), customer_id:String(customerId), customer_name:customer?.name||'', customer_phone:customer?.phone||'', order_total:total, commission_rate:STAFF_COMMISSION_RATE, commission_amount:0, status:'pending', order_ref_no:data.order_ref_no||null, order_snapshot:{order_id:data.id,order_ref_no:data.order_ref_no||null,customer_id:customerId,customer_name:customer?.name||'',product_size_g:Number(product)||0,qty,unit_price:unitPrice,total,address,notes,created_by:currentUser.id,referral_staff_id:String(referralStaffId),referral_staff_reference:referralStaffReference} };
+      const claim = { owner_id: businessId, staff_id:String(referralStaffId), staff_reference:referralStaffReference||'', order_id:String(data.id), customer_id:String(customerId), customer_name:customer?.name||'', customer_phone:customer?.phone||'', order_total:total, commission_rate:STAFF_COMMISSION_RATE, commission_amount:0, status:'pending', order_ref_no:data.order_ref_no||null, order_snapshot:{order_id:data.id,order_ref_no:data.order_ref_no||null,customer_id:customerId,customer_name:customer?.name||'',items:itemsForDb,qty:totalQty,unit_price:row.unit_price,total,address,notes,created_by:currentUser.id,referral_staff_id:String(referralStaffId),referral_staff_reference:referralStaffReference} };
       const { error: ce } = await supabase.from('staff_commission_claims').insert(claim);
       if (ce) console.error('Owner referral claim create failed:',ce);
     }
@@ -9075,20 +9021,24 @@ async function createOrder() {
         // confirmDelivery() and confirmBatchDelivery() once status becomes
         // 'delivered' (or 'rejected' if the order is cancelled first).
         status: 'pending',
-        order_snapshot: { order_id: data.id, order_ref_no: data.order_ref_no || null, product_size_g: Number(product)||0, qty, unit_price: unitPrice, total }
+        order_snapshot: { order_id: data.id, order_ref_no: data.order_ref_no || null, items: itemsForDb, qty: totalQty, unit_price: row.unit_price, total }
       };
       const { error: dce } = await withSessionRetry(() => supabase.from('distributor_commission_claims').insert(distClaim));
       if (dce) console.error('Distributor commission claim create failed:', dce);
       else loadDistributorCommissionClaims();
     }
   } catch (e) { console.error('Create order error:',e); alert('❌ Could not save order: '+e.message); return; }
-  orders.unshift({id:row.id,customerId,productId,product,qty,unitPrice,total,address,notes,status:'pending',createdBy:currentUser.id,createdAt:new Date().toISOString(),referralStaffId,referralStaffReference,referralStatus:referralStaffId?'pending_verification':'none',orderRefNo:row.order_ref_no||null,paymentMethod});
-  // Order placed against a catalog product -> stock is committed right away
-  // (not just when a Sale is logged), so the Products tab reflects orders
-  // the moment they're created. Reversed automatically if the order is
-  // later cancelled/reactivated (see cycleStatus()) or deleted (see deleteOrder()).
-  if (productId) await applyStockMovement(productId, -qty, 'order', `New order${customer ? ' — ' + customer.name : ''}`);
+  orders.unshift({id:row.id,customerId,productId:row.product_id,product:String(row.product_size_g||''),qty:totalQty,unitPrice:row.unit_price,total,address,notes,status:'pending',createdBy:currentUser.id,createdAt:new Date().toISOString(),referralStaffId,referralStaffReference,referralStatus:referralStaffId?'pending_verification':'none',orderRefNo:row.order_ref_no||null,paymentMethod,items:itemsForDb});
+  // Order placed against catalog product(s) -> stock is committed right away
+  // for EVERY item (not just when a Sale is logged), so the Products tab
+  // reflects orders the moment they're created. Reversed automatically if
+  // the order is later cancelled/reactivated (see cycleStatus()) or deleted
+  // (see deleteOrder()) — both now loop every item, not just one.
+  for (const it of items) {
+    if (it.productId) await applyStockMovement(it.productId, -it.qty, 'order', `New order${customer ? ' — ' + customer.name : ''}`);
+  }
   saveOrders(); renderOrders(); renderDelivery(); updateOrderStats(); closeModal('orderModal');
+  resetOrderCart();
   $('orderQty').value=1; $('orderUnitPrice').value=350; $('orderAddress').value=''; $('orderNotes').value='';
   if ($('orderPaymentMethod')) $('orderPaymentMethod').value = 'cod';
   if ($('orderProduct')) $('orderProduct').value = '50';
@@ -9137,11 +9087,14 @@ function renderOrders() {
           { label: 'Delete', icon: '🗑️', danger: true, onclick: `deleteOrder(${index})` }
         ])
       : '<span style="font-size:.68rem;font-weight:800;opacity:.55;">VIEW ONLY</span>';
+    const productCell = (Array.isArray(order.items) && order.items.length > 1)
+      ? `<span title="${order.items.map(it => `${it.qty}x ${(it.name || (it.sizeG ? it.sizeG + 'g Pack' : 'Item'))}`).join(' | ').replace(/"/g, '&quot;')}">${order.items.length} products</span>`
+      : `${order.qty} × ${order.product}g`;
     return `<tr>
       <td><strong>${order.id}</strong></td>
       <td>${new Date(order.createdAt).toLocaleDateString()}</td>
       <td><strong>${escapeHtmlSafe(order.customerName || getCustomerName(order.customerId) || 'Customer')}</strong>${order.orderRefNo?`<br><small style="font-weight:900;letter-spacing:.06em;opacity:.7;">${escapeHtmlSafe(order.orderRefNo)}</small>`:''}</td>
-      <td>${order.qty} × ${order.product}g</td>
+      <td>${productCell}</td>
       <td>${fmt(order.total)}</td>
       <td>${getStatusBadge(order.status)}</td>
       <td>${commissionCell}</td>
@@ -9171,6 +9124,20 @@ function getStatusBadge(status) {
     case 'cancelled': return '<span class="badge badge-cancelled"><i class="business-icon icon-inline" data-lucide="circle-x" aria-hidden="true"></i> Cancelled</span>';
     case 'failed': return '<span class="badge badge-cancelled"><i class="business-icon icon-inline" data-lucide="circle-alert" aria-hidden="true"></i> Delivery Failed</span>';
     default: return status;
+  }
+}
+
+// Stock was committed the moment an order was created (see createOrder()),
+// for EVERY item in a multi-product order. Cancelling releases it all back
+// to the shelf; reviving a cancelled order commits it all again. Falls back
+// to the single legacy productId/qty pair for orders saved before the
+// multi-item cart existed.
+async function reverseOrderItemsStock(order, sign, movementType, note) {
+  const items = Array.isArray(order.items) && order.items.length
+    ? order.items
+    : (order.productId ? [{ productId: order.productId, qty: order.qty }] : []);
+  for (const it of items) {
+    if (it.productId) await applyStockMovement(it.productId, it.qty * sign, movementType, note);
   }
 }
 
@@ -9204,11 +9171,11 @@ async function cycleStatus(index) {
   // Cancelling it releases that stock back to the shelf; reviving a
   // previously-cancelled order (cycling past 'cancelled' back to 'pending')
   // commits it again.
-  if (order.productId) {
+  if (order.productId || (Array.isArray(order.items) && order.items.length)) {
     if (newStatus === 'cancelled' && prevStatus !== 'cancelled') {
-      await applyStockMovement(order.productId, order.qty, 'adjustment', `Order ${order.orderRefNo || ''} cancelled — stock released`.trim());
+      await reverseOrderItemsStock(order, 1, 'adjustment', `Order ${order.orderRefNo || ''} cancelled — stock released`.trim());
     } else if (prevStatus === 'cancelled' && newStatus !== 'cancelled') {
-      await applyStockMovement(order.productId, -order.qty, 'order', `Order ${order.orderRefNo || ''} reactivated — stock committed`.trim());
+      await reverseOrderItemsStock(order, -1, 'order', `Order ${order.orderRefNo || ''} reactivated — stock committed`.trim());
     }
   }
   updateStatus('🔄 Order status updated');
@@ -9230,8 +9197,8 @@ async function deleteOrder(index) {
   }
   // If the order was still holding committed stock (never cancelled first),
   // deleting it must give that stock back — otherwise it's lost forever.
-  if (order.productId && order.status !== 'cancelled') {
-    await applyStockMovement(order.productId, order.qty, 'adjustment', `Order ${order.orderRefNo || ''} deleted — stock released`.trim());
+  if ((order.productId || (Array.isArray(order.items) && order.items.length)) && order.status !== 'cancelled') {
+    await reverseOrderItemsStock(order, 1, 'adjustment', `Order ${order.orderRefNo || ''} deleted — stock released`.trim());
   }
   orders.splice(index, 1);
   saveOrders();
@@ -11578,6 +11545,17 @@ function viewInvoice(index) {
   const customerAddress = order.address || getCustomerAddress(order.customerId);
   const customerPhone = userRole === 'staff' ? (order.customerPhone || '') : getCustomerPhone(order.customerId);
 
+  const items = Array.isArray(order.items) && order.items.length
+    ? order.items
+    : [{ name: `Umbalakada (${order.product}g Pack)`, qty: order.qty, unitPrice: order.unitPrice, total: order.total }];
+  const itemRows = items.map(it => `
+          <tr>
+            <td><strong>${escapeHtmlSafe(it.name || 'Item')}</strong></td>
+            <td style="text-align:center;">${it.qty}</td>
+            <td style="text-align:right;">${fmt(it.unitPrice)}</td>
+            <td style="text-align:right;">${fmt(it.total)}</td>
+          </tr>`).join('');
+
   const invoiceHTML = `
     <div class="inv-card">
       <div class="inv-header">
@@ -11607,14 +11585,7 @@ function viewInvoice(index) {
       </div>
       <table>
         <thead><tr><th>Item Description</th><th style="text-align:center;">Qty</th><th style="text-align:right;">Unit Price</th><th style="text-align:right;">Total</th></tr></thead>
-        <tbody>
-          <tr>
-            <td><strong>Umbalakada (${order.product}g Pack)</strong></td>
-            <td style="text-align:center;">${order.qty}</td>
-            <td style="text-align:right;">${fmt(order.unitPrice)}</td>
-            <td style="text-align:right;">${fmt(order.total)}</td>
-          </tr>
-        </tbody>
+        <tbody>${itemRows}</tbody>
         <tfoot>
           <tr><td colspan="3" style="text-align:right;font-size:1rem;"><strong>Grand Total:</strong></td><td style="text-align:right;font-size:1.1rem;color:#047857;"><strong>${fmt(order.total)}</strong></td></tr>
         </tfoot>
@@ -11656,10 +11627,14 @@ function shareInvoiceWhatsApp(index) {
   message += `*Customer:* ${customerName}\n`;
   if (customerPhone) message += `*Phone:* ${customerPhone}\n`;
   if (customerAddress) message += `*Address:* ${customerAddress}\n`;
-  message += `\n*Item:* Umbalakada ${order.product}g Pack\n`;
-  message += `*Quantity:* ${order.qty}\n`;
-  message += `*Unit Price:* ${fmt(order.unitPrice)}\n`;
-  message += `*Total:* ${fmt(order.total)}\n`;
+  const items = Array.isArray(order.items) && order.items.length
+    ? order.items
+    : [{ name: `Umbalakada ${order.product}g Pack`, qty: order.qty, unitPrice: order.unitPrice, total: order.total }];
+  message += `\n*Items:*\n`;
+  items.forEach(it => {
+    message += `• ${it.name} — ${it.qty} × ${fmt(it.unitPrice)} = ${fmt(it.total)}\n`;
+  });
+  message += `\n*Total:* ${fmt(order.total)}\n`;
   message += `*Status:* ${order.status.toUpperCase()}\n`;
   if (order.notes) message += `*Notes:* ${order.notes}\n`;
   message += `\n_Thank you for your business! 🐟_`;
@@ -14996,14 +14971,16 @@ function activateAppTab(tabId){
     // "Link Grinding to Store Products" — same idea, one step earlier in
     // the process (ground Umbalakada + dust, before packing).
     populateGrindProductMapSelects();
+    // Custom Chips pack/bottle sizes (owner-defined) + today's packing
+    // batches — see "CUSTOM CHIPS PACK / BOTTLE TYPES" in app.js.
+    renderChipPackTypesManager();
+    renderChipsPackingInputs();
+    loadDailyChipsPackBatches();
     // Stage 6 "Stock — Confirmed Today": needs today's already-logged
     // product batches (normally only fetched when the "Add Today's Product
     // Batch" modal opens) so the summary is accurate as soon as the tab
     // opens, not just after that modal has been used once.
     loadDailyProductBatches().then(() => renderStockUpdateSummary());
-    // Umbalakada Chips — Mixed Grind & Custom Packaging (separate from the
-    // pipeline above): running chip stock + today's grind/packaging logs.
-    initChipGrindingSection();
   }
   if (tabId === 'distributor-home') { showSkeletons('distributor-home'); loadDistributorCommissionClaims().then(renderDistributorHome); }
   if (tabId === 'my-income') { loadDistributorCommissionClaims().then(renderProductAgentPage); }

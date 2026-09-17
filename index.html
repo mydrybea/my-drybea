@@ -2733,10 +2733,13 @@
         </div>
         <p class="dpl-note">Every time you grind Umbalakada, add it here — pick the type, how many kg went in, and how many grams of dust came out. Example: Linna 1kg → 100g dust. Add as many rounds as you did today; totals below update automatically.</p>
         <div class="dpl-sub-card">
-          <div class="grid-4">
-            <div class="field"><label>Fish Type</label><select id="dgbType" onchange="prefillGrindBatchPrice()"></select></div>
+          <div class="field">
+            <label>Fish Type(s) <span class="hint">(tick all that went into this round — e.g. Linna + Balaya for a mixed grind)</span></label>
+            <div id="dgbTypeChecks" style="display:flex;flex-wrap:wrap;margin-top:4px;"></div>
+          </div>
+          <div class="grid-3">
             <div class="field"><label>Kg Ground</label><input type="number" id="dgbKg" min="0" step="0.1" placeholder="e.g. 1"></div>
-            <div class="field"><label>Price /kg <span class="hint">(auto-filled, editable)</span></label><input type="number" id="dgbPrice" min="0" step="0.01" placeholder="e.g. 850"></div>
+            <div class="field"><label>Price /kg <span class="hint">(auto-suggested avg of ticked types, editable)</span></label><input type="number" id="dgbPrice" min="0" step="0.01" placeholder="e.g. 850"></div>
             <div class="field"><label>Dust Made <span class="hint">(grams)</span></label><input type="number" id="dgbDustG" min="0" step="1" placeholder="e.g. 100"></div>
           </div>
           <div class="btn-row" style="margin:6px 0 0;">
@@ -2790,7 +2793,7 @@
           <span class="dpl-badge" style="background:#8b5cf6;">4</span>
           <div><h3>Value Addition</h3><span class="dpl-stage-tag">One-time setup</span></div>
         </div>
-        <p class="dpl-note">Turn what came out of grinding into stock-tracked value: pick which catalog product each Umbalakada type's usable (ground) output restocks, and which product the dust restocks. Once linked, every round you add in Stage 2 (or delete) automatically updates that product's Stock — so Products always matches what actually came out of grinding today.</p>
+        <p class="dpl-note">Turn what came out of grinding into stock-tracked value. Whatever combo you grind — Linna, Balaya, Premium Mix, or any mix of them — becomes ONE product on the shelf: <strong>Umbalakada Chips</strong>. Pick which catalog product that is, and which product the dust restocks. Once linked, every round you add in Stage 2 (or delete) automatically updates that product's Stock — so Products always matches what actually came out of grinding today.</p>
         <div class="dpl-sub-card">
           <div class="grid-2" id="gpmGrid"></div>
           <div class="field" style="margin-top:10px;">
@@ -2854,6 +2857,47 @@
           </div>
           <small style="display:block;margin-top:6px;opacity:.65;">Logs a separate timestamped batch (on top of the pack numbers above) and moves linked products' Stock immediately — as many batches a day as you like.</small>
         </div>
+
+        <!-- ============ CUSTOM PACK / BOTTLE SIZES → UMBALAKADA CHIPS ============ -->
+        <!-- Owner-defined packing units (any name/weight — "50g Pack",
+             "100g Bottle", etc.), separate from the 4 fixed PACKS sizes
+             above. Packing a batch here deducts kg from the single
+             "Umbalakada Chips" product (linked in Stage 4) and adds qty to
+             whichever product each size is linked to. See
+             ensureChipPackTypes()/addChipPackType()/addChipsPackBatch() in
+             app.js. -->
+        <div class="dpl-sub-card" style="margin-top:14px;">
+          <h4 style="margin:0 0 6px;font-size:.92rem;">Pack Umbalakada Chips — Your Own Sizes <span class="hint" style="font-weight:400;">(custom, one-time setup)</span></h4>
+          <p class="sub" style="margin:0 0 10px;">Define exactly the pack/bottle sizes you actually use — any name, any weight, as many as you like — then link each to a catalog product.</p>
+          <div class="grid-3">
+            <div class="field"><label>Size Name</label><input type="text" id="cptNewName" placeholder="e.g. 50g Pack / 100g Bottle"></div>
+            <div class="field"><label>Weight (g)</label><input type="number" id="cptNewWeight" min="0" step="1" placeholder="e.g. 50"></div>
+            <div class="field" style="display:flex;align-items:flex-end;"><button type="button" class="btn btn-primary btn-sm" style="width:100%;" onclick="addChipPackType()"><i class="business-icon icon-inline" data-lucide="plus" aria-hidden="true"></i> Add Size</button></div>
+          </div>
+          <div class="table-wrap" style="margin-top:10px;">
+            <table>
+              <thead><tr><th>Size</th><th>Weight</th><th>Linked Product</th><th></th></tr></thead>
+              <tbody id="cptListBody"><tr><td colspan="4" style="text-align:center;opacity:.5;padding:14px;">No pack/bottle sizes defined yet.</td></tr></tbody>
+            </table>
+          </div>
+
+          <div style="border-top:1px dashed var(--border, #e5e7eb);margin:16px 0 12px;"></div>
+
+          <h4 style="margin:0 0 6px;font-size:.92rem;">Today's Packing</h4>
+          <p class="sub" style="margin:0 0 10px;">How many of each size you packed today — this deducts that weight from Umbalakada Chips Stock and adds the count to each linked product's Stock.</p>
+          <div class="grid-3" id="cpkQtyGrid"></div>
+          <div class="field" style="margin-top:6px;"><label>Note (optional)</label><input type="text" id="cpkNote" placeholder="Optional notes..."></div>
+          <div class="btn-row" style="margin-top:10px;" data-owner-only>
+            <button type="button" class="btn btn-primary btn-sm" onclick="addChipsPackBatch()"><i class="business-icon icon-inline" data-lucide="package-plus" aria-hidden="true"></i> Add Packing Batch</button>
+          </div>
+          <div class="table-wrap" style="margin-top:10px;">
+            <table>
+              <thead><tr><th>Time</th><th>Packed</th><th>Chips Used</th><th></th></tr></thead>
+              <tbody id="cpkBatchListBody"><tr><td colspan="4" style="text-align:center;opacity:.5;padding:14px;">No packing batches logged yet today.</td></tr></tbody>
+            </table>
+          </div>
+          <p class="sub" id="cpkBatchTotalsNote" style="margin:8px 0 0;"></p>
+        </div>
       </div>
 
       <!-- ---------- STAGE 6 — STOCK (CONFIRMED MOVEMENTS TODAY) ---------- -->
@@ -2905,88 +2949,6 @@
           <tbody id="dpLogBody"><tr><td colspan="10" style="text-align:center;opacity:.5;padding:20px;">No entries yet this month.</td></tr></tbody>
         </table>
       </div>
-    </div>
-
-    <!-- ============ UMBALAKADA CHIPS — MIXED GRIND & CUSTOM PACKAGING ============ -->
-    <!-- Separate from the Daily Production Log pipeline above: that pipeline
-         grinds each Umbalakada type on its own and only packages into the
-         four fixed pack sizes (50g/100g/500g/1kg). This section is for
-         grinding any MIX of Linna / Balaya / Premium Mix together in one
-         batch (7 possible combos), each batch priced per kg on its own —
-         and then packaging the resulting "chips" into any custom product
-         (your own name, weight and price — e.g. "50g Pack" @ Rs.20 or
-         "100g Bottle" @ Rs.30), which restocks the real Product catalog.
-         See addChipGrindBatch()/packageChipsIntoProduct() in app.js. -->
-    <div class="card" style="margin-top:16px;">
-      <h2><span class="pro-title-icon orange" aria-hidden="true"><i class="business-icon" data-lucide="blend" aria-hidden="true"></i></span><span>Umbalakada Chips — Mixed Grind &amp; Custom Packaging</span></h2>
-      <p class="pro-subtitle orange">Grind any mix of Linna / Balaya / Premium Mix together at your own price per kg, then package the chips into whatever custom products you like — it restocks Products automatically.</p>
-
-      <!-- ---------- GRIND A BATCH ---------- -->
-      <div class="dpl-sub-card">
-        <h4 style="margin:0 0 6px;font-size:.92rem;">1. Grind a Batch</h4>
-        <p class="sub" style="margin:0 0 10px;">Tick which types went into this grind (any combination), how many kg you fed in at what price, and how many kg of chips actually came out.</p>
-        <div class="field">
-          <label>Types in this Batch</label>
-          <div style="display:flex;flex-wrap:wrap;gap:16px;margin-top:4px;">
-            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:400;"><input type="checkbox" id="cgbLinna" style="width:auto;" onchange="updateChipGrindComboPreview()"><span>Linna</span></label>
-            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:400;"><input type="checkbox" id="cgbBalaya" style="width:auto;" onchange="updateChipGrindComboPreview()"><span>Balaya</span></label>
-            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:400;"><input type="checkbox" id="cgbPremium" style="width:auto;" onchange="updateChipGrindComboPreview()"><span>Premium Mix</span></label>
-          </div>
-          <p class="sub" id="cgbComboPreview" style="margin:6px 0 0;opacity:.7;">Pick at least one type above.</p>
-        </div>
-        <div class="grid-3">
-          <div class="field"><label>Price /kg <span class="hint">(Rs., this batch)</span></label><input type="number" id="cgbPricePerKg" min="0" step="0.01" placeholder="e.g. 1800"></div>
-          <div class="field"><label>Kg Fed In</label><input type="number" id="cgbInputKg" min="0" step="0.1" value="1"></div>
-          <div class="field"><label>Kg Chips Out</label><input type="number" id="cgbOutputKg" min="0" step="0.1" placeholder="e.g. 0.85"></div>
-        </div>
-        <div class="field"><label>Note <span class="hint">(optional)</span></label><input type="text" id="cgbNote" placeholder="Optional notes..."></div>
-        <div class="btn-row" style="margin:6px 0 0;" data-owner-only>
-          <button type="button" class="btn btn-primary btn-sm" onclick="addChipGrindBatch()"><i class="business-icon icon-inline" data-lucide="plus" aria-hidden="true"></i> Add Grind Batch</button>
-        </div>
-      </div>
-      <div class="table-wrap" style="margin-top:10px;">
-        <table>
-          <thead><tr><th>Combo</th><th>Price/kg</th><th>Kg In</th><th>Kg Out</th><th></th></tr></thead>
-          <tbody id="chipGrindBatchesBody"><tr><td colspan="5" style="text-align:center;opacity:.5;padding:14px;">No grind batches added yet today.</td></tr></tbody>
-        </table>
-      </div>
-      <p class="sub" id="chipGrindListNote" style="margin:8px 0 0;"></p>
-
-      <!-- ---------- CHIP STOCK (RUNNING BALANCE, ALL DAYS) ---------- -->
-      <h4 style="margin:18px 0 6px;font-size:.92rem;">Chip Stock <span class="hint" style="font-weight:400;">(kg available to package right now, by combo)</span></h4>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Combo</th><th class="num">Available (kg)</th></tr></thead>
-          <tbody id="chipStockBody"><tr><td colspan="2" style="text-align:center;opacity:.5;padding:14px;">Grind a batch above to build up chip stock.</td></tr></tbody>
-        </table>
-      </div>
-
-      <!-- ---------- PACKAGE CHIPS INTO A PRODUCT ---------- -->
-      <div class="dpl-sub-card" style="margin-top:14px;">
-        <h4 style="margin:0 0 6px;font-size:.92rem;">2. Package Chips into a Product</h4>
-        <p class="sub" style="margin:0 0 10px;">Pick which combo's chip stock to use, then define the product — any name, weight and price you like (e.g. "50g Pack" @ Rs.20, "100g Bottle" @ Rs.30). Matches an existing product by name, or creates a new one — either way it restocks Products immediately.</p>
-        <div class="field"><label>Combo <span class="hint">(only combos with chip stock)</span></label><select id="cpkCombo" onchange="updateChipPackagingKgNeeded()"><option value="">— Select a combo —</option></select></div>
-        <div class="grid-2">
-          <div class="field"><label>Product Name</label><input type="text" id="cpkProductName" list="cpkProductList" placeholder="e.g. 50g Pack" oninput="onChipPackagingProductPick()"><datalist id="cpkProductList"></datalist></div>
-          <div class="field"><label>Selling Price <span class="hint">(Rs./unit)</span></label><input type="number" id="cpkPrice" min="0" step="0.01" placeholder="e.g. 20"></div>
-        </div>
-        <div class="grid-2">
-          <div class="field"><label>Pack Weight <span class="hint">(grams, per unit)</span></label><input type="number" id="cpkWeightG" min="0" step="1" placeholder="e.g. 50" oninput="updateChipPackagingKgNeeded()"></div>
-          <div class="field"><label>Quantity <span class="hint">(units to make)</span></label><input type="number" id="cpkQty" min="0" step="1" placeholder="e.g. 100" oninput="updateChipPackagingKgNeeded()"></div>
-        </div>
-        <p class="sub" id="cpkKgNeeded" style="margin:2px 0 8px;"></p>
-        <div class="field"><label>Note <span class="hint">(optional)</span></label><input type="text" id="cpkNote" placeholder="Optional notes..."></div>
-        <div class="btn-row" style="margin:6px 0 0;" data-owner-only>
-          <button type="button" class="btn btn-primary btn-sm" onclick="packageChipsIntoProduct()"><i class="business-icon icon-inline" data-lucide="package-plus" aria-hidden="true"></i> Add Product Batch</button>
-        </div>
-      </div>
-      <div class="table-wrap" style="margin-top:10px;">
-        <table>
-          <thead><tr><th>Combo</th><th>Product</th><th>Weight</th><th>Qty</th><th>Kg Used</th><th class="num">Price</th><th></th></tr></thead>
-          <tbody id="chipPackagingBatchesBody"><tr><td colspan="7" style="text-align:center;opacity:.5;padding:14px;">No products packaged yet today.</td></tr></tbody>
-        </table>
-      </div>
-      <p class="sub" id="chipPackagingListNote" style="margin:8px 0 0;"></p>
     </div>
 
 
@@ -4177,6 +4139,18 @@
           <div class="om-total-sub" id="orderTotalSub">1 × Rs. 350</div>
         </div>
         <div class="om-total-value" id="orderTotalValue">Rs. 350</div>
+      </div>
+
+      <div data-owner-order-cart>
+        <div class="btn-row" style="margin-top:10px;">
+          <button type="button" class="btn btn-sm" onclick="addAnotherOrderProduct()"><i class="business-icon icon-inline" data-lucide="plus" aria-hidden="true"></i> Add Another Product</button>
+        </div>
+        <small style="display:block;margin-top:4px;opacity:.65;">One customer wants several different products in the same order? Pick the first one above, tap this to lock it in, then pick the next.</small>
+
+        <div id="orderCartListWrap" style="display:none;margin-top:12px;">
+          <label style="font-size:.72rem;opacity:.7;display:block;margin-bottom:6px;">Products added to this order</label>
+          <div id="orderCartList"></div>
+        </div>
       </div>
     </div>
 
