@@ -2913,3 +2913,82 @@ html[data-theme="light"] #calculator .table-wrap table tbody tr:not(.total-row):
 @media (prefers-reduced-motion: reduce){
   .chero-kpi{ transition:none; }
 }
+
+/* ============================================================
+   Professional custom checkbox
+   The generic `input, select, textarea { appearance:none; width:100% }`
+   reset earlier in this file strips native checkbox styling and
+   stretches it to fill its container, leaving a bare, invisible
+   box (see grsrc-check / bsrc-check / batch-select-cb). This
+   restyles every checkbox in the app as a small, rounded, brand-
+   colored control regardless of where it's used.
+   ============================================================ */
+input[type="checkbox"]{
+  -webkit-appearance:none!important;
+  appearance:none!important;
+  width:20px!important;
+  height:20px!important;
+  min-width:20px!important;
+  flex:0 0 20px;
+  padding:0!important;
+  margin:0 auto!important;
+  border-radius:6px!important;
+  border:1.5px solid var(--border-strong)!important;
+  background:var(--bg-secondary)!important;
+  box-shadow:none!important;
+  cursor:pointer;
+  position:relative;
+  display:inline-block;
+  vertical-align:middle;
+  transition:background .18s ease,border-color .18s ease,box-shadow .18s ease,transform .1s ease;
+}
+input[type="checkbox"]:hover:not(:disabled){
+  border-color:var(--green)!important;
+  box-shadow:0 0 0 3px var(--green-glow)!important;
+}
+input[type="checkbox"]:focus-visible{
+  outline:none!important;
+  border-color:var(--green)!important;
+  box-shadow:0 0 0 3px var(--green-glow)!important;
+}
+input[type="checkbox"]:checked{
+  background:linear-gradient(135deg,var(--green) 0%,var(--green-deep) 100%)!important;
+  border-color:var(--green-deep)!important;
+  box-shadow:0 3px 10px var(--green-glow)!important;
+}
+input[type="checkbox"]:checked::after{
+  content:"";
+  position:absolute;
+  left:6px; top:2px;
+  width:5px; height:10px;
+  border:solid var(--white);
+  border-width:0 2px 2px 0;
+  transform:rotate(45deg);
+  animation:chkPop .16s ease;
+}
+input[type="checkbox"]:active:not(:disabled){ transform:scale(.90); }
+input[type="checkbox"]:disabled{
+  opacity:.4!important;
+  cursor:not-allowed;
+}
+@keyframes chkPop{
+  from{ opacity:0; transform:scale(.4) rotate(45deg); }
+  to{ opacity:1; transform:scale(1) rotate(45deg); }
+}
+/* Center nicely when used inside table cells */
+td input[type="checkbox"]{ display:block; margin:0 auto!important; }
+
+html[data-theme="light"] input[type="checkbox"]{
+  background:#fff!important;
+  border-color:#c9dbd1!important;
+  box-shadow:none!important;
+}
+html[data-theme="light"] input[type="checkbox"]:hover:not(:disabled){
+  border-color:#0a8f43!important;
+  box-shadow:0 0 0 3px rgba(10,143,67,.14)!important;
+}
+html[data-theme="light"] input[type="checkbox"]:checked{
+  background:linear-gradient(135deg,#0a9b50,#087f43)!important;
+  border-color:#087f43!important;
+  box-shadow:0 3px 10px rgba(10,143,67,.28)!important;
+}
