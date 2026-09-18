@@ -2679,44 +2679,18 @@
       </div>
     </div>
 
-    <!-- ============ PRODUCTION CONSOLE — REBUILDING STEP BY STEP ============ -->
-    <!-- Clean-slate rebuild, one piece at a time, per the owner's direction.
-         Step 1 (current): Umbalakada — Raw Material In. Later steps
-         (Grinding, Dust, Finished Product, Stock, Reports) will be added
-         back one at a time as their own clean sections once designed with
-         the owner — not restored from the old pipeline/tab layout. Nothing
-         about the underlying data was touched: the app.js functions and
-         Supabase tables for those later parts (grind batches/combo prices,
-         chips-pack batches, product batches, production_cost_log) are
-         completely untouched and still hold every real record — only this
-         card's markup was replaced, so those functions simply have nothing
-         to render into right now (they no-op safely until their section is
-         rebuilt) rather than losing any data. -->
-    <div class="card" style="margin-top:16px;">
-      <h2><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="factory" aria-hidden="true"></i></span><span>Production Console</span></h2>
-      <p class="pro-subtitle gold">Rebuilding step by step, one clean section at a time. Step 1: Umbalakada — Raw Material In.</p>
-
-      <!-- ---------- STEP 1 — UMBALAKADA, RAW MATERIAL IN ---------- -->
-      <div class="dpl-stage" id="dplStage1">
-        <div class="dpl-stage-head">
-          <div><h3>Umbalakada — Raw Material In</h3><span class="dpl-stage-tag">Fills in by itself</span></div>
-        </div>
-        <p class="dpl-note">This comes from what you already typed in the Costing tab's "Today's Umbalakada Purchase" — you don't need to type it again here.</p>
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>Variety</th><th>Price Paid Today (Rs./kg)</th><th>Qty Bought Today</th></tr></thead>
-            <tbody id="umbTypesBody"></tbody>
-          </table>
-        </div>
-        <p class="sub" id="umbSyncNote" style="margin:8px 0 0;"></p>
-        <div class="stat-grid" style="margin-top:10px;">
-          <div class="stat"><div class="k">Total Bought Today</div><div class="v" id="umbTotalGroundKg">0 kg</div></div>
-          <div class="stat accent"><div class="k">Average Price/kg</div><div class="v" id="umbAvgPricePerKg">Rs. 0</div></div>
-        </div>
-      </div>
-    </div>
-
-
+    <!-- ============ PRODUCTION CONSOLE ============ -->
+    <!-- Removed entirely per the owner's request while it's being rebuilt
+         from a clean slate, step by step. Nothing about the underlying
+         data was touched: all app.js functions (grinding/combo pricing,
+         dust, chips-pack batches, product batches, saveDailyProductionLog,
+         etc.) and every Supabase table (production_cost_log,
+         daily_chips_pack_batches, daily_product_batches) are completely
+         untouched and still hold every real record — they just have no
+         card to render into right now, and no-op safely because of that
+         (every render function here guards on its own element with
+         `if (!el) return;`). The next step will be added back as its own
+         new card once designed with the owner. -->
 
     <!-- ============ DAILY FISH PURCHASE BILLS ============ -->
     <div class="card" style="margin-top:16px;">
