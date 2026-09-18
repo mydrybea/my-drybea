@@ -2749,6 +2749,13 @@
       <h2><span class="pro-title-icon orange" aria-hidden="true"><i class="business-icon" data-lucide="package" aria-hidden="true"></i></span><span>Pack Today's Chips — Custom Sizes</span></h2>
       <p class="pro-subtitle orange">Split ground Umbalakada Chips into your own pack/bottle sizes (e.g. 50g Pack, 100g Bottle, 500g, 1kg) — link each size to its product in Stock, and optionally record what % of that size's weight is reused Dust.</p>
 
+      <div class="stat-grid" id="cptSummaryStats">
+        <div class="stat"><div class="k">Sizes Defined</div><div class="v" id="cptStatSizes">0</div></div>
+        <div class="stat good"><div class="k">Linked to Stock</div><div class="v" id="cptStatLinked">0</div></div>
+        <div class="stat accent"><div class="k">Packed Today</div><div class="v" id="cptStatPackedToday">0</div></div>
+        <div class="stat"><div class="k">Chips Used Today</div><div class="v" id="cptStatChipsUsedToday">0 kg</div></div>
+      </div>
+
       <h3 style="margin:0 0 8px;">Define Pack / Bottle Sizes</h3>
       <div class="grid-3" data-owner-only>
         <div class="field"><label>Name</label><input type="text" id="cptNewName" placeholder="e.g. 100g Bottle"></div>
@@ -2759,7 +2766,7 @@
       <div class="table-wrap" style="margin-top:10px;" data-owner-only>
         <table>
           <thead><tr><th>Name</th><th>Weight</th><th>Product →</th><th>Dust % Used</th><th></th></tr></thead>
-          <tbody id="cptListBody"><tr><td colspan="5" style="text-align:center;opacity:.5;padding:14px;">Loading…</td></tr></tbody>
+          <tbody id="cptListBody"><tr><td colspan="5" style="text-align:center;opacity:.55;padding:22px 14px;"><i class="business-icon icon-inline" data-lucide="package-plus" aria-hidden="true" style="width:20px;height:20px;display:block;margin:0 auto 6px;"></i>No pack/bottle sizes defined yet — add one above (e.g. "50g Pack", "100g Bottle").</td></tr></tbody>
         </table>
       </div>
 

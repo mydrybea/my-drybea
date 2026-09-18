@@ -4282,27 +4282,54 @@ window.onChipPackTypeDustPctChange = onChipPackTypeDustPctChange;
 
 function renderChipPackTypesManager() {
   const body = $('cptListBody');
-  if (!body) return;
-  const list = ensureChipPackTypes();
-  const optionsHtml = '<option value="">— Not linked —</option>' + (products || []).map(p => `<option value="${p.id}">${p.name}</option>`).join('');
-  if (list.length === 0) {
-    body.innerHTML = '<tr><td colspan="5" style="text-align:center;opacity:.5;padding:14px;">No pack/bottle sizes defined yet — add one above (e.g. "50g Pack", "100g Bottle").</td></tr>';
-    return;
+  if (body) {
+    const list = ensureChipPackTypes();
+    const optionsHtml = '<option value="">— Not linked —</option>' + (products || []).map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+    if (list.length === 0) {
+      body.innerHTML = '<tr><td colspan="5" style="text-align:center;opacity:.55;padding:22px 14px;"><i class="business-icon icon-inline" data-lucide="package-plus" aria-hidden="true" style="width:20px;height:20px;display:block;margin:0 auto 6px;"></i>No pack/bottle sizes defined yet — add one above (e.g. "50g Pack", "100g Bottle").</td></tr>';
+    } else {
+      body.innerHTML = list.map(t => `
+        <tr>
+          <td><strong>${t.name}</strong></td>
+          <td><span class="badge" style="background:var(--green-subtle);color:var(--green);border:1px solid rgba(16,185,129,0.25);">${t.weightG}g</span></td>
+          <td>
+            <select id="cptProduct_${t.id}" onchange="onChipPackTypeProductChange('${t.id}')" style="margin-bottom:4px;">${optionsHtml}</select>
+            <span class="badge" id="cptLinkBadge_${t.id}"></span>
+          </td>
+          <td><input type="number" id="cptDustPct_${t.id}" min="0" max="100" step="1" style="width:64px;text-align:right;" onchange="onChipPackTypeDustPctChange('${t.id}')"> <span class="hint">%</span></td>
+          <td><button type="button" class="btn btn-xs btn-danger" onclick="deleteChipPackType('${t.id}')"><i class="business-icon icon-inline" data-lucide="trash-2" aria-hidden="true"></i></button></td>
+        </tr>`).join('');
+      list.forEach(t => {
+        const sel = $('cptProduct_' + t.id); if (sel) sel.value = t.productId || '';
+        const pctEl = $('cptDustPct_' + t.id); if (pctEl) pctEl.value = t.dustPct || 0;
+        const badge = $('cptLinkBadge_' + t.id);
+        if (badge) {
+          if (t.productId) { badge.textContent = 'Linked'; badge.className = 'badge badge-good'; }
+          else { badge.textContent = 'Not linked'; badge.className = 'badge badge-warn'; }
+        }
+      });
+    }
   }
-  body.innerHTML = list.map(t => `
-    <tr>
-      <td>${t.name}</td>
-      <td>${t.weightG}g</td>
-      <td><select id="cptProduct_${t.id}" onchange="onChipPackTypeProductChange('${t.id}')">${optionsHtml}</select></td>
-      <td><input type="number" id="cptDustPct_${t.id}" min="0" max="100" step="1" style="width:70px;" onchange="onChipPackTypeDustPctChange('${t.id}')"> %</td>
-      <td><button type="button" class="btn btn-xs btn-danger" onclick="deleteChipPackType('${t.id}')"><i class="business-icon icon-inline" data-lucide="trash-2" aria-hidden="true"></i></button></td>
-    </tr>`).join('');
-  list.forEach(t => {
-    const sel = $('cptProduct_' + t.id); if (sel) sel.value = t.productId || '';
-    const pctEl = $('cptDustPct_' + t.id); if (pctEl) pctEl.value = t.dustPct || 0;
-  });
+  updateChipPackSummaryStats();
 }
 window.renderChipPackTypesManager = renderChipPackTypesManager;
+
+// Quick at-a-glance counts for the card header — how many sizes exist, how
+// many are actually wired to Stock, and today's packing progress so far.
+function updateChipPackSummaryStats() {
+  const list = ensureChipPackTypes();
+  const sizesEl = $('cptStatSizes'); if (sizesEl) sizesEl.textContent = list.length;
+  const linkedEl = $('cptStatLinked'); if (linkedEl) linkedEl.textContent = list.filter(t => t.productId).length;
+  const batches = dailyChipsPackBatchesCache || [];
+  const packedEl = $('cptStatPackedToday');
+  if (packedEl) {
+    const totalPacked = batches.reduce((s, b) => s + Object.values(b.pack_qtys || {}).reduce((a, q) => a + (Number(q) || 0), 0), 0);
+    packedEl.textContent = totalPacked;
+  }
+  const usedEl = $('cptStatChipsUsedToday');
+  if (usedEl) usedEl.textContent = fmt2(batches.reduce((s, b) => s + (Number(b.chips_kg_used) || 0), 0)) + ' kg';
+}
+window.updateChipPackSummaryStats = updateChipPackSummaryStats;
 
 // ==================== PACK TODAY'S CHIPS (dynamic, per custom size) ====================
 // Consumes stock from the single "Umbalakada Chips" product (Stage 4 link)
@@ -4346,13 +4373,13 @@ function renderChipsPackBatchList() {
   const list = ensureChipPackTypes();
   const nameById = {}; list.forEach(t => { nameById[t.id] = t.name; });
   if (batches.length === 0) {
-    body.innerHTML = '<tr><td colspan="4" style="text-align:center;opacity:.5;padding:14px;">No packing batches logged yet today.</td></tr>';
+    body.innerHTML = '<tr><td colspan="4" style="text-align:center;opacity:.55;padding:22px 14px;"><i class="business-icon icon-inline" data-lucide="inbox" aria-hidden="true" style="width:20px;height:20px;display:block;margin:0 auto 6px;"></i>No packing batches logged yet today.</td></tr>';
   } else {
     body.innerHTML = batches.map(b => {
       const time = b.created_at ? new Date(b.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—';
       const qtys = b.pack_qtys || {};
-      const parts = Object.keys(qtys).filter(k => Number(qtys[k]) > 0).map(k => `${qtys[k]}× ${nameById[k] || 'Removed size'}`);
-      return `<tr><td>${time}</td><td>${parts.join(', ') || '—'}</td><td>${fmt2(b.chips_kg_used || 0)} kg</td><td><button type="button" class="btn btn-xs btn-danger" onclick="deleteChipsPackBatch('${b.id}')"><i class="business-icon icon-inline" data-lucide="trash-2" aria-hidden="true"></i></button></td></tr>`;
+      const parts = Object.keys(qtys).filter(k => Number(qtys[k]) > 0).map(k => `<span class="badge" style="background:var(--green-subtle);color:var(--green);border:1px solid rgba(16,185,129,0.25);margin:1px 3px 1px 0;">${qtys[k]}× ${nameById[k] || 'Removed size'}</span>`);
+      return `<tr><td>${time}</td><td style="white-space:normal;">${parts.join('') || '—'}</td><td>${fmt2(b.chips_kg_used || 0)} kg</td><td><button type="button" class="btn btn-xs btn-danger" onclick="deleteChipsPackBatch('${b.id}')"><i class="business-icon icon-inline" data-lucide="trash-2" aria-hidden="true"></i></button></td></tr>`;
     }).join('');
   }
   if (noteEl) {
@@ -4360,6 +4387,7 @@ function renderChipsPackBatchList() {
     noteEl.textContent = `Total Chips packed today: ${fmt2(totalKg)} kg across ${batches.length} batch${batches.length === 1 ? '' : 'es'}.`;
   }
   renderStockUpdateSummary();
+  updateChipPackSummaryStats();
 }
 window.renderChipsPackBatchList = renderChipsPackBatchList;
 
@@ -7963,7 +7991,7 @@ function renderGrindSourcePicker() {
         <td>${b.fishType}</td>
         <td>${remaining.toFixed(1)} kg</td>
         <td><input type="number" class="grsrc-kg" data-remaining="${remaining}" min="0" step="0.1" max="${remaining}" value="0" disabled style="width:80px;" oninput="recalcGrindRoundPreview()"></td>
-        <td class="grsrc-balance">${remaining.toFixed(1)} kg</td>
+        <td><span class="badge badge-warn grsrc-balance">${remaining.toFixed(1)} kg</span></td>
       </tr>`;
     }).join('');
   }
@@ -8016,7 +8044,9 @@ function recalcGrindRoundPreview() {
       if (!kgInput || !balCell) return;
       const remaining = Number(kgInput.dataset.remaining) || 0;
       const kg = Number(kgInput.value) || 0;
-      balCell.textContent = Math.max(0, remaining - kg).toFixed(1) + ' kg';
+      const balance = Math.max(0, remaining - kg);
+      balCell.textContent = balance.toFixed(1) + ' kg';
+      balCell.className = balance > 0.01 ? 'badge badge-warn grsrc-balance' : 'badge badge-good grsrc-balance';
     });
   }
   const sources = getTickedGrindSources();
