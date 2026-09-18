@@ -7988,14 +7988,25 @@ function renderGrindSourcePicker() {
     tbody.innerHTML = rows.map(b => {
       const remaining = batchRemainingKg(b);
       const realCostPerKg = batchRealCostPerKg(b);
-      const priceCell = realCostPerKg !== null
-        ? `<span class="badge badge-good" title="From actual fish-bill prices">${fmt(realCostPerKg)}</span>`
-        : (b.realRawCost === null ? `<span title="No linked fish bills — showing estimate only" style="opacity:.5;">est. only</span>` : `<span style="opacity:.5;">— pending</span>`);
+      const hasReal = realCostPerKg !== null;
+      const autoAttr = hasReal ? realCostPerKg.toFixed(2) : '';
+      const tagText = hasReal ? 'Auto' : (b.realRawCost === null ? 'No bills' : 'Pending');
+      const tagClass = hasReal ? 'is-auto' : 'is-empty';
+      const tagTitle = hasReal
+        ? 'From linked fish-bill prices — edit if the factory/actual price differs'
+        : (b.realRawCost === null ? 'No linked fish bills — enter the actual price manually' : 'Fish bills linked but not yet priced — enter manually');
       return `<tr>
         <td><input type="checkbox" class="grsrc-check" data-batch-id="${b.id}" data-max="${remaining}" onchange="onGrindSourceToggle(this)"></td>
         <td>${b.batchNo}</td>
         <td>${b.fishType}</td>
-        <td data-cost-per-kg="${realCostPerKg !== null ? realCostPerKg : ''}">${priceCell}</td>
+        <td>
+          <div class="grsrc-price-wrap">
+            <input type="number" class="grsrc-price" step="0.01" min="0" inputmode="decimal"
+              value="${autoAttr}" data-auto="${autoAttr}" placeholder="Rs/kg"
+              title="${tagTitle}" oninput="onGrindPriceInput(this)">
+            <span class="grsrc-price-tag ${tagClass}" title="${tagTitle}">${tagText}</span>
+          </div>
+        </td>
         <td>${remaining.toFixed(1)} kg</td>
         <td><input type="number" class="grsrc-kg" data-remaining="${remaining}" min="0" step="0.1" max="${remaining}" value="0" disabled style="width:80px;" oninput="recalcGrindRoundPreview()"></td>
         <td><span class="badge badge-warn grsrc-balance">${remaining.toFixed(1)} kg</span></td>
@@ -8020,14 +8031,39 @@ function onGrindSourceToggle(checkbox) {
 }
 window.onGrindSourceToggle = onGrindSourceToggle;
 
+// Fires on every keystroke in a row's Price/kg field. Lets the user
+// override the auto-detected (fish-bill-derived) price with the real
+// factory/production price when they differ, and flags the field as
+// "Manual" vs "Auto" so it's obvious at a glance which rows were touched.
+function onGrindPriceInput(input) {
+  const row = input.closest('tr');
+  const tag = row && row.querySelector('.grsrc-price-tag');
+  if (tag) {
+    const auto = input.dataset.auto || '';
+    const val = input.value;
+    if (val === '') {
+      tag.textContent = auto !== '' ? 'Auto' : 'No bills';
+      tag.className = 'grsrc-price-tag ' + (auto !== '' ? 'is-auto' : 'is-empty');
+    } else if (auto !== '' && Number(val) === Number(auto)) {
+      tag.textContent = 'Auto';
+      tag.className = 'grsrc-price-tag is-auto';
+    } else {
+      tag.textContent = 'Manual';
+      tag.className = 'grsrc-price-tag is-manual';
+    }
+  }
+  recalcGrindRoundPreview();
+}
+window.onGrindPriceInput = onGrindPriceInput;
+
 function getTickedGrindSources() {
   const tbody = $('grindSourceBody');
   if (!tbody) return [];
   return Array.from(tbody.querySelectorAll('.grsrc-check:checked')).map(cb => {
     const b = productionBatches.find(x => x.id === cb.dataset.batchId);
     const row = cb.closest('tr');
-    const costCell = row.querySelector('[data-cost-per-kg]');
-    const costPerKg = costCell && costCell.dataset.costPerKg !== '' ? Number(costCell.dataset.costPerKg) : null;
+    const priceInput = row.querySelector('.grsrc-price');
+    const costPerKg = priceInput && priceInput.value !== '' ? Number(priceInput.value) : null;
     return { batchId: cb.dataset.batchId, batchNo: b ? b.batchNo : '', fishType: b ? b.fishType : '', kg: Number(row.querySelector('.grsrc-kg').value) || 0, costPerKg };
   }).filter(s => s.kg > 0);
 }
