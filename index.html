@@ -616,6 +616,29 @@
       <div><span class="eyebrow">FINANCIAL OVERVIEW</span><h2><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="trending-up" aria-hidden="true"></i></span><span>Income</span></h2><p class="pro-subtitle green">See what the business is earning at a glance.</p><p>Revenue, profit and fixed-cost position at a glance.</p></div>
       <div class="profile-dot"><i class="business-icon" data-lucide="trending-up" aria-hidden="true"></i></div>
     </div>
+
+    <div class="profit-gold-hero">
+      <div class="profit-gold-hero-top">
+        <div>
+          <span class="eyebrow">DAILY REAL PROFIT</span>
+          <h2><i class="business-icon" data-lucide="sparkles" aria-hidden="true"></i> Profit Pulse</h2>
+          <p>Live, day-by-day — updates automatically as today's sales come in.</p>
+        </div>
+        <div class="profit-gold-toggle" role="tablist" aria-label="Chart range">
+          <button type="button" data-days="7" class="active" onclick="setIncomeProfitChartRange(7)">7D</button>
+          <button type="button" data-days="14" onclick="setIncomeProfitChartRange(14)">14D</button>
+          <button type="button" data-days="30" onclick="setIncomeProfitChartRange(30)">30D</button>
+        </div>
+      </div>
+      <div class="chart-wrap profit-gold-chart-wrap"><canvas id="incomeDailyProfitChart"></canvas></div>
+      <div class="profit-gold-stats">
+        <div><span>Today</span><strong id="incomeProfitToday">Rs. 0</strong></div>
+        <div><span>Best Day</span><strong id="incomeProfitBest">Rs. 0</strong></div>
+        <div><span>Daily Average</span><strong id="incomeProfitAvg">Rs. 0</strong></div>
+        <div><span>Trend</span><strong id="incomeProfitTrend">—</strong></div>
+      </div>
+    </div>
+
     <div class="income-grid">
       <div class="card income-card"><span>Monthly Revenue</span><strong id="incomeRevenue">Rs. 0</strong><small>Total planned sales</small></div>
       <div class="card income-card"><span>Gross Profit</span><strong id="incomeGrossProfit">Rs. 0</strong><small>Before fixed costs</small></div>

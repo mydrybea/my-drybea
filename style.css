@@ -3039,3 +3039,99 @@ input.grsrc-price.is-empty, input.grrm-price.is-empty{ border-left-color:var(--w
 .grsrc-price-legend .lg-auto::before{ background:var(--green); }
 .grsrc-price-legend .lg-manual::before{ background:var(--gold); }
 .grsrc-price-legend .lg-empty::before{ background:var(--warn); }
+
+/* ============ Income Tab — Profit Pulse gold hero (daily real profit chart) ============ */
+.profit-gold-hero{
+  position:relative;
+  overflow:hidden;
+  border-radius:20px;
+  padding:20px;
+  margin:14px 0;
+  background:linear-gradient(150deg,#2a2005 0%,#5c471a 35%,#a8842c 68%,#d4af37 100%);
+  box-shadow:0 18px 40px rgba(168,132,44,.28), inset 0 1px 0 rgba(255,255,255,.12);
+  border:1px solid rgba(245,231,163,.35);
+  color:#fff;
+}
+.profit-gold-hero::before{
+  content:"";
+  position:absolute; inset:0;
+  background:
+    radial-gradient(circle at 8% 0%, rgba(245,231,163,.22) 0%, transparent 45%),
+    radial-gradient(circle at 100% 100%, rgba(0,0,0,.18) 0%, transparent 55%);
+  pointer-events:none;
+}
+.profit-gold-hero::after{
+  content:"";
+  position:absolute; top:0; left:-40%; width:35%; height:100%;
+  background:linear-gradient(90deg, transparent, rgba(255,255,255,.16), transparent);
+  transform:skewX(-18deg);
+  animation:profitGoldSheen 6s ease-in-out infinite;
+  pointer-events:none;
+}
+@keyframes profitGoldSheen{
+  0%{ left:-40%; }
+  45%{ left:120%; }
+  100%{ left:120%; }
+}
+.profit-gold-hero-top{
+  position:relative;
+  display:flex; align-items:flex-start; justify-content:space-between; gap:12px;
+  flex-wrap:wrap;
+}
+.profit-gold-hero .eyebrow{
+  font-size:.66rem; font-weight:800; letter-spacing:.14em; color:rgba(255,255,255,.75)!important;
+}
+.profit-gold-hero h2{
+  margin:4px 0 4px; font-size:1.18rem; font-weight:900; letter-spacing:-.02em;
+  display:flex; align-items:center; gap:8px; color:#fff;
+}
+.profit-gold-hero h2 i{ width:20px; height:20px; color:#fff5cf; }
+.profit-gold-hero p{ margin:0; font-size:.76rem; font-weight:600; color:rgba(255,255,255,.8); max-width:34ch; }
+.profit-gold-toggle{
+  position:relative;
+  display:flex; gap:4px; padding:4px;
+  background:rgba(0,0,0,.22); border-radius:999px; border:1px solid rgba(255,255,255,.18);
+}
+.profit-gold-toggle button{
+  border:none; background:transparent; color:rgba(255,255,255,.72);
+  font-size:.72rem; font-weight:800; letter-spacing:.02em;
+  padding:6px 13px; border-radius:999px; cursor:pointer;
+  transition:background .18s ease, color .18s ease, box-shadow .18s ease;
+}
+.profit-gold-toggle button.active{
+  background:linear-gradient(135deg,#fff8df,#f5e7a3);
+  color:#5c471a;
+  box-shadow:0 4px 10px rgba(0,0,0,.22);
+}
+.profit-gold-toggle button:not(.active):hover{ color:#fff; }
+.profit-gold-chart-wrap{
+  position:relative;
+  height:220px;
+  margin-top:16px;
+  padding:12px 8px 4px;
+  background:rgba(0,0,0,.16);
+  border-radius:14px;
+  border:1px solid rgba(255,255,255,.12);
+}
+@media(max-width:480px){ .profit-gold-chart-wrap{ height:170px; } }
+.profit-gold-stats{
+  position:relative;
+  display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px;
+  margin-top:14px;
+}
+.profit-gold-stats div{
+  background:rgba(255,255,255,.09);
+  border:1px solid rgba(255,255,255,.14);
+  border-radius:12px;
+  padding:9px 6px;
+  text-align:center;
+}
+.profit-gold-stats span{
+  display:block; font-size:.6rem; font-weight:800; letter-spacing:.06em;
+  color:rgba(255,255,255,.68); text-transform:uppercase; margin-bottom:3px;
+}
+.profit-gold-stats strong{ font-size:.92rem; font-weight:900; color:#fff8df; letter-spacing:-.02em; }
+@media(max-width:480px){
+  .profit-gold-stats{ grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .profit-gold-stats strong{ font-size:.82rem; }
+}

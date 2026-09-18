@@ -13519,8 +13519,146 @@ function calcRealIncome() {
       : '<tr><td colspan="2" style="opacity:.6;">No expenses logged this month yet.</td></tr>';
     set('realOtherExpBreakdownTotal', fmt(realOtherExpenses));
   }
+
+  renderIncomeDailyProfitChart();
 }
 window.calcRealIncome = calcRealIncome;
+
+// ==================== INCOME TAB — "Profit Pulse" gold daily chart ====================
+// Day-by-day REAL profit (not the monthly total above) so the owner can see
+// which days are actually driving the month's number and spot a slump the
+// moment it starts, instead of waiting for the month-end figure to move.
+// Mirrors calcRealIncome()'s math exactly, just bucketed per day instead of
+// summed for the whole month — same revenue/cost sources, same exclusions
+// (fish-bill-mirrored expense categories, order-linked sales), so the two
+// numbers never disagree.
+let incomeDailyProfitChart = null;
+let incomeProfitChartRangeDays = 7;
+
+function setIncomeProfitChartRange(days) {
+  incomeProfitChartRangeDays = days;
+  document.querySelectorAll('.profit-gold-toggle button').forEach(b => {
+    b.classList.toggle('active', Number(b.dataset.days) === days);
+  });
+  renderIncomeDailyProfitChart();
+}
+window.setIncomeProfitChartRange = setIncomeProfitChartRange;
+
+function renderIncomeDailyProfitChart() {
+  const canvas = $('incomeDailyProfitChart');
+  if (!canvas) return; // Income tab not in the DOM for this role — skip
+
+  const rangeDays = incomeProfitChartRangeDays || 7;
+  const days = [];
+  for (let i = rangeDays - 1; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    days.push(toLocalDateStr(d));
+  }
+  const daySet = new Set(days);
+
+  // Same fish-bill-mirrored expense categories calcRealIncome() excludes,
+  // to avoid double-counting raw fish cost.
+  const REAL_INCOME_FISH_BILL_EXPENSE_CATEGORIES = ['Raw Fish', 'Ready-Made Umbalakada'];
+
+  const revenueByDay = {}, rawCostByDay = {}, otherExpByDay = {}, directCostByDay = {};
+  days.forEach(d => { revenueByDay[d] = 0; rawCostByDay[d] = 0; otherExpByDay[d] = 0; directCostByDay[d] = 0; });
+
+  (orders || []).forEach(o => {
+    if (o.status === 'cancelled') return;
+    const d = parseSummaryDate(o.createdAt);
+    const key = d ? toLocalDateStr(d) : null;
+    if (key && daySet.has(key)) revenueByDay[key] += Number(o.total) || 0;
+  });
+
+  // Direct sales not already represented by a counted order (their revenue,
+  // plus their own cost/wage/marketing as that day's extra cost).
+  (sales || []).forEach(s => {
+    if (s.linkedOrderId || !daySet.has(s.date)) return;
+    revenueByDay[s.date] += Number(s.total) || 0;
+    directCostByDay[s.date] += (Number(s.cost) || 0) + (Number(s.wage) || 0) + (Number(s.marketingCost) || 0);
+  });
+
+  (fishBills || []).forEach(b => {
+    if (daySet.has(b.date)) rawCostByDay[b.date] += Number(b.total) || 0;
+  });
+
+  (expenses || []).forEach(e => {
+    if (REAL_INCOME_FISH_BILL_EXPENSE_CATEGORIES.includes(e.category)) return;
+    const d = parseSummaryDate(e.date || e.createdAt);
+    const key = d ? toLocalDateStr(d) : null;
+    if (key && daySet.has(key)) otherExpByDay[key] += Number(e.amount) || 0;
+  });
+
+  const profitByDay = {};
+  days.forEach(d => {
+    profitByDay[d] = revenueByDay[d] - rawCostByDay[d] - otherExpByDay[d] - directCostByDay[d];
+  });
+
+  // Headline stats under the chart.
+  const todayKey = toLocalDateStr(new Date());
+  const values = days.map(d => profitByDay[d] || 0);
+  const bestVal = values.length ? Math.max(...values) : 0;
+  const avgVal = values.length ? values.reduce((a, b) => a + b, 0) / values.length : 0;
+  const half = Math.max(1, Math.floor(values.length / 2));
+  const firstAvg = values.slice(0, half).reduce((a, b) => a + b, 0) / half;
+  const secondAvg = values.slice(-half).reduce((a, b) => a + b, 0) / half;
+  const trendUp = secondAvg >= firstAvg;
+
+  const set = (id, v) => { const el = $(id); if (el) el.textContent = v; };
+  set('incomeProfitToday', fmt(profitByDay[todayKey] || 0));
+  set('incomeProfitBest', fmt(bestVal));
+  set('incomeProfitAvg', fmt(avgVal));
+  const trendEl = $('incomeProfitTrend');
+  if (trendEl) trendEl.textContent = trendUp ? '▲ Rising' : '▼ Falling';
+
+  safeRenderChart('incomeDailyProfitChart', () => {
+    const ctx = canvas.getContext('2d');
+    const h = canvas.height || 220;
+    const barGradient = ctx.createLinearGradient(0, 0, 0, h);
+    barGradient.addColorStop(0, '#fff3c4');
+    barGradient.addColorStop(1, '#a8842c');
+
+    const data = {
+      labels: days.map(d => d.slice(5)),
+      datasets: [
+        {
+          type: 'bar',
+          label: 'Real Profit',
+          data: days.map(d => Math.round(profitByDay[d] || 0)),
+          backgroundColor: barGradient,
+          borderRadius: 6,
+          borderSkipped: false,
+          maxBarThickness: 34,
+          order: 2
+        },
+        {
+          type: 'line',
+          label: 'Revenue',
+          data: days.map(d => Math.round(revenueByDay[d] || 0)),
+          borderColor: 'rgba(255,255,255,.85)',
+          backgroundColor: 'transparent',
+          borderWidth: 2,
+          pointRadius: 0,
+          pointHoverRadius: 4,
+          tension: .35,
+          order: 1
+        }
+      ]
+    };
+    const opts = {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: '#fff', boxWidth: 10, font: { size: 10, weight: '700' } } } },
+      scales: {
+        x: { ticks: { color: 'rgba(255,255,255,.85)', maxRotation: 0, font: { size: 10 } }, grid: { display: false } },
+        y: { ticks: { color: 'rgba(255,255,255,.85)', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,.14)' } }
+      }
+    };
+    if (incomeDailyProfitChart) { incomeDailyProfitChart.data = data; incomeDailyProfitChart.options = opts; incomeDailyProfitChart.update(); }
+    else incomeDailyProfitChart = new Chart(ctx, { type: 'bar', data, options: opts });
+  });
+}
+window.renderIncomeDailyProfitChart = renderIncomeDailyProfitChart;
 
 // Toggles the "Real Other Expenses" breakdown panel open/closed. Recomputes
 // first so the panel is never stale relative to the card's headline number.
