@@ -7803,12 +7803,434 @@ function batchRealCostPerKg(b) {
 }
 window.batchRealCostPerKg = batchRealCostPerKg;
 
+// ==================== BATCH → GRINDING / DIRECT-TO-PRODUCT ====================
+// Connects a completed Production Batch's actual finished Umbalakada (raw
+// dried fish, by fish type) to what actually happens to it next:
+//   - Ground (alone, or mixed with other batches/fish types) into the
+//     shared "Umbalakada Chips" product — see saveGrindRound() below. Extra
+//     kg not from any batch (bought ready-ground / unrecorded stock) can be
+//     added into the same round.
+//   - Used directly as whole pieces into a finished product, with no
+//     grinding at all — see saveDirectBatchUse().
+// A completed batch's "remaining" kg (how much of its actual finished
+// output hasn't been used yet, either way) is the source of truth for what
+// can still be picked here — see batchRemainingKg(). Every kg used is
+// recorded in production_batch_usage so remaining kg stays correct across
+// days/reloads, and each grind round is its own row in grind_rounds (saves
+// immediately, survives a reload, not tucked inside any daily snapshot).
+//
+// ---- SQL setup (run once in Supabase before this can save) ----
+// CREATE TABLE IF NOT EXISTS grind_rounds (
+//   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+//   owner_id uuid NOT NULL,
+//   round_date date NOT NULL,
+//   type_label text NOT NULL,
+//   total_kg numeric NOT NULL DEFAULT 0,
+//   extra_kg numeric NOT NULL DEFAULT 0,
+//   price_per_kg numeric NOT NULL DEFAULT 0,
+//   dust_g numeric NOT NULL DEFAULT 0,
+//   usable_kg numeric NOT NULL DEFAULT 0,
+//   raw_cost numeric NOT NULL DEFAULT 0,
+//   product_id uuid,
+//   dust_product_id uuid,
+//   notes text,
+//   created_by uuid,
+//   created_at timestamptz NOT NULL DEFAULT now()
+// );
+// ALTER TABLE grind_rounds ENABLE ROW LEVEL SECURITY;
+// CREATE POLICY "owner_all_grind_rounds" ON grind_rounds
+//   FOR ALL USING (owner_id = auth.uid()) WITH CHECK (owner_id = auth.uid());
+//
+// CREATE TABLE IF NOT EXISTS production_batch_usage (
+//   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+//   owner_id uuid NOT NULL,
+//   batch_id uuid NOT NULL REFERENCES production_batches(id) ON DELETE CASCADE,
+//   usage_date date NOT NULL,
+//   kg_used numeric NOT NULL DEFAULT 0,
+//   usage_type text NOT NULL CHECK (usage_type IN ('grind','direct')),
+//   grind_round_id uuid REFERENCES grind_rounds(id) ON DELETE CASCADE,
+//   product_id uuid,
+//   notes text,
+//   created_by uuid,
+//   created_at timestamptz NOT NULL DEFAULT now()
+// );
+// ALTER TABLE production_batch_usage ENABLE ROW LEVEL SECURITY;
+// CREATE POLICY "owner_all_production_batch_usage" ON production_batch_usage
+//   FOR ALL USING (owner_id = auth.uid()) WITH CHECK (owner_id = auth.uid());
+
+let grindRounds = [];             // recent grind rounds, newest first
+let productionBatchUsage = [];    // one row per kg_used from a batch (grind or direct)
+
+// batch.fishType label -> core grind-type id, for combo pricing/labels.
+// 'Other' (mixed/unrecorded fish) has no single core id, so it's left out
+// of the saved per-combo price lookup but can still be picked & ground.
+const BATCH_FISHTYPE_TO_TYPEID = { 'Linna': 'linna', 'Balaya': 'balaya', 'Premium Mix': 'kawalam' };
+
+async function loadGrindRoundsFromCloud() {
+  if (!currentUser) return;
+  try {
+    const { data, error } = await supabase.from('grind_rounds').select('*').order('round_date', { ascending: false }).order('created_at', { ascending: false }).limit(200);
+    if (error) throw error;
+    grindRounds = data || [];
+  } catch (e) {
+    console.error('Load grind rounds error:', e);
+    const missingTable = /relation .* does not exist/i.test(e?.message || '');
+    if (!missingTable) updateStatus('⚠️ Could not load grind rounds from cloud');
+    grindRounds = [];
+  }
+}
+window.loadGrindRoundsFromCloud = loadGrindRoundsFromCloud;
+
+async function loadProductionBatchUsageFromCloud() {
+  if (!currentUser) return;
+  try {
+    const { data, error } = await supabase.from('production_batch_usage').select('*');
+    if (error) throw error;
+    productionBatchUsage = data || [];
+  } catch (e) {
+    console.error('Load production batch usage error:', e);
+    const missingTable = /relation .* does not exist/i.test(e?.message || '');
+    if (!missingTable) updateStatus('⚠️ Could not load batch usage from cloud');
+    productionBatchUsage = [];
+  }
+}
+window.loadProductionBatchUsageFromCloud = loadProductionBatchUsageFromCloud;
+
+function batchUsedKg(batchId) {
+  return productionBatchUsage.filter(u => u.batch_id === batchId).reduce((s, u) => s + (Number(u.kg_used) || 0), 0);
+}
+window.batchUsedKg = batchUsedKg;
+
+// How much of a COMPLETED batch's actual finished kg is still unused —
+// null for a batch that isn't completed yet (nothing to use/grind).
+function batchRemainingKg(b) {
+  if (b.status !== 'completed' || b.actualFinishedKg == null) return null;
+  return Math.max(0, b.actualFinishedKg - batchUsedKg(b.id));
+}
+window.batchRemainingKg = batchRemainingKg;
+
+function eligibleBatchesForUse() {
+  return productionBatches.filter(b => b.status === 'completed' && (batchRemainingKg(b) || 0) > 0.01);
+}
+
+// ---- Product links (Umbalakada Chips + Dust) — same app_data-blob pattern
+// state.packProductMap already uses elsewhere in this app. ----
+function populateGrindLinkSelects() {
+  const chipsSel = $('grindLinkChips');
+  const dustSel = $('grindLinkDust');
+  if (!chipsSel && !dustSel) return;
+  const optionsHtml = '<option value="">— Not linked —</option>' + (products || []).map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+  if (chipsSel) { chipsSel.innerHTML = optionsHtml; chipsSel.value = (state.grindProductMap && state.grindProductMap.chips) || ''; }
+  if (dustSel) { dustSel.innerHTML = optionsHtml; dustSel.value = (state.grindProductMap && state.grindProductMap.dust) || ''; }
+}
+window.populateGrindLinkSelects = populateGrindLinkSelects;
+
+function onGrindLinkChange() {
+  if (!state.grindProductMap) state.grindProductMap = {};
+  const chipsSel = $('grindLinkChips'); const dustSel = $('grindLinkDust');
+  if (chipsSel) state.grindProductMap.chips = chipsSel.value;
+  if (dustSel) state.grindProductMap.dust = dustSel.value;
+  onDataChange();
+}
+window.onGrindLinkChange = onGrindLinkChange;
+
+// ---- Grind round builder: source = ticked completed batches (any mix of
+// fish types) + optional Extra Kg not from any batch. ----
+function renderGrindSourcePicker() {
+  const tbody = $('grindSourceBody');
+  if (!tbody) return;
+  const rows = eligibleBatchesForUse();
+  if (rows.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;opacity:.5;padding:14px;">No completed batches with unused output right now.</td></tr>';
+  } else {
+    tbody.innerHTML = rows.map(b => {
+      const remaining = batchRemainingKg(b);
+      return `<tr>
+        <td><input type="checkbox" class="grsrc-check" data-batch-id="${b.id}" data-max="${remaining}" onchange="onGrindSourceToggle(this)"></td>
+        <td>${b.batchNo}</td>
+        <td>${b.fishType}</td>
+        <td>${remaining.toFixed(1)} kg</td>
+        <td><input type="number" class="grsrc-kg" min="0" step="0.1" max="${remaining}" value="0" disabled style="width:80px;" oninput="recalcGrindRoundPreview()"></td>
+      </tr>`;
+    }).join('');
+  }
+  recalcGrindRoundPreview();
+}
+window.renderGrindSourcePicker = renderGrindSourcePicker;
+
+function onGrindSourceToggle(checkbox) {
+  const row = checkbox.closest('tr');
+  const kgInput = row.querySelector('.grsrc-kg');
+  if (checkbox.checked) {
+    kgInput.disabled = false;
+    if (Number(kgInput.value) <= 0) kgInput.value = checkbox.dataset.max;
+  } else {
+    kgInput.disabled = true;
+    kgInput.value = 0;
+  }
+  recalcGrindRoundPreview();
+}
+window.onGrindSourceToggle = onGrindSourceToggle;
+
+function getTickedGrindSources() {
+  const tbody = $('grindSourceBody');
+  if (!tbody) return [];
+  return Array.from(tbody.querySelectorAll('.grsrc-check:checked')).map(cb => {
+    const b = productionBatches.find(x => x.id === cb.dataset.batchId);
+    return { batchId: cb.dataset.batchId, batchNo: b ? b.batchNo : '', fishType: b ? b.fishType : '', kg: Number(cb.closest('tr').querySelector('.grsrc-kg').value) || 0 };
+  }).filter(s => s.kg > 0);
+}
+
+// Combo key built from whichever fish types are ticked (+ "extra" if
+// manual/external kg is included too) — feeds the saved per-combo price
+// suggestion in state.grindComboPrices, same idea the old Grinding section used.
+function currentGrindComboKey() {
+  const sources = getTickedGrindSources();
+  const extraKg = Number($('grindExtraKg') && $('grindExtraKg').value) || 0;
+  const ids = [...new Set(sources.map(s => BATCH_FISHTYPE_TO_TYPEID[s.fishType]).filter(Boolean))].sort();
+  if (extraKg > 0) ids.push('extra');
+  return ids.join('+');
+}
+
+function recalcGrindRoundPreview() {
+  const sources = getTickedGrindSources();
+  const extraKg = Number($('grindExtraKg') && $('grindExtraKg').value) || 0;
+  const totalKg = sources.reduce((s, x) => s + x.kg, 0) + extraKg;
+  const typeNames = [...new Set(sources.map(s => s.fishType))];
+  if (extraKg > 0) typeNames.push('Extra (unrecorded)');
+  const label = typeNames.length ? typeNames.join(' + ') : '—';
+  const totalEl = $('grindRoundTotalKg'); if (totalEl) totalEl.textContent = totalKg.toFixed(1) + ' kg';
+  const labelEl = $('grindRoundTypeLabel'); if (labelEl) labelEl.textContent = label;
+  const priceEl = $('grindRoundPrice');
+  if (priceEl && !priceEl.dataset.userEdited) {
+    const saved = ensureGrindComboPrices()[currentGrindComboKey()];
+    if (saved != null) priceEl.value = saved;
+  }
+}
+window.recalcGrindRoundPreview = recalcGrindRoundPreview;
+
+function onGrindExtraKgInput() { recalcGrindRoundPreview(); }
+window.onGrindExtraKgInput = onGrindExtraKgInput;
+
+function onGrindRoundPriceInput() {
+  const el = $('grindRoundPrice');
+  if (el) el.dataset.userEdited = '1';
+}
+window.onGrindRoundPriceInput = onGrindRoundPriceInput;
+
+async function saveGrindRound() {
+  if (userRole !== 'owner') { alert('Only the owner can log a grind round.'); return; }
+  if (!currentUser) { alert('Please login first.'); return; }
+  const sources = getTickedGrindSources();
+  const extraKg = Number($('grindExtraKg') && $('grindExtraKg').value) || 0;
+  const totalKg = sources.reduce((s, x) => s + x.kg, 0) + extraKg;
+  const priceKg = Number($('grindRoundPrice') && $('grindRoundPrice').value) || 0;
+  const dustG = Number($('grindRoundDustG') && $('grindRoundDustG').value) || 0;
+  const notes = ($('grindRoundNotes') && $('grindRoundNotes').value.trim()) || null;
+
+  if (totalKg <= 0) { alert('Tick at least one completed batch or enter Extra Kg.'); return; }
+  if (dustG < 0 || dustG > totalKg * 1000) { alert("Enter a valid dust weight — can't be more than the Umbalakada that went in."); return; }
+  if (priceKg <= 0) { alert('Enter Price/kg for this grind round.'); return; }
+  for (const s of sources) {
+    const b = productionBatches.find(x => x.id === s.batchId);
+    const remaining = b ? (batchRemainingKg(b) || 0) : 0;
+    if (s.kg > remaining + 0.001) { alert(`${s.batchNo}: only ${remaining.toFixed(1)}kg remaining — can't use ${s.kg}kg.`); return; }
+  }
+  if (!(await ensureFreshSession())) return;
+
+  const usableKg = Math.max(0, totalKg - dustG / 1000);
+  const typeNames = [...new Set(sources.map(s => s.fishType))];
+  if (extraKg > 0) typeNames.push('Extra (unrecorded)');
+  const typeLabel = typeNames.join(' + ') || 'Umbalakada';
+  const map = state.grindProductMap || {};
+  const productId = map.chips || '';
+  const dustProductId = map.dust || '';
+  const date = todayIso();
+
+  let savedRound = null;
+  try {
+    const { data, error } = await supabase.from('grind_rounds').insert({
+      owner_id: businessId, round_date: date, type_label: typeLabel,
+      total_kg: totalKg, extra_kg: extraKg, price_per_kg: priceKg, dust_g: dustG,
+      usable_kg: usableKg, raw_cost: totalKg * priceKg,
+      product_id: productId || null, dust_product_id: dustProductId || null,
+      notes, created_by: currentUser.id
+    }).select().single();
+    if (error) throw error;
+    savedRound = data;
+  } catch (e) {
+    console.error('Save grind round error:', e);
+    const missingTable = /relation .* does not exist/i.test(e?.message || '');
+    alert('❌ Could not save grind round: ' + e.message + (missingTable ? '\n\nRun the grind_rounds / production_batch_usage setup SQL in Supabase first (see the comment above loadGrindRoundsFromCloud() in app.js).' : ''));
+    return;
+  }
+
+  // Record kg consumed from each ticked batch — this is what keeps
+  // "Remaining" correct from now on, across reloads and other days.
+  if (sources.length) {
+    try {
+      const rows = sources.map(s => ({
+        owner_id: businessId, batch_id: s.batchId, usage_date: date, kg_used: s.kg,
+        usage_type: 'grind', grind_round_id: savedRound.id, created_by: currentUser.id
+      }));
+      const { data, error } = await supabase.from('production_batch_usage').insert(rows).select();
+      if (error) throw error;
+      productionBatchUsage.push(...(data || []));
+    } catch (e) {
+      alert('⚠️ Grind round saved but batch usage failed to record — Remaining kg may be wrong until this is fixed: ' + e.message);
+    }
+  }
+
+  // Remember this combo's price for next time (same convenience the old
+  // per-combo Grinding section had).
+  const comboKey = currentGrindComboKey();
+  if (comboKey) { ensureGrindComboPrices()[comboKey] = priceKg; onDataChange(); }
+
+  grindRounds.unshift(savedRound);
+
+  // Move stock — usable kg into Chips, dust into Dust — same RPC every
+  // other stock action in this app uses.
+  clearStockMovementError();
+  const unlinkedParts = [];
+  if (usableKg > 0) {
+    if (productId) await applyStockMovement(productId, usableKg, 'production', `Grind round: ${typeLabel} — ${fmt2(usableKg)}kg usable → Umbalakada Chips`);
+    else unlinkedParts.push('Umbalakada Chips');
+  }
+  if (dustG > 0) {
+    if (dustProductId) await applyStockMovement(dustProductId, dustG / 1000, 'production', `Grind round dust: ${typeLabel} — ${fmt2(dustG)}g`);
+    else unlinkedParts.push('Dust');
+  }
+
+  // Reset the builder.
+  if ($('grindExtraKg')) $('grindExtraKg').value = 0;
+  if ($('grindRoundDustG')) $('grindRoundDustG').value = 0;
+  if ($('grindRoundNotes')) $('grindRoundNotes').value = '';
+  if ($('grindRoundPrice')) delete $('grindRoundPrice').dataset.userEdited;
+
+  renderProductionBatches();
+  renderGrindSourcePicker();
+  renderGrindRoundsList();
+  if (unlinkedParts.length) {
+    showStockLinkWarning(`Round saved, but ${unlinkedParts.join(' & ')} isn't linked to a product above, so Stock wasn't touched for it.`);
+    updateStatus(`✅ Grind round saved (${unlinkedParts.join(', ')} not linked to stock)`);
+  } else {
+    updateStatus(`✅ Grind round saved: ${fmt2(totalKg)}kg ${typeLabel} → ${fmt2(usableKg)}kg Chips, ${fmt2(dustG)}g dust`);
+  }
+}
+window.saveGrindRound = saveGrindRound;
+
+async function deleteGrindRound(id) {
+  if (userRole !== 'owner') { alert('Only the owner can delete a grind round.'); return; }
+  const round = grindRounds.find(r => r.id === id);
+  if (!round) return;
+  if (!confirm(`Delete grind round "${round.type_label}" (${fmt2(round.total_kg)}kg)? This reverses its Stock movement and frees up the batch kg it used.`)) return;
+  if (!(await ensureFreshSession())) return;
+  clearStockMovementError();
+  // Reverse stock first, using exactly what this round originally stocked.
+  if (round.usable_kg > 0 && round.product_id) await applyStockMovement(round.product_id, -round.usable_kg, 'adjustment', `Grind round deleted: ${round.type_label}`);
+  if (round.dust_g > 0 && round.dust_product_id) await applyStockMovement(round.dust_product_id, -(round.dust_g / 1000), 'adjustment', `Grind round dust deleted: ${round.type_label}`);
+  try {
+    const { error } = await supabase.from('grind_rounds').delete().eq('id', id);
+    if (error) throw error;
+  } catch (e) {
+    alert('❌ Could not delete grind round: ' + e.message);
+    return;
+  }
+  // production_batch_usage rows cascade-delete with the round in the DB
+  // (FK ON DELETE CASCADE) — drop them locally too so Remaining updates now.
+  productionBatchUsage = productionBatchUsage.filter(u => u.grind_round_id !== id);
+  grindRounds = grindRounds.filter(r => r.id !== id);
+  renderProductionBatches();
+  renderGrindSourcePicker();
+  renderGrindRoundsList();
+  updateStatus('🗑️ Grind round deleted');
+}
+window.deleteGrindRound = deleteGrindRound;
+
+function renderGrindRoundsList() {
+  const tbody = $('grindRoundsBody');
+  if (!tbody) return;
+  if (grindRounds.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;opacity:.5;padding:14px;">No grind rounds logged yet.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = grindRounds.map(r => `<tr>
+    <td>${r.round_date}</td>
+    <td>${r.type_label}</td>
+    <td>${fmt2(r.total_kg)} kg</td>
+    <td>${fmt(r.price_per_kg)}</td>
+    <td>${fmt2(r.dust_g)} g</td>
+    <td>${fmt2(r.usable_kg)} kg</td>
+    <td>${userRole === 'owner' ? actionMenuHTML([{ label: 'Delete', icon: '🗑️', danger: true, onclick: `deleteGrindRound('${r.id}')` }]) : ''}</td>
+  </tr>`).join('');
+}
+window.renderGrindRoundsList = renderGrindRoundsList;
+
+// ---- Direct-to-Product (no grinding): whole pieces from a completed
+// batch straight into a finished product's stock. ----
+function openDirectUseModal(batchId) {
+  const b = productionBatches.find(x => x.id === batchId);
+  if (!b) return;
+  const remaining = batchRemainingKg(b) || 0;
+  if (remaining <= 0.01) { alert('No unused output left on this batch.'); return; }
+  $('directUseModal').dataset.batchId = batchId;
+  $('duBatchNoLabel').textContent = b.batchNo;
+  $('duRemaining').textContent = remaining.toFixed(1) + ' kg';
+  $('duKg').max = remaining;
+  $('duKg').value = remaining.toFixed(1);
+  const sel = $('duProduct');
+  sel.innerHTML = '<option value="">— Choose a product —</option>' + (products || []).map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+  $('duNotes').value = '';
+  $('directUseModal').classList.add('active');
+}
+window.openDirectUseModal = openDirectUseModal;
+
+async function saveDirectBatchUse() {
+  if (userRole !== 'owner') { alert('Only the owner can do this.'); return; }
+  const batchId = $('directUseModal').dataset.batchId;
+  const b = productionBatches.find(x => x.id === batchId);
+  if (!b) return;
+  const kg = Number($('duKg').value) || 0;
+  const productId = $('duProduct').value;
+  const notes = $('duNotes').value.trim() || null;
+  const remaining = batchRemainingKg(b) || 0;
+
+  if (!productId) { alert('Choose which product this goes into.'); return; }
+  if (kg <= 0 || kg > remaining + 0.001) { alert(`Enter a kg between 0 and ${remaining.toFixed(1)} (remaining on this batch).`); return; }
+  if (!(await ensureFreshSession())) return;
+
+  let usageRow = null;
+  try {
+    const { data, error } = await supabase.from('production_batch_usage').insert({
+      owner_id: businessId, batch_id: batchId, usage_date: todayIso(), kg_used: kg,
+      usage_type: 'direct', product_id: productId, notes, created_by: currentUser.id
+    }).select().single();
+    if (error) throw error;
+    usageRow = data;
+  } catch (e) {
+    console.error('Save direct batch use error:', e);
+    const missingTable = /relation .* does not exist/i.test(e?.message || '');
+    alert('❌ Could not save: ' + e.message + (missingTable ? '\n\nRun the production_batch_usage setup SQL in Supabase first.' : ''));
+    return;
+  }
+  productionBatchUsage.push(usageRow);
+
+  const p = (products || []).find(x => String(x.id) === String(productId));
+  await applyStockMovement(productId, kg, 'production', `${b.batchNo} used directly (no grinding) — ${fmt2(kg)}kg${notes ? ' — ' + notes : ''}`);
+
+  renderProductionBatches();
+  renderGrindSourcePicker();
+  closeModal('directUseModal');
+  updateStatus(`✅ ${fmt2(kg)}kg from ${b.batchNo} sent straight to ${p ? p.name : 'product'} (no grinding)`);
+}
+window.saveDirectBatchUse = saveDirectBatchUse;
+
 function renderProductionBatches() {
   const tbody = $('batchBody');
   if (!tbody) return;
 
   if (productionBatches.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;opacity:.5;padding:20px;">No batches yet. Start one above.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="12" style="text-align:center;opacity:.5;padding:20px;">No batches yet. Start one above.</td></tr>';
   } else {
     tbody.innerHTML = productionBatches.map(b => {
       const hasActual = b.actualFinishedKg !== null;
@@ -7819,8 +8241,14 @@ function renderProductionBatches() {
       const realCostCell = realCostPerKg !== null
         ? `<span class="badge badge-good" title="From actual fish-bill prices">✅ ${fmt(realCostPerKg)}</span>`
         : (b.realRawCost === null ? `<span title="No linked fish bills — showing estimate only" style="opacity:.5;">est. only</span>` : `<span style="opacity:.5;">— pending</span>`);
+      const remainingKg = hasActual ? batchRemainingKg(b) : null;
+      const remainingCell = remainingKg === null ? '—'
+        : `<span class="badge ${remainingKg > 0.01 ? 'badge-warn' : 'badge-good'}">${remainingKg.toFixed(1)} kg</span>`;
+      const completedActions = [];
+      if (remainingKg > 0.01) completedActions.push({ label: 'Use Directly (No Grind)', icon: '📦', onclick: `openDirectUseModal('${b.id}')` });
+      if (userRole === 'owner') completedActions.push({ label: 'Delete', icon: '🗑️', danger: true, onclick: `deleteProductionBatch('${b.id}')` });
       const actions = b.status === 'completed'
-        ? (userRole === 'owner' ? actionMenuHTML([{ label: 'Delete', icon: '🗑️', danger: true, onclick: `deleteProductionBatch('${b.id}')` }]) : '')
+        ? actionMenuHTML(completedActions)
         : (userRole === 'owner' ? actionMenuHTML([
             { label: 'Complete', icon: '✅', onclick: `openCompleteBatchModal('${b.id}')` },
             { label: 'Delete', icon: '🗑️', danger: true, onclick: `deleteProductionBatch('${b.id}')` }
@@ -7835,6 +8263,7 @@ function renderProductionBatches() {
         <td class="num">${varianceCell}</td>
         <td>${fmt(b.costPerKgSnapshot)}</td>
         <td>${realCostCell}</td>
+        <td>${remainingCell}</td>
         <td>${statusBadge}</td>
         <td style="white-space:nowrap;">${actions}</td>
       </tr>`;
@@ -15216,7 +15645,12 @@ function activateAppTab(tabId){
     });
     loadDailyProductionLog().then(() => { renderDailyProductionLog(); updateIngredientVarianceAlert(lastProdIngredientsCostPerKg); loadTodayGrindBatchesFromLog(); });
     loadDailyPurchaseLog().then(() => syncUmbalakadaGroundFromPurchaseLog());
-    loadProductionBatchesFromCloud().then(renderProductionBatches);
+    Promise.all([loadProductionBatchesFromCloud(), loadGrindRoundsFromCloud(), loadProductionBatchUsageFromCloud()]).then(() => {
+      renderProductionBatches();
+      populateGrindLinkSelects();
+      renderGrindSourcePicker();
+      renderGrindRoundsList();
+    });
     // "Link Packs to Store Products" (moved here from the old Costing tab
     // "Daily Costing & Trends" sub-tab) — needs the product list for its
     // dropdowns; products are already loaded app-wide at login, so no

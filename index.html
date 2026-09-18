@@ -2673,24 +2673,77 @@
 
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Batch No</th><th>Date</th><th>Fish Type</th><th>Raw In</th><th>Planned Out</th><th>Actual Out</th><th class="num">Variance</th><th>Est. Cost/kg</th><th>Real Cost/kg</th><th>Status</th><th></th></tr></thead>
-          <tbody id="batchBody"><tr><td colspan="11" style="text-align:center;opacity:.5;padding:20px;">Loading…</td></tr></tbody>
+          <thead><tr><th>Batch No</th><th>Date</th><th>Fish Type</th><th>Raw In</th><th>Planned Out</th><th>Actual Out</th><th class="num">Variance</th><th>Est. Cost/kg</th><th>Real Cost/kg</th><th>Remaining</th><th>Status</th><th></th></tr></thead>
+          <tbody id="batchBody"><tr><td colspan="12" style="text-align:center;opacity:.5;padding:20px;">Loading…</td></tr></tbody>
         </table>
       </div>
     </div>
 
     <!-- ============ PRODUCTION CONSOLE ============ -->
-    <!-- Removed entirely per the owner's request while it's being rebuilt
-         from a clean slate, step by step. Nothing about the underlying
-         data was touched: all app.js functions (grinding/combo pricing,
-         dust, chips-pack batches, product batches, saveDailyProductionLog,
-         etc.) and every Supabase table (production_cost_log,
-         daily_chips_pack_batches, daily_product_batches) are completely
-         untouched and still hold every real record — they just have no
-         card to render into right now, and no-op safely because of that
-         (every render function here guards on its own element with
-         `if (!el) return;`). The next step will be added back as its own
-         new card once designed with the owner. -->
+    <!-- Older combo-based Grinding UI (comboCardsWrap / grindBatchesBody /
+         gpmGrid, driven by production_cost_log.grind_batches, dust sale
+         price, kg produced etc.) is still removed while the rest of the
+         Daily Production Log is rebuilt — see app.js for that untouched
+         code. This card is the first piece added back, designed fresh: it
+         grinds directly FROM Completed Production Batches (single type,
+         or several batches/types mixed together in one round) and can also
+         send a batch straight to a product with no grinding at all. See
+         "BATCH → GRINDING / DIRECT-TO-PRODUCT" in app.js. -->
+    <div class="card" style="margin-top:16px;">
+      <h2><span class="pro-title-icon orange" aria-hidden="true"><i class="business-icon" data-lucide="cog" aria-hidden="true"></i></span><span>Grinding — From Completed Batches</span></h2>
+      <p class="pro-subtitle orange">Send Completed Batches' finished Umbalakada to grinding — one type alone, or several batches/types mixed into one round — plus any extra Umbalakada bought ready-ground. Usable output restocks Umbalakada Chips, dust restocks Dust.</p>
+
+      <div class="grid-2" style="margin-bottom:14px;" data-owner-only>
+        <div class="field"><label>Umbalakada Chips (ground output) →</label><select id="grindLinkChips" onchange="onGrindLinkChange()"></select></div>
+        <div class="field"><label>Dust →</label><select id="grindLinkDust" onchange="onGrindLinkChange()"></select></div>
+      </div>
+
+      <div class="field" data-owner-only>
+        <label>Pick Completed Batches to Grind <span class="sub" style="font-weight:400;">(tick any — mix different fish types in one round if that's how it's actually ground)</span></label>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th></th><th>Batch No</th><th>Fish Type</th><th>Remaining</th><th>Kg to Grind</th></tr></thead>
+            <tbody id="grindSourceBody"><tr><td colspan="5" style="text-align:center;opacity:.5;padding:14px;">Loading…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="grid-3" data-owner-only>
+        <div class="field">
+          <label>Extra Kg <span class="sub" style="font-weight:400;">(not from a batch)</span></label>
+          <input type="number" id="grindExtraKg" min="0" step="0.1" value="0" oninput="onGrindExtraKgInput()">
+        </div>
+        <div class="field">
+          <label>Price /kg (Rs.)</label>
+          <input type="number" id="grindRoundPrice" min="0" step="0.01" placeholder="e.g. 900" oninput="onGrindRoundPriceInput()">
+        </div>
+        <div class="field">
+          <label>Dust <span class="sub" style="font-weight:400;">(grams, weighed after grinding)</span></label>
+          <input type="number" id="grindRoundDustG" min="0" step="1" value="0" oninput="recalcGrindRoundPreview()">
+        </div>
+      </div>
+      <div class="field" data-owner-only>
+        <label>Note (optional)</label>
+        <input type="text" id="grindRoundNotes" placeholder="Optional notes...">
+      </div>
+
+      <div class="stat-grid" style="margin:10px 0;">
+        <div class="stat"><div class="k">Type</div><div class="v" id="grindRoundTypeLabel" style="font-size:.95rem;">—</div></div>
+        <div class="stat accent"><div class="k">Total Kg Going In</div><div class="v" id="grindRoundTotalKg">0 kg</div></div>
+      </div>
+
+      <div class="btn-row" style="margin:6px 0 16px;" data-owner-only>
+        <button class="btn btn-primary btn-sm" onclick="saveGrindRound()"><i class="business-icon icon-inline" data-lucide="plus" aria-hidden="true"></i> Add Grind Round</button>
+      </div>
+
+      <h3 style="margin:18px 0 8px;">Grind Rounds Logged</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Date</th><th>Type</th><th>Kg In</th><th>Price/kg</th><th>Dust</th><th>Usable Out</th><th></th></tr></thead>
+          <tbody id="grindRoundsBody"><tr><td colspan="7" style="text-align:center;opacity:.5;padding:14px;">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
 
     <!-- ============ DAILY FISH PURCHASE BILLS ============ -->
     <div class="card" style="margin-top:16px;">
@@ -2875,6 +2928,36 @@
       <div class="btn-row" style="margin-top:14px;">
         <button class="btn btn-primary" onclick="saveBatchCompletion()"><i class="business-icon icon-inline" data-lucide="check" aria-hidden="true"></i> Mark Complete</button>
         <button class="btn" onclick="closeModal('completeBatchModal')">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Use Batch Directly (No Grinding) Modal -->
+  <div class="modal-backdrop" id="directUseModal">
+    <div class="modal" style="max-width:480px;">
+      <h3><span class="pro-title-icon" aria-hidden="true"><i class="business-icon" data-lucide="package" aria-hidden="true"></i></span><span>Use Directly (No Grinding)</span></h3>
+      <p class="pro-subtitle">Batch <strong id="duBatchNoLabel">—</strong> — send whole-piece Umbalakada straight into a product's stock, skipping grinding entirely.</p>
+
+      <div class="stat-grid" style="margin-bottom:10px;">
+        <div class="stat"><div class="k">Remaining on Batch</div><div class="v" id="duRemaining">0 kg</div></div>
+      </div>
+
+      <div class="field">
+        <label>Kg to Send</label>
+        <input type="number" id="duKg" min="0" step="0.1" value="0">
+      </div>
+      <div class="field">
+        <label>Send To Product</label>
+        <select id="duProduct"></select>
+      </div>
+      <div class="field">
+        <label>Note (optional)</label>
+        <input type="text" id="duNotes" placeholder="Optional notes...">
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="saveDirectBatchUse()"><i class="business-icon icon-inline" data-lucide="save" aria-hidden="true"></i> Send to Product</button>
+        <button class="btn" onclick="closeModal('directUseModal')">Cancel</button>
       </div>
     </div>
   </div>
