@@ -13416,6 +13416,11 @@ function calcRealIncome() {
   const realDirectSalesRevenue = monthDirectSales.reduce((s, sa) => s + (Number(sa.total) || 0), 0);
   const realDirectSalesCost = monthDirectSales.reduce((s, sa) =>
     s + (Number(sa.cost) || 0) + (Number(sa.wage) || 0) + (Number(sa.marketingCost) || 0), 0);
+  // Split out for the "Real Other Expenses" breakdown panel — realDirectSalesCost
+  // above stays as the combined figure the actual profit math uses.
+  const realDirectSalesCostOnly = monthDirectSales.reduce((s, sa) => s + (Number(sa.cost) || 0), 0);
+  const realDirectSalesWageOnly = monthDirectSales.reduce((s, sa) => s + (Number(sa.wage) || 0), 0);
+  const realDirectSalesMarketingOnly = monthDirectSales.reduce((s, sa) => s + (Number(sa.marketingCost) || 0), 0);
 
   const realRevenue = realOrdersRevenue + realDirectSalesRevenue;
 
@@ -13489,8 +13494,44 @@ function calcRealIncome() {
 
   const netEl = $('realIncomeNet');
   if (netEl) netEl.style.color = realNetProfit >= 0 ? '#10b981' : '#f87171';
+
+  // Breakdown panel for "Real Other Expenses" — shown when the card is
+  // tapped (toggleRealOtherExpBreakdown). Groups monthOtherExpenses by
+  // category, then adds the three direct-sale figures as their own rows so
+  // the Rs. total on the card can be traced back to where it came from.
+  const breakdownBodyEl = $('realOtherExpBreakdownBody');
+  if (breakdownBodyEl) {
+    const categoryTotals = {};
+    monthOtherExpenses.forEach(e => {
+      const cat = e.category || 'Uncategorized';
+      categoryTotals[cat] = (categoryTotals[cat] || 0) + (Number(e.amount) || 0);
+    });
+    const rows = Object.keys(categoryTotals)
+      .sort((a, b) => categoryTotals[b] - categoryTotals[a])
+      .map(cat => `<tr><td>${cat}</td><td style="text-align:right;">${fmt(categoryTotals[cat])}</td></tr>`);
+
+    if (realDirectSalesCostOnly > 0) rows.push(`<tr><td>Direct Sales — Cost</td><td style="text-align:right;">${fmt(realDirectSalesCostOnly)}</td></tr>`);
+    if (realDirectSalesWageOnly > 0) rows.push(`<tr><td>Direct Sales — Wage</td><td style="text-align:right;">${fmt(realDirectSalesWageOnly)}</td></tr>`);
+    if (realDirectSalesMarketingOnly > 0) rows.push(`<tr><td>Direct Sales — Marketing</td><td style="text-align:right;">${fmt(realDirectSalesMarketingOnly)}</td></tr>`);
+
+    breakdownBodyEl.innerHTML = rows.length
+      ? rows.join('')
+      : '<tr><td colspan="2" style="opacity:.6;">No expenses logged this month yet.</td></tr>';
+    set('realOtherExpBreakdownTotal', fmt(realOtherExpenses));
+  }
 }
 window.calcRealIncome = calcRealIncome;
+
+// Toggles the "Real Other Expenses" breakdown panel open/closed. Recomputes
+// first so the panel is never stale relative to the card's headline number.
+function toggleRealOtherExpBreakdown() {
+  const panel = $('realOtherExpBreakdown');
+  if (!panel) return;
+  const opening = panel.style.display === 'none';
+  if (opening && typeof calcRealIncome === 'function') calcRealIncome();
+  panel.style.display = opening ? 'block' : 'none';
+}
+window.toggleRealOtherExpBreakdown = toggleRealOtherExpBreakdown;
 
 // ==================== PAYABLES & RECEIVABLES (Income tab — live balances) ====================
 // These are NOT month-scoped like Real Profit above — a fish bill from last

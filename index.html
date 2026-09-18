@@ -634,7 +634,7 @@
       <div class="income-grid">
         <div class="card income-card"><span>Real Revenue</span><strong id="realIncomeRevenue">Rs. 0</strong><small id="realIncomeRevenueNote">From actual orders</small></div>
         <div class="card income-card"><span>Real Raw Material Cost</span><strong id="realIncomeRawCost">Rs. 0</strong><small>Fish bills + ready-made purchases</small></div>
-        <div class="card income-card"><span>Real Other Expenses</span><strong id="realIncomeOtherExp">Rs. 0</strong><small>Everything else logged</small></div>
+        <div class="card income-card" id="realOtherExpCard" onclick="toggleRealOtherExpBreakdown()" style="cursor:pointer;" title="Tap for a breakdown of what's inside this figure"><span>Real Other Expenses</span><strong id="realIncomeOtherExp">Rs. 0</strong><small>Everything else logged — tap for breakdown ▾</small></div>
         <div class="card income-card income-highlight"><span>Real Net Profit</span><strong id="realIncomeNet">Rs. 0</strong><small>Revenue − all real costs</small></div>
       </div>
       <div class="income-summary">
@@ -645,6 +645,21 @@
         <button class="btn btn-primary" data-open-tab="production" data-ribbon="true">Open Production</button>
       </div>
       <small style="display:block;margin-top:8px;opacity:.6;" id="realCostPerKgNote">Tip: tick "linked fish bills" when starting a Production Batch and its Real Cost/kg will show ✅ once completed — otherwise it falls back to the estimate.</small>
+
+      <div id="realOtherExpBreakdown" style="display:none;margin-top:14px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <strong style="font-size:14px;">Real Other Expenses — Breakdown</strong>
+          <button class="btn btn-secondary" style="padding:4px 10px;font-size:12px;" onclick="toggleRealOtherExpBreakdown()">Close ✕</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Source</th><th style="text-align:right;">Amount</th></tr></thead>
+            <tbody id="realOtherExpBreakdownBody"></tbody>
+            <tfoot><tr class="total-row"><td><strong>Total</strong></td><td style="text-align:right;"><strong id="realOtherExpBreakdownTotal">Rs. 0</strong></td></tr></tfoot>
+          </table>
+        </div>
+        <small style="display:block;margin-top:6px;opacity:.6;">"Direct Sales" rows are this month's Sales-Diary entries not already counted as Order revenue — their own cost/wage/marketing fields. Fish-related categories (Raw Fish, Ready-Made Umbalakada) are excluded here since they're already inside Real Raw Material Cost above.</small>
+      </div>
     </div>
 
     <div class="card">
