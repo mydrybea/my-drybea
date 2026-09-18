@@ -648,6 +648,20 @@
     </div>
 
     <div class="card">
+      <h2><span class="pro-title-icon orange" aria-hidden="true"><i class="business-icon" data-lucide="scale" aria-hidden="true"></i></span><span>What You Owe &amp; What's Owed To You</span></h2>
+      <p class="pro-subtitle orange">Live balances — not a monthly figure, this is the total outstanding right now.</p>
+      <div class="income-grid">
+        <div class="card income-card income-highlight"><span>Bills You Need To Pay</span><strong id="incomePayablesTotal">Rs. 0</strong><small id="incomePayablesNote">Unpaid balance on fish/ready-made bills</small></div>
+        <div class="card income-card income-highlight"><span>Money You're Due To Receive</span><strong id="incomeReceivablesTotal">Rs. 0</strong><small id="incomeReceivablesNote">Unpaid customer orders + sales</small></div>
+      </div>
+      <div class="income-summary">
+        <div><span>Net Position (Receivable − Payable)</span><strong id="incomeNetPosition">Rs. 0</strong></div>
+        <button class="btn btn-primary" data-open-tab="sales" data-ribbon="true">Open Seller Ledger / Sales</button>
+      </div>
+      <small style="display:block;margin-top:8px;opacity:.6;" id="incomePayablesReceivablesFootnote">These are running balances across all time, not scoped to this month.</small>
+    </div>
+
+    <div class="card">
       <h2><span class="pro-title-icon orange" aria-hidden="true"><i class="business-icon" data-lucide="wind" aria-hidden="true"></i></span><span>Daily Grinding &amp; Dust Summary</span></h2>
       <p class="pro-subtitle orange">Today's grinding output and dust loss, from the Production tab's Daily Production Log.</p>
       <div class="income-grid">

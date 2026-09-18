@@ -7396,6 +7396,7 @@ function renderFishBills() {
   set('fishTotalOwed', fmt(totalOwed));
   set('fishSellersWithDues', sellersWithDues);
   calcRealIncome();
+  calcOwnerBalances();
   syncDailyRawKgFromBills();
 }
 window.renderFishBills = renderFishBills;
@@ -9255,6 +9256,8 @@ function renderSales() {
   renderSalesChequeDepositTracker(list);
   renderSalesSummaryChart(list);
   updateSalesStats();
+  if (typeof calcRealIncome === 'function') calcRealIncome();
+  if (typeof calcOwnerBalances === 'function') calcOwnerBalances();
   if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
@@ -10103,6 +10106,7 @@ function renderOrders() {
   }).join('');
   if (window.lucide) lucide.createIcons({ attrs: { 'stroke-width': 1.9, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' } });
   updateOrdersNewBadge(visibleOrders);
+  if (typeof calcOwnerBalances === 'function') calcOwnerBalances();
 }
 
 // "New" here = orders still sitting at 'pending' (not yet shipped/actioned) —
@@ -13481,6 +13485,63 @@ function calcRealIncome() {
 }
 window.calcRealIncome = calcRealIncome;
 
+// ==================== PAYABLES & RECEIVABLES (Income tab — live balances) ====================
+// These are NOT month-scoped like Real Profit above — a fish bill from last
+// month that's still unpaid is still owed today, so this always looks at
+// the full live arrays.
+//
+// PAYABLES ("Bills You Need To Pay"): reuses the exact same per-seller
+// balance math as sellerAggregate()/renderFishBills() (bought − (paid at
+// purchase + any extra fishPayments logged later)) so this figure can never
+// silently disagree with the Seller Ledger tab.
+//
+// RECEIVABLES ("Money You're Due To Receive"): two non-overlapping pools —
+//   - Orders still pending/shipped (not yet delivered) — their full value,
+//     since nothing has been collected yet.
+//   - Sales-diary entries (this covers BOTH delivered orders, which mirror
+//     themselves into `sales` on delivery, AND manual diary sales) whose
+//     `pending` (total − paid) is greater than 0.
+// A pending/shipped order has no sales-diary row yet (that only gets
+// created on delivery — see autoLogSaleFromDeliveredOrder), so these two
+// pools never double-count the same money.
+function calcOwnerBalances() {
+  const payablesEl = $('incomePayablesTotal');
+  if (!payablesEl) return; // Income tab not in the DOM for this role — skip
+
+  const sellerPhones = [...new Set((fishBills || []).map(b => b.sellerPhone))];
+  const sellerBalances = sellerPhones.map(sellerAggregate);
+  const totalPayables = sellerBalances.reduce((s, a) => s + Math.max(0, a.balance), 0);
+  const sellersWithDues = sellerBalances.filter(a => a.balance > 0.01).length;
+
+  const undeliveredOrders = (orders || []).filter(o => o.status === 'pending' || o.status === 'shipped');
+  const receivablesFromOrders = undeliveredOrders.reduce((s, o) => s + (Number(o.total) || 0), 0);
+
+  const unpaidSales = (sales || []).filter(s => (Number(s.pending) || 0) > 0.01);
+  const receivablesFromSales = unpaidSales.reduce((s, sa) => s + (Number(sa.pending) || 0), 0);
+
+  const totalReceivables = receivablesFromOrders + receivablesFromSales;
+  const netPosition = totalReceivables - totalPayables;
+
+  const set = (id, v) => { const el = $(id); if (el) el.textContent = v; };
+  set('incomePayablesTotal', fmt(totalPayables));
+  set('incomeReceivablesTotal', fmt(totalReceivables));
+  set('incomeNetPosition', fmt(netPosition));
+
+  const payablesNoteEl = $('incomePayablesNote');
+  if (payablesNoteEl) {
+    payablesNoteEl.textContent = sellersWithDues > 0
+      ? `Owed to ${sellersWithDues} seller${sellersWithDues > 1 ? 's' : ''} — fish/ready-made bills`
+      : 'All fish/ready-made bills settled';
+  }
+  const receivablesNoteEl = $('incomeReceivablesNote');
+  if (receivablesNoteEl) {
+    receivablesNoteEl.textContent = `Undelivered orders: ${fmt(receivablesFromOrders)} + Unpaid balance: ${fmt(receivablesFromSales)}`;
+  }
+  const netPositionEl = $('incomeNetPosition');
+  if (netPositionEl) netPositionEl.style.color = netPosition >= 0 ? '#10b981' : '#f87171';
+}
+window.calcOwnerBalances = calcOwnerBalances;
+
 // ==================== ANALYTICS ====================
 let trendChart = null, orderStatusChart = null, productMixChart = null, expenseCatChart = null, profitBySizeChart = null, perfFailedReasonsChart = null, newReturningChart = null;
 
@@ -15986,11 +16047,13 @@ function activateAppTab(tabId){
   if (tabId === 'income') {
     calcDashboard();
     calcRealIncome();
-    Promise.all([loadFishBillsFromCloud(), loadProductionBatchesFromCloud(), loadSalesFromCloud()]).then(() => {
+    calcOwnerBalances();
+    Promise.all([loadFishBillsFromCloud(), loadFishPaymentsFromCloud(), loadProductionBatchesFromCloud(), loadSalesFromCloud(), loadOrdersFromCloud()]).then(() => {
       renderFishBills(); // also refreshes calcRealIncome() with real purchase data
       renderReadymadeBills(); // live Ready-Made Umbalakada card on the Income tab
       renderProductionBatches(); // also refreshes calcRealIncome() with real output data
       calcRealIncome(); // Real Revenue includes Sales-diary entries — recompute with fresh sales
+      calcOwnerBalances(); // Payables/Receivables — recompute with fresh bills/payments/orders/sales
     });
     loadDailyProductionLog().then(() => renderIncomeDailyDustSummary());
   }
