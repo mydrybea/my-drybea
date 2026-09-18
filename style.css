@@ -2915,17 +2915,23 @@ html[data-theme="light"] #calculator .table-wrap table tbody tr:not(.total-row):
 }
 
 /* ============================================================
-   Professional custom checkbox
+   Professional custom checkbox (v2 — icon-based, not ::after)
+   ----------------------------------------------------------
    The generic `input, select, textarea { appearance:none; width:100% }`
-   reset earlier in this file strips native checkbox styling and
-   stretches it to fill its container, leaving a bare, invisible
-   box (see grsrc-check / bsrc-check / batch-select-cb). This
-   restyles every checkbox in the app as a small, rounded, brand-
-   colored control regardless of where it's used.
+   reset earlier in this file strips native checkbox rendering and
+   stretches the box to fill its table cell, leaving a bare, blank
+   rectangle (grsrc-check / bsrc-check / batch-select-cb everywhere
+   they're used). This restyles every checkbox in the app as a small
+   rounded control with a real vector checkmark icon painted in as a
+   background-image, so it renders identically on every browser/
+   WebView (no dependence on ::after generated content on a
+   replaced <input> element, which some engines skip).
    ============================================================ */
 input[type="checkbox"]{
   -webkit-appearance:none!important;
   appearance:none!important;
+  -webkit-print-color-adjust:exact;
+  print-color-adjust:exact;
   width:20px!important;
   height:20px!important;
   min-width:20px!important;
@@ -2934,13 +2940,15 @@ input[type="checkbox"]{
   margin:0 auto!important;
   border-radius:6px!important;
   border:1.5px solid var(--border-strong)!important;
-  background:var(--bg-secondary)!important;
+  background-color:var(--bg-secondary)!important;
+  background-repeat:no-repeat!important;
+  background-position:center!important;
+  background-size:0 0!important;
   box-shadow:none!important;
   cursor:pointer;
-  position:relative;
   display:inline-block;
   vertical-align:middle;
-  transition:background .18s ease,border-color .18s ease,box-shadow .18s ease,transform .1s ease;
+  transition:background-color .18s ease,border-color .18s ease,box-shadow .18s ease,transform .12s ease,background-size .12s ease;
 }
 input[type="checkbox"]:hover:not(:disabled){
   border-color:var(--green)!important;
@@ -2952,18 +2960,11 @@ input[type="checkbox"]:focus-visible{
   box-shadow:0 0 0 3px var(--green-glow)!important;
 }
 input[type="checkbox"]:checked{
-  background:linear-gradient(135deg,var(--green) 0%,var(--green-deep) 100%)!important;
+  background-color:var(--green)!important;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23ffffff' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='3.5 8.5 6.7 11.7 12.5 4.7'/%3E%3C/svg%3E")!important;
+  background-size:13px 13px!important;
   border-color:var(--green-deep)!important;
   box-shadow:0 3px 10px var(--green-glow)!important;
-}
-input[type="checkbox"]:checked::after{
-  content:"";
-  position:absolute;
-  left:6px; top:2px;
-  width:5px; height:10px;
-  border:solid var(--white);
-  border-width:0 2px 2px 0;
-  transform:rotate(45deg);
   animation:chkPop .16s ease;
 }
 input[type="checkbox"]:active:not(:disabled){ transform:scale(.90); }
@@ -2972,14 +2973,15 @@ input[type="checkbox"]:disabled{
   cursor:not-allowed;
 }
 @keyframes chkPop{
-  from{ opacity:0; transform:scale(.4) rotate(45deg); }
-  to{ opacity:1; transform:scale(1) rotate(45deg); }
+  0%{ transform:scale(.75); }
+  60%{ transform:scale(1.08); }
+  100%{ transform:scale(1); }
 }
 /* Center nicely when used inside table cells */
 td input[type="checkbox"]{ display:block; margin:0 auto!important; }
 
 html[data-theme="light"] input[type="checkbox"]{
-  background:#fff!important;
+  background-color:#fff!important;
   border-color:#c9dbd1!important;
   box-shadow:none!important;
 }
@@ -2988,7 +2990,7 @@ html[data-theme="light"] input[type="checkbox"]:hover:not(:disabled){
   box-shadow:0 0 0 3px rgba(10,143,67,.14)!important;
 }
 html[data-theme="light"] input[type="checkbox"]:checked{
-  background:linear-gradient(135deg,#0a9b50,#087f43)!important;
+  background-color:#0a9b50!important;
   border-color:#087f43!important;
   box-shadow:0 3px 10px rgba(10,143,67,.28)!important;
 }
