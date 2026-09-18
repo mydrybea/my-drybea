@@ -620,22 +620,21 @@
     <div class="profit-gold-hero">
       <div class="profit-gold-hero-top">
         <div>
-          <span class="eyebrow">DAILY REAL PROFIT</span>
-          <h2><i class="business-icon" data-lucide="sparkles" aria-hidden="true"></i> Profit Pulse</h2>
-          <p>Live, day-by-day — updates automatically as today's sales come in.</p>
+          <span class="eyebrow">TODAY'S REAL PROFIT</span>
+          <div class="profit-gold-headline"><strong id="incomeProfitToday">Rs. 0</strong></div>
+          <span class="profit-gold-trend" id="incomeProfitTrendWrap"><span id="incomeProfitTrend">—</span></span>
         </div>
-        <div class="profit-gold-toggle" role="tablist" aria-label="Chart range">
-          <button type="button" data-days="7" class="active" onclick="setIncomeProfitChartRange(7)">7D</button>
-          <button type="button" data-days="14" onclick="setIncomeProfitChartRange(14)">14D</button>
-          <button type="button" data-days="30" onclick="setIncomeProfitChartRange(30)">30D</button>
-        </div>
+        <div class="profit-gold-icon" aria-hidden="true"><i class="business-icon" data-lucide="trending-up"></i></div>
+      </div>
+      <div class="profit-gold-toggle" role="tablist" aria-label="Chart range">
+        <button type="button" data-days="7" class="active" onclick="setIncomeProfitChartRange(7)">7D</button>
+        <button type="button" data-days="14" onclick="setIncomeProfitChartRange(14)">14D</button>
+        <button type="button" data-days="30" onclick="setIncomeProfitChartRange(30)">30D</button>
       </div>
       <div class="chart-wrap profit-gold-chart-wrap"><canvas id="incomeDailyProfitChart"></canvas></div>
       <div class="profit-gold-stats">
-        <div><span>Today</span><strong id="incomeProfitToday">Rs. 0</strong></div>
         <div><span>Best Day</span><strong id="incomeProfitBest">Rs. 0</strong></div>
         <div><span>Daily Average</span><strong id="incomeProfitAvg">Rs. 0</strong></div>
-        <div><span>Trend</span><strong id="incomeProfitTrend">—</strong></div>
       </div>
     </div>
 

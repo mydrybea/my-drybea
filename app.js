@@ -13605,57 +13605,103 @@ function renderIncomeDailyProfitChart() {
   const secondAvg = values.slice(-half).reduce((a, b) => a + b, 0) / half;
   const trendUp = secondAvg >= firstAvg;
 
+  // % change: today's real profit vs. this range's daily average, so the
+  // trend pill under the headline number always has a concrete figure
+  // (not just an up/down arrow) — mirrors the "▲ 36.7% (1Y)" style pill
+  // on a typical net-worth card.
+  const todayVal = profitByDay[todayKey] || 0;
+  let trendPct = 0;
+  if (Math.abs(avgVal) > 0.01) trendPct = ((todayVal - avgVal) / Math.abs(avgVal)) * 100;
+  else if (todayVal !== 0) trendPct = 100;
+
   const set = (id, v) => { const el = $(id); if (el) el.textContent = v; };
-  set('incomeProfitToday', fmt(profitByDay[todayKey] || 0));
+  set('incomeProfitToday', fmt(todayVal));
   set('incomeProfitBest', fmt(bestVal));
   set('incomeProfitAvg', fmt(avgVal));
   const trendEl = $('incomeProfitTrend');
-  if (trendEl) trendEl.textContent = trendUp ? '▲ Rising' : '▼ Falling';
+  const trendWrap = $('incomeProfitTrendWrap');
+  if (trendEl) {
+    const arrow = trendPct >= 0 ? '▲' : '▼';
+    trendEl.textContent = `${arrow} ${Math.abs(trendPct).toFixed(1)}% vs avg`;
+  }
+  if (trendWrap) trendWrap.classList.toggle('down', trendPct < 0);
 
   safeRenderChart('incomeDailyProfitChart', () => {
     const ctx = canvas.getContext('2d');
-    const h = canvas.height || 220;
-    const barGradient = ctx.createLinearGradient(0, 0, 0, h);
-    barGradient.addColorStop(0, '#fff3c4');
-    barGradient.addColorStop(1, '#a8842c');
+    const h = canvas.height || 210;
+    const lineGradient = ctx.createLinearGradient(0, 0, 0, h);
+    lineGradient.addColorStop(0, '#fff3c4');
+    lineGradient.addColorStop(1, '#c9962f');
+
+    const fillGradient = ctx.createLinearGradient(0, 0, 0, h);
+    fillGradient.addColorStop(0, 'rgba(212,175,55,.38)');
+    fillGradient.addColorStop(1, 'rgba(212,175,55,0)');
+
+    const profitValues = days.map(d => Math.round(profitByDay[d] || 0));
+    const lastIdx = profitValues.length - 1;
+    const pointRadii = profitValues.map((_, i) => i === lastIdx ? 5 : 0);
+    const pointHoverRadii = profitValues.map(() => 5);
+    const pointColors = profitValues.map((_, i) => i === lastIdx ? '#fff6dd' : 'transparent');
 
     const data = {
       labels: days.map(d => d.slice(5)),
       datasets: [
         {
-          type: 'bar',
-          label: 'Real Profit',
-          data: days.map(d => Math.round(profitByDay[d] || 0)),
-          backgroundColor: barGradient,
-          borderRadius: 6,
-          borderSkipped: false,
-          maxBarThickness: 34,
-          order: 2
-        },
-        {
           type: 'line',
-          label: 'Revenue',
-          data: days.map(d => Math.round(revenueByDay[d] || 0)),
-          borderColor: 'rgba(255,255,255,.85)',
-          backgroundColor: 'transparent',
-          borderWidth: 2,
-          pointRadius: 0,
-          pointHoverRadius: 4,
-          tension: .35,
+          label: 'Real Profit',
+          data: profitValues,
+          borderColor: lineGradient,
+          backgroundColor: fillGradient,
+          fill: true,
+          borderWidth: 2.5,
+          tension: .4,
+          pointRadius: pointRadii,
+          pointHoverRadius: pointHoverRadii,
+          pointBackgroundColor: pointColors,
+          pointBorderColor: '#fff6dd',
+          pointBorderWidth: 2,
           order: 1
         }
       ]
     };
     const opts = {
       responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { labels: { color: '#fff', boxWidth: 10, font: { size: 10, weight: '700' } } } },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: 'rgba(15,13,5,.92)',
+          titleColor: '#f5d67a', bodyColor: '#fff',
+          borderColor: 'rgba(212,175,55,.4)', borderWidth: 1,
+          padding: 8, displayColors: false,
+          callbacks: { label: (item) => ' Rs. ' + Math.round(item.parsed.y).toLocaleString('en-IN') }
+        }
+      },
       scales: {
-        x: { ticks: { color: 'rgba(255,255,255,.85)', maxRotation: 0, font: { size: 10 } }, grid: { display: false } },
-        y: { ticks: { color: 'rgba(255,255,255,.85)', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,.14)' } }
+        x: {
+          ticks: { color: 'rgba(255,255,255,.5)', maxRotation: 0, font: { size: 10, weight: '700' } },
+          grid: { display: true, color: 'rgba(255,255,255,.08)', drawTicks: false, borderDash: [3, 5] },
+          border: { display: false }
+        },
+        y: { display: false, grid: { display: false }, border: { display: false } }
       }
     };
-    if (incomeDailyProfitChart) { incomeDailyProfitChart.data = data; incomeDailyProfitChart.options = opts; incomeDailyProfitChart.update(); }
-    else incomeDailyProfitChart = new Chart(ctx, { type: 'bar', data, options: opts });
+    // Soft glow behind the gold line, like a premium finance-app chart.
+    const goldLineGlow = {
+      id: 'goldLineGlow',
+      beforeDatasetsDraw(chart) {
+        chart.ctx.save();
+        chart.ctx.shadowColor = 'rgba(212,175,55,.65)';
+        chart.ctx.shadowBlur = 14;
+      },
+      afterDatasetsDraw(chart) { chart.ctx.restore(); }
+    };
+    if (incomeDailyProfitChart) {
+      incomeDailyProfitChart.data = data;
+      incomeDailyProfitChart.options = opts;
+      incomeDailyProfitChart.update();
+    } else {
+      incomeDailyProfitChart = new Chart(ctx, { type: 'line', data, options: opts, plugins: [goldLineGlow] });
+    }
   });
 }
 window.renderIncomeDailyProfitChart = renderIncomeDailyProfitChart;
