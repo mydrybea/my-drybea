@@ -649,7 +649,7 @@
 
     <div class="card">
       <h2><span class="pro-title-icon orange" aria-hidden="true"><i class="business-icon" data-lucide="wind" aria-hidden="true"></i></span><span>Daily Grinding &amp; Dust Summary</span></h2>
-      <p class="pro-subtitle orange">Today's grinding output and dust loss, from the Production tab's Daily Production Log.</p>
+      <p class="pro-subtitle orange">Today's grinding output and dust loss, from the Production tab's Grinding &amp; Production module.</p>
       <div class="income-grid">
         <div class="card income-card"><span>Today's Umbalakada Ground</span><strong id="incomeDustGroundKg">0 kg</strong><small>Fed into grinding today</small></div>
         <div class="card income-card"><span>Today's Dust Removed</span><strong id="incomeDustRemovedKg">0 kg</strong><small>Net waste after recovery</small></div>
@@ -661,7 +661,7 @@
         <div><span>This Month — Net Dust Impact</span><strong id="incomeDustMonthImpact">Rs. 0</strong></div>
         <button class="btn btn-primary" data-open-tab="production" data-ribbon="true">Open Production</button>
       </div>
-      <small style="display:block;margin-top:8px;opacity:.6;" id="incomeDustSummaryNote">No Daily Production Log snapshot saved for today yet — figures show the most recent saved day.</small>
+      <small style="display:block;margin-top:8px;opacity:.6;" id="incomeDustSummaryNote">No Grinding &amp; Production snapshot saved for today yet — figures show the most recent saved day.</small>
     </div>
 
     <div class="card">
@@ -2688,27 +2688,12 @@
          totals, saving, stock movements — keeps working exactly as before.
          Only the structure, copy and visual flow are new. -->
     <div class="card" style="margin-top:16px;">
-      <h2><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="calendar-check" aria-hidden="true"></i></span><span>Daily Production Log</span></h2>
-      <p class="pro-subtitle gold">One pipeline, six stages — Umbalakada in, Stock out. Takes about 2 minutes a day.</p>
+      <h2><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="calendar-check" aria-hidden="true"></i></span><span>Grinding &amp; Production</span></h2>
+      <p class="pro-subtitle gold">Grind → Pack → Stock, in one place. Daily flow, no fixed pipeline.</p>
 
-      <div class="dpl-pipeline" role="navigation" aria-label="Daily production pipeline">
-        <a class="dpl-step" href="#dplStage1"><span class="dpl-num" style="background:#3b82f6;">1</span><span class="dpl-label">Umbalakada<span class="dpl-sub">Raw material in</span></span></a>
-        <span class="dpl-arrow">→</span>
-        <a class="dpl-step" href="#dplStage2"><span class="dpl-num" style="background:#f97316;">2</span><span class="dpl-label">Grinding<span class="dpl-sub">Kg in, dust out</span></span></a>
-        <span class="dpl-arrow">→</span>
-        <a class="dpl-step" href="#dplStage3"><span class="dpl-num" style="background:#64748b;">3</span><span class="dpl-label">Dust / By-product<span class="dpl-sub">What came off</span></span></a>
-        <span class="dpl-arrow">→</span>
-        <a class="dpl-step" href="#dplStage4"><span class="dpl-num" style="background:#8b5cf6;">4</span><span class="dpl-label">Value Addition<span class="dpl-sub">Link to stock items</span></span></a>
-        <span class="dpl-arrow">→</span>
-        <a class="dpl-step" href="#dplStage5"><span class="dpl-num" style="background:var(--green);">5</span><span class="dpl-label">Finished Product<span class="dpl-sub">Packs made</span></span></a>
-        <span class="dpl-arrow">→</span>
-        <a class="dpl-step" href="#dplStage6"><span class="dpl-num" style="background:#14b8a6;">6</span><span class="dpl-label">Stock<span class="dpl-sub">Confirmed today</span></span></a>
-      </div>
-
-      <!-- ---------- STAGE 1 — UMBALAKADA (RAW MATERIAL IN) ---------- -->
+      <!-- ---------- SECTION — UMBALAKADA (RAW MATERIAL IN) ---------- -->
       <div class="dpl-stage" id="dplStage1">
         <div class="dpl-stage-head">
-          <span class="dpl-badge" style="background:#3b82f6;">1</span>
           <div><h3>Umbalakada — Raw Material In</h3><span class="dpl-stage-tag">Fills in by itself</span></div>
         </div>
         <p class="dpl-note">This comes from what you already typed in the Costing tab's "Today's Umbalakada Purchase" — you don't need to type it again here.</p>
@@ -2725,32 +2710,42 @@
         </div>
       </div>
 
-      <!-- ---------- STAGE 2 — GRINDING ---------- -->
+      <!-- ---------- SECTION — GRINDING (dynamic combo, one form) ---------- -->
       <div class="dpl-stage" id="dplStage2">
         <div class="dpl-stage-head">
-          <span class="dpl-badge" style="background:#f97316;">2</span>
-          <div><h3>Grinding</h3><span class="dpl-stage-tag">Log every round</span></div>
+          <div><h3>Grinding</h3><span class="dpl-stage-tag">Log every batch</span></div>
         </div>
-        <p class="dpl-note">Grinding is organized by combo — each combo below has its own saved Price/kg and its own quick "Add Round" so you always know exactly what today's kg/dust/cost was for that specific combo.</p>
+        <p class="dpl-note">Tick whichever type(s) went into today's grind — the combo can change every time. Dust is weighed and typed in by hand; only the dust you actually use/sell counts toward profit.</p>
 
-        <!-- ============ COMBO-CENTRIC GRINDING CARDS ============ -->
-        <!-- One card per combo (Linna, Balaya, Premium Mix, or any
-             pairing/triple of them) — each with its own saved Price/kg
-             (state.grindComboPrices), its own quick kg/dust entry, its own
-             live today's totals, and its own mini round list. Every combo's
-             usable output still restocks the SAME single "Umbalakada Chips"
-             product (linked in Stage 4 below) — this is a workflow
-             reorganization around how grinding actually happens, not a
-             change to what gets stocked. See renderComboCards()/
-             addGrindBatch()/onGrindComboPriceInput() in app.js. -->
-        <div id="comboCardsWrap"></div>
+        <!-- ============ DYNAMIC COMBO — SINGLE BATCH FORM ============ -->
+        <!-- Replaces the old "one card per combo" layout. See
+             renderGrindingForm()/onGrindComboCheck()/addGrindBatchV2()/
+             editGrindBatch()/deleteGrindBatch() in app.js. -->
+        <div class="dpl-sub-card">
+          <div id="ccComboChecks" class="btn-row" style="margin-bottom:10px;flex-wrap:wrap;"></div>
+          <p class="sub" id="ccComboLabel" style="margin:0 0 10px;font-weight:600;">No type selected yet</p>
+          <div class="grid-3">
+            <div class="field"><label>Price /kg (Rs.)</label><input type="number" min="0" step="0.01" id="ccPrice" placeholder="e.g. 900"></div>
+            <div class="field"><label>Kg Ground</label><input type="number" min="0" step="0.1" id="ccKg" placeholder="e.g. 5"></div>
+            <div class="field"><label>Dust <span class="hint">(kg, weighed)</span></label><input type="number" min="0" step="0.01" id="ccDustKg" placeholder="e.g. 0.5"></div>
+          </div>
+          <div class="grid-2">
+            <div class="field"><label>Dust Price /kg (Rs.)</label><input type="number" min="0" step="0.01" id="ccDustPriceKg" placeholder="If dust is sold/used"></div>
+            <div class="field"><label>Dust Used/Sold Today <span class="hint">(kg — only this counts as profit)</span></label><input type="number" min="0" step="0.01" id="ccDustUsedKg" placeholder="e.g. 0.3"></div>
+          </div>
+          <div id="ccStockBanner" class="dpl-stock-banner dpl-stock-warning" style="display:none;"></div>
+          <div class="btn-row" style="margin:6px 0 0;">
+            <button type="button" class="btn btn-primary btn-sm" id="ccAddBtn" onclick="addGrindBatchV2()"><i class="business-icon icon-inline" data-lucide="plus" aria-hidden="true"></i> Add Batch</button>
+            <button type="button" class="btn btn-sm" id="ccCancelEditBtn" style="display:none;" onclick="cancelEditGrindBatch()">Cancel Edit</button>
+          </div>
+        </div>
 
-        <div class="monthly-summary-note" style="margin:6px 0 14px;">💡 Every round you add above — from any combo — also lands in the combined log below, and its Price/kg is remembered for that combo the next time you grind it.</div>
+        <div class="monthly-summary-note" style="margin:6px 0 14px;">💡 Add as many batches as you grind today — morning and afternoon combos are logged separately, each with its own price.</div>
 
         <div class="table-wrap">
           <table>
-            <thead><tr><th>Fish Type</th><th>Kg Ground</th><th>Price/kg</th><th>Dust Made</th><th>Usable Kg</th><th class="num">Dust Worth (Rs.)</th><th>Stocked To</th><th></th></tr></thead>
-            <tbody id="grindBatchesBody"><tr><td colspan="8" style="text-align:center;opacity:.5;padding:14px;">Nothing added yet today — add a round above after each grind.</td></tr></tbody>
+            <thead><tr><th>Combo</th><th>Kg Ground</th><th>Price/kg</th><th>Dust</th><th>Dust Used</th><th>Usable Kg</th><th class="num">Dust Value (Rs.)</th><th>Stocked To</th><th></th></tr></thead>
+            <tbody id="grindBatchesBody"><tr><td colspan="9" style="text-align:center;opacity:.5;padding:14px;">Nothing added yet today — add a batch above after each grind.</td></tr></tbody>
           </table>
         </div>
         <p class="sub" id="gbNote" style="margin:8px 0 0;"></p>
@@ -2759,18 +2754,43 @@
           <div class="stat"><div class="k">Total Usable</div><div class="v" id="gbTotalUsable">0 kg</div></div>
           <div class="stat"><div class="k">Total Dust</div><div class="v" id="gbTotalDust">0 g</div></div>
           <div class="stat"><div class="k">Dust %</div><div class="v" id="gbAvgYield">0%</div></div>
-          <div class="stat accent"><div class="k">Dust Worth (Rs.)</div><div class="v" id="gbDustValue">Rs. 0</div></div>
+          <div class="stat accent"><div class="k">Dust Value Used (Rs.)</div><div class="v" id="gbDustValue">Rs. 0</div></div>
           <div class="stat accent"><div class="k">Raw Cost (Rs.)</div><div class="v" id="gbTotalRawCost">Rs. 0</div></div>
         </div>
       </div>
 
-      <!-- ---------- STAGE 3 — DUST / BY-PRODUCT ---------- -->
+      <!-- ---------- SECTION — UMBALAKADA NON-GROUND (WHOLE / L-SIZE PCS) ---------- -->
+      <div class="dpl-stage" id="dplStageLpcs">
+        <div class="dpl-stage-head">
+          <div><h3>Umbalakada — Not Ground (L Pcs)</h3><span class="dpl-stage-tag">Sold whole, no grinding</span></div>
+        </div>
+        <p class="dpl-note">L-size Umbalakada that goes straight to stock without grinding — separate from Chips, doesn't touch the Grinding batches above.</p>
+        <div class="dpl-sub-card">
+          <div class="grid-3">
+            <div class="field"><label>Qty (pcs or kg)</label><input type="number" min="0" step="0.1" id="lpcsQty" placeholder="e.g. 20"></div>
+            <div class="field"><label>Cost (optional, Rs.)</label><input type="number" min="0" step="0.01" id="lpcsCost" placeholder="e.g. 4000"></div>
+            <div class="field"><label>Note (optional)</label><input type="text" id="lpcsNote" placeholder="Optional notes..."></div>
+          </div>
+          <div id="lpcsStockBanner" class="dpl-stock-banner dpl-stock-warning" style="display:none;"></div>
+          <div class="btn-row" style="margin:4px 0 0;">
+            <button type="button" class="btn btn-primary btn-sm" id="lpcsAddBtn" onclick="addLpcsEntry()"><i class="business-icon icon-inline" data-lucide="plus" aria-hidden="true"></i> Add to Stock</button>
+            <button type="button" class="btn btn-sm" id="lpcsCancelEditBtn" style="display:none;" onclick="cancelEditLpcsEntry()">Cancel Edit</button>
+          </div>
+          <div class="table-wrap" style="margin-top:10px;">
+            <table>
+              <thead><tr><th>Time</th><th>Qty</th><th>Cost</th><th>Note</th><th></th></tr></thead>
+              <tbody id="lpcsBatchesBody"><tr><td colspan="5" style="text-align:center;opacity:.5;padding:14px;">Nothing added yet today.</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ---------- SECTION — DUST / BY-PRODUCT (running totals) ---------- -->
       <div class="dpl-stage" id="dplStage3">
         <div class="dpl-stage-head">
-          <span class="dpl-badge" style="background:#64748b;">3</span>
           <div><h3>Dust / By-product</h3><span class="dpl-stage-tag">Auto-fills from Grinding — editable</span></div>
         </div>
-        <p class="dpl-note">How much dust came out of grinding, and how much you used or sold vs. threw away. These fill in from Stage 2's rounds once you've logged at least one — edit below only if you skipped logging individual rounds today.</p>
+        <p class="dpl-note">How much dust came out of grinding, and how much you used or sold vs. threw away. These fill in from the batches above once you've logged at least one — edit below only if you skipped logging individual batches today.</p>
         <div class="grid-3">
           <div class="field"><label>Umbalakada Ground (kg)</label><input type="number" id="dpUmbalakadaGroundKg" value="0" min="0" step="0.1" oninput="updateDailyProductionSummaryLive()"></div>
           <div class="field"><label>Dust Made (kg)</label><input type="number" id="dpDustGeneratedKg" value="0" min="0" step="0.1" oninput="updateDailyProductionSummaryLive()"></div>
@@ -2782,37 +2802,35 @@
         <p class="sub" id="dpDustSuggestNote" style="margin:4px 0 0;"></p>
       </div>
 
-      <!-- ---------- STAGE 4 — VALUE ADDITION (LINK OUTPUTS TO STOCK) ---------- -->
-      <!-- Bridges Grinding's usable output + Dust with the real Product
-           catalog's Stock (Products tab) — same applyStockMovement()/
-           adjust_product_stock() RPC "Link Packs to Store Products" uses.
-           See populateGrindProductMapSelects()/onGrindProductMapChange()/
-           addGrindBatch()/deleteGrindBatch() in app.js. Dropdowns are built
-           by JS, not hard-coded. -->
+      <!-- ---------- SECTION — PRODUCT LINKS (VALUE ADDITION) ---------- -->
+      <!-- Bridges Grinding's usable output + Dust + L-pcs with the real
+           Product catalog's Stock (Products tab) — same
+           applyStockMovement()/adjust_product_stock() RPC "Link Packs to
+           Store Products" uses. See populateGrindProductMapSelects()/
+           onGrindProductMapChange()/addGrindBatchV2()/deleteGrindBatch() in
+           app.js. Dropdowns are built by JS, not hard-coded. -->
       <div class="dpl-stage" id="dplStage4">
         <div class="dpl-stage-head">
-          <span class="dpl-badge" style="background:#8b5cf6;">4</span>
-          <div><h3>Value Addition</h3><span class="dpl-stage-tag">One-time setup</span></div>
+          <div><h3>Product Links</h3><span class="dpl-stage-tag">One-time setup</span></div>
         </div>
-        <p class="dpl-note">Turn what came out of grinding into stock-tracked value. Whatever combo you grind — Linna, Balaya, Premium Mix, or any mix of them — becomes ONE product on the shelf: <strong>Umbalakada Chips</strong>. Pick which catalog product that is, and which product the dust restocks. Once linked, every round you add in Stage 2 (or delete) automatically updates that product's Stock — so Products always matches what actually came out of grinding today.</p>
+        <p class="dpl-note">Whatever combo you grind — Linna, Balaya, Premium Mix, or any mix — becomes ONE product on the shelf: <strong>Umbalakada Chips</strong>. Pick which catalog product that is, which restocks the dust, and which restocks non-ground L pcs. Once linked, every batch above (or delete) automatically updates that product's Stock.</p>
         <div class="dpl-sub-card">
           <div class="grid-2" id="gpmGrid"></div>
-          <div class="field" style="margin-top:10px;">
-            <label>Dust (all types) →</label>
-            <select id="gpmMapDust" onchange="onGrindProductMapChange()"><option value="">— Not linked —</option></select>
+          <div class="grid-2" style="margin-top:10px;">
+            <div class="field"><label>Dust (all types) →</label><select id="gpmMapDust" onchange="onGrindProductMapChange()"><option value="">— Not linked —</option></select></div>
+            <div class="field"><label>Umbalakada L Pcs (non-ground) →</label><select id="gpmMapLpcs" onchange="onGrindProductMapChange()"><option value="">— Not linked —</option></select></div>
           </div>
           <div class="monthly-summary-note" id="gpmNote">Types left "Not linked" won't touch Product Stock — the numbers above still work as before either way.</div>
         </div>
         <div class="btn-row" style="margin:10px 0 0;" data-owner-only>
-          <button type="button" class="btn btn-sm" onclick="relinkTodayGrindBatches()"><i class="business-icon icon-inline" data-lucide="refresh-cw" aria-hidden="true"></i> Apply Links to Today's Rounds</button>
+          <button type="button" class="btn btn-sm" onclick="relinkTodayGrindBatches()"><i class="business-icon icon-inline" data-lucide="refresh-cw" aria-hidden="true"></i> Apply Links to Today's Batches</button>
         </div>
-        <small style="display:block;margin-top:6px;opacity:.65;">Already logged a round in Stage 2 before linking it here? Link it above, then tap this — it backfills Stock for exactly the rounds that were missed, without needing to delete and re-add anything.</small>
+        <small style="display:block;margin-top:6px;opacity:.65;">Already logged a batch before linking it here? Link it above, then tap this — it backfills Stock for exactly what was missed, without needing to delete and re-add anything.</small>
       </div>
 
-      <!-- ---------- STAGE 5 — FINISHED PRODUCT ---------- -->
+      <!-- ---------- SECTION — FINISHED PRODUCT ---------- -->
       <div class="dpl-stage" id="dplStage5">
         <div class="dpl-stage-head">
-          <span class="dpl-badge" style="background:var(--green);">5</span>
           <div><h3>Finished Product</h3><span class="dpl-stage-tag">What came out today, ready to sell</span></div>
         </div>
         <p class="dpl-note">How much you made today, the price you sold it at, and how many packs of each size came out.</p>
@@ -2868,17 +2886,20 @@
              ensureChipPackTypes()/addChipPackType()/addChipsPackBatch() in
              app.js. -->
         <div class="dpl-sub-card" style="margin-top:14px;">
-          <h4 style="margin:0 0 6px;font-size:.92rem;">Pack Umbalakada Chips — Your Own Sizes <span class="hint" style="font-weight:400;">(custom, one-time setup)</span></h4>
-          <p class="sub" style="margin:0 0 10px;">Define exactly the pack/bottle sizes you actually use — any name, any weight, as many as you like — then link each to a catalog product.</p>
+          <h4 style="margin:0 0 6px;font-size:.92rem;">Pack Umbalakada Chips — 50g / 100g / 500g / 1kg <span class="hint" style="font-weight:400;">(one-time setup)</span></h4>
+          <p class="sub" style="margin:0 0 10px;">Fixed sizes, pre-filled below — just link each to a catalog product. Add a packing-material cost per unit (bag/bottle/label) if you want it counted.</p>
           <div class="grid-3">
-            <div class="field"><label>Size Name</label><input type="text" id="cptNewName" placeholder="e.g. 50g Pack / 100g Bottle"></div>
-            <div class="field"><label>Weight (g)</label><input type="number" id="cptNewWeight" min="0" step="1" placeholder="e.g. 50"></div>
-            <div class="field" style="display:flex;align-items:flex-end;"><button type="button" class="btn btn-primary btn-sm" style="width:100%;" onclick="addChipPackType()"><i class="business-icon icon-inline" data-lucide="plus" aria-hidden="true"></i> Add Size</button></div>
+            <div class="field"><label>Size Name <span class="hint">(custom size, optional)</span></label><input type="text" id="cptNewName" placeholder="e.g. 250g Jar"></div>
+            <div class="field"><label>Weight (g)</label><input type="number" id="cptNewWeight" min="0" step="1" placeholder="e.g. 250"></div>
+            <div class="field"><label>Material Cost /unit (Rs.)</label><input type="number" id="cptNewMaterialCost" min="0" step="0.01" placeholder="e.g. 3"></div>
+          </div>
+          <div class="btn-row" style="margin:4px 0 0;">
+            <button type="button" class="btn btn-primary btn-sm" onclick="addChipPackType()"><i class="business-icon icon-inline" data-lucide="plus" aria-hidden="true"></i> Add Size</button>
           </div>
           <div class="table-wrap" style="margin-top:10px;">
             <table>
-              <thead><tr><th>Size</th><th>Weight</th><th>Linked Product</th><th></th></tr></thead>
-              <tbody id="cptListBody"><tr><td colspan="4" style="text-align:center;opacity:.5;padding:14px;">No pack/bottle sizes defined yet.</td></tr></tbody>
+              <thead><tr><th>Size</th><th>Weight</th><th>Material Cost/unit</th><th>Linked Product</th><th></th></tr></thead>
+              <tbody id="cptListBody"><tr><td colspan="5" style="text-align:center;opacity:.5;padding:14px;">No pack/bottle sizes defined yet.</td></tr></tbody>
             </table>
           </div>
 
@@ -2888,26 +2909,40 @@
           <p class="sub" style="margin:0 0 10px;">How many of each size you packed today — this deducts that weight from Umbalakada Chips Stock and adds the count to each linked product's Stock.</p>
           <div class="grid-3" id="cpkQtyGrid"></div>
           <div class="field" style="margin-top:6px;"><label>Note (optional)</label><input type="text" id="cpkNote" placeholder="Optional notes..."></div>
+          <div id="cpkStockBanner" class="dpl-stock-banner dpl-stock-warning" style="display:none;"></div>
           <div class="btn-row" style="margin-top:10px;" data-owner-only>
             <button type="button" class="btn btn-primary btn-sm" onclick="addChipsPackBatch()"><i class="business-icon icon-inline" data-lucide="package-plus" aria-hidden="true"></i> Add Packing Batch</button>
           </div>
           <div class="table-wrap" style="margin-top:10px;">
             <table>
-              <thead><tr><th>Time</th><th>Packed</th><th>Chips Used</th><th></th></tr></thead>
-              <tbody id="cpkBatchListBody"><tr><td colspan="4" style="text-align:center;opacity:.5;padding:14px;">No packing batches logged yet today.</td></tr></tbody>
+              <thead><tr><th>Time</th><th>Packed</th><th>Chips Used</th><th>Material Cost</th><th></th></tr></thead>
+              <tbody id="cpkBatchListBody"><tr><td colspan="5" style="text-align:center;opacity:.5;padding:14px;">No packing batches logged yet today.</td></tr></tbody>
             </table>
           </div>
           <p class="sub" id="cpkBatchTotalsNote" style="margin:8px 0 0;"></p>
         </div>
       </div>
 
-      <!-- ---------- STAGE 6 — STOCK (CONFIRMED MOVEMENTS TODAY) ---------- -->
+      <!-- ---------- SECTION — TODAY'S ACTIVITY (unified history) ---------- -->
+      <div class="dpl-stage" id="dplStageActivity">
+        <div class="dpl-stage-head">
+          <div><h3>Today's Activity</h3><span class="dpl-stage-tag">Every batch, in order</span></div>
+        </div>
+        <p class="dpl-note">Grinding, L-pcs and Packing batches together, newest last — for a quick end-of-day check.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Time</th><th>Type</th><th>Details</th></tr></thead>
+            <tbody id="todayActivityBody"><tr><td colspan="3" style="text-align:center;opacity:.5;padding:14px;">Nothing logged yet today.</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ---------- SECTION — STOCK (CONFIRMED MOVEMENTS TODAY) ---------- -->
       <div class="dpl-stage" id="dplStage6">
         <div class="dpl-stage-head">
-          <span class="dpl-badge" style="background:#14b8a6;">6</span>
           <div><h3>Stock — Confirmed Today</h3><span class="dpl-stage-tag">Live, updates as you go</span></div>
         </div>
-        <p class="dpl-note">Every product that has actually been added to Stock so far today, from Grinding/Dust (Stage 2, moves instantly when you add a round) and from Finished Product batches (Stage 5, moves when you click "Add Today's Product Batch"). Nothing to do here — this just confirms it happened.</p>
+        <p class="dpl-note">Every product that has actually been added to Stock so far today — from Grinding/Dust, L-pcs, and Packing (moves instantly as you add each batch) and from Finished Product batches (moves when you click "Add Today's Product Batch"). Nothing to do here — this just confirms it happened.</p>
         <div id="stockMovementErrorBanner" class="dpl-stock-banner" style="display:none;"></div>
         <div class="table-wrap">
           <table>

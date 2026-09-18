@@ -2165,6 +2165,8 @@ window.renderUmbalakadaPurchaseSyncTable = renderUmbalakadaPurchaseSyncTable;
 // for the price/usable-kg/product-link fields, they just ride along inside
 // each batch's jsonb object.
 let grindBatchesToday = [];
+let lpcsBatchesToday = [];
+let editingLpcsId = null;
 let lastDustBatchesValueForSave = 0;
 
 // ==================== GRINDING PRICE LIST (per-combo Rs./kg, set once) ====================
@@ -2216,104 +2218,151 @@ function onGrindComboPriceInput(key) {
 }
 window.onGrindComboPriceInput = onGrindComboPriceInput;
 
-// ==================== COMBO-CENTRIC GRINDING (Stage 2) ====================
-// Each of the 7 combos is its own mini production line — its own saved
-// Price/kg, its own quick "add a round" inputs, and its own live totals for
-// today (kg ground, usable kg, dust, raw cost) — instead of one flat form
-// shared by every combo. Every combo's usable output still restocks the
-// SAME single "Umbalakada Chips" product (Stage 4 link) and dust restocks
-// the same shared dust product — this is purely a workflow/visual
-// reorganization around how the owner actually thinks about grinding, not
-// a change to what gets stocked. See renderComboCards()/addGrindBatch()/
+// ==================== DYNAMIC-COMBO GRINDING (single form) ====================
+// The owner ticks whichever type(s) actually went into today's grind — the
+// combo can change from one batch to the next, same day (e.g. morning:
+// Linna+Balaya, afternoon: Balaya alone). One shared form instead of 7
+// always-visible cards. Dust is a manual, weighed entry (not estimated),
+// with its own Rs./kg price and a separate "used/sold" amount — only the
+// used portion counts toward profit, matching how the owner actually
+// values it. See renderGrindingForm()/addGrindBatchV2()/editGrindBatch()/
 // deleteGrindBatch().
-function renderComboCards() {
-  const wrap = $('comboCardsWrap');
-  if (!wrap) return;
-  const combos = getAllGrindCombos();
-  const saved = ensureGrindComboPrices();
-  const dustSalePrice = Number($('dpDustSalePrice') && $('dpDustSalePrice').value) || 0;
+let editingGrindBatchId = null;
 
-  wrap.innerHTML = combos.map(c => {
-    const batches = grindBatchesToday.filter(b => (b.comboKey || grindComboKey(b.typeIds || [])) === c.key);
-    const kg = batches.reduce((s, b) => s + b.kg, 0);
-    const dustG = batches.reduce((s, b) => s + b.dustG, 0);
-    const usableKg = batches.reduce((s, b) => s + (b.usableKg != null ? b.usableKg : Math.max(0, b.kg - b.dustG / 1000)), 0);
-    const rawCost = batches.reduce((s, b) => s + (b.rawCost != null ? b.rawCost : b.kg * (b.priceKg || 0)), 0);
-    const priceVal = saved[c.key] != null ? saved[c.key] : '';
-    const roundsHtml = batches.length ? batches.map(b => `
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:5px 0;border-bottom:1px dashed var(--border,#e5e7eb);font-size:.82rem;">
-        <span>${fmt2(b.kg)} kg @ Rs.${fmt(b.priceKg || 0)}/kg → ${fmt2(b.dustG)} g dust</span>
-        <button type="button" class="btn btn-xs btn-danger" onclick="deleteGrindBatch('${b.id}')"><i class="business-icon icon-inline" data-lucide="trash-2" aria-hidden="true"></i></button>
-      </div>`).join('') : '<p class="sub" style="margin:4px 0 0;opacity:.6;">No rounds logged yet today.</p>';
-
-    return `
-    <div class="dpl-sub-card" style="margin-bottom:12px;">
-      <h4 style="margin:0 0 8px;font-size:.95rem;">${c.label}</h4>
-      <div class="grid-3">
-        <div class="field"><label>Price /kg (Rs.)</label><input type="number" min="0" step="0.01" id="ccPrice_${c.key}" value="${priceVal}" placeholder="e.g. 900" oninput="onGrindComboPriceInput('${c.key}')"></div>
-        <div class="field"><label>Kg Ground</label><input type="number" min="0" step="0.1" id="ccKg_${c.key}" placeholder="e.g. 1"></div>
-        <div class="field"><label>Dust <span class="hint">(grams)</span></label><input type="number" min="0" step="1" id="ccDustG_${c.key}" placeholder="e.g. 100"></div>
-      </div>
-      <div class="btn-row" style="margin:6px 0 10px;">
-        <button type="button" class="btn btn-primary btn-sm" onclick="addGrindBatch('${c.key}')"><i class="business-icon icon-inline" data-lucide="plus" aria-hidden="true"></i> Add Round</button>
-      </div>
-      <div class="stat-grid" style="margin-bottom:8px;">
-        <div class="stat"><div class="k">Ground Today</div><div class="v">${fmt2(kg)} kg</div></div>
-        <div class="stat"><div class="k">Usable</div><div class="v">${fmt2(usableKg)} kg</div></div>
-        <div class="stat"><div class="k">Dust</div><div class="v">${fmt2(dustG)} g</div></div>
-        <div class="stat accent"><div class="k">Raw Cost</div><div class="v">${fmt(rawCost)}</div></div>
-      </div>
-      ${roundsHtml}
-    </div>`;
-  }).join('');
+function ensureGrindCheckedIds() {
+  if (!Array.isArray(window._grindCheckedIds)) window._grindCheckedIds = [];
+  return window._grindCheckedIds;
 }
-window.renderComboCards = renderComboCards;
 
-async function addGrindBatch(comboKey) {
-  const kgEl = $('ccKg_' + comboKey);
-  const dustEl = $('ccDustG_' + comboKey);
-  const kg = Number(kgEl && kgEl.value) || 0;
-  const dustG = Number(dustEl && dustEl.value) || 0;
+function onGrindComboCheckToggle(typeId) {
+  const checked = ensureGrindCheckedIds();
+  const idx = checked.indexOf(typeId);
+  if (idx >= 0) checked.splice(idx, 1); else checked.push(typeId);
+  renderGrindingComboLabel();
+}
+window.onGrindComboCheckToggle = onGrindComboCheckToggle;
+
+function renderGrindingComboLabel() {
   const types = ensureUmbalakadaTypes().filter(t => t.core);
-  const ids = String(comboKey || '').split('+').filter(Boolean);
-  const checkedTypes = types.filter(t => ids.includes(t.id));
-  if (checkedTypes.length === 0) { alert('Unknown combo — refresh the page and try again.'); return; }
-  if (kg <= 0) { alert('Enter the kg ground for this combo.'); return; }
-  if (dustG < 0) { alert('Enter a valid dust weight (grams).'); return; }
-  if (dustG > kg * 1000) { alert('Dust produced can\'t be more than the Umbalakada that went in — check the numbers.'); return; }
+  const checked = ensureGrindCheckedIds();
+  const chosen = types.filter(t => checked.includes(t.id));
+  const labelEl = $('ccComboLabel');
+  if (labelEl) labelEl.textContent = chosen.length ? chosen.map(t => t.name).join(' + ') : 'No type selected yet';
+  // Suggest the last-used price for this exact combo, if any — editable.
+  const key = grindComboKey(checked);
   const saved = ensureGrindComboPrices();
-  const priceKg = Number(saved[comboKey]) || 0;
-  if (priceKg <= 0) { alert("Set this combo's Price/kg first — the field at the top of its card."); return; }
+  const priceEl = $('ccPrice');
+  if (priceEl && !priceEl.dataset.userTouched && saved[key] != null) priceEl.value = saved[key];
+}
+window.renderGrindingComboLabel = renderGrindingComboLabel;
+
+function renderGrindingForm() {
+  const wrap = $('ccComboChecks');
+  if (!wrap) return;
+  const types = ensureUmbalakadaTypes().filter(t => t.core);
+  const checked = ensureGrindCheckedIds();
+  wrap.innerHTML = types.map(t => `
+    <label style="display:flex;align-items:center;gap:5px;font-size:.85rem;font-weight:600;padding:6px 10px;border:1px solid var(--border,#e5e7eb);border-radius:8px;cursor:pointer;">
+      <input type="checkbox" value="${t.id}" ${checked.includes(t.id) ? 'checked' : ''} onchange="onGrindComboCheckToggle('${t.id}')"> ${t.name}
+    </label>`).join('');
+  const priceEl = $('ccPrice');
+  if (priceEl && !priceEl.dataset.bound) { priceEl.addEventListener('input', () => { priceEl.dataset.userTouched = '1'; }); priceEl.dataset.bound = '1'; }
+  renderGrindingComboLabel();
+}
+window.renderGrindingForm = renderGrindingForm;
+
+// How much of each core type is still available to grind today = what was
+// bought today (Stage 1 sync) minus what's already been used in today's
+// logged batches for that type. A batch's kg is split evenly across the
+// types it mixed (that's the best approximation we can make — the owner
+// doesn't log separate kg per type inside one mixed grind).
+function getRemainingUmbalakadaByType() {
+  const types = ensureUmbalakadaTypes().filter(t => t.core);
+  const remaining = {};
+  types.forEach(t => { remaining[t.id] = Number(umbalakadaGroundTodayByType[t.id]) || 0; });
+  grindBatchesToday.forEach(b => {
+    const ids = b.typeIds || [];
+    if (!ids.length) return;
+    const share = (b.kg || 0) / ids.length;
+    ids.forEach(id => { if (remaining[id] != null) remaining[id] -= share; });
+  });
+  return remaining;
+}
+window.getRemainingUmbalakadaByType = getRemainingUmbalakadaByType;
+
+async function addGrindBatchV2() {
+  const checked = ensureGrindCheckedIds().slice();
+  const types = ensureUmbalakadaTypes().filter(t => t.core);
+  const checkedTypes = types.filter(t => checked.includes(t.id));
+  const priceKg = Number($('ccPrice') && $('ccPrice').value) || 0;
+  const kg = Number($('ccKg') && $('ccKg').value) || 0;
+  const dustKg = Number($('ccDustKg') && $('ccDustKg').value) || 0;
+  const dustPriceKg = Number($('ccDustPriceKg') && $('ccDustPriceKg').value) || 0;
+  const dustUsedKg = Number($('ccDustUsedKg') && $('ccDustUsedKg').value) || 0;
+
+  if (checkedTypes.length === 0) { alert('Tick at least one Umbalakada type for this batch.'); return; }
+  if (kg <= 0) { alert('Enter the kg ground for this batch.'); return; }
+  if (priceKg <= 0) { alert('Enter this batch\'s Price/kg.'); return; }
+  if (dustKg < 0 || dustKg > kg) { alert('Dust (kg) must be between 0 and the kg ground.'); return; }
+  if (dustUsedKg < 0 || dustUsedKg > dustKg) { alert('Dust Used/Sold can\'t be more than the Dust made.'); return; }
+
+  // ---- Stock validation: don't grind more than what was bought today ----
+  const remaining = getRemainingUmbalakadaByType();
+  const editingOld = editingGrindBatchId ? grindBatchesToday.find(b => b.id === editingGrindBatchId) : null;
+  if (editingOld) {
+    // Put the old batch's kg back before checking, since we're replacing it.
+    const oldShare = (editingOld.kg || 0) / (editingOld.typeIds || []).length;
+    (editingOld.typeIds || []).forEach(id => { if (remaining[id] != null) remaining[id] += oldShare; });
+  }
+  const availableForCombo = checkedTypes.reduce((s, t) => s + Math.max(0, remaining[t.id] || 0), 0);
+  const banner = $('ccStockBanner');
+  if (kg > availableForCombo + 0.0001) {
+    if (banner) { banner.style.display = 'block'; banner.textContent = `⚠️ You only have about ${fmt2(availableForCombo)} kg of ${checkedTypes.map(t => t.name).join('/')} left from today's purchase — ${fmt2(kg)} kg would over-grind it. Add it anyway only if you're using stock from another day.`; }
+    if (!confirm(`This exceeds today's bought stock for ${checkedTypes.map(t => t.name).join('/')} by ${fmt2(kg - availableForCombo)} kg. Add anyway?`)) return;
+  } else if (banner) { banner.style.display = 'none'; }
+
   clearStockMovementError();
+  const comboKey = grindComboKey(checked);
   const typeIds = checkedTypes.map(t => t.id);
   const typeName = checkedTypes.map(t => t.name).join(' & ');
-  const usableKg = Math.max(0, kg - (dustG / 1000));
+  const usableKg = Math.max(0, kg - dustKg);
+  const dustValueUsed = dustUsedKg * dustPriceKg;
   const map = state.grindProductMap || {};
-  // Every combo's usable output restocks the SAME single "Umbalakada Chips"
-  // product — Linna, Balaya, Premium Mix, or any mix of them, all become
-  // one product line on the shelf, not separate per-type stock.
   const productId = map.chips || '';
   const dustProductId = map.dust || '';
 
+  // Remember this combo's price for next time (convenience only).
+  ensureGrindComboPrices()[comboKey] = priceKg;
+  onDataChange();
+
+  if (editingGrindBatchId) {
+    // Reverse the old batch's stock movements first, same as a delete.
+    const old = grindBatchesToday.find(b => b.id === editingGrindBatchId);
+    if (old) {
+      if (old.usableKg > 0 && old.productId) await applyStockMovement(old.productId, -old.usableKg, 'adjustment', `Grind batch edited: ${old.typeName}`);
+      if (old.dustProductId && (old.dustUsedKg || 0) > 0) await applyStockMovement(old.dustProductId, 0, 'adjustment', 'Grind batch edited (dust value only, no stock change)');
+      grindBatchesToday = grindBatchesToday.filter(b => b.id !== editingGrindBatchId);
+    }
+  }
+
   const batch = {
-    id: 'gb_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
-    comboKey, typeIds, typeName, kg, dustG, priceKg,
-    rawCost: kg * priceKg,
-    usableKg,
-    yieldPct: kg > 0 ? (dustG / (kg * 1000)) * 100 : 0,
-    productId, dustProductId
+    id: editingGrindBatchId || ('gb_' + Date.now() + '_' + Math.floor(Math.random() * 1000)),
+    comboKey, typeIds, typeName, kg,
+    dustG: dustKg * 1000, dustKg, dustPriceKg, dustUsedKg, dustValueUsed,
+    priceKg, rawCost: kg * priceKg, usableKg,
+    yieldPct: kg > 0 ? (dustKg / kg) * 100 : 0,
+    productId, dustProductId,
+    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   };
   grindBatchesToday.push(batch);
-  if (kgEl) kgEl.value = '';
-  if (dustEl) dustEl.value = '';
+  editingGrindBatchId = null;
+  ['ccKg', 'ccDustKg', 'ccDustPriceKg', 'ccDustUsedKg'].forEach(id => { const el = $(id); if (el) el.value = ''; });
+  const priceEl = $('ccPrice'); if (priceEl) priceEl.dataset.userTouched = '';
+  const addBtn = $('ccAddBtn'); if (addBtn) addBtn.innerHTML = '<i class="business-icon icon-inline" data-lucide="plus" aria-hidden="true"></i> Add Batch';
+  const cancelBtn = $('ccCancelEditBtn'); if (cancelBtn) cancelBtn.style.display = 'none';
   renderGrindBatches();
-  renderComboCards();
+  renderGrindingForm();
 
-  // Restock whatever's linked in Stage 4 (Value Addition). If a side isn't
-  // linked, that's not an error — but it's also no longer silent: a clear
-  // amber notice tells you exactly what to link, and "Apply Links to
-  // Today's Rounds" (Stage 4) can backfill this exact batch retroactively
-  // once you've linked it, with no need to delete and re-add.
   const unlinkedParts = [];
   let anyMovementFailed = false;
   if (usableKg > 0) {
@@ -2324,9 +2373,9 @@ async function addGrindBatch(comboKey) {
       unlinkedParts.push('Umbalakada Chips');
     }
   }
-  if (dustG > 0) {
+  if (dustUsedKg > 0) {
     if (dustProductId) {
-      const r = await applyStockMovement(dustProductId, dustG / 1000, 'production', `Grind batch dust: ${typeName} — ${fmt2(dustG)}g`);
+      const r = await applyStockMovement(dustProductId, dustUsedKg, 'production', `Grind batch dust used: ${typeName} — ${fmt2(dustUsedKg)}kg`);
       if (!r.ok) anyMovementFailed = true;
     } else {
       unlinkedParts.push('Dust');
@@ -2336,14 +2385,44 @@ async function addGrindBatch(comboKey) {
   if (anyMovementFailed) {
     // applyStockMovement already put the specific reason in the banner.
   } else if (unlinkedParts.length > 0) {
-    showStockLinkWarning(`Batch added, but ${unlinkedParts.join(' & ')} isn't linked to a product in Stage 4 (Value Addition), so Stock wasn't touched for it. Link it, then use "Apply Links to Today's Rounds" to backfill this batch.`);
+    showStockLinkWarning(`Batch added, but ${unlinkedParts.join(' & ')} isn't linked to a product (Product Links), so Stock wasn't touched for it. Link it, then use "Apply Links to Today's Batches" to backfill this batch.`);
     updateStatus(`✅ Batch added (${unlinkedParts.join(', ')} not linked to stock)`);
   } else {
-    updateStatus(`✅ Batch added: ${fmt2(kg)}kg ${typeName} → ${fmt2(usableKg)}kg Chips, ${fmt2(dustG)}g dust — Stock updated`);
+    updateStatus(`✅ Batch added: ${fmt2(kg)}kg ${typeName} → ${fmt2(usableKg)}kg Chips, ${fmt2(dustUsedKg)}kg dust used — Stock updated`);
   }
   renderStockUpdateSummary();
+  renderTodayActivityLog();
 }
-window.addGrindBatch = addGrindBatch;
+window.addGrindBatchV2 = addGrindBatchV2;
+
+function editGrindBatch(id) {
+  const b = grindBatchesToday.find(x => x.id === id);
+  if (!b) return;
+  editingGrindBatchId = id;
+  window._grindCheckedIds = (b.typeIds || []).slice();
+  renderGrindingForm();
+  const priceEl = $('ccPrice'); if (priceEl) { priceEl.value = b.priceKg; priceEl.dataset.userTouched = '1'; }
+  if ($('ccKg')) $('ccKg').value = b.kg;
+  if ($('ccDustKg')) $('ccDustKg').value = b.dustKg != null ? b.dustKg : (b.dustG || 0) / 1000;
+  if ($('ccDustPriceKg')) $('ccDustPriceKg').value = b.dustPriceKg || '';
+  if ($('ccDustUsedKg')) $('ccDustUsedKg').value = b.dustUsedKg || '';
+  const addBtn = $('ccAddBtn'); if (addBtn) addBtn.innerHTML = '<i class="business-icon icon-inline" data-lucide="save" aria-hidden="true"></i> Save Changes';
+  const cancelBtn = $('ccCancelEditBtn'); if (cancelBtn) cancelBtn.style.display = '';
+  const stage = $('dplStage2'); if (stage) stage.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+window.editGrindBatch = editGrindBatch;
+
+function cancelEditGrindBatch() {
+  editingGrindBatchId = null;
+  window._grindCheckedIds = [];
+  ['ccKg', 'ccDustKg', 'ccDustPriceKg', 'ccDustUsedKg'].forEach(id => { const el = $(id); if (el) el.value = ''; });
+  const priceEl = $('ccPrice'); if (priceEl) { priceEl.value = ''; priceEl.dataset.userTouched = ''; }
+  const addBtn = $('ccAddBtn'); if (addBtn) addBtn.innerHTML = '<i class="business-icon icon-inline" data-lucide="plus" aria-hidden="true"></i> Add Batch';
+  const cancelBtn = $('ccCancelEditBtn'); if (cancelBtn) cancelBtn.style.display = 'none';
+  const banner = $('ccStockBanner'); if (banner) banner.style.display = 'none';
+  renderGrindingForm();
+}
+window.cancelEditGrindBatch = cancelEditGrindBatch;
 
 // Re-applies today's Value Addition links to any grind round that was
 // logged before it had a product linked (or before the link existed at
@@ -2356,20 +2435,17 @@ async function relinkTodayGrindBatches() {
   let updated = 0, stillUnlinked = 0, failed = 0;
   for (const b of grindBatchesToday) {
     let touched = false;
-    // New combo batches always restock the single Chips product; a batch
-    // saved before this change (single b.typeId, no b.typeIds) falls back
-    // to whatever that type's old per-type link was, if it still exists.
     const targetProductId = map.chips || (b.typeId ? map[b.typeId] : '');
     if (b.usableKg > 0 && !b.productId && targetProductId) {
       const r = await applyStockMovement(targetProductId, b.usableKg, 'production', `Grind batch (backfilled): ${b.typeName} — ${fmt2(b.usableKg)}kg usable`);
       if (r.ok) { b.productId = targetProductId; touched = true; } else { failed++; }
     }
-    if (b.dustG > 0 && !b.dustProductId && map.dust) {
-      const r = await applyStockMovement(map.dust, b.dustG / 1000, 'production', `Grind batch dust (backfilled): ${b.typeName} — ${fmt2(b.dustG)}g`);
+    if ((b.dustUsedKg || 0) > 0 && !b.dustProductId && map.dust) {
+      const r = await applyStockMovement(map.dust, b.dustUsedKg, 'production', `Grind batch dust used (backfilled): ${b.typeName} — ${fmt2(b.dustUsedKg)}kg`);
       if (r.ok) { b.dustProductId = map.dust; touched = true; } else { failed++; }
     }
     if (touched) updated++;
-    if ((b.usableKg > 0 && !b.productId) || (b.dustG > 0 && !b.dustProductId)) stillUnlinked++;
+    if ((b.usableKg > 0 && !b.productId) || ((b.dustUsedKg || 0) > 0 && !b.dustProductId)) stillUnlinked++;
   }
   renderGrindBatches();
   renderStockUpdateSummary();
@@ -2377,10 +2453,10 @@ async function relinkTodayGrindBatches() {
     // Banner already shows the specific error from applyStockMovement.
   } else if (updated === 0) {
     showStockLinkWarning(stillUnlinked > 0
-      ? 'Nothing to backfill yet — link the missing type(s)/dust in Stage 4 first, then click this again.'
+      ? 'Nothing to backfill yet — link the missing type(s)/dust in Product Links first, then click this again.'
       : 'Everything today is already linked and stocked — nothing to backfill.');
   } else {
-    updateStatus(`✅ Backfilled Stock for ${updated} round${updated > 1 ? 's' : ''} today.`);
+    updateStatus(`✅ Backfilled Stock for ${updated} batch${updated > 1 ? 'es' : ''} today.`);
   }
 }
 window.relinkTodayGrindBatches = relinkTodayGrindBatches;
@@ -2393,30 +2469,31 @@ async function deleteGrindBatch(id) {
   clearStockMovementError();
   // Reverse using the productId(s) stamped onto the batch itself at the
   // moment it was added — not today's current mapping — so deleting an old
-  // batch always undoes exactly what it originally added, even if the
-  // Link Grinding to Store Products mapping has since changed.
+  // batch always undoes exactly what it originally added, even if Product
+  // Links has since changed.
   if (batch.usableKg > 0 && batch.productId) {
     await applyStockMovement(batch.productId, -batch.usableKg, 'adjustment', `Grind batch deleted: ${batch.typeName}`);
   }
-  if (batch.dustG > 0 && batch.dustProductId) {
-    await applyStockMovement(batch.dustProductId, -(batch.dustG / 1000), 'adjustment', `Grind batch dust deleted: ${batch.typeName}`);
+  if ((batch.dustUsedKg || 0) > 0 && batch.dustProductId) {
+    await applyStockMovement(batch.dustProductId, -batch.dustUsedKg, 'adjustment', `Grind batch dust deleted: ${batch.typeName}`);
   }
   renderStockUpdateSummary();
+  renderTodayActivityLog();
 }
 window.deleteGrindBatch = deleteGrindBatch;
 
 function renderGrindBatches() {
   const tbody = $('grindBatchesBody');
   if (!tbody) return;
-  const dustSalePrice = Number($('dpDustSalePrice') && $('dpDustSalePrice').value) || 0;
 
   if (grindBatchesToday.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;opacity:.5;padding:14px;">No batches logged yet today — add one above after each grind.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;opacity:.5;padding:14px;">No batches logged yet today — add one above after each grind.</td></tr>';
   } else {
     tbody.innerHTML = grindBatchesToday.map(b => {
-      const valueRs = (b.dustG / 1000) * dustSalePrice;
-      const usableKg = b.usableKg != null ? b.usableKg : Math.max(0, b.kg - b.dustG / 1000);
+      const dustKg = b.dustKg != null ? b.dustKg : (b.dustG || 0) / 1000;
+      const usableKg = b.usableKg != null ? b.usableKg : Math.max(0, b.kg - dustKg);
       const priceKg = b.priceKg || 0;
+      const dustValueUsed = b.dustValueUsed != null ? b.dustValueUsed : (b.dustUsedKg || 0) * (b.dustPriceKg || 0);
       const stockedParts = [];
       if (b.productId) {
         const gp = (products || []).find(p => String(p.id) === String(b.productId));
@@ -2431,11 +2508,13 @@ function renderGrindBatches() {
         <td>${b.typeName}</td>
         <td>${fmt2(b.kg)} kg</td>
         <td>${priceKg ? fmt(priceKg) : '—'}</td>
-        <td>${fmt2(b.dustG)} g</td>
+        <td>${fmt2(dustKg)} kg</td>
+        <td>${fmt2(b.dustUsedKg || 0)} kg</td>
         <td>${fmt2(usableKg)} kg</td>
-        <td class="num">${fmt(valueRs)}</td>
+        <td class="num">${fmt(dustValueUsed)}</td>
         <td style="font-size:.82rem;">${stockedTo}</td>
         <td>${actionMenuHTML([
+          { label: 'Edit', icon: '✏️', onclick: `editGrindBatch('${b.id}')` },
           { label: 'Delete', icon: '🗑️', danger: true, onclick: `deleteGrindBatch('${b.id}')` }
         ])}</td>
       </tr>`;
@@ -2443,19 +2522,19 @@ function renderGrindBatches() {
   }
 
   const totalKg = grindBatchesToday.reduce((s, b) => s + b.kg, 0);
-  const totalDustG = grindBatchesToday.reduce((s, b) => s + b.dustG, 0);
-  const totalUsableKg = grindBatchesToday.reduce((s, b) => s + (b.usableKg != null ? b.usableKg : Math.max(0, b.kg - b.dustG / 1000)), 0);
+  const totalDustKg = grindBatchesToday.reduce((s, b) => s + (b.dustKg != null ? b.dustKg : (b.dustG || 0) / 1000), 0);
+  const totalUsableKg = grindBatchesToday.reduce((s, b) => s + (b.usableKg != null ? b.usableKg : Math.max(0, b.kg - (b.dustKg || 0))), 0);
   const totalRawCost = grindBatchesToday.reduce((s, b) => s + (b.rawCost != null ? b.rawCost : (b.kg * (b.priceKg || 0))), 0);
-  const avgYieldPct = totalKg > 0 ? (totalDustG / (totalKg * 1000)) * 100 : 0;
-  const totalDustValue = (totalDustG / 1000) * dustSalePrice;
-  lastDustBatchesValueForSave = totalDustValue;
+  const avgYieldPct = totalKg > 0 ? (totalDustKg / totalKg) * 100 : 0;
+  const totalDustValueUsed = grindBatchesToday.reduce((s, b) => s + (b.dustValueUsed != null ? b.dustValueUsed : (b.dustUsedKg || 0) * (b.dustPriceKg || 0)), 0);
+  lastDustBatchesValueForSave = totalDustValueUsed;
 
   const totalKgEl = $('gbTotalKg'), totalDustEl = $('gbTotalDust'), avgYieldEl = $('gbAvgYield'), dustValueEl = $('gbDustValue');
   const totalUsableEl = $('gbTotalUsable'), totalRawCostEl = $('gbTotalRawCost');
   if (totalKgEl) totalKgEl.textContent = fmt2(totalKg) + ' kg';
-  if (totalDustEl) totalDustEl.textContent = fmt2(totalDustG) + ' g (' + fmt2(totalDustG / 1000) + ' kg)';
+  if (totalDustEl) totalDustEl.textContent = fmt2(totalDustKg * 1000) + ' g (' + fmt2(totalDustKg) + ' kg)';
   if (avgYieldEl) avgYieldEl.textContent = avgYieldPct.toFixed(1) + '%';
-  if (dustValueEl) dustValueEl.textContent = fmt(totalDustValue);
+  if (dustValueEl) dustValueEl.textContent = fmt(totalDustValueUsed);
   if (totalUsableEl) totalUsableEl.textContent = fmt2(totalUsableKg) + ' kg';
   if (totalRawCostEl) totalRawCostEl.textContent = fmt(totalRawCost);
 
@@ -2466,17 +2545,142 @@ function renderGrindBatches() {
   const noteEl = $('gbNote');
   if (grindBatchesToday.length > 0) {
     if ($('dpUmbalakadaGroundKg')) $('dpUmbalakadaGroundKg').value = fmt2(totalKg);
-    if ($('dpDustGeneratedKg')) $('dpDustGeneratedKg').value = fmt2(totalDustG / 1000);
+    if ($('dpDustGeneratedKg')) $('dpDustGeneratedKg').value = fmt2(totalDustKg);
     if (noteEl) noteEl.textContent = `🔄 ${grindBatchesToday.length} batch${grindBatchesToday.length > 1 ? 'es' : ''} logged today — these real measured totals have replaced the estimated Umbalakada Ground / Dust Generated figures above.`;
   } else if (noteEl) {
     noteEl.textContent = 'Add a batch above after each grind — its real measured totals will replace the estimated figures above.';
   }
 
-  renderComboCards();
+  renderGrindingForm();
   updateDailyProductionSummaryLive();
   renderStockUpdateSummary();
 }
 window.renderGrindBatches = renderGrindBatches;
+
+// ==================== UMBALAKADA — NON-GROUND (WHOLE / L-SIZE PCS) ====================
+// A separate product line that never touches the Grinding pipeline above —
+// straight from "bought" to Stock, for whole/L-size Umbalakada sold as-is.
+// Kept in-memory for today (like grindBatchesToday) and stamped with the
+// productId it stocked, so delete/edit can reverse exactly what was added.
+function renderLpcsBatches() {
+  const tbody = $('lpcsBatchesBody');
+  if (!tbody) return;
+  if (lpcsBatchesToday.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;opacity:.5;padding:14px;">Nothing added yet today.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = lpcsBatchesToday.map(b => `<tr>
+    <td>${b.time || ''}</td>
+    <td>${fmt2(b.qty)}</td>
+    <td>${b.cost ? fmt(b.cost) : '—'}</td>
+    <td>${b.note ? String(b.note).replace(/</g, '&lt;') : ''}</td>
+    <td>${actionMenuHTML([
+      { label: 'Edit', icon: '✏️', onclick: `editLpcsEntry('${b.id}')` },
+      { label: 'Delete', icon: '🗑️', danger: true, onclick: `deleteLpcsEntry('${b.id}')` }
+    ])}</td>
+  </tr>`).join('');
+}
+window.renderLpcsBatches = renderLpcsBatches;
+
+async function addLpcsEntry() {
+  const qty = Number($('lpcsQty') && $('lpcsQty').value) || 0;
+  const cost = Number($('lpcsCost') && $('lpcsCost').value) || 0;
+  const note = ($('lpcsNote') && $('lpcsNote').value.trim()) || '';
+  if (qty <= 0) { alert('Enter the qty of L-pcs Umbalakada to add.'); return; }
+
+  const map = state.grindProductMap || {};
+  const productId = map.lpcs || '';
+  const banner = $('lpcsStockBanner');
+  if (banner) banner.style.display = 'none';
+
+  clearStockMovementError();
+  if (editingLpcsId) {
+    const old = lpcsBatchesToday.find(b => b.id === editingLpcsId);
+    if (old && old.productId) await applyStockMovement(old.productId, -old.qty, 'adjustment', 'L-pcs entry edited');
+    lpcsBatchesToday = lpcsBatchesToday.filter(b => b.id !== editingLpcsId);
+  }
+
+  const entry = {
+    id: editingLpcsId || ('lp_' + Date.now() + '_' + Math.floor(Math.random() * 1000)),
+    qty, cost, note, productId,
+    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  };
+  lpcsBatchesToday.push(entry);
+  editingLpcsId = null;
+  ['lpcsQty', 'lpcsCost', 'lpcsNote'].forEach(id => { const el = $(id); if (el) el.value = ''; });
+  const addBtn = $('lpcsAddBtn'); if (addBtn) addBtn.innerHTML = '<i class="business-icon icon-inline" data-lucide="plus" aria-hidden="true"></i> Add to Stock';
+  const cancelBtn = $('lpcsCancelEditBtn'); if (cancelBtn) cancelBtn.style.display = 'none';
+  renderLpcsBatches();
+
+  if (productId) {
+    const r = await applyStockMovement(productId, qty, 'production', note ? `Umbalakada L pcs: ${note}` : 'Umbalakada L pcs added');
+    updateStatus(r.ok ? `✅ ${fmt2(qty)} L-pcs added to Stock` : '⚠️ Stock update failed, see notice above');
+  } else {
+    showStockLinkWarning('Umbalakada L Pcs isn\'t linked to a product (Product Links), so Stock wasn\'t touched. Link it, then edit this entry to resend it.');
+    updateStatus('✅ Entry added (not linked to stock yet)');
+  }
+  renderStockUpdateSummary();
+  renderTodayActivityLog();
+}
+window.addLpcsEntry = addLpcsEntry;
+
+function editLpcsEntry(id) {
+  const b = lpcsBatchesToday.find(x => x.id === id);
+  if (!b) return;
+  editingLpcsId = id;
+  if ($('lpcsQty')) $('lpcsQty').value = b.qty;
+  if ($('lpcsCost')) $('lpcsCost').value = b.cost || '';
+  if ($('lpcsNote')) $('lpcsNote').value = b.note || '';
+  const addBtn = $('lpcsAddBtn'); if (addBtn) addBtn.innerHTML = '<i class="business-icon icon-inline" data-lucide="save" aria-hidden="true"></i> Save Changes';
+  const cancelBtn = $('lpcsCancelEditBtn'); if (cancelBtn) cancelBtn.style.display = '';
+}
+window.editLpcsEntry = editLpcsEntry;
+
+function cancelEditLpcsEntry() {
+  editingLpcsId = null;
+  ['lpcsQty', 'lpcsCost', 'lpcsNote'].forEach(id => { const el = $(id); if (el) el.value = ''; });
+  const addBtn = $('lpcsAddBtn'); if (addBtn) addBtn.innerHTML = '<i class="business-icon icon-inline" data-lucide="plus" aria-hidden="true"></i> Add to Stock';
+  const cancelBtn = $('lpcsCancelEditBtn'); if (cancelBtn) cancelBtn.style.display = 'none';
+}
+window.cancelEditLpcsEntry = cancelEditLpcsEntry;
+
+async function deleteLpcsEntry(id) {
+  const batch = lpcsBatchesToday.find(b => b.id === id);
+  lpcsBatchesToday = lpcsBatchesToday.filter(b => b.id !== id);
+  renderLpcsBatches();
+  if (!batch) return;
+  clearStockMovementError();
+  if (batch.productId) await applyStockMovement(batch.productId, -batch.qty, 'adjustment', 'L-pcs entry deleted');
+  renderStockUpdateSummary();
+  renderTodayActivityLog();
+}
+window.deleteLpcsEntry = deleteLpcsEntry;
+
+// ==================== TODAY'S ACTIVITY — UNIFIED HISTORY ====================
+// Merges Grinding batches, L-pcs entries and Packing batches into one
+// time-ordered list for a quick end-of-day check — read-only, doesn't move
+// any stock itself.
+function renderTodayActivityLog() {
+  const tbody = $('todayActivityBody');
+  if (!tbody) return;
+  const rows = [];
+  grindBatchesToday.forEach(b => rows.push({ time: b.time || '', type: 'Grinding', detail: `${b.typeName} — ${fmt2(b.kg)}kg @ Rs.${fmt(b.priceKg || 0)}/kg, dust ${fmt2(b.dustKg || 0)}kg` }));
+  lpcsBatchesToday.forEach(b => rows.push({ time: b.time || '', type: 'L Pcs', detail: `${fmt2(b.qty)} qty${b.cost ? ', Rs.' + fmt(b.cost) : ''}${b.note ? ' — ' + b.note : ''}` }));
+  (dailyChipsPackBatchesCache || []).forEach(b => {
+    const time = b.created_at ? new Date(b.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+    const list = ensureChipPackTypes();
+    const nameById = {}; list.forEach(t => { nameById[t.id] = t.name; });
+    const qtys = b.pack_qtys || {};
+    const parts = Object.keys(qtys).filter(k => Number(qtys[k]) > 0).map(k => `${qtys[k]}× ${nameById[k] || 'size'}`);
+    rows.push({ time, type: 'Packing', detail: `${parts.join(', ') || '—'} (${fmt2(b.chips_kg_used || 0)}kg Chips used)` });
+  });
+  if (rows.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;opacity:.5;padding:14px;">Nothing logged yet today.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(r => `<tr><td>${r.time}</td><td>${r.type}</td><td>${r.detail}</td></tr>`).join('');
+}
+window.renderTodayActivityLog = renderTodayActivityLog;
 
 // ==================== STAGE 6: STOCK — CONFIRMED MOVEMENTS TODAY ====================
 // Pure read-only summary for the Daily Production Log's "Stock" stage — it
@@ -2574,7 +2778,7 @@ window.renderStockUpdateSummary = renderStockUpdateSummary;
 // was last saved in today's production_cost_log row — never overwrites
 // batches already sitting unsaved in memory this session.
 function loadTodayGrindBatchesFromLog() {
-  renderComboCards();
+  renderGrindingForm();
   if (grindBatchesToday.length === 0) {
     const today = todayIso();
     const rec = (dailyProductionLogCache || []).find(r => r.log_date === today);
@@ -2607,7 +2811,8 @@ window.loadTodayGrindBatchesFromLog = loadTodayGrindBatchesFromLog;
 function populateGrindProductMapSelects() {
   const grid = $('gpmGrid');
   const dustSel = $('gpmMapDust');
-  if (!grid && !dustSel) return;
+  const lpcsSel = $('gpmMapLpcs');
+  if (!grid && !dustSel && !lpcsSel) return;
   const optionsHtml = '<option value="">— Not linked —</option>' +
     (products || []).map(p => `<option value="${p.id}">${p.name}</option>`).join('');
   if (grid) {
@@ -2625,6 +2830,10 @@ function populateGrindProductMapSelects() {
     dustSel.innerHTML = optionsHtml;
     dustSel.value = (state.grindProductMap && state.grindProductMap.dust) || '';
   }
+  if (lpcsSel) {
+    lpcsSel.innerHTML = optionsHtml;
+    lpcsSel.value = (state.grindProductMap && state.grindProductMap.lpcs) || '';
+  }
 }
 window.populateGrindProductMapSelects = populateGrindProductMapSelects;
 
@@ -2634,6 +2843,8 @@ function onGrindProductMapChange() {
   if (sel) state.grindProductMap.chips = sel.value;
   const dustSel = $('gpmMapDust');
   if (dustSel) state.grindProductMap.dust = dustSel.value;
+  const lpcsSel = $('gpmMapLpcs');
+  if (lpcsSel) state.grindProductMap.lpcs = lpcsSel.value;
   onDataChange();
 }
 window.onGrindProductMapChange = onGrindProductMapChange;
@@ -4147,19 +4358,32 @@ async function applyPackBatchStockMovements(qtyByKey, note, sign) {
 // blob, same as state.grindProductMap / state.packProductMap).
 function ensureChipPackTypes() {
   if (!Array.isArray(state.chipPackTypes)) state.chipPackTypes = [];
+  // Pre-seed the 4 standard sizes the owner actually uses (50g/100g/500g/1kg)
+  // the first time this runs, so there's nothing to set up before linking
+  // products — the owner can still add more custom sizes alongside these.
+  if (state.chipPackTypes.length === 0) {
+    state.chipPackTypes = [
+      { id: 'cpt_fixed_50', name: '50g Pack', weightG: 50, productId: '', materialCost: 0 },
+      { id: 'cpt_fixed_100', name: '100g Pack', weightG: 100, productId: '', materialCost: 0 },
+      { id: 'cpt_fixed_500', name: '500g Pack', weightG: 500, productId: '', materialCost: 0 },
+      { id: 'cpt_fixed_1000', name: '1kg Pack', weightG: 1000, productId: '', materialCost: 0 }
+    ];
+  }
   return state.chipPackTypes;
 }
 window.ensureChipPackTypes = ensureChipPackTypes;
 
 function addChipPackType() {
-  const nameEl = $('cptNewName'), weightEl = $('cptNewWeight');
+  const nameEl = $('cptNewName'), weightEl = $('cptNewWeight'), materialCostEl = $('cptNewMaterialCost');
   const name = (nameEl && nameEl.value.trim()) || '';
   const weightG = Number(weightEl && weightEl.value) || 0;
-  if (!name) { alert('Enter a name for this pack/bottle size (e.g. "50g Pack", "100g Bottle").'); return; }
+  const materialCost = Number(materialCostEl && materialCostEl.value) || 0;
+  if (!name) { alert('Enter a name for this pack/bottle size (e.g. "250g Jar").'); return; }
   if (weightG <= 0) { alert('Enter the weight in grams for this pack/bottle size.'); return; }
-  ensureChipPackTypes().push({ id: 'cpt_' + Date.now() + '_' + Math.floor(Math.random() * 1000), name, weightG, productId: '' });
+  ensureChipPackTypes().push({ id: 'cpt_' + Date.now() + '_' + Math.floor(Math.random() * 1000), name, weightG, productId: '', materialCost });
   if (nameEl) nameEl.value = '';
   if (weightEl) weightEl.value = '';
+  if (materialCostEl) materialCostEl.value = '';
   onDataChange();
   renderChipPackTypesManager();
   renderChipsPackingInputs();
@@ -4183,19 +4407,28 @@ function onChipPackTypeProductChange(id) {
 }
 window.onChipPackTypeProductChange = onChipPackTypeProductChange;
 
+function onChipPackTypeMaterialCostChange(id) {
+  const el = $('cptMaterialCost_' + id);
+  const t = ensureChipPackTypes().find(x => x.id === id);
+  if (t && el) t.materialCost = Number(el.value) || 0;
+  onDataChange();
+}
+window.onChipPackTypeMaterialCostChange = onChipPackTypeMaterialCostChange;
+
 function renderChipPackTypesManager() {
   const body = $('cptListBody');
   if (!body) return;
   const list = ensureChipPackTypes();
   const optionsHtml = '<option value="">— Not linked —</option>' + (products || []).map(p => `<option value="${p.id}">${p.name}</option>`).join('');
   if (list.length === 0) {
-    body.innerHTML = '<tr><td colspan="4" style="text-align:center;opacity:.5;padding:14px;">No pack/bottle sizes defined yet — add one above (e.g. "50g Pack", "100g Bottle").</td></tr>';
+    body.innerHTML = '<tr><td colspan="5" style="text-align:center;opacity:.5;padding:14px;">No pack/bottle sizes defined yet.</td></tr>';
     return;
   }
   body.innerHTML = list.map(t => `
     <tr>
       <td>${t.name}</td>
       <td>${t.weightG}g</td>
+      <td><input type="number" id="cptMaterialCost_${t.id}" min="0" step="0.01" style="width:80px;" value="${t.materialCost || 0}" onchange="onChipPackTypeMaterialCostChange('${t.id}')"></td>
       <td><select id="cptProduct_${t.id}" onchange="onChipPackTypeProductChange('${t.id}')">${optionsHtml}</select></td>
       <td><button type="button" class="btn btn-xs btn-danger" onclick="deleteChipPackType('${t.id}')"><i class="business-icon icon-inline" data-lucide="trash-2" aria-hidden="true"></i></button></td>
     </tr>`).join('');
@@ -4245,20 +4478,22 @@ function renderChipsPackBatchList() {
   const list = ensureChipPackTypes();
   const nameById = {}; list.forEach(t => { nameById[t.id] = t.name; });
   if (batches.length === 0) {
-    body.innerHTML = '<tr><td colspan="4" style="text-align:center;opacity:.5;padding:14px;">No packing batches logged yet today.</td></tr>';
+    body.innerHTML = '<tr><td colspan="5" style="text-align:center;opacity:.5;padding:14px;">No packing batches logged yet today.</td></tr>';
   } else {
     body.innerHTML = batches.map(b => {
       const time = b.created_at ? new Date(b.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—';
       const qtys = b.pack_qtys || {};
       const parts = Object.keys(qtys).filter(k => Number(qtys[k]) > 0).map(k => `${qtys[k]}× ${nameById[k] || 'Removed size'}`);
-      return `<tr><td>${time}</td><td>${parts.join(', ') || '—'}</td><td>${fmt2(b.chips_kg_used || 0)} kg</td><td><button type="button" class="btn btn-xs btn-danger" onclick="deleteChipsPackBatch('${b.id}')"><i class="business-icon icon-inline" data-lucide="trash-2" aria-hidden="true"></i></button></td></tr>`;
+      return `<tr><td>${time}</td><td>${parts.join(', ') || '—'}</td><td>${fmt2(b.chips_kg_used || 0)} kg</td><td>${fmt(b.material_cost || 0)}</td><td><button type="button" class="btn btn-xs btn-danger" onclick="deleteChipsPackBatch('${b.id}')"><i class="business-icon icon-inline" data-lucide="trash-2" aria-hidden="true"></i></button></td></tr>`;
     }).join('');
   }
   if (noteEl) {
     const totalKg = batches.reduce((s, b) => s + (Number(b.chips_kg_used) || 0), 0);
-    noteEl.textContent = `Total Chips packed today: ${fmt2(totalKg)} kg across ${batches.length} batch${batches.length === 1 ? '' : 'es'}.`;
+    const totalMaterial = batches.reduce((s, b) => s + (Number(b.material_cost) || 0), 0);
+    noteEl.textContent = `Total Chips packed today: ${fmt2(totalKg)} kg across ${batches.length} batch${batches.length === 1 ? '' : 'es'} — Material cost: ${fmt(totalMaterial)}.`;
   }
   renderStockUpdateSummary();
+  renderTodayActivityLog();
 }
 window.renderChipsPackBatchList = renderChipsPackBatchList;
 
@@ -4269,6 +4504,7 @@ window.renderChipsPackBatchList = renderChipsPackBatchList;
 //   log_date date NOT NULL,
 //   pack_qtys jsonb NOT NULL DEFAULT '{}'::jsonb,
 //   chips_kg_used numeric NOT NULL DEFAULT 0,
+//   material_cost numeric NOT NULL DEFAULT 0,
 //   note text,
 //   created_by uuid,
 //   created_at timestamptz NOT NULL DEFAULT now()
@@ -4276,6 +4512,8 @@ window.renderChipsPackBatchList = renderChipsPackBatchList;
 // ALTER TABLE daily_chips_pack_batches ENABLE ROW LEVEL SECURITY;
 // CREATE POLICY "owner_all_chips_pack_batches" ON daily_chips_pack_batches
 //   FOR ALL USING (owner_id = auth.uid()) WITH CHECK (owner_id = auth.uid());
+// -- If this table already existed before "material_cost" was added:
+// ALTER TABLE daily_chips_pack_batches ADD COLUMN IF NOT EXISTS material_cost numeric NOT NULL DEFAULT 0;
 async function addChipsPackBatch() {
   if (userRole !== 'owner') { alert('Only the owner can add a packing batch.'); return; }
   if (!currentUser) { alert('Please login first.'); return; }
@@ -4283,14 +4521,27 @@ async function addChipsPackBatch() {
   if (list.length === 0) { alert('Define at least one pack/bottle size first (above).'); return; }
 
   const qtyById = {};
-  let anyQty = false, kgUsed = 0;
+  let anyQty = false, kgUsed = 0, materialCost = 0;
   list.forEach(t => {
     const el = $('cpkQty_' + t.id);
     const qty = Number(el && el.value) || 0;
     qtyById[t.id] = qty;
-    if (qty > 0) { anyQty = true; kgUsed += (qty * t.weightG) / 1000; }
+    if (qty > 0) { anyQty = true; kgUsed += (qty * t.weightG) / 1000; materialCost += qty * (Number(t.materialCost) || 0); }
   });
   if (!anyQty) { alert('Enter at least one pack/bottle quantity for this batch.'); return; }
+
+  // ---- Stock validation: don't pack more Chips than are actually in stock ----
+  const map = state.grindProductMap || {};
+  const chipsProductId = map.chips || '';
+  const banner = $('cpkStockBanner');
+  if (chipsProductId) {
+    const chipsProduct = (products || []).find(p => String(p.id) === String(chipsProductId));
+    const available = chipsProduct ? (Number(chipsProduct.stock_qty) || 0) : null;
+    if (available != null && kgUsed > available + 0.0001) {
+      if (banner) { banner.style.display = 'block'; banner.textContent = `⚠️ Umbalakada Chips stock is only ${fmt2(available)} kg — this batch needs ${fmt2(kgUsed)} kg.`; }
+      if (!confirm(`This packs more Chips (${fmt2(kgUsed)} kg) than is currently in stock (${fmt2(available)} kg). Add anyway?`)) return;
+    } else if (banner) { banner.style.display = 'none'; }
+  }
 
   const noteEl = $('cpkNote');
   const note = (noteEl && noteEl.value.trim()) || null;
@@ -4299,6 +4550,7 @@ async function addChipsPackBatch() {
     log_date: todayIso(),
     pack_qtys: qtyById,
     chips_kg_used: kgUsed,
+    material_cost: materialCost,
     note,
     created_by: currentUser.id
   };
@@ -5252,7 +5504,7 @@ function calcProduction() {
   lastProdAvgMarketPrice = avgFinPrice;
   lastProdAvgProfitPerKg = avgProfitPerKg;
   renderUmbalakadaPurchaseSyncTable(); // local re-render only — cloud sync happens via syncUmbalakadaGroundFromPurchaseLog()
-  renderComboCards();
+  renderGrindingForm();
   updateDailyProductionSummaryLive();
 
   const colors = getChartColors();
@@ -15142,6 +15394,8 @@ function activateAppTab(tabId){
     renderChipPackTypesManager();
     renderChipsPackingInputs();
     loadDailyChipsPackBatches();
+    renderLpcsBatches();
+    renderTodayActivityLog();
     // Stage 6 "Stock — Confirmed Today": needs today's already-logged
     // product batches (normally only fetched when the "Add Today's Product
     // Batch" modal opens) so the summary is accurate as soon as the tab
