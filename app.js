@@ -13424,10 +13424,17 @@ function calcRealIncome() {
   const realReadymadeCost = monthFishBills.filter(b => b.purchaseType === 'readymade_umbalakada').reduce((s, b) => s + b.total, 0);
 
   // Everything else the owner has logged as an expense this month, EXCLUDING
-  // "Raw Fish" (already counted above via fishBills, to avoid double-counting
-  // — every fish bill also mirrors into expenses under that exact category)
+  // "Raw Fish" AND "Ready-Made Umbalakada" (both already counted above via
+  // fishBills/realRawCost — every fish bill, raw or readymade, mirrors into
+  // expenses under one of these two exact categories depending on
+  // purchaseType — see saveFishBill()'s `expenseCategory` line. Excluding
+  // only 'Raw Fish' here left readymade purchase costs double-counted:
+  // once via realRawCost (all fish bills) and again via this expenses sum
+  // (their mirrored 'Ready-Made Umbalakada' expense row wasn't excluded).
   // — PLUS each direct sale's own wage/marketing/cost figures (see note above).
-  const monthOtherExpenses = (expenses || []).filter(e => inMonth(e.date || e.createdAt) && e.category !== 'Raw Fish');
+  const REAL_INCOME_FISH_BILL_EXPENSE_CATEGORIES = ['Raw Fish', 'Ready-Made Umbalakada'];
+  const monthOtherExpenses = (expenses || []).filter(e =>
+    inMonth(e.date || e.createdAt) && !REAL_INCOME_FISH_BILL_EXPENSE_CATEGORIES.includes(e.category));
   const realOtherExpenses = monthOtherExpenses.reduce((s, e) => s + (Number(e.amount) || 0), 0) + realDirectSalesCost;
 
   const realNetProfit = realRevenue - realRawCost - realOtherExpenses;
