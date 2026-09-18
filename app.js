@@ -2779,14 +2779,19 @@ window.renderStockUpdateSummary = renderStockUpdateSummary;
 // batches already sitting unsaved in memory this session.
 function loadTodayGrindBatchesFromLog() {
   renderGrindingForm();
-  if (grindBatchesToday.length === 0) {
+  if (grindBatchesToday.length === 0 || lpcsBatchesToday.length === 0) {
     const today = todayIso();
     const rec = (dailyProductionLogCache || []).find(r => r.log_date === today);
-    if (rec && Array.isArray(rec.grind_batches) && rec.grind_batches.length > 0) {
+    if (rec && grindBatchesToday.length === 0 && Array.isArray(rec.grind_batches) && rec.grind_batches.length > 0) {
       grindBatchesToday = rec.grind_batches.map(b => ({ ...b }));
+    }
+    if (rec && lpcsBatchesToday.length === 0 && Array.isArray(rec.lpcs_batches) && rec.lpcs_batches.length > 0) {
+      lpcsBatchesToday = rec.lpcs_batches.map(b => ({ ...b }));
     }
   }
   renderGrindBatches();
+  renderLpcsBatches();
+  renderTodayActivityLog();
 }
 window.loadTodayGrindBatchesFromLog = loadTodayGrindBatchesFromLog;
 
@@ -5827,6 +5832,7 @@ async function saveDailyProductionLog() {
   //   ADD COLUMN IF NOT EXISTS output_total_profit numeric DEFAULT 0,
   //   ADD COLUMN IF NOT EXISTS umbalakada_variety_breakdown jsonb DEFAULT '[]'::jsonb,
   //   ADD COLUMN IF NOT EXISTS grind_batches jsonb DEFAULT '[]'::jsonb,
+  //   ADD COLUMN IF NOT EXISTS lpcs_batches jsonb DEFAULT '[]'::jsonb,
   //   ADD COLUMN IF NOT EXISTS dust_batches_value numeric DEFAULT 0;
   // (Existing owner_id-uuid RLS policy already covers these new columns —
   // no policy changes needed, this only adds columns to an already-owned row.)
@@ -5860,6 +5866,7 @@ async function saveDailyProductionLog() {
     net_profit_incl_dust: totalProfit + lastNetDustImpactForSave,
     umbalakada_variety_breakdown: lastUmbalakadaBreakdownForSave,
     grind_batches: grindBatchesToday,
+    lpcs_batches: lpcsBatchesToday,
     dust_batches_value: lastDustBatchesValueForSave,
     notes,
     created_by: currentUser.id
@@ -6060,6 +6067,121 @@ function renderDailyProductionLog() {
   renderCostingGrindOutputChart();
 }
 window.renderDailyProductionLog = renderDailyProductionLog;
+
+// ==================== HISTORY — MONTHLY DIARY ====================
+// Read-only lookback across BOTH Production Batches (production_batches —
+// already fully loaded, no fetch needed) and Grinding & Production days
+// (production_cost_log + daily_chips_pack_batches, which normally only
+// keep the current month/today in memory, so this fetches the chosen
+// month specially). Nothing is moved, deleted or auto-archived — the
+// normal views above keep working exactly as they do today; this is just
+// a separate lookback filter.
+let historyMonthLogs = [];
+let historyMonthPackBatches = [];
+
+function monthRangeFromInput(monthStr) {
+  // monthStr like "2026-09" -> ["2026-09-01","2026-10-01") as strings.
+  const [y, m] = monthStr.split('-').map(Number);
+  const start = `${y}-${String(m).padStart(2, '0')}-01`;
+  const nextM = m === 12 ? 1 : m + 1;
+  const nextY = m === 12 ? y + 1 : y;
+  const end = `${nextY}-${String(nextM).padStart(2, '0')}-01`;
+  return { start, end };
+}
+
+async function loadHistoryMonth() {
+  const monthEl = $('histMonth');
+  const monthStr = (monthEl && monthEl.value) || todayIso().slice(0, 7);
+  if (monthEl && !monthEl.value) monthEl.value = monthStr;
+  if (!currentUser) { alert('Please login first.'); return; }
+  const noteEl = $('histLoadingNote');
+  if (noteEl) noteEl.textContent = 'Loading…';
+  const { start, end } = monthRangeFromInput(monthStr);
+
+  try {
+    const { data, error } = await withSessionRetry(() => supabase.from('production_cost_log')
+      .select('*').eq('owner_id', currentUser.id).gte('log_date', start).lt('log_date', end).order('log_date', { ascending: true }));
+    if (error) throw error;
+    historyMonthLogs = data || [];
+  } catch (e) {
+    console.warn('History month log load failed:', e?.message || e);
+    historyMonthLogs = [];
+  }
+
+  try {
+    const { data, error } = await withSessionRetry(() => supabase.from('daily_chips_pack_batches')
+      .select('*').eq('owner_id', currentUser.id).gte('log_date', start).lt('log_date', end).order('created_at', { ascending: true }));
+    if (error) throw error;
+    historyMonthPackBatches = data || [];
+  } catch (e) {
+    console.warn('History month pack batches load failed:', e?.message || e);
+    historyMonthPackBatches = [];
+  }
+
+  if (noteEl) noteEl.textContent = `Showing ${monthStr} — ${historyMonthLogs.length} day(s) logged.`;
+  renderHistoryMonth(start, end);
+}
+window.loadHistoryMonth = loadHistoryMonth;
+
+function renderHistoryMonth(start, end) {
+  // ---- Production Batches for the month ----
+  const batchBody = $('histBatchBody');
+  if (batchBody) {
+    const rows = (productionBatches || []).filter(b => b.date >= start && b.date < end);
+    if (rows.length === 0) {
+      batchBody.innerHTML = '<tr><td colspan="7" style="text-align:center;opacity:.5;padding:14px;">No Production Batches this month.</td></tr>';
+    } else {
+      batchBody.innerHTML = rows.map(b => `<tr>
+        <td>${b.batchNo}</td>
+        <td>${b.date}</td>
+        <td>${b.fishType}</td>
+        <td>${fmt2(b.rawKgUsed)} kg</td>
+        <td>${fmt2(b.plannedFinishedKg)} kg</td>
+        <td>${b.actualFinishedKg != null ? fmt2(b.actualFinishedKg) + ' kg' : '—'}</td>
+        <td><span class="badge ${b.status === 'completed' ? 'badge-good' : ''}">${b.status === 'completed' ? 'Completed' : 'In Progress'}</span></td>
+      </tr>`).join('');
+    }
+  }
+
+  // ---- Grinding & Production days for the month ----
+  const wrap = $('histDaysWrap');
+  if (!wrap) return;
+  if (historyMonthLogs.length === 0) {
+    wrap.innerHTML = '<p class="sub" style="margin:0;">No Grinding &amp; Production days saved this month.</p>';
+    return;
+  }
+  const packByDate = {};
+  (historyMonthPackBatches || []).forEach(b => { (packByDate[b.log_date] = packByDate[b.log_date] || []).push(b); });
+  const packTypeNameById = {};
+  ensureChipPackTypes().forEach(t => { packTypeNameById[t.id] = t.name; });
+
+  wrap.innerHTML = [...historyMonthLogs].reverse().map(r => {
+    const grindRows = Array.isArray(r.grind_batches) ? r.grind_batches : [];
+    const lpcsRows = Array.isArray(r.lpcs_batches) ? r.lpcs_batches : [];
+    const packRows = packByDate[r.log_date] || [];
+
+    const grindHtml = grindRows.length ? `<table style="margin-top:6px;"><thead><tr><th>Combo</th><th>Kg</th><th>Price/kg</th><th>Dust</th><th>Dust Used</th></tr></thead><tbody>${
+      grindRows.map(b => `<tr><td>${b.typeName || ''}</td><td>${fmt2(b.kg || 0)}</td><td>${fmt(b.priceKg || 0)}</td><td>${fmt2(b.dustKg != null ? b.dustKg : (b.dustG || 0) / 1000)}kg</td><td>${fmt2(b.dustUsedKg || 0)}kg</td></tr>`).join('')
+    }</tbody></table>` : '<p class="sub" style="margin:4px 0;opacity:.6;">No grinding batches logged.</p>';
+
+    const lpcsHtml = lpcsRows.length ? `<p class="sub" style="margin:6px 0 2px;"><strong>L Pcs:</strong> ${lpcsRows.map(b => `${fmt2(b.qty)} qty${b.cost ? ' (Rs.' + fmt(b.cost) + ')' : ''}`).join(', ')}</p>` : '';
+
+    const packHtml = packRows.length ? `<p class="sub" style="margin:6px 0 2px;"><strong>Packing:</strong> ${packRows.map(b => {
+      const qtys = b.pack_qtys || {};
+      const parts = Object.keys(qtys).filter(k => Number(qtys[k]) > 0).map(k => `${qtys[k]}× ${packTypeNameById[k] || 'size'}`);
+      return `${parts.join(', ') || '—'} (${fmt2(b.chips_kg_used || 0)}kg Chips${b.material_cost ? ', Rs.' + fmt(b.material_cost) + ' material' : ''})`;
+    }).join(' | ')}</p>` : '';
+
+    return `<div class="dpl-sub-card" style="margin-bottom:10px;">
+      <h4 style="margin:0 0 4px;font-size:.92rem;">${r.log_date} <span class="hint" style="font-weight:400;">— ${fmt2(r.kg_produced || 0)}kg produced, Profit ${fmt(r.total_profit || 0)}</span></h4>
+      ${grindHtml}
+      ${lpcsHtml}
+      ${packHtml}
+      ${r.notes ? `<p class="sub" style="margin:6px 0 0;">📝 ${String(r.notes).replace(/</g, '&lt;')}</p>` : ''}
+    </div>`;
+  }).join('');
+}
+window.renderHistoryMonth = renderHistoryMonth;
 
 // ==================== INCOME TAB — DAILY GRINDING & DUST SUMMARY ====================
 // Reads the same dailyProductionLogCache the Production tab's Daily
@@ -7696,25 +7818,31 @@ function kgAlreadyAllocated(fishBillItemId, excludeBatchId) {
   return used;
 }
 
-// Recent (last 14 days) fish bill line items with remaining unallocated kg,
-// regardless of exact fish-type label match (seller-recorded names vary),
-// so the owner can tick whichever ones actually went into this batch.
+// Fish bill line items with remaining unallocated kg, on or before the
+// selected batch date — no more hard "last 14 days from today" cutoff, so
+// a batch can be logged for ANY day, pulling from whatever raw fish was
+// actually bought up to that day (never fish bought after it). Matched
+// regardless of exact fish-type label (seller-recorded names vary), so the
+// owner ticks whichever ones actually went into this batch.
 function getAvailableFishBillSources() {
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - 14);
+  const batchDateEl = $('batchDate');
+  const batchDateStr = (batchDateEl && batchDateEl.value) || todayIso();
   const rows = [];
-  fishBills.filter(b => new Date(b.date) >= cutoff).forEach(bill => {
+  fishBills.filter(b => !b.date || b.date <= batchDateStr).forEach(bill => {
     (bill.items || []).forEach(item => {
       if (!item.id) return; // safety: only DB-backed items have ids
       const remaining = item.quantityKg - kgAlreadyAllocated(item.id, null);
       if (remaining > 0.01) {
         rows.push({
           fishBillId: bill.id, fishBillItemId: item.id, billNo: bill.billNo,
-          sellerName: bill.sellerName, fishType: item.fishType, remainingKg: remaining
+          sellerName: bill.sellerName, fishType: item.fishType, remainingKg: remaining, date: bill.date
         });
       }
     });
   });
+  // Most recent (closest to the chosen batch date) first, since that's
+  // usually what actually went into this specific batch.
+  rows.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
   return rows;
 }
 
@@ -7723,12 +7851,13 @@ function refreshBatchSourcePicker() {
   if (!tbody) return;
   const rows = getAvailableFishBillSources();
   if (rows.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;opacity:.5;padding:14px;">No recent unallocated fish bills.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;opacity:.5;padding:14px;">No unallocated fish bills on or before this date.</td></tr>';
     return;
   }
   tbody.innerHTML = rows.map((r, i) => `
     <tr>
       <td><input type="checkbox" class="bsrc-check" data-item-id="${r.fishBillItemId}" data-bill-id="${r.fishBillId}" data-max="${r.remainingKg}" onchange="onBatchSourceToggle(this)"></td>
+      <td>${r.date || '—'}</td>
       <td>${r.billNo}</td>
       <td>${r.sellerName}</td>
       <td>${r.fishType}</td>
@@ -15396,6 +15525,7 @@ function activateAppTab(tabId){
     loadDailyChipsPackBatches();
     renderLpcsBatches();
     renderTodayActivityLog();
+    if ($('histMonth') && !$('histMonth').value) $('histMonth').value = todayIso().slice(0, 7);
     // Stage 6 "Stock — Confirmed Today": needs today's already-logged
     // product batches (normally only fetched when the "Add Today's Product
     // Batch" modal opens) so the summary is accurate as soon as the tab

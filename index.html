@@ -2987,6 +2987,36 @@
       </div>
     </div>
 
+    <!-- ============ HISTORY — MONTHLY DIARY (Production Batches + Grinding & Production) ============ -->
+    <!-- Nothing gets deleted or auto-archived — this is just a month filter
+         on top of what's already saved: Production Batches (from
+         production_batches, already fully loaded) and Grinding & Production
+         daily entries (production_cost_log + daily_chips_pack_batches,
+         fetched on demand for the chosen month since those normally only
+         load the current month). See loadHistoryMonth()/renderHistoryMonth()
+         in app.js. -->
+    <div class="card" style="margin-top:16px;">
+      <h2><span class="pro-title-icon purple" aria-hidden="true"><i class="business-icon" data-lucide="book-open" aria-hidden="true"></i></span><span>History</span></h2>
+      <p class="pro-subtitle purple">Every month's Production Batches and Grinding &amp; Production days, like a diary — pick a month to look back.</p>
+
+      <div class="grid-2">
+        <div class="field"><label>Month</label><input type="month" id="histMonth"></div>
+        <div class="field" style="display:flex;align-items:flex-end;"><button type="button" class="btn btn-primary btn-sm" onclick="loadHistoryMonth()"><i class="business-icon icon-inline" data-lucide="search" aria-hidden="true"></i> Show This Month</button></div>
+      </div>
+      <p class="sub" id="histLoadingNote" style="margin:6px 0 0;"></p>
+
+      <h3 style="margin:18px 0 8px;">Production Batches</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Batch No</th><th>Date</th><th>Fish Type</th><th>Raw In</th><th>Planned Out</th><th>Actual Out</th><th>Status</th></tr></thead>
+          <tbody id="histBatchBody"><tr><td colspan="7" style="text-align:center;opacity:.5;padding:14px;">Pick a month above.</td></tr></tbody>
+        </table>
+      </div>
+
+      <h3 style="margin:18px 0 8px;">Grinding &amp; Production — Days</h3>
+      <div id="histDaysWrap"><p class="sub" style="margin:0;">Pick a month above.</p></div>
+    </div>
+
 
     <!-- ============ DAILY FISH PURCHASE BILLS ============ -->
     <div class="card" style="margin-top:16px;">
@@ -3104,7 +3134,7 @@
       <div class="grid-2">
         <div class="field">
           <label>Date</label>
-          <input type="date" id="batchDate" onchange="refreshBatchSourcePicker()">
+          <input type="date" id="batchDate" onchange="refreshBatchSourcePicker(); $('batchNoPreview').textContent = generateBatchNo(this.value);">
         </div>
         <div class="field">
           <label>Fish Type (costing category)</label>
@@ -3121,8 +3151,8 @@
         <label>Raw Fish Sources <span class="sub" style="font-weight:400;">(tick bills to allocate kg from — optional)</span></label>
         <div class="table-wrap">
           <table>
-            <thead><tr><th></th><th>Bill No</th><th>Seller</th><th>Fish Type (as billed)</th><th>Available (kg)</th><th>Kg to Use</th></tr></thead>
-            <tbody id="batchSourceBody"><tr><td colspan="6" style="text-align:center;opacity:.5;padding:14px;">No recent unallocated fish bills.</td></tr></tbody>
+            <thead><tr><th></th><th>Date</th><th>Bill No</th><th>Seller</th><th>Fish Type (as billed)</th><th>Available (kg)</th><th>Kg to Use</th></tr></thead>
+            <tbody id="batchSourceBody"><tr><td colspan="7" style="text-align:center;opacity:.5;padding:14px;">No unallocated fish bills on or before this date.</td></tr></tbody>
           </table>
         </div>
       </div>
