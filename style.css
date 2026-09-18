@@ -2995,39 +2995,47 @@ html[data-theme="light"] input[type="checkbox"]:checked{
   box-shadow:0 3px 10px rgba(10,143,67,.28)!important;
 }
 
+
 /* ============================================================
-   Grind-source picker — editable Price/kg per batch row
-   (Pick Completed Batches to Grind table). Shows the
-   auto-detected fish-bill price by default but lets it be
-   overridden when the real/factory price differs, with a small
-   status tag (Auto / Manual / No bills) so it's clear which rows
-   were touched.
+   Grind picker — editable Price/kg per row
+   (both "Pick Completed Batches to Grind" and "Add Ready-Made
+   Umbalakada" tables). Shows the auto-detected price by default
+   (from linked fish bills / the purchase bill itself) but lets
+   it be overridden when the real/factory price differs. Status
+   is shown as a colored left edge on the field itself — never a
+   separate stacked element — so it can't spill into the next
+   table column regardless of row content length.
+   Legend: green = auto (from bills), gold = manually edited,
+   amber = no bill on file yet (enter manually).
    ============================================================ */
-.grsrc-price-wrap{
-  display:flex;
-  flex-direction:column;
-  align-items:flex-start;
-  gap:4px;
-}
-input.grsrc-price{
-  width:92px!important;
-  padding:6px 8px!important;
+input.grsrc-price, input.grrm-price{
+  width:96px!important;
+  padding:6px 8px 6px 10px!important;
   font-size:.85rem!important;
   font-weight:600;
   text-align:right;
+  border-left-width:3px!important;
+  border-left-style:solid!important;
 }
-.grsrc-price-tag{
-  font-size:.6rem;
-  font-weight:700;
-  letter-spacing:.03em;
-  text-transform:uppercase;
-  padding:2px 7px;
-  border-radius:20px;
-  line-height:1.5;
-  white-space:nowrap;
-}
-.grsrc-price-tag.is-auto{ background:rgba(16,185,129,0.15); color:var(--green); border:1px solid rgba(16,185,129,0.25); }
-.grsrc-price-tag.is-manual{ background:rgba(212,175,55,0.16); color:var(--gold-dark); border:1px solid rgba(212,175,55,0.35); }
-.grsrc-price-tag.is-empty{ background:var(--warn-bg); color:var(--warn); border:1px solid rgba(251,191,36,0.25); }
+input.grsrc-price.is-auto, input.grrm-price.is-auto{ border-left-color:var(--green)!important; }
+input.grsrc-price.is-manual, input.grrm-price.is-manual{ border-left-color:var(--gold)!important; background:rgba(212,175,55,0.07)!important; }
+input.grsrc-price.is-empty, input.grrm-price.is-empty{ border-left-color:var(--warn)!important; }
 
-html[data-theme="light"] .grsrc-price-tag.is-manual{ color:#a8842c; }
+.grsrc-price-legend{
+  display:flex;
+  flex-wrap:wrap;
+  gap:14px;
+  margin-top:8px;
+  font-size:.72rem;
+  color:var(--text-muted);
+}
+.grsrc-price-legend span{ display:inline-flex; align-items:center; gap:5px; }
+.grsrc-price-legend span::before{
+  content:"";
+  width:9px; height:9px;
+  border-radius:3px;
+  display:inline-block;
+}
+.grsrc-price-legend .lg-auto::before{ background:var(--green); }
+.grsrc-price-legend .lg-manual::before{ background:var(--gold); }
+.grsrc-price-legend .lg-empty::before{ background:var(--warn); }

@@ -2705,11 +2705,23 @@
             <tbody id="grindSourceBody"><tr><td colspan="7" style="text-align:center;opacity:.5;padding:14px;">Loading…</td></tr></tbody>
           </table>
         </div>
+        <div class="grsrc-price-legend"><span class="lg-auto">Auto (from fish bills)</span><span class="lg-manual">Manually edited</span><span class="lg-empty">No bill — enter manually</span></div>
+      </div>
+
+      <div class="field" data-owner-only>
+        <label>Add Ready-Made Umbalakada <span class="sub" style="font-weight:400;">(tick any type bought in via Ready-Made Umbalakada Purchase — mix into this round with the batches above if needed)</span></label>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th></th><th>Grade / Description</th><th>Price/kg</th><th>Remaining</th><th>Kg to Use</th><th>Balance</th></tr></thead>
+            <tbody id="grindReadymadeBody"><tr><td colspan="6" style="text-align:center;opacity:.5;padding:14px;">Loading…</td></tr></tbody>
+          </table>
+        </div>
+        <div class="grsrc-price-legend"><span class="lg-auto">Auto (from purchase bill)</span><span class="lg-manual">Manually edited</span></div>
       </div>
 
       <div class="grid-3" data-owner-only>
         <div class="field">
-          <label>Extra Kg <span class="sub" style="font-weight:400;">(not from a batch)</span></label>
+          <label>Other Extra Kg <span class="sub" style="font-weight:400;">(unrecorded — not from a batch or a Ready-Made bill)</span></label>
           <input type="number" id="grindExtraKg" min="0" step="0.1" value="0" oninput="onGrindExtraKgInput()">
         </div>
         <div class="field">

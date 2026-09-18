@@ -7900,9 +7900,25 @@ window.batchRealCostPerKg = batchRealCostPerKg;
 // ALTER TABLE production_batch_usage ENABLE ROW LEVEL SECURITY;
 // CREATE POLICY "owner_all_production_batch_usage" ON production_batch_usage
 //   FOR ALL USING (owner_id = auth.uid()) WITH CHECK (owner_id = auth.uid());
+//
+// CREATE TABLE IF NOT EXISTS readymade_item_usage (
+//   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+//   owner_id uuid NOT NULL,
+//   item_id uuid NOT NULL REFERENCES fish_bill_items(id) ON DELETE CASCADE,
+//   bill_id uuid NOT NULL,
+//   usage_date date NOT NULL,
+//   kg_used numeric NOT NULL DEFAULT 0,
+//   grind_round_id uuid REFERENCES grind_rounds(id) ON DELETE CASCADE,
+//   created_by uuid,
+//   created_at timestamptz NOT NULL DEFAULT now()
+// );
+// ALTER TABLE readymade_item_usage ENABLE ROW LEVEL SECURITY;
+// CREATE POLICY "owner_all_readymade_item_usage" ON readymade_item_usage
+//   FOR ALL USING (owner_id = auth.uid()) WITH CHECK (owner_id = auth.uid());
 
 let grindRounds = [];             // recent grind rounds, newest first
 let productionBatchUsage = [];    // one row per kg_used from a batch (grind or direct)
+let readymadeItemUsage = [];      // one row per kg_used from a Ready-Made Umbalakada Purchase item, into a grind round
 
 // batch.fishType label -> core grind-type id, for combo pricing/labels.
 // 'Other' (mixed/unrecorded fish) has no single core id, so it's left out
@@ -7943,6 +7959,53 @@ function batchUsedKg(batchId) {
   return productionBatchUsage.filter(u => u.batch_id === batchId).reduce((s, u) => s + (Number(u.kg_used) || 0), 0);
 }
 window.batchUsedKg = batchUsedKg;
+
+async function loadReadymadeItemUsageFromCloud() {
+  if (!currentUser) return;
+  try {
+    const { data, error } = await supabase.from('readymade_item_usage').select('*');
+    if (error) throw error;
+    readymadeItemUsage = data || [];
+  } catch (e) {
+    console.error('Load readymade item usage error:', e);
+    const missingTable = /relation .* does not exist/i.test(e?.message || '');
+    if (!missingTable) updateStatus('⚠️ Could not load ready-made usage from cloud');
+    readymadeItemUsage = [];
+  }
+}
+window.loadReadymadeItemUsageFromCloud = loadReadymadeItemUsageFromCloud;
+
+function readymadeItemUsedKg(itemId) {
+  return readymadeItemUsage.filter(u => u.item_id === itemId).reduce((s, u) => s + (Number(u.kg_used) || 0), 0);
+}
+window.readymadeItemUsedKg = readymadeItemUsedKg;
+
+// Recent (last 30 days) Ready-Made Umbalakada Purchase line items with
+// remaining un-used kg — same idea as getAvailableFishBillSources() above,
+// but sourced from purchase_type='readymade_umbalakada' bills (bought
+// already-ground Umbalakada, tracked in the Costing tab) and consumed
+// against grind rounds instead of production batches.
+function getAvailableReadymadeSources() {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - 30);
+  const rows = [];
+  fishBills.filter(b => b.purchaseType === 'readymade_umbalakada' && new Date(b.date) >= cutoff).forEach(bill => {
+    (bill.items || []).forEach(item => {
+      if (!item.id) return; // safety: only DB-backed items have ids
+      const remaining = item.quantityKg - readymadeItemUsedKg(item.id);
+      if (remaining > 0.01) {
+        rows.push({
+          billId: bill.id, itemId: item.id, billNo: bill.billNo, date: bill.date,
+          sellerName: bill.sellerName, gradeLabel: item.fishType,
+          pricePerKg: item.pricePerKg, remainingKg: remaining
+        });
+      }
+    });
+  });
+  rows.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0)); // newest purchase first
+  return rows;
+}
+window.getAvailableReadymadeSources = getAvailableReadymadeSources;
 
 // How much of a COMPLETED batch's actual finished kg is still unused —
 // null for a batch that isn't completed yet (nothing to use/grind).
@@ -7990,8 +8053,7 @@ function renderGrindSourcePicker() {
       const realCostPerKg = batchRealCostPerKg(b);
       const hasReal = realCostPerKg !== null;
       const autoAttr = hasReal ? realCostPerKg.toFixed(2) : '';
-      const tagText = hasReal ? 'Auto' : (b.realRawCost === null ? 'No bills' : 'Pending');
-      const tagClass = hasReal ? 'is-auto' : 'is-empty';
+      const startClass = hasReal ? 'is-auto' : 'is-empty';
       const tagTitle = hasReal
         ? 'From linked fish-bill prices — edit if the factory/actual price differs'
         : (b.realRawCost === null ? 'No linked fish bills — enter the actual price manually' : 'Fish bills linked but not yet priced — enter manually');
@@ -7999,14 +8061,9 @@ function renderGrindSourcePicker() {
         <td><input type="checkbox" class="grsrc-check" data-batch-id="${b.id}" data-max="${remaining}" onchange="onGrindSourceToggle(this)"></td>
         <td>${b.batchNo}</td>
         <td>${b.fishType}</td>
-        <td>
-          <div class="grsrc-price-wrap">
-            <input type="number" class="grsrc-price" step="0.01" min="0" inputmode="decimal"
+        <td><input type="number" class="grsrc-price ${startClass}" step="0.01" min="0" inputmode="decimal"
               value="${autoAttr}" data-auto="${autoAttr}" placeholder="Rs/kg"
-              title="${tagTitle}" oninput="onGrindPriceInput(this)">
-            <span class="grsrc-price-tag ${tagClass}" title="${tagTitle}">${tagText}</span>
-          </div>
-        </td>
+              title="${tagTitle}" oninput="onGrindPriceInput(this)"></td>
         <td>${remaining.toFixed(1)} kg</td>
         <td><input type="number" class="grsrc-kg" data-remaining="${remaining}" min="0" step="0.1" max="${remaining}" value="0" disabled style="width:80px;" oninput="recalcGrindRoundPreview()"></td>
         <td><span class="badge badge-warn grsrc-balance">${remaining.toFixed(1)} kg</span></td>
@@ -8033,24 +8090,20 @@ window.onGrindSourceToggle = onGrindSourceToggle;
 
 // Fires on every keystroke in a row's Price/kg field. Lets the user
 // override the auto-detected (fish-bill-derived) price with the real
-// factory/production price when they differ, and flags the field as
-// "Manual" vs "Auto" so it's obvious at a glance which rows were touched.
+// factory/production price when they differ. The field itself is
+// color-coded (green left edge = auto, gold = manually edited, amber =
+// no bill yet) via its own class — no separate stacked element, so it
+// can never spill into a neighbouring column.
 function onGrindPriceInput(input) {
-  const row = input.closest('tr');
-  const tag = row && row.querySelector('.grsrc-price-tag');
-  if (tag) {
-    const auto = input.dataset.auto || '';
-    const val = input.value;
-    if (val === '') {
-      tag.textContent = auto !== '' ? 'Auto' : 'No bills';
-      tag.className = 'grsrc-price-tag ' + (auto !== '' ? 'is-auto' : 'is-empty');
-    } else if (auto !== '' && Number(val) === Number(auto)) {
-      tag.textContent = 'Auto';
-      tag.className = 'grsrc-price-tag is-auto';
-    } else {
-      tag.textContent = 'Manual';
-      tag.className = 'grsrc-price-tag is-manual';
-    }
+  const auto = input.dataset.auto || '';
+  const val = input.value;
+  input.classList.remove('is-auto', 'is-manual', 'is-empty');
+  if (val === '') {
+    input.classList.add(auto !== '' ? 'is-auto' : 'is-empty');
+  } else if (auto !== '' && Number(val) === Number(auto)) {
+    input.classList.add('is-auto');
+  } else {
+    input.classList.add('is-manual');
   }
   recalcGrindRoundPreview();
 }
@@ -8067,6 +8120,81 @@ function getTickedGrindSources() {
     return { batchId: cb.dataset.batchId, batchNo: b ? b.batchNo : '', fishType: b ? b.fishType : '', kg: Number(row.querySelector('.grsrc-kg').value) || 0, costPerKg };
   }).filter(s => s.kg > 0);
 }
+
+// ---- Ready-Made Umbalakada picker (separate from Completed Batches above) ----
+// Same tick → kg → editable Price/kg pattern as the batches table, but
+// sourced from Ready-Made Umbalakada Purchase bill items instead of
+// production batches, each type kept on its own row/kg amount.
+function renderGrindReadymadePicker() {
+  const tbody = $('grindReadymadeBody');
+  if (!tbody) return;
+  const rows = getAvailableReadymadeSources();
+  if (rows.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;opacity:.5;padding:14px;">No unused Ready-Made Umbalakada purchases in the last 30 days.</td></tr>';
+  } else {
+    tbody.innerHTML = rows.map(r => {
+      const priceStr = r.pricePerKg ? r.pricePerKg.toFixed(2) : '';
+      return `<tr>
+        <td><input type="checkbox" class="grrm-check" data-item-id="${r.itemId}" data-bill-id="${r.billId}" data-label="${r.gradeLabel}" data-max="${r.remainingKg}" onchange="onGrindReadymadeToggle(this)"></td>
+        <td>${r.gradeLabel}<br><small style="opacity:.6;">${r.billNo} · ${r.sellerName}</small></td>
+        <td><input type="number" class="grrm-price is-auto" step="0.01" min="0" inputmode="decimal"
+              value="${priceStr}" data-auto="${priceStr}" placeholder="Rs/kg"
+              title="From this purchase bill — edit if the factory/actual price differs" oninput="onGrindReadymadePriceInput(this)"></td>
+        <td>${r.remainingKg.toFixed(1)} kg</td>
+        <td><input type="number" class="grrm-kg" data-remaining="${r.remainingKg}" min="0" step="0.1" max="${r.remainingKg}" value="0" disabled style="width:80px;" oninput="recalcGrindRoundPreview()"></td>
+        <td><span class="badge badge-warn grrm-balance">${r.remainingKg.toFixed(1)} kg</span></td>
+      </tr>`;
+    }).join('');
+  }
+  recalcGrindRoundPreview();
+}
+window.renderGrindReadymadePicker = renderGrindReadymadePicker;
+
+function onGrindReadymadeToggle(checkbox) {
+  const row = checkbox.closest('tr');
+  const kgInput = row.querySelector('.grrm-kg');
+  if (checkbox.checked) {
+    kgInput.disabled = false;
+    if (Number(kgInput.value) <= 0) kgInput.value = checkbox.dataset.max;
+  } else {
+    kgInput.disabled = true;
+    kgInput.value = 0;
+  }
+  recalcGrindRoundPreview();
+}
+window.onGrindReadymadeToggle = onGrindReadymadeToggle;
+
+// Same color-coded-border approach as onGrindPriceInput() above — the
+// input itself carries the status class, nothing stacked beside it.
+function onGrindReadymadePriceInput(input) {
+  const auto = input.dataset.auto || '';
+  const val = input.value;
+  input.classList.remove('is-auto', 'is-manual', 'is-empty');
+  if (val === '') {
+    input.classList.add(auto !== '' ? 'is-auto' : 'is-empty');
+  } else if (auto !== '' && Number(val) === Number(auto)) {
+    input.classList.add('is-auto');
+  } else {
+    input.classList.add('is-manual');
+  }
+  recalcGrindRoundPreview();
+}
+window.onGrindReadymadePriceInput = onGrindReadymadePriceInput;
+
+function getTickedReadymadeSources() {
+  const tbody = $('grindReadymadeBody');
+  if (!tbody) return [];
+  return Array.from(tbody.querySelectorAll('.grrm-check:checked')).map(cb => {
+    const row = cb.closest('tr');
+    const priceInput = row.querySelector('.grrm-price');
+    const costPerKg = priceInput && priceInput.value !== '' ? Number(priceInput.value) : null;
+    return {
+      itemId: cb.dataset.itemId, billId: cb.dataset.billId, gradeLabel: cb.dataset.label || '',
+      kg: Number(row.querySelector('.grrm-kg').value) || 0, costPerKg
+    };
+  }).filter(s => s.kg > 0);
+}
+window.getTickedReadymadeSources = getTickedReadymadeSources;
 
 // Combo key built from whichever fish types are ticked (+ "extra" if
 // manual/external kg is included too) — feeds the saved per-combo price
@@ -8095,10 +8223,27 @@ function recalcGrindRoundPreview() {
       balCell.className = balance > 0.01 ? 'badge badge-warn grsrc-balance' : 'badge badge-good grsrc-balance';
     });
   }
+  // Same live balance for the Ready-Made Umbalakada picker rows.
+  const rmBody = $('grindReadymadeBody');
+  if (rmBody) {
+    rmBody.querySelectorAll('tr').forEach(tr => {
+      const kgInput = tr.querySelector('.grrm-kg');
+      const balCell = tr.querySelector('.grrm-balance');
+      if (!kgInput || !balCell) return;
+      const remaining = Number(kgInput.dataset.remaining) || 0;
+      const kg = Number(kgInput.value) || 0;
+      const balance = Math.max(0, remaining - kg);
+      balCell.textContent = balance.toFixed(1) + ' kg';
+      balCell.className = balance > 0.01 ? 'badge badge-warn grrm-balance' : 'badge badge-good grrm-balance';
+    });
+  }
   const sources = getTickedGrindSources();
+  const rmSources = getTickedReadymadeSources();
   const extraKg = Number($('grindExtraKg') && $('grindExtraKg').value) || 0;
-  const totalKg = sources.reduce((s, x) => s + x.kg, 0) + extraKg;
+  const rmKg = rmSources.reduce((s, x) => s + x.kg, 0);
+  const totalKg = sources.reduce((s, x) => s + x.kg, 0) + rmKg + extraKg;
   const typeNames = [...new Set(sources.map(s => s.fishType))];
+  [...new Set(rmSources.map(s => s.gradeLabel).filter(Boolean))].forEach(n => typeNames.push(n));
   if (extraKg > 0) typeNames.push('Extra (unrecorded)');
   const label = typeNames.length ? typeNames.join(' + ') : '—';
   const totalEl = $('grindRoundTotalKg'); if (totalEl) totalEl.textContent = totalKg.toFixed(1) + ' kg';
@@ -8106,10 +8251,13 @@ function recalcGrindRoundPreview() {
 
   // Weighted-average Price/kg from each ticked batch's OWN real cost
   // (batchRealCostPerKg — actual fish-bill price for that specific type/
-  // batch, not a guess). Extra Kg and any batch with no known cost yet
-  // fall back to whatever's in the Price/kg field itself.
-  const knownCostKg = sources.filter(s => s.costPerKg !== null).reduce((s, x) => s + x.kg, 0);
-  const knownCostTotal = sources.filter(s => s.costPerKg !== null).reduce((s, x) => s + x.kg * x.costPerKg, 0);
+  // batch, not a guess) plus each ticked Ready-Made item's own bill price.
+  // Extra Kg and any row with no known cost yet fall back to whatever's in
+  // the Price/kg field itself.
+  const knownCostKg = sources.filter(s => s.costPerKg !== null).reduce((s, x) => s + x.kg, 0)
+    + rmSources.filter(s => s.costPerKg !== null).reduce((s, x) => s + x.kg, 0);
+  const knownCostTotal = sources.filter(s => s.costPerKg !== null).reduce((s, x) => s + x.kg * x.costPerKg, 0)
+    + rmSources.filter(s => s.costPerKg !== null).reduce((s, x) => s + x.kg * x.costPerKg, 0);
   const priceEl = $('grindRoundPrice');
   if (priceEl && !priceEl.dataset.userEdited) {
     if (knownCostKg > 0) {
@@ -8157,13 +8305,15 @@ async function saveGrindRound() {
   if (userRole !== 'owner') { alert('Only the owner can log a grind round.'); return; }
   if (!currentUser) { alert('Please login first.'); return; }
   const sources = getTickedGrindSources();
+  const rmSources = getTickedReadymadeSources();
   const extraKg = Number($('grindExtraKg') && $('grindExtraKg').value) || 0;
-  const totalKg = sources.reduce((s, x) => s + x.kg, 0) + extraKg;
+  const rmKg = rmSources.reduce((s, x) => s + x.kg, 0);
+  const totalKg = sources.reduce((s, x) => s + x.kg, 0) + rmKg + extraKg;
   const priceKg = Number($('grindRoundPrice') && $('grindRoundPrice').value) || 0;
   const dustG = Number($('grindRoundDustG') && $('grindRoundDustG').value) || 0;
   const notes = ($('grindRoundNotes') && $('grindRoundNotes').value.trim()) || null;
 
-  if (totalKg <= 0) { alert('Tick at least one completed batch or enter Extra Kg.'); return; }
+  if (totalKg <= 0) { alert('Tick at least one completed batch, tick a Ready-Made item, or enter Extra Kg.'); return; }
   if (dustG < 0 || dustG > totalKg * 1000) { alert("Enter a valid dust weight — can't be more than the Umbalakada that went in."); return; }
   if (priceKg <= 0) { alert('Enter Price/kg for this grind round.'); return; }
   for (const s of sources) {
@@ -8171,10 +8321,15 @@ async function saveGrindRound() {
     const remaining = b ? (batchRemainingKg(b) || 0) : 0;
     if (s.kg > remaining + 0.001) { alert(`${s.batchNo}: only ${remaining.toFixed(1)}kg remaining — can't use ${s.kg}kg.`); return; }
   }
+  for (const s of rmSources) {
+    const remaining = s.itemId ? (getAvailableReadymadeSources().find(r => r.itemId === s.itemId)?.remainingKg || 0) : 0;
+    if (s.kg > remaining + 0.001) { alert(`${s.gradeLabel}: only ${remaining.toFixed(1)}kg remaining — can't use ${s.kg}kg.`); return; }
+  }
   if (!(await ensureFreshSession())) return;
 
   const usableKg = Math.max(0, totalKg - dustG / 1000);
   const typeNames = [...new Set(sources.map(s => s.fishType))];
+  [...new Set(rmSources.map(s => s.gradeLabel).filter(Boolean))].forEach(n => typeNames.push(n));
   if (extraKg > 0) typeNames.push('Extra (unrecorded)');
   const typeLabel = typeNames.join(' + ') || 'Umbalakada';
   const map = state.grindProductMap || {};
@@ -8216,6 +8371,22 @@ async function saveGrindRound() {
     }
   }
 
+  // Record kg consumed from each ticked Ready-Made Umbalakada Purchase item
+  // — keeps that item's "Remaining" correct here from now on too.
+  if (rmSources.length) {
+    try {
+      const rows = rmSources.map(s => ({
+        owner_id: businessId, item_id: s.itemId, bill_id: s.billId, usage_date: date,
+        kg_used: s.kg, grind_round_id: savedRound.id, created_by: currentUser.id
+      }));
+      const { data, error } = await supabase.from('readymade_item_usage').insert(rows).select();
+      if (error) throw error;
+      readymadeItemUsage.push(...(data || []));
+    } catch (e) {
+      alert('⚠️ Grind round saved but Ready-Made usage failed to record — Remaining kg may be wrong until this is fixed: ' + e.message);
+    }
+  }
+
   // Remember this combo's price for next time (same convenience the old
   // per-combo Grinding section had).
   const comboKey = currentGrindComboKey();
@@ -8244,6 +8415,7 @@ async function saveGrindRound() {
 
   renderProductionBatches();
   renderGrindSourcePicker();
+  renderGrindReadymadePicker();
   renderGrindRoundsList();
   if (unlinkedParts.length) {
     showStockLinkWarning(`Round saved, but ${unlinkedParts.join(' & ')} isn't linked to a product above, so Stock wasn't touched for it.`);
@@ -8271,12 +8443,15 @@ async function deleteGrindRound(id) {
     alert('❌ Could not delete grind round: ' + e.message);
     return;
   }
-  // production_batch_usage rows cascade-delete with the round in the DB
-  // (FK ON DELETE CASCADE) — drop them locally too so Remaining updates now.
+  // production_batch_usage / readymade_item_usage rows cascade-delete with
+  // the round in the DB (FK ON DELETE CASCADE) — drop them locally too so
+  // Remaining updates now.
   productionBatchUsage = productionBatchUsage.filter(u => u.grind_round_id !== id);
+  readymadeItemUsage = readymadeItemUsage.filter(u => u.grind_round_id !== id);
   grindRounds = grindRounds.filter(r => r.id !== id);
   renderProductionBatches();
   renderGrindSourcePicker();
+  renderGrindReadymadePicker();
   renderGrindRoundsList();
   updateStatus('🗑️ Grind round deleted');
 }
@@ -15777,13 +15952,15 @@ function activateAppTab(tabId){
       renderFishBills();
       renderReadymadeBills();
       renderSellerLedger();
+      renderGrindReadymadePicker(); // needs fishBills (Ready-Made bills) loaded
     });
     loadDailyProductionLog().then(() => { renderDailyProductionLog(); updateIngredientVarianceAlert(lastProdIngredientsCostPerKg); loadTodayGrindBatchesFromLog(); });
     loadDailyPurchaseLog().then(() => syncUmbalakadaGroundFromPurchaseLog());
-    Promise.all([loadProductionBatchesFromCloud(), loadGrindRoundsFromCloud(), loadProductionBatchUsageFromCloud()]).then(() => {
+    Promise.all([loadProductionBatchesFromCloud(), loadGrindRoundsFromCloud(), loadProductionBatchUsageFromCloud(), loadReadymadeItemUsageFromCloud()]).then(() => {
       renderProductionBatches();
       populateGrindLinkSelects();
       renderGrindSourcePicker();
+      renderGrindReadymadePicker(); // re-run once usage rows are in too
       renderGrindRoundsList();
     });
     // "Link Packs to Store Products" (moved here from the old Costing tab
