@@ -734,8 +734,8 @@ async function onSalaryStaffChange() {
   const panel = $('salaryPanel');
   if (!staffId) { if (panel) panel.style.display = 'none'; return; }
   if (panel) panel.style.display = '';
-  $('salDailyDate').value = new Date().toISOString().slice(0, 10);
-  $('salEntryDate').value = new Date().toISOString().slice(0, 10);
+  $('salDailyDate').value = todayIso();
+  $('salEntryDate').value = todayIso();
   initSmartSalaryMonth();
 
   const staff = staffListCache.find(s => s.id === staffId);
@@ -765,7 +765,7 @@ async function saveSalarySettings() {
 
 async function saveDailySalary() {
   if (!currentSalaryStaffId) { alert('Select a staff member first.'); return; }
-  const date = $('salDailyDate').value || new Date().toISOString().slice(0, 10);
+  const date = $('salDailyDate').value || todayIso();
   const amount = Number($('salDailyAmount').value) || 0;
   const note = $('salDailyNote').value.trim();
   if (amount <= 0) { alert('Enter an amount greater than 0!'); return; }
@@ -776,7 +776,7 @@ async function saveDailySalary() {
 async function addSalaryEntry() {
   if (!currentSalaryStaffId) { alert('Select a staff member first.'); return; }
   const type = $('salEntryType').value;
-  const date = $('salEntryDate').value || new Date().toISOString().slice(0, 10);
+  const date = $('salEntryDate').value || todayIso();
   const amount = Number($('salEntryAmount').value) || 0;
   const note = $('salEntryNote').value.trim();
   if (amount <= 0) { alert('Enter an amount greater than 0!'); return; }
@@ -1084,8 +1084,28 @@ function renderDailyPay() {
   }
 }
 
+// ==================== DATE HELPERS (local-calendar-day safe) ====================
+// `.toISOString().slice(0,10)` gives the UTC calendar date, NOT the device's
+// local calendar date. For Sri Lanka (UTC+5:30) that means any "today"
+// default computed that way is WRONG for roughly 00:00–05:29 local time —
+// it silently returns YESTERDAY's date instead. That single bug is why
+// bills/expenses/snapshots saved late at night or just after midnight could
+// get filed under the wrong day, and why "today" cards on the Income tab
+// could fail to find data that was in fact saved today.
+// Fix: always build the YYYY-MM-DD string from the Date object's LOCAL
+// year/month/day components, never from toISOString().
+function toLocalDateStr(d) {
+  const dt = d instanceof Date ? d : new Date(d);
+  if (Number.isNaN(dt.getTime())) return '';
+  const y = dt.getFullYear();
+  const m = String(dt.getMonth() + 1).padStart(2, '0');
+  const day = String(dt.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+window.toLocalDateStr = toLocalDateStr;
+
 // ==================== MY WORK UPDATE (staff-only) ====================
-function todayStr() { return new Date().toISOString().slice(0, 10); }
+function todayStr() { return toLocalDateStr(new Date()); }
 
 function updateWorkUpdateStats() {
   const today = todayStr();
@@ -3655,7 +3675,7 @@ async function loadDailyPurchaseLog() {
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - 30);
     const { data, error } = await withSessionRetry(() => supabase.from('daily_purchase_log')
-      .select('*').eq('owner_id', currentUser.id).gte('log_date', cutoff.toISOString().slice(0, 10))
+      .select('*').eq('owner_id', currentUser.id).gte('log_date', toLocalDateStr(cutoff))
       .order('created_at', { ascending: false }));
     if (error) throw error;
     dailyPurchaseLogCache = data || [];
@@ -3784,7 +3804,7 @@ function renderDailyPurchaseHistory() {
   }
 
   const sevenDaysAgo = new Date(); sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-  const last7d = entries.filter(e => e.log_date >= sevenDaysAgo.toISOString().slice(0, 10));
+  const last7d = entries.filter(e => e.log_date >= toLocalDateStr(sevenDaysAgo));
   const avg7d = last7d.length > 0
     ? last7d.reduce((sum, e) => sum + (Number(e.net_cost_per_kg) || 0), 0) / last7d.length
     : 0;
@@ -4758,7 +4778,7 @@ async function loadCostingEntriesFromCloud() {
   if (!currentUser || userRole !== 'owner') { costingEntries = []; return costingEntries; }
   try {
     const now = new Date();
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+    const monthStart = toLocalDateStr(new Date(now.getFullYear(), now.getMonth(), 1));
     const { data, error } = await withSessionRetry(() => supabase.from('costing_entries')
       .select('*').eq('owner_id', currentUser.id).gte('entry_date', monthStart)
       .order('entry_date', { ascending: false }).order('created_at', { ascending: false }));
@@ -5487,7 +5507,7 @@ function calcProduction() {
 // the calculator, but Save/load will show a clear error instead of failing
 // silently.
 
-function todayIso() { return new Date().toISOString().slice(0, 10); }
+function todayIso() { return toLocalDateStr(new Date()); }
 
 // Compares today's live Ingredients Cost/kg against the trailing average
 // pulled from this month's saved Daily Production Log snapshots, and shows
@@ -5768,7 +5788,7 @@ async function loadDailyProductionLog() {
   if (!currentUser || userRole !== 'owner') { dailyProductionLogCache = []; return dailyProductionLogCache; }
   try {
     const now = new Date();
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+    const monthStart = toLocalDateStr(new Date(now.getFullYear(), now.getMonth(), 1));
     const { data, error } = await withSessionRetry(() => supabase.from('production_cost_log')
       .select('*').eq('owner_id', currentUser.id).gte('log_date', monthStart).order('log_date', { ascending: true }));
     if (error) throw error;
@@ -6655,7 +6675,7 @@ function openNewExpense() {
   if ($('expEditId')) $('expEditId').value = '';
   if ($('expenseModalTitle')) $('expenseModalTitle').textContent = 'New Expense';
   if ($('expenseSaveBtn')) $('expenseSaveBtn').innerHTML = '✅ Save Expense';
-  $('expDate').value = new Date().toISOString().slice(0, 10);
+  $('expDate').value = todayIso();
   $('expCategory').value = 'Transport';
   $('expDescription').value = '';
   $('expAmount').value = 0;
@@ -6681,7 +6701,7 @@ window.editExpense = editExpense;
 
 async function saveExpense() {
   const editId = $('expEditId') ? $('expEditId').value : '';
-  const date = $('expDate').value || new Date().toISOString().slice(0, 10);
+  const date = $('expDate').value || todayIso();
   const category = $('expCategory').value;
   const description = $('expDescription').value.trim();
   const amount = Number($('expAmount').value) || 0;
@@ -6736,7 +6756,7 @@ async function saveExpense() {
   let recurringWarning = '';
   if (isRecurring) {
     try {
-      const today = new Date().toISOString().slice(0, 10);
+      const today = todayIso();
       const { data: rdata, error: rerror } = await supabase.from('recurring_expenses').insert({
         created_by: currentUser.id,
         category,
@@ -6829,7 +6849,7 @@ function isThisMonth(dateStr) {
 
 function openNewCosting() {
   if (userRole !== 'owner') { alert('Only the owner can add costing entries.'); return; }
-  $('costingDate').value = new Date().toISOString().slice(0, 10);
+  $('costingDate').value = todayIso();
   $('costingCategory').value = 'Raw Fish';
   $('costingNote').value = '';
   $('costingAmount').value = 0;
@@ -6837,7 +6857,7 @@ function openNewCosting() {
 }
 
 async function saveCosting() {
-  const date = $('costingDate').value || new Date().toISOString().slice(0, 10);
+  const date = $('costingDate').value || todayIso();
   const category = $('costingCategory').value;
   const description = $('costingNote').value.trim();
   const amount = Number($('costingAmount').value) || 0;
@@ -6986,7 +7006,7 @@ async function loadFishPaymentsFromCloud() {
 }
 
 function generateFishBillNo(dateStr, type) {
-  const d = (dateStr || new Date().toISOString().slice(0, 10)).replace(/-/g, '');
+  const d = (dateStr || todayIso()).replace(/-/g, '');
   const prefix = type === 'readymade_umbalakada' ? 'RM' : 'FB';
   const countToday = fishBills.filter(b => b.billNo && b.billNo.startsWith(`${prefix}-${d}`)).length;
   return `${prefix}-${d}-${String(countToday + 1).padStart(3, '0')}`;
@@ -7068,7 +7088,7 @@ function openNewFishBill(type) {
   if ($('fbItemsTypeHeader')) $('fbItemsTypeHeader').textContent = isReadymade ? 'Grade / Description' : 'Fish Type';
   if ($('fbAddItemBtn')) $('fbAddItemBtn').innerHTML = `<i class="business-icon icon-inline" data-lucide="plus" aria-hidden="true"></i> Add Item`;
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayIso();
   $('fbDate').value = today;
   $('fbBillNoPreview').textContent = generateFishBillNo(today, window.currentFishBillType);
   $('fbSellerName').value = '';
@@ -7088,7 +7108,7 @@ window.openNewFishBill = openNewFishBill;
 
 async function saveFishBill() {
   const isReadymade = window.currentFishBillType === 'readymade_umbalakada';
-  const date = $('fbDate').value || new Date().toISOString().slice(0, 10);
+  const date = $('fbDate').value || todayIso();
   const sellerName = $('fbSellerName').value.trim();
   const sellerPhone = $('fbSellerPhone').value.trim();
   const paidAmount = Number($('fbPaidAmount').value) || 0;
@@ -7276,7 +7296,7 @@ function openSellerPayment(sellerName, sellerPhone) {
   $('spSellerName').value = sellerName;
   $('spSellerPhone').value = sellerPhone;
   $('sellerPaymentSubtitle').textContent = `Settle balance with ${sellerName} (${sellerPhone}).`;
-  $('spDate').value = new Date().toISOString().slice(0, 10);
+  $('spDate').value = todayIso();
   $('spAmount').value = 0;
   $('spMethod').value = 'cash';
   $('spReference').value = '';
@@ -7287,7 +7307,7 @@ function openSellerPayment(sellerName, sellerPhone) {
 async function saveSellerPayment() {
   const sellerName = $('spSellerName').value;
   const sellerPhone = $('spSellerPhone').value;
-  const date = $('spDate').value || new Date().toISOString().slice(0, 10);
+  const date = $('spDate').value || todayIso();
   const amount = Number($('spAmount').value) || 0;
   const method = $('spMethod').value;
   const reference = $('spReference').value.trim();
@@ -7557,7 +7577,7 @@ async function loadProductionBatchesFromCloud() {
 window.loadProductionBatchesFromCloud = loadProductionBatchesFromCloud;
 
 function generateBatchNo(dateStr) {
-  const d = (dateStr || new Date().toISOString().slice(0, 10)).replace(/-/g, '');
+  const d = (dateStr || todayIso()).replace(/-/g, '');
   const countToday = productionBatches.filter(b => b.batchNo && b.batchNo.includes(d)).length;
   return `BATCH-${d}-${countToday + 1}`;
 }
@@ -7661,7 +7681,7 @@ window.onBatchFishTypeChange = onBatchFishTypeChange;
 
 function openNewBatchModal() {
   if (userRole !== 'owner') { alert('Only the owner can start a production batch.'); return; }
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayIso();
   $('batchDate').value = today;
   $('batchNoPreview').textContent = generateBatchNo(today);
   $('batchFishType').value = 'Linna';
@@ -7677,7 +7697,7 @@ async function saveProductionBatch() {
   if (userRole !== 'owner') { alert('Only the owner can start a production batch.'); return; }
   if (!currentUser) { alert('Please login first.'); return; }
 
-  const date = $('batchDate').value || new Date().toISOString().slice(0, 10);
+  const date = $('batchDate').value || todayIso();
   const fishType = $('batchFishType').value;
   const rawKg = Number($('batchRawKg').value) || 0;
   const notes = $('batchNotes').value.trim();
@@ -8622,7 +8642,7 @@ async function loadRecurringExpenses() {
 // and stamp last_generated_date so it won't duplicate if this runs again.
 async function generateDueRecurringExpenses() {
   if (!currentUser) return;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayIso();
   const due = recurringExpenses.filter(r =>
     r.active && r.created_by === currentUser.id && r.last_generated_date !== today
   );
@@ -8887,7 +8907,7 @@ async function loadSalesFromCloud() {
 function openNewSale() {
   $('saleModalTitle').textContent = 'New Sale';
   $('saleEditId').value = '';
-  $('saleDate').value = new Date().toISOString().slice(0, 10);
+  $('saleDate').value = todayIso();
   $('saleProduct').value = '';
   populateSaleProductDatalist();
   $('saleCustomer').value = '';
@@ -8903,11 +8923,11 @@ function openNewSale() {
   if ($('salePaymentMethod')) $('salePaymentMethod').value = 'cash';
   if ($('saleChequeNumber')) $('saleChequeNumber').value = '';
   if ($('saleChequeBank')) $('saleChequeBank').value = '';
-  if ($('saleChequeDate')) $('saleChequeDate').value = new Date().toISOString().slice(0, 10);
+  if ($('saleChequeDate')) $('saleChequeDate').value = todayIso();
   if ($('saleChequeStatus')) $('saleChequeStatus').value = 'pending';
   if ($('saleDepositBank')) $('saleDepositBank').value = '';
   if ($('saleDepositRef')) $('saleDepositRef').value = '';
-  if ($('saleDepositDate')) $('saleDepositDate').value = new Date().toISOString().slice(0, 10);
+  if ($('saleDepositDate')) $('saleDepositDate').value = todayIso();
   togglePaymentMethodFields();
   recalcSaleModal();
   $('saleModal').classList.add('active');
@@ -8971,7 +8991,7 @@ function recalcSaleModal(skipAuto) {
 
 async function saveSale() {
   const editId = $('saleEditId').value;
-  const date = $('saleDate').value || new Date().toISOString().slice(0, 10);
+  const date = $('saleDate').value || todayIso();
   const product = $('saleProduct').value.trim();
   const customer = $('saleCustomer').value.trim();
   const qty = Number($('saleQty').value) || 0;
@@ -9294,7 +9314,7 @@ function renderSalesSummaryChart(list) {
   for (let i = 13; i >= 0; i--) {
     const d = new Date();
     d.setDate(d.getDate() - i);
-    days.push(d.toISOString().slice(0, 10));
+    days.push(toLocalDateStr(d));
   }
   const revenueByDay = {}, profitByDay = {};
   sales.forEach(s => {
@@ -13052,7 +13072,7 @@ function backupJSON() {
   const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `mydrybea_backup_${new Date().toISOString().slice(0,10)}.json`;
+  a.download = `mydrybea_backup_${todayIso()}.json`;
   a.click();
 }
 
@@ -13351,10 +13371,26 @@ function updateMonthlySummary() {
 // ==================== REAL PROFIT (Income tab — Production → Income Linking) ====================
 // Unlike the "Monthly Mix" planner above (dashBody/incomeRevenue etc., which
 // uses manually-typed quantities & selling prices), this pulls ONLY real
-// recorded data: actual orders, actual fish-purchase bills, actual other
-// expenses, and actual finished output from completed production batches.
-// No extra fetch needed — orders/expenses/fishBills/productionBatches are
-// already loaded elsewhere; this just recomputes from those live arrays.
+// recorded data: actual orders, actual Sales-diary entries, actual
+// fish-purchase bills, actual other expenses, and actual finished output
+// from completed production batches. No extra fetch needed —
+// orders/sales/expenses/fishBills/productionBatches are already loaded
+// elsewhere; this just recomputes from those live arrays.
+//
+// REVENUE SOURCES (fixed 2026-09): revenue used to come from `orders` only,
+// which meant every walk-in / wholesale / direct sale logged in the
+// separate Sales Diary (the `sales` array) was invisible here — on a month
+// where most real business happened through the Sales Diary rather than
+// formal Orders, Real Revenue could look tiny next to real costs. Revenue
+// now correctly combines BOTH:
+//   - orders (any status except cancelled)
+//   - sales diary entries that are NOT auto-mirrors of an order (a
+//     delivered order auto-logs itself into `sales` with linkedOrderId set
+//     — skip those or the same money gets counted twice)
+// Each counted Sales-diary entry's own wage_amount + marketing_cost +
+// cost_amount (entered by the owner at the time of that sale) is folded
+// into Real Other Expenses so the newly-added revenue is matched by its
+// own recorded cost, not left as pure unmatched profit.
 function calcRealIncome() {
   const revenueEl = $('realIncomeRevenue');
   if (!revenueEl) return; // Income tab not in the DOM for this role — skip
@@ -13366,7 +13402,18 @@ function calcRealIncome() {
   };
 
   const monthOrders = (orders || []).filter(o => inMonth(o.createdAt) && o.status !== 'cancelled');
-  const realRevenue = monthOrders.reduce((s, o) => s + (Number(o.total) || 0), 0);
+  const realOrdersRevenue = monthOrders.reduce((s, o) => s + (Number(o.total) || 0), 0);
+
+  // Only Sales-diary entries NOT already represented by a counted order —
+  // linkedOrderId means autoLogSaleFromDeliveredOrder() created this row
+  // the moment that order was delivered, so its revenue is already inside
+  // realOrdersRevenue above.
+  const monthDirectSales = (sales || []).filter(s => inMonth(s.date) && !s.linkedOrderId);
+  const realDirectSalesRevenue = monthDirectSales.reduce((s, sa) => s + (Number(sa.total) || 0), 0);
+  const realDirectSalesCost = monthDirectSales.reduce((s, sa) =>
+    s + (Number(sa.cost) || 0) + (Number(sa.wage) || 0) + (Number(sa.marketingCost) || 0), 0);
+
+  const realRevenue = realOrdersRevenue + realDirectSalesRevenue;
 
   const monthFishBills = (fishBills || []).filter(b => inMonth(b.date));
   const realRawCost = monthFishBills.reduce((s, b) => s + b.total, 0);
@@ -13374,16 +13421,39 @@ function calcRealIncome() {
 
   // Everything else the owner has logged as an expense this month, EXCLUDING
   // "Raw Fish" (already counted above via fishBills, to avoid double-counting
-  // — every fish bill also mirrors into expenses under that exact category).
+  // — every fish bill also mirrors into expenses under that exact category)
+  // — PLUS each direct sale's own wage/marketing/cost figures (see note above).
   const monthOtherExpenses = (expenses || []).filter(e => inMonth(e.date || e.createdAt) && e.category !== 'Raw Fish');
-  const realOtherExpenses = monthOtherExpenses.reduce((s, e) => s + (Number(e.amount) || 0), 0);
+  const realOtherExpenses = monthOtherExpenses.reduce((s, e) => s + (Number(e.amount) || 0), 0) + realDirectSalesCost;
 
   const realNetProfit = realRevenue - realRawCost - realOtherExpenses;
   const realMargin = realRevenue > 0 ? (realNetProfit / realRevenue) * 100 : 0;
 
   const monthCompletedBatches = (productionBatches || []).filter(b => inMonth(b.date) && b.status === 'completed');
   const realOutputKg = monthCompletedBatches.reduce((s, b) => s + (b.actualFinishedKg || 0), 0);
-  const realCostPerKgProduced = realOutputKg > 0 ? realRawCost / realOutputKg : 0;
+
+  // Real Cost/kg: prefer each batch's own VERIFIED cost/kg (from its linked
+  // fish-bill prices, via batchRealCostPerKg()) weighted by that batch's
+  // actual finished kg; a batch with no linked bills falls back to its
+  // planning-time cost snapshot instead of silently blending an unverified
+  // estimate into a "Real" figure with equal weight to verified ones.
+  let verifiedCostKgSum = 0, verifiedKg = 0, estimateCostKgSum = 0, estimateKg = 0;
+  monthCompletedBatches.forEach(b => {
+    const kg = b.actualFinishedKg || 0;
+    if (kg <= 0) return;
+    const realPerKg = (typeof batchRealCostPerKg === 'function') ? batchRealCostPerKg(b) : null;
+    if (realPerKg !== null && realPerKg !== undefined) {
+      verifiedCostKgSum += realPerKg * kg;
+      verifiedKg += kg;
+    } else {
+      estimateCostKgSum += (b.costPerKgSnapshot || 0) * kg;
+      estimateKg += kg;
+    }
+  });
+  const realCostPerKgProduced = realOutputKg > 0
+    ? (verifiedCostKgSum + estimateCostKgSum) / realOutputKg
+    : 0;
+  const verifiedPct = realOutputKg > 0 ? (verifiedKg / realOutputKg) * 100 : 0;
 
   const set = (id, v) => { const el = $(id); if (el) el.textContent = v; };
   set('realIncomeRevenue', fmt(realRevenue));
@@ -13394,6 +13464,17 @@ function calcRealIncome() {
   set('realIncomeOutputKg', realOutputKg.toFixed(1) + ' kg');
   set('realIncomeCostPerKg', fmt(realCostPerKgProduced));
   set('realIncomeReadymadeCost', fmt(realReadymadeCost));
+
+  const revenueNoteEl = $('realIncomeRevenueNote');
+  if (revenueNoteEl) {
+    revenueNoteEl.textContent = `Orders: ${fmt(realOrdersRevenue)} + Direct Sales: ${fmt(realDirectSalesRevenue)}`;
+  }
+  const costKgNoteEl = $('realCostPerKgNote');
+  if (costKgNoteEl) {
+    costKgNoteEl.textContent = realOutputKg > 0
+      ? `${verifiedPct.toFixed(0)}% of this month's output priced from real linked fish-bill costs — the rest uses each batch's planning estimate. Tick "linked fish bills" on a batch for it to count as verified.`
+      : 'No completed batches this month yet — tick "linked fish bills" when starting a Production Batch so its Real Cost/kg is verified once completed.';
+  }
 
   const netEl = $('realIncomeNet');
   if (netEl) netEl.style.color = realNetProfit >= 0 ? '#10b981' : '#f87171';
@@ -13764,7 +13845,7 @@ async function cloudLoadPerformance(month){
   const owner=effectiveOwnerId(); if(!owner)return [];
   const first=month+'-01';
   const d=new Date(first+'T00:00:00'); d.setMonth(d.getMonth()+1);
-  const next=d.toISOString().slice(0,10);
+  const next=toLocalDateStr(d);
   const q=userRole==='owner'
     ? supabase.from('staff_performance').select('*').eq('owner_id',owner).gte('period_start',first).lt('period_start',next)
     : supabase.from('staff_performance').select('*').eq('staff_id',currentUser.id).gte('period_start',first).lt('period_start',next);
@@ -14706,7 +14787,7 @@ async function loadDistributorActivities(){
 async function initDistributorActivityPanel(){
   if (userRole !== 'owner' || !currentUser) return;
   populateDistActivityDistSelects();
-  if ($('distActLogDate') && !$('distActLogDate').value) $('distActLogDate').value = new Date().toISOString().slice(0,10);
+  if ($('distActLogDate') && !$('distActLogDate').value) $('distActLogDate').value = todayIso();
   await Promise.all([ loadDistributorCommissionClaims(), loadDistributorActivities() ]);
   populateDistActivityDistSelects(); // distributorListCache may have just finished loading in parallel
   renderDistActivityOverview();
@@ -14881,7 +14962,7 @@ async function addDistributorActivity(){
   const distId = $('distActLogDistSelect')?.value;
   if (!distId) { alert('Select a distributor first.'); return; }
   const type = $('distActLogType')?.value || 'note';
-  const date = $('distActLogDate')?.value || new Date().toISOString().slice(0,10);
+  const date = $('distActLogDate')?.value || todayIso();
   const outcome = $('distActLogOutcome')?.value || null;
   const nextFollowup = $('distActLogNextFollowup')?.value || null;
   const notes = ($('distActLogNotes')?.value || '').trim();
@@ -15905,10 +15986,11 @@ function activateAppTab(tabId){
   if (tabId === 'income') {
     calcDashboard();
     calcRealIncome();
-    Promise.all([loadFishBillsFromCloud(), loadProductionBatchesFromCloud()]).then(() => {
+    Promise.all([loadFishBillsFromCloud(), loadProductionBatchesFromCloud(), loadSalesFromCloud()]).then(() => {
       renderFishBills(); // also refreshes calcRealIncome() with real purchase data
       renderReadymadeBills(); // live Ready-Made Umbalakada card on the Income tab
       renderProductionBatches(); // also refreshes calcRealIncome() with real output data
+      calcRealIncome(); // Real Revenue includes Sales-diary entries — recompute with fresh sales
     });
     loadDailyProductionLog().then(() => renderIncomeDailyDustSummary());
   }

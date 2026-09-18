@@ -632,7 +632,7 @@
       <h2><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="badge-check" aria-hidden="true"></i></span><span>Real Profit — This Month</span></h2>
       <p class="pro-subtitle green">Actual orders, actual fish bills, actual expenses and actual finished output — no estimates.</p>
       <div class="income-grid">
-        <div class="card income-card"><span>Real Revenue</span><strong id="realIncomeRevenue">Rs. 0</strong><small>From actual orders</small></div>
+        <div class="card income-card"><span>Real Revenue</span><strong id="realIncomeRevenue">Rs. 0</strong><small id="realIncomeRevenueNote">From actual orders</small></div>
         <div class="card income-card"><span>Real Raw Material Cost</span><strong id="realIncomeRawCost">Rs. 0</strong><small>Fish bills + ready-made purchases</small></div>
         <div class="card income-card"><span>Real Other Expenses</span><strong id="realIncomeOtherExp">Rs. 0</strong><small>Everything else logged</small></div>
         <div class="card income-card income-highlight"><span>Real Net Profit</span><strong id="realIncomeNet">Rs. 0</strong><small>Revenue − all real costs</small></div>
@@ -644,7 +644,7 @@
         <div><span>— of which Ready-Made (This Month)</span><strong id="realIncomeReadymadeCost">Rs. 0</strong></div>
         <button class="btn btn-primary" data-open-tab="production" data-ribbon="true">Open Production</button>
       </div>
-      <small style="display:block;margin-top:8px;opacity:.6;">Tip: tick "linked fish bills" when starting a Production Batch and its Real Cost/kg will show ✅ once completed — otherwise it falls back to the estimate.</small>
+      <small style="display:block;margin-top:8px;opacity:.6;" id="realCostPerKgNote">Tip: tick "linked fish bills" when starting a Production Batch and its Real Cost/kg will show ✅ once completed — otherwise it falls back to the estimate.</small>
     </div>
 
     <div class="card">
