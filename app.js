@@ -4311,6 +4311,7 @@ function renderChipPackTypesManager() {
     }
   }
   updateChipPackSummaryStats();
+  if (window.lucide) lucide.createIcons({ attrs: { 'stroke-width': 1.9, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' } });
 }
 window.renderChipPackTypesManager = renderChipPackTypesManager;
 
@@ -4388,6 +4389,7 @@ function renderChipsPackBatchList() {
   }
   renderStockUpdateSummary();
   updateChipPackSummaryStats();
+  if (window.lucide) lucide.createIcons({ attrs: { 'stroke-width': 1.9, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' } });
 }
 window.renderChipsPackBatchList = renderChipsPackBatchList;
 
@@ -7981,14 +7983,19 @@ function renderGrindSourcePicker() {
   if (!tbody) return;
   const rows = eligibleBatchesForUse();
   if (rows.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;opacity:.5;padding:14px;">No completed batches with unused output right now.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;opacity:.5;padding:14px;">No completed batches with unused output right now.</td></tr>';
   } else {
     tbody.innerHTML = rows.map(b => {
       const remaining = batchRemainingKg(b);
+      const realCostPerKg = batchRealCostPerKg(b);
+      const priceCell = realCostPerKg !== null
+        ? `<span class="badge badge-good" title="From actual fish-bill prices">${fmt(realCostPerKg)}</span>`
+        : (b.realRawCost === null ? `<span title="No linked fish bills — showing estimate only" style="opacity:.5;">est. only</span>` : `<span style="opacity:.5;">— pending</span>`);
       return `<tr>
         <td><input type="checkbox" class="grsrc-check" data-batch-id="${b.id}" data-max="${remaining}" onchange="onGrindSourceToggle(this)"></td>
         <td>${b.batchNo}</td>
         <td>${b.fishType}</td>
+        <td data-cost-per-kg="${realCostPerKg !== null ? realCostPerKg : ''}">${priceCell}</td>
         <td>${remaining.toFixed(1)} kg</td>
         <td><input type="number" class="grsrc-kg" data-remaining="${remaining}" min="0" step="0.1" max="${remaining}" value="0" disabled style="width:80px;" oninput="recalcGrindRoundPreview()"></td>
         <td><span class="badge badge-warn grsrc-balance">${remaining.toFixed(1)} kg</span></td>
@@ -8018,7 +8025,10 @@ function getTickedGrindSources() {
   if (!tbody) return [];
   return Array.from(tbody.querySelectorAll('.grsrc-check:checked')).map(cb => {
     const b = productionBatches.find(x => x.id === cb.dataset.batchId);
-    return { batchId: cb.dataset.batchId, batchNo: b ? b.batchNo : '', fishType: b ? b.fishType : '', kg: Number(cb.closest('tr').querySelector('.grsrc-kg').value) || 0 };
+    const row = cb.closest('tr');
+    const costCell = row.querySelector('[data-cost-per-kg]');
+    const costPerKg = costCell && costCell.dataset.costPerKg !== '' ? Number(costCell.dataset.costPerKg) : null;
+    return { batchId: cb.dataset.batchId, batchNo: b ? b.batchNo : '', fishType: b ? b.fishType : '', kg: Number(row.querySelector('.grsrc-kg').value) || 0, costPerKg };
   }).filter(s => s.kg > 0);
 }
 
@@ -8057,10 +8067,43 @@ function recalcGrindRoundPreview() {
   const label = typeNames.length ? typeNames.join(' + ') : '—';
   const totalEl = $('grindRoundTotalKg'); if (totalEl) totalEl.textContent = totalKg.toFixed(1) + ' kg';
   const labelEl = $('grindRoundTypeLabel'); if (labelEl) labelEl.textContent = label;
+
+  // Weighted-average Price/kg from each ticked batch's OWN real cost
+  // (batchRealCostPerKg — actual fish-bill price for that specific type/
+  // batch, not a guess). Extra Kg and any batch with no known cost yet
+  // fall back to whatever's in the Price/kg field itself.
+  const knownCostKg = sources.filter(s => s.costPerKg !== null).reduce((s, x) => s + x.kg, 0);
+  const knownCostTotal = sources.filter(s => s.costPerKg !== null).reduce((s, x) => s + x.kg * x.costPerKg, 0);
   const priceEl = $('grindRoundPrice');
   if (priceEl && !priceEl.dataset.userEdited) {
-    const saved = ensureGrindComboPrices()[currentGrindComboKey()];
-    if (saved != null) priceEl.value = saved;
+    if (knownCostKg > 0) {
+      priceEl.value = (knownCostTotal / knownCostKg).toFixed(2);
+    } else {
+      const saved = ensureGrindComboPrices()[currentGrindComboKey()];
+      if (saved != null) priceEl.value = saved;
+    }
+  }
+
+  // Effective Cost/kg (usable, after dust) — the real business number: known
+  // batch costs at their own actual price, everything else (Extra Kg / any
+  // batch still missing a linked fish bill) priced at the Price/kg field,
+  // all divided by usable kg (total kg minus dust) so the dust loss is
+  // actually reflected in the cost per kg of finished Chips.
+  const roundPrice = Number(priceEl && priceEl.value) || 0;
+  const unknownCostKg = Math.max(0, totalKg - knownCostKg);
+  const totalRawCost = knownCostTotal + unknownCostKg * roundPrice;
+  const dustG = Number($('grindRoundDustG') && $('grindRoundDustG').value) || 0;
+  const usableKg = Math.max(0, totalKg - dustG / 1000);
+  const effEl = $('grindRoundEffCostKg');
+  const effStat = $('grindRoundEffCostStat');
+  if (effEl) {
+    if (usableKg > 0 && totalKg > 0) {
+      effEl.textContent = fmt(totalRawCost / usableKg) + '/kg';
+      if (effStat) effStat.className = knownCostKg >= totalKg ? 'stat good' : 'stat accent';
+    } else {
+      effEl.textContent = '—';
+      if (effStat) effStat.className = 'stat';
+    }
   }
 }
 window.recalcGrindRoundPreview = recalcGrindRoundPreview;

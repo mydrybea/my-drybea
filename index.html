@@ -2701,8 +2701,8 @@
         <label>Pick Completed Batches to Grind <span class="sub" style="font-weight:400;">(tick any — mix different fish types in one round if that's how it's actually ground)</span></label>
         <div class="table-wrap">
           <table>
-            <thead><tr><th></th><th>Batch No</th><th>Fish Type</th><th>Remaining</th><th>Kg to Grind</th><th>Balance (Not Ground)</th></tr></thead>
-            <tbody id="grindSourceBody"><tr><td colspan="6" style="text-align:center;opacity:.5;padding:14px;">Loading…</td></tr></tbody>
+            <thead><tr><th></th><th>Batch No</th><th>Fish Type</th><th>Price/kg</th><th>Remaining</th><th>Kg to Grind</th><th>Balance (Not Ground)</th></tr></thead>
+            <tbody id="grindSourceBody"><tr><td colspan="7" style="text-align:center;opacity:.5;padding:14px;">Loading…</td></tr></tbody>
           </table>
         </div>
       </div>
@@ -2713,7 +2713,7 @@
           <input type="number" id="grindExtraKg" min="0" step="0.1" value="0" oninput="onGrindExtraKgInput()">
         </div>
         <div class="field">
-          <label>Price /kg (Rs.)</label>
+          <label>Price /kg (Rs.) <span class="hint">(auto from batch cost — editable)</span></label>
           <input type="number" id="grindRoundPrice" min="0" step="0.01" placeholder="e.g. 900" oninput="onGrindRoundPriceInput()">
         </div>
         <div class="field">
@@ -2729,6 +2729,7 @@
       <div class="stat-grid" style="margin:10px 0;">
         <div class="stat"><div class="k">Type</div><div class="v" id="grindRoundTypeLabel" style="font-size:.95rem;">—</div></div>
         <div class="stat accent"><div class="k">Total Kg Going In</div><div class="v" id="grindRoundTotalKg">0 kg</div></div>
+        <div class="stat" id="grindRoundEffCostStat"><div class="k">Effective Cost/kg <span class="hint">(usable, after dust)</span></div><div class="v" id="grindRoundEffCostKg">—</div></div>
       </div>
 
       <div class="btn-row" style="margin:6px 0 16px;" data-owner-only>
