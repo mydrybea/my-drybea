@@ -2691,19 +2691,18 @@
          "BATCH → GRINDING / DIRECT-TO-PRODUCT" in app.js. -->
     <div class="card" style="margin-top:16px;">
       <h2><span class="pro-title-icon orange" aria-hidden="true"><i class="business-icon" data-lucide="cog" aria-hidden="true"></i></span><span>Grinding — From Completed Batches</span></h2>
-      <p class="pro-subtitle orange">Send Completed Batches' finished Umbalakada to grinding — one type alone, or several batches/types mixed into one round — plus any extra Umbalakada bought ready-ground. Usable output restocks Umbalakada Chips, dust restocks Dust.</p>
+      <p class="pro-subtitle orange">Send Completed Batches' finished Umbalakada to grinding — one type alone, or several batches/types mixed into one round — plus any extra Umbalakada bought ready-ground. Usable output restocks Umbalakada Chips.</p>
 
-      <div class="grid-2" style="margin-bottom:14px;" data-owner-only>
-        <div class="field"><label>Umbalakada Chips (ground output) →</label><select id="grindLinkChips" onchange="onGrindLinkChange()"></select></div>
-        <div class="field"><label>Dust →</label><select id="grindLinkDust" onchange="onGrindLinkChange()"></select></div>
+      <div class="field" style="margin-bottom:14px;" data-owner-only>
+        <label>Umbalakada Chips (ground output) →</label><select id="grindLinkChips" onchange="onGrindLinkChange()"></select>
       </div>
 
       <div class="field" data-owner-only>
         <label>Pick Completed Batches to Grind <span class="sub" style="font-weight:400;">(tick any — mix different fish types in one round if that's how it's actually ground)</span></label>
         <div class="table-wrap">
           <table>
-            <thead><tr><th></th><th>Batch No</th><th>Fish Type</th><th>Remaining</th><th>Kg to Grind</th></tr></thead>
-            <tbody id="grindSourceBody"><tr><td colspan="5" style="text-align:center;opacity:.5;padding:14px;">Loading…</td></tr></tbody>
+            <thead><tr><th></th><th>Batch No</th><th>Fish Type</th><th>Remaining</th><th>Kg to Grind</th><th>Balance (Not Ground)</th></tr></thead>
+            <tbody id="grindSourceBody"><tr><td colspan="6" style="text-align:center;opacity:.5;padding:14px;">Loading…</td></tr></tbody>
           </table>
         </div>
       </div>
@@ -2741,6 +2740,45 @@
         <table>
           <thead><tr><th>Date</th><th>Type</th><th>Kg In</th><th>Price/kg</th><th>Dust</th><th>Usable Out</th><th></th></tr></thead>
           <tbody id="grindRoundsBody"><tr><td colspan="7" style="text-align:center;opacity:.5;padding:14px;">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ============ PACK TODAY'S CHIPS — CUSTOM SIZES ============ -->
+    <div class="card" style="margin-top:16px;">
+      <h2><span class="pro-title-icon orange" aria-hidden="true"><i class="business-icon" data-lucide="package" aria-hidden="true"></i></span><span>Pack Today's Chips — Custom Sizes</span></h2>
+      <p class="pro-subtitle orange">Split ground Umbalakada Chips into your own pack/bottle sizes (e.g. 50g Pack, 100g Bottle, 500g, 1kg) — link each size to its product in Stock, and optionally record what % of that size's weight is reused Dust.</p>
+
+      <h3 style="margin:0 0 8px;">Define Pack / Bottle Sizes</h3>
+      <div class="grid-3" data-owner-only>
+        <div class="field"><label>Name</label><input type="text" id="cptNewName" placeholder="e.g. 100g Bottle"></div>
+        <div class="field"><label>Weight <span class="hint">(g)</span></label><input type="number" id="cptNewWeight" min="0" step="1" placeholder="e.g. 100"></div>
+        <div class="field"><label>&nbsp;</label><button type="button" class="btn btn-primary btn-sm" style="width:100%;" onclick="addChipPackType()"><i class="business-icon icon-inline" data-lucide="plus" aria-hidden="true"></i> Add Size</button></div>
+      </div>
+
+      <div class="table-wrap" style="margin-top:10px;" data-owner-only>
+        <table>
+          <thead><tr><th>Name</th><th>Weight</th><th>Product →</th><th>Dust % Used</th><th></th></tr></thead>
+          <tbody id="cptListBody"><tr><td colspan="5" style="text-align:center;opacity:.5;padding:14px;">Loading…</td></tr></tbody>
+        </table>
+      </div>
+
+      <h3 style="margin:18px 0 8px;">Add Today's Packing Batch</h3>
+      <div class="grid-3" id="cpkQtyGrid" data-owner-only></div>
+      <div class="field" data-owner-only>
+        <label>Note (optional)</label>
+        <input type="text" id="cpkNote" placeholder="Optional notes...">
+      </div>
+      <div class="btn-row" style="margin:6px 0 8px;" data-owner-only>
+        <button type="button" class="btn btn-primary btn-sm" onclick="addChipsPackBatch()"><i class="business-icon icon-inline" data-lucide="plus" aria-hidden="true"></i> Add Packing Batch</button>
+      </div>
+      <small style="display:block;margin-bottom:8px;opacity:.7;" id="cpkBatchTotalsNote"></small>
+
+      <h3 style="margin:18px 0 8px;">Packing Batches Logged Today</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Time</th><th>Packed</th><th>Chips Used</th><th></th></tr></thead>
+          <tbody id="cpkBatchListBody"><tr><td colspan="4" style="text-align:center;opacity:.5;padding:14px;">Loading…</td></tr></tbody>
         </table>
       </div>
     </div>

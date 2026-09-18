@@ -2324,13 +2324,12 @@ async function addGrindBatch(comboKey) {
       unlinkedParts.push('Umbalakada Chips');
     }
   }
-  if (dustG > 0) {
-    if (dustProductId) {
-      const r = await applyStockMovement(dustProductId, dustG / 1000, 'production', `Grind batch dust: ${typeName} — ${fmt2(dustG)}g`);
-      if (!r.ok) anyMovementFailed = true;
-    } else {
-      unlinkedParts.push('Dust');
-    }
+  // Dust is optional on purpose — most owners mix it back into the product
+  // itself rather than stocking it as its own item, so an unlinked Dust
+  // product is expected, not a mistake worth warning about.
+  if (dustG > 0 && dustProductId) {
+    const r = await applyStockMovement(dustProductId, dustG / 1000, 'production', `Grind batch dust: ${typeName} — ${fmt2(dustG)}g`);
+    if (!r.ok) anyMovementFailed = true;
   }
 
   if (anyMovementFailed) {
@@ -2522,9 +2521,8 @@ function renderStockUpdateSummary() {
   if (grindUnlinkedUsableKg > 0) {
     rows.push({ name: 'Not linked yet', qty: `${fmt2(grindUnlinkedUsableKg)} kg usable`, from: 'Grinding — fix in Stage 4', ok: false });
   }
-  if (grindUnlinkedDustG > 0) {
-    rows.push({ name: 'Not linked yet', qty: `${fmt2(grindUnlinkedDustG)} g dust`, from: 'Dust — fix in Stage 4', ok: false });
-  }
+  // Dust is intentionally left unlinked for owners who mix it back into
+  // the product rather than stocking it separately — no "fix this" row.
 
   // Finished Product Batches — pack counts per linked product.
   const packSums = (typeof computeTodayBatchSums === 'function') ? computeTodayBatchSums() : {};
@@ -4245,7 +4243,7 @@ function addChipPackType() {
   const weightG = Number(weightEl && weightEl.value) || 0;
   if (!name) { alert('Enter a name for this pack/bottle size (e.g. "50g Pack", "100g Bottle").'); return; }
   if (weightG <= 0) { alert('Enter the weight in grams for this pack/bottle size.'); return; }
-  ensureChipPackTypes().push({ id: 'cpt_' + Date.now() + '_' + Math.floor(Math.random() * 1000), name, weightG, productId: '' });
+  ensureChipPackTypes().push({ id: 'cpt_' + Date.now() + '_' + Math.floor(Math.random() * 1000), name, weightG, productId: '', dustPct: 0 });
   if (nameEl) nameEl.value = '';
   if (weightEl) weightEl.value = '';
   onDataChange();
@@ -4271,13 +4269,24 @@ function onChipPackTypeProductChange(id) {
 }
 window.onChipPackTypeProductChange = onChipPackTypeProductChange;
 
+// % of this pack/bottle size's weight that's reused Dust rather than fresh
+// ground Chips — recorded for the owner's own reference/costing; purely
+// informational, doesn't move stock or change the kg deducted from Chips.
+function onChipPackTypeDustPctChange(id) {
+  const el = $('cptDustPct_' + id);
+  const t = ensureChipPackTypes().find(x => x.id === id);
+  if (t && el) t.dustPct = Math.max(0, Math.min(100, Number(el.value) || 0));
+  onDataChange();
+}
+window.onChipPackTypeDustPctChange = onChipPackTypeDustPctChange;
+
 function renderChipPackTypesManager() {
   const body = $('cptListBody');
   if (!body) return;
   const list = ensureChipPackTypes();
   const optionsHtml = '<option value="">— Not linked —</option>' + (products || []).map(p => `<option value="${p.id}">${p.name}</option>`).join('');
   if (list.length === 0) {
-    body.innerHTML = '<tr><td colspan="4" style="text-align:center;opacity:.5;padding:14px;">No pack/bottle sizes defined yet — add one above (e.g. "50g Pack", "100g Bottle").</td></tr>';
+    body.innerHTML = '<tr><td colspan="5" style="text-align:center;opacity:.5;padding:14px;">No pack/bottle sizes defined yet — add one above (e.g. "50g Pack", "100g Bottle").</td></tr>';
     return;
   }
   body.innerHTML = list.map(t => `
@@ -4285,9 +4294,13 @@ function renderChipPackTypesManager() {
       <td>${t.name}</td>
       <td>${t.weightG}g</td>
       <td><select id="cptProduct_${t.id}" onchange="onChipPackTypeProductChange('${t.id}')">${optionsHtml}</select></td>
+      <td><input type="number" id="cptDustPct_${t.id}" min="0" max="100" step="1" style="width:70px;" onchange="onChipPackTypeDustPctChange('${t.id}')"> %</td>
       <td><button type="button" class="btn btn-xs btn-danger" onclick="deleteChipPackType('${t.id}')"><i class="business-icon icon-inline" data-lucide="trash-2" aria-hidden="true"></i></button></td>
     </tr>`).join('');
-  list.forEach(t => { const sel = $('cptProduct_' + t.id); if (sel) sel.value = t.productId || ''; });
+  list.forEach(t => {
+    const sel = $('cptProduct_' + t.id); if (sel) sel.value = t.productId || '';
+    const pctEl = $('cptDustPct_' + t.id); if (pctEl) pctEl.value = t.dustPct || 0;
+  });
 }
 window.renderChipPackTypesManager = renderChipPackTypesManager;
 
@@ -7913,23 +7926,22 @@ function eligibleBatchesForUse() {
   return productionBatches.filter(b => b.status === 'completed' && (batchRemainingKg(b) || 0) > 0.01);
 }
 
-// ---- Product links (Umbalakada Chips + Dust) — same app_data-blob pattern
-// state.packProductMap already uses elsewhere in this app. ----
+// ---- Product link (Umbalakada Chips) — same app_data-blob pattern
+// state.packProductMap already uses elsewhere in this app. Dust is no
+// longer stocked as its own product — owners mix it back into the product
+// itself, so there's nothing to link it to here.
 function populateGrindLinkSelects() {
   const chipsSel = $('grindLinkChips');
-  const dustSel = $('grindLinkDust');
-  if (!chipsSel && !dustSel) return;
+  if (!chipsSel) return;
   const optionsHtml = '<option value="">— Not linked —</option>' + (products || []).map(p => `<option value="${p.id}">${p.name}</option>`).join('');
-  if (chipsSel) { chipsSel.innerHTML = optionsHtml; chipsSel.value = (state.grindProductMap && state.grindProductMap.chips) || ''; }
-  if (dustSel) { dustSel.innerHTML = optionsHtml; dustSel.value = (state.grindProductMap && state.grindProductMap.dust) || ''; }
+  chipsSel.innerHTML = optionsHtml; chipsSel.value = (state.grindProductMap && state.grindProductMap.chips) || '';
 }
 window.populateGrindLinkSelects = populateGrindLinkSelects;
 
 function onGrindLinkChange() {
   if (!state.grindProductMap) state.grindProductMap = {};
-  const chipsSel = $('grindLinkChips'); const dustSel = $('grindLinkDust');
+  const chipsSel = $('grindLinkChips');
   if (chipsSel) state.grindProductMap.chips = chipsSel.value;
-  if (dustSel) state.grindProductMap.dust = dustSel.value;
   onDataChange();
 }
 window.onGrindLinkChange = onGrindLinkChange;
@@ -7941,7 +7953,7 @@ function renderGrindSourcePicker() {
   if (!tbody) return;
   const rows = eligibleBatchesForUse();
   if (rows.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;opacity:.5;padding:14px;">No completed batches with unused output right now.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;opacity:.5;padding:14px;">No completed batches with unused output right now.</td></tr>';
   } else {
     tbody.innerHTML = rows.map(b => {
       const remaining = batchRemainingKg(b);
@@ -7950,7 +7962,8 @@ function renderGrindSourcePicker() {
         <td>${b.batchNo}</td>
         <td>${b.fishType}</td>
         <td>${remaining.toFixed(1)} kg</td>
-        <td><input type="number" class="grsrc-kg" min="0" step="0.1" max="${remaining}" value="0" disabled style="width:80px;" oninput="recalcGrindRoundPreview()"></td>
+        <td><input type="number" class="grsrc-kg" data-remaining="${remaining}" min="0" step="0.1" max="${remaining}" value="0" disabled style="width:80px;" oninput="recalcGrindRoundPreview()"></td>
+        <td class="grsrc-balance">${remaining.toFixed(1)} kg</td>
       </tr>`;
     }).join('');
   }
@@ -7993,6 +8006,19 @@ function currentGrindComboKey() {
 }
 
 function recalcGrindRoundPreview() {
+  // Live "Balance (Not Ground)" per row = that batch's remaining kg minus
+  // whatever's currently entered in Kg to Grind for it (ticked or not).
+  const tbody = $('grindSourceBody');
+  if (tbody) {
+    tbody.querySelectorAll('tr').forEach(tr => {
+      const kgInput = tr.querySelector('.grsrc-kg');
+      const balCell = tr.querySelector('.grsrc-balance');
+      if (!kgInput || !balCell) return;
+      const remaining = Number(kgInput.dataset.remaining) || 0;
+      const kg = Number(kgInput.value) || 0;
+      balCell.textContent = Math.max(0, remaining - kg).toFixed(1) + ' kg';
+    });
+  }
   const sources = getTickedGrindSources();
   const extraKg = Number($('grindExtraKg') && $('grindExtraKg').value) || 0;
   const totalKg = sources.reduce((s, x) => s + x.kg, 0) + extraKg;
@@ -8096,9 +8122,9 @@ async function saveGrindRound() {
     if (productId) await applyStockMovement(productId, usableKg, 'production', `Grind round: ${typeLabel} — ${fmt2(usableKg)}kg usable → Umbalakada Chips`);
     else unlinkedParts.push('Umbalakada Chips');
   }
-  if (dustG > 0) {
-    if (dustProductId) await applyStockMovement(dustProductId, dustG / 1000, 'production', `Grind round dust: ${typeLabel} — ${fmt2(dustG)}g`);
-    else unlinkedParts.push('Dust');
+  // Dust is optional on purpose — see the note above addGrindBatch().
+  if (dustG > 0 && dustProductId) {
+    await applyStockMovement(dustProductId, dustG / 1000, 'production', `Grind round dust: ${typeLabel} — ${fmt2(dustG)}g`);
   }
 
   // Reset the builder.
