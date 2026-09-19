@@ -1969,7 +1969,9 @@ function onDpBasisChange() {
 window.onDpBasisChange = onDpBasisChange;
 
 function calculatePack(sizeKey, linnaPrice, balayaPrice, premiumPrice, mixPct, mode, targetProfit, customSp) {
-  const p = PACKS[sizeKey];
+  // Packaging cost = fixed PACKS[..].pack unless the owner turned on "Use packaging recipe costs"
+  // (Production tab → Packaging Materials) — see getPackagingCostPerPack().
+  const p = Object.assign({}, PACKS[sizeKey], { pack: getPackagingCostPerPack(sizeKey) });
   const gy = getGrindYields();
   const linnaUsableG = p.fish * mixPct.linna;
   const balayaUsableG = p.fish * mixPct.balaya;
@@ -3576,7 +3578,7 @@ function calcDailyPurchase() {
     const p = PACKS[key];
     const grams = Number(key);
     const rawShare = costPerKgUsable * (grams / 1000);
-    const costPerPack = rawShare + p.grind + p.pack;
+    const costPerPack = rawShare + p.grind + getPackagingCostPerPack(key);
 
     const defaultMarketPrice = weightedFinPricePerKg > 0 ? weightedFinPricePerKg * (grams / 1000) : p.mrp;
     const marketPrice = (dpbMarketPriceOverride[key] != null) ? dpbMarketPriceOverride[key] : defaultMarketPrice;
@@ -4526,6 +4528,7 @@ async function deleteChipsPackBatch(id) {
         const qty = Number(qtys[t.id]) || 0;
         if (qty > 0 && t.productId) {
           await applyStockMovement(t.productId, -qty, 'adjustment', 'Packing batch deleted — reversed');
+          packagingOnProductionMovement(t.productId, -qty, `${t.name} packing batch deleted — materials restored`);
         }
       }
     }
@@ -4536,6 +4539,960 @@ async function deleteChipsPackBatch(id) {
   }
 }
 window.deleteChipsPackBatch = deleteChipsPackBatch;
+
+// ==================== PACKAGING MATERIALS — COSTING PLAN & STOCK ====================
+// Owner-only. Tracks every packaging material used for Maldive Fish products
+// (bottles / bags / pouches, labels, silica packets, plus extras such as
+// cartons or seals) as a costed stock, and a "recipe" per finished product
+// saying which materials ONE unit uses.
+//
+//   • Costing Plan  — packaging cost per unit of each product, how many can
+//                     be packed with today's stock, and a "plan a run"
+//                     calculator (needs vs stock vs shortfall).
+//   • Material Stock — purchases (weighted-average cost), wastage, manual
+//                     use, stock-count corrections, reorder alerts.
+//   • Product Recipes — the materials per unit + the Stock (Products tab)
+//                     product each recipe is linked to.
+//
+// AUTO-DEDUCT: applyStockMovement() calls packagingOnProductionMovement()
+// after every successful 'production' movement. If the product is linked to
+// a recipe (and auto-deduct is on for it), qty × recipe is taken out of
+// material stock (or put back, when a packing batch is reversed).
+//
+// COSTING TAB: optional (off by default). When ON, getPackagingCostPerPack()
+// replaces the fixed PACKS[size].pack packaging cost with the recipe cost
+// for any recipe mapped to that Costing size.
+//
+// DATA: state.packaging = { materials[], plans[], log[], planQty{},
+// useInCosting } — inside `state`, so it syncs through the existing
+// app_data blob like packProductMap / chipPackTypes. No new Supabase table.
+const PKG_CAT_LABELS = { container: 'Bottle / Bag / Pouch', label: 'Label', silica: 'Silica Packet', other: 'Other' };
+const PKG_EXTRAS = [
+  { name: 'Tamper Seal / Induction Liner', category: 'other' },
+  { name: 'Shrink Neck Band', category: 'other' },
+  { name: 'Bottle Cap / Lid', category: 'other' },
+  { name: 'Zip-Lock / Seal Clip', category: 'other' },
+  { name: 'Batch & Expiry Date Sticker', category: 'label' },
+  { name: 'Barcode / Price Sticker', category: 'label' },
+  { name: 'Oxygen Absorber', category: 'silica' },
+  { name: 'Outer Carton (small)', category: 'other' },
+  { name: 'Outer Carton (large)', category: 'other' },
+  { name: 'Sealing Tape', category: 'other' },
+  { name: 'Delivery Bubble Wrap', category: 'other' },
+  { name: 'Thank-You Card / Flyer', category: 'other' }
+];
+let pkgActiveTab = 'plan';
+let pkgModalCtx = { materialId: null };
+
+function pkgUid(prefix) { return prefix + '_' + Date.now().toString(36) + Math.floor(Math.random() * 1296).toString(36); }
+function pkgRound(n) { return Math.round((Number(n) || 0) * 1000) / 1000; }
+
+function pkgBuildStarter() {
+  const mk = (id, name, category, reorder) => ({ id, name, category, unit: 'pcs', stockQty: 0, unitCost: 0, reorderLevel: reorder });
+  const materials = [
+    mk('pm_c50',   'Chips 50g Pack (pouch)', 'container', 100),
+    mk('pm_c100',  'Chips 100g Bottle',      'container', 100),
+    mk('pm_c500',  'Chips 500g Bottle',      'container', 50),
+    mk('pm_c1000', 'Chips 1kg Bottle',       'container', 50),
+    mk('pm_cl50',   'Chips Label 50g',  'label', 100),
+    mk('pm_cl100',  'Chips Label 100g', 'label', 100),
+    mk('pm_cl500',  'Chips Label 500g', 'label', 50),
+    mk('pm_cl1000', 'Chips Label 1kg',  'label', 50),
+    mk('pm_s50',   'Silica Packet 50g',  'silica', 200),
+    mk('pm_s100',  'Silica Packet 100g', 'silica', 200),
+    mk('pm_s500',  'Silica Packet 500g', 'silica', 100),
+    mk('pm_s1000', 'Silica Packet 1kg',  'silica', 100),
+    mk('pm_pb500',  'Pieces Bag 500g', 'container', 50),
+    mk('pm_pb1000', 'Pieces Bag 1kg',  'container', 50),
+    mk('pm_pl500',  'Pieces Label 500g', 'label', 50),
+    mk('pm_pl1000', 'Pieces Label 1kg',  'label', 50)
+  ];
+  const plan = (id, name, group, weightG, costingKey, lines) => ({
+    id, name, group, weightG, costingKey, productId: '', autoDeduct: true,
+    lines: lines.map(([materialId, qty]) => ({ materialId, qty }))
+  });
+  const plans = [
+    plan('pl_chips50',   'Umbalakada Chips 50g Pack',    'chips', 50,   '50',   [['pm_c50', 1],   ['pm_cl50', 1],   ['pm_s50', 1]]),
+    plan('pl_chips100',  'Umbalakada Chips 100g Bottle', 'chips', 100,  '100',  [['pm_c100', 1],  ['pm_cl100', 1],  ['pm_s100', 1]]),
+    plan('pl_chips500',  'Umbalakada Chips 500g Bottle', 'chips', 500,  '500',  [['pm_c500', 1],  ['pm_cl500', 1],  ['pm_s500', 1]]),
+    plan('pl_chips1000', 'Umbalakada Chips 1kg Bottle',  'chips', 1000, '1000', [['pm_c1000', 1], ['pm_cl1000', 1], ['pm_s1000', 1]]),
+    plan('pl_pcs500',    'Maldive Fish Large/Medium Pieces 500g Bag', 'pieces', 500,  '', [['pm_pb500', 1],  ['pm_pl500', 1],  ['pm_s500', 1]]),
+    plan('pl_pcs1000',   'Maldive Fish Large/Medium Pieces 1kg Bag',  'pieces', 1000, '', [['pm_pb1000', 1], ['pm_pl1000', 1], ['pm_s1000', 1]])
+  ];
+  return { materials, plans, log: [], planQty: {}, useInCosting: false, snapshots: [], names: {} };
+}
+
+function ensurePackaging() {
+  if (!state.packaging || typeof state.packaging !== 'object') state.packaging = pkgBuildStarter();
+  const pk = state.packaging;
+  if (!Array.isArray(pk.materials)) pk.materials = [];
+  if (!Array.isArray(pk.plans)) pk.plans = [];
+  if (!Array.isArray(pk.log)) pk.log = [];
+  if (!pk.planQty || typeof pk.planQty !== 'object') pk.planQty = {};
+  if (typeof pk.useInCosting !== 'boolean') pk.useInCosting = false;
+  if (!Array.isArray(pk.snapshots)) pk.snapshots = [];
+  if (!pk.names || typeof pk.names !== 'object') pk.names = {};
+  return pk;
+}
+window.ensurePackaging = ensurePackaging;
+
+function pkgMat(id) { return ensurePackaging().materials.find(m => m.id === id); }
+function pkgPlan(id) { return ensurePackaging().plans.find(p => p.id === id); }
+function pkgPlanCost(plan) {
+  return (plan.lines || []).reduce((s, l) => {
+    const m = pkgMat(l.materialId);
+    return s + (m ? (Number(m.unitCost) || 0) * (Number(l.qty) || 0) : 0);
+  }, 0);
+}
+function pkgPlanMissingPrice(plan) {
+  return (plan.lines || []).some(l => { const m = pkgMat(l.materialId); return m && Number(l.qty) > 0 && !(Number(m.unitCost) > 0); });
+}
+// How many units of this product the CURRENT material stock can still pack,
+// and which material runs out first.
+function pkgPlanCanPack(plan) {
+  let n = Infinity, limiting = null;
+  (plan.lines || []).forEach(l => {
+    const q = Number(l.qty) || 0; if (q <= 0) return;
+    const m = pkgMat(l.materialId); if (!m) return;
+    const can = Math.floor(Math.max(0, Number(m.stockQty) || 0) / q);
+    if (can < n) { n = can; limiting = m; }
+  });
+  return n === Infinity ? null : { n, limiting };
+}
+function pkgMatStatus(m) {
+  const s = Number(m.stockQty) || 0, r = Number(m.reorderLevel) || 0;
+  if (s <= 0) return 'out';
+  if (s <= r) return 'low';
+  return 'ok';
+}
+function pkgStatusBadge(m) {
+  const st = pkgMatStatus(m);
+  if (st === 'out') return '<span class="badge badge-bad">Out</span>';
+  if (st === 'low') return '<span class="badge badge-warn">Low</span>';
+  return '<span class="badge badge-good">OK</span>';
+}
+function pkgPlansUsing(materialId) {
+  return ensurePackaging().plans.filter(p => (p.lines || []).some(l => l.materialId === materialId));
+}
+
+function pkgLog(material, type, qty, unitCost, note, planId) {
+  const pk = ensurePackaging();
+  pk.log.unshift({
+    id: pkgUid('lg'), ts: new Date().toISOString(), materialId: material.id, name: material.name,
+    type, qty: pkgRound(qty), unitCost: Number(unitCost) || 0, note: note || '', planId: planId || ''
+  });
+  if (pk.log.length > 400) pk.log.length = 400;
+}
+
+// Save + refresh. Costing tab is recalculated too when it uses these costs.
+function pkgPersist() {
+  const pk = ensurePackaging();
+  if (pk.useInCosting) { try { calcAll(); } catch (e) { console.warn('calcAll after packaging change:', e); } }
+  pkgSnapshotToday(); // today's daily-history snapshot follows every change
+  scheduleAutoSave();
+  renderPackagingModule();
+}
+
+// ---- Costing-tab hook: real packaging cost per pack (opt-in) ----
+function getPackagingCostPerPack(sizeKey) {
+  const base = PACKS[sizeKey] ? PACKS[sizeKey].pack : 0;
+  try {
+    const pk = state && state.packaging;
+    if (!pk || !pk.useInCosting || !Array.isArray(pk.plans)) return base;
+    const plan = pk.plans.find(pl => String(pl.costingKey) === String(sizeKey));
+    if (!plan) return base;
+    const c = pkgPlanCost(plan);
+    return c > 0 ? c : base;
+  } catch (e) { return base; }
+}
+window.getPackagingCostPerPack = getPackagingCostPerPack;
+
+// ---- Auto-deduct hook (called from applyStockMovement after a 'production' movement) ----
+// delta > 0 → units were packed → materials used up.
+// delta < 0 → a packing entry was reversed → materials put back.
+function packagingOnProductionMovement(productId, delta, note) {
+  try {
+    const pk = state && state.packaging;
+    if (!pk || !Array.isArray(pk.plans) || !productId || !delta) return;
+    const plans = pk.plans.filter(p => p.productId && String(p.productId) === String(productId) && p.autoDeduct !== false);
+    if (plans.length === 0) return;
+    const lowMats = new Map();
+    plans.forEach(pl => {
+      const low = pkgConsumeForPlan(pl, delta, note || (delta > 0 ? `${pl.name} packed` : `${pl.name} packing reversed`));
+      low.forEach(m => lowMats.set(m.id, m));
+    });
+    pkgPersist();
+    if (lowMats.size > 0) {
+      const names = Array.from(lowMats.values()).map(m => `${m.name} (${pkgRound(m.stockQty)} left)`).join(', ');
+      try {
+        if ($('appNotifyContainer') && typeof showAppNotification === 'function') showAppNotification('📦 Packaging stock low', names, 'warn', { tab: 'production' });
+        else updateStatus('⚠️ Packaging stock low: ' + names);
+      } catch (e) { /* notification is best-effort */ }
+    }
+  } catch (e) { console.warn('Packaging auto-deduct skipped:', e && e.message || e); }
+}
+window.packagingOnProductionMovement = packagingOnProductionMovement;
+
+// units > 0 = deduct, units < 0 = restore. Returns materials now low/out.
+function pkgConsumeForPlan(plan, units, note) {
+  const low = [];
+  (plan.lines || []).forEach(l => {
+    const m = pkgMat(l.materialId); const per = Number(l.qty) || 0;
+    if (!m || per <= 0) return;
+    const change = -per * units;
+    m.stockQty = pkgRound((Number(m.stockQty) || 0) + change);
+    pkgLog(m, units > 0 ? 'use' : 'restore', change, m.unitCost, note, plan.id);
+    if (units > 0 && pkgMatStatus(m) !== 'ok') low.push(m);
+  });
+  return low;
+}
+
+// Recipes for chips sizes pick up the Stock product already chosen for the
+// same-weight size in "Pack Today's Chips", (or the Pack→Product link for
+// 50/100/500/1000) so auto-deduct works out of the box. Only fills recipes
+// that have no product yet — never overwrites the owner's own choice.
+function pkgAutoLinkPlans() {
+  const pk = ensurePackaging(); let changed = false;
+  const chipTypes = Array.isArray(state.chipPackTypes) ? state.chipPackTypes : [];
+  pk.plans.forEach(pl => {
+    if (pl.productId || pl.group !== 'chips') return;
+    const byWeight = chipTypes.filter(t => Number(t.weightG) === Number(pl.weightG) && t.productId);
+    let pid = byWeight.length === 1 ? byWeight[0].productId : '';
+    if (!pid && pl.costingKey && state.packProductMap && state.packProductMap[pl.costingKey]) pid = state.packProductMap[pl.costingKey];
+    if (pid) { pl.productId = pid; pl.autoLinked = true; changed = true; }
+  });
+  if (changed) scheduleAutoSave();
+}
+
+// ==================== RENDER ====================
+function renderPackagingModule() {
+  if (!$('pkgCard')) return;
+  const pk = ensurePackaging();
+  pkgAutoLinkPlans();
+  if (pkgSnapshotToday()) scheduleAutoSave(); // first open/login of the day creates the day's snapshot
+  pkgRenderStats();
+  pkgRenderPlanTable();
+  pkgRenderRunInputs();
+  pkgRenderRun();
+  pkgRenderStock();
+  pkgRenderRecipes();
+  pkgRenderHistory();
+  pkgRenderDaily();
+  const cb = $('pkgUseInCosting'); if (cb) cb.checked = !!pk.useInCosting;
+  pkgRenderUseInCostingNote();
+  pkgApplyTab();
+  if (window.lucide) lucide.createIcons({ attrs: { 'stroke-width': 1.9, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' } });
+}
+window.renderPackagingModule = renderPackagingModule;
+
+function pkgRenderStats() {
+  const pk = ensurePackaging();
+  const set = (id, v) => { const el = $(id); if (el) el.textContent = v; };
+  set('pkgStatCount', pk.materials.length);
+  set('pkgStatValue', fmt(pk.materials.reduce((s, m) => s + Math.max(0, Number(m.stockQty) || 0) * (Number(m.unitCost) || 0), 0)));
+  const lowN = pk.materials.filter(m => pkgMatStatus(m) !== 'ok').length;
+  set('pkgStatLow', lowN);
+  const lowBox = $('pkgStatLowBox'); if (lowBox) lowBox.classList.toggle('bad', lowN > 0);
+  let worst = null;
+  pk.plans.forEach(pl => { const c = pkgPlanCanPack(pl); if (c && (!worst || c.n < worst.n)) worst = { n: c.n, name: pl.name }; });
+  set('pkgStatBottleneck', worst ? `${worst.name} — ${worst.n} left` : '—');
+}
+
+function pkgRenderPlanTable() {
+  const body = $('pkgPlanBody'); if (!body) return;
+  const pk = ensurePackaging();
+  if (pk.plans.length === 0) { body.innerHTML = '<tr><td colspan="7" style="text-align:center;opacity:.55;padding:16px;">No product recipes yet — add one in the Product Recipes tab.</td></tr>'; return; }
+  body.innerHTML = pk.plans.map(pl => {
+    const cost = pkgPlanCost(pl);
+    const parts = (pl.lines || []).map(l => { const m = pkgMat(l.materialId); return m ? `${escapeHtmlSafe(m.name)}${Number(l.qty) !== 1 ? ' ×' + pkgRound(l.qty) : ''}` : ''; }).filter(Boolean);
+    const key = pl.costingKey && PACKS[pl.costingKey] ? pl.costingKey : '';
+    const mrp = key ? getPackPrice(key, 'mrp') : 0;
+    const pct = mrp > 0 && cost > 0 ? (cost / mrp) * 100 : null;
+    const can = pkgPlanCanPack(pl);
+    const canHtml = can ? `<strong>${can.n}</strong>${can.limiting && can.n < 50 ? ` <span class="hint">(${escapeHtmlSafe(can.limiting.name)})</span>` : ''}` : '—';
+    const link = pl.productId ? '<span class="badge badge-good">Auto-deduct</span>' : '<span class="badge badge-warn">Not linked</span>';
+    const missing = pkgPlanMissingPrice(pl) ? ' <span class="badge badge-warn" title="Some materials have no price yet">price missing</span>' : '';
+    return `<tr>
+      <td><strong>${escapeHtmlSafe(pl.name)}</strong><br><span class="hint">${escapeHtmlSafe(pl.weightG || '')}${pl.weightG ? 'g' : ''}</span></td>
+      <td style="white-space:normal;">${parts.join(' + ') || '—'}</td>
+      <td class="num"><strong>${fmt(cost)}</strong>${missing}</td>
+      <td class="num">${mrp > 0 ? fmt(mrp) : '—'}</td>
+      <td class="num">${pct !== null ? pct.toFixed(1) + '%' : '—'}</td>
+      <td>${canHtml}</td>
+      <td>${link}</td>
+    </tr>`;
+  }).join('');
+}
+
+function pkgRenderUseInCostingNote() {
+  const el = $('pkgUseInCostingNote'); if (!el) return;
+  const pk = ensurePackaging();
+  if (!pk.useInCosting) {
+    el.textContent = 'Off — Costing tab keeps its fixed packaging cost (50g Rs.13.5 · 100g Rs.43 · 500g Rs.130 · 1kg Rs.140).';
+    return;
+  }
+  const parts = Object.keys(PACKS).map(k => `${PACKS[k].label} ${fmt(getPackagingCostPerPack(k))}`);
+  el.textContent = 'On — Costing tab now uses your recipe costs: ' + parts.join(' · ') + '. (Any size without a priced recipe falls back to its fixed cost.)';
+}
+
+// ---- Plan a run ----
+function pkgRenderRunInputs() {
+  const wrap = $('pkgRunInputs'); if (!wrap) return;
+  const pk = ensurePackaging();
+  wrap.innerHTML = pk.plans.map(pl => `<div class="field"><label>${escapeHtmlSafe(pl.name)}</label><input type="number" min="0" step="1" id="pkgRunQty_${pl.id}" value="${Number(pk.planQty[pl.id]) || 0}" oninput="pkgOnRunQty('${pl.id}', this)"></div>`).join('');
+}
+function pkgOnRunQty(planId, el) {
+  const pk = ensurePackaging();
+  pk.planQty[planId] = Math.max(0, Number(el.value) || 0);
+  pkgRenderRun();
+  scheduleAutoSave();
+}
+window.pkgOnRunQty = pkgOnRunQty;
+
+function pkgComputeRun() {
+  const pk = ensurePackaging();
+  const need = {}; let totalCost = 0;
+  pk.plans.forEach(pl => {
+    const qty = Number(pk.planQty[pl.id]) || 0; if (qty <= 0) return;
+    (pl.lines || []).forEach(l => {
+      const m = pkgMat(l.materialId); const per = Number(l.qty) || 0; if (!m || per <= 0) return;
+      need[m.id] = (need[m.id] || 0) + per * qty;
+      totalCost += per * qty * (Number(m.unitCost) || 0);
+    });
+  });
+  const rows = Object.keys(need).map(id => {
+    const m = pkgMat(id); const stock = Math.max(0, Number(m.stockQty) || 0);
+    const short = Math.max(0, need[id] - stock);
+    return { m, needed: need[id], stock, short, buyCost: short * (Number(m.unitCost) || 0) };
+  }).sort((a, b) => b.short - a.short);
+  return { rows, totalCost };
+}
+function pkgRenderRun() {
+  const body = $('pkgRunBody'); if (!body) return;
+  const { rows, totalCost } = pkgComputeRun();
+  const shortRows = rows.filter(r => r.short > 0);
+  const set = (id, v) => { const el = $(id); if (el) el.textContent = v; };
+  set('pkgRunCost', fmt(totalCost));
+  set('pkgRunShort', shortRows.length);
+  set('pkgRunBuyCost', fmt(shortRows.reduce((s, r) => s + r.buyCost, 0)));
+  const box = $('pkgRunShortBox'); if (box) box.classList.toggle('bad', shortRows.length > 0);
+  if (rows.length === 0) { body.innerHTML = '<tr><td colspan="5" style="text-align:center;opacity:.5;padding:14px;">Enter a planned quantity above.</td></tr>'; return; }
+  body.innerHTML = rows.map(r => `<tr${r.short > 0 ? ' style="background:var(--bad-bg);"' : ''}>
+    <td>${escapeHtmlSafe(r.m.name)}</td>
+    <td class="num">${pkgRound(r.needed)}</td>
+    <td class="num">${pkgRound(r.stock)}</td>
+    <td class="num">${r.short > 0 ? '<strong style="color:var(--bad);">' + pkgRound(r.short) + '</strong>' : '—'}</td>
+    <td class="num">${r.short > 0 ? fmt(r.buyCost) : '—'}</td>
+  </tr>`).join('');
+}
+function pkgClearRun() {
+  const pk = ensurePackaging(); pk.planQty = {};
+  scheduleAutoSave();
+  pkgRenderRunInputs(); pkgRenderRun();
+}
+window.pkgClearRun = pkgClearRun;
+
+// Manual "I packed this run" — deducts materials for plans that are NOT
+// linked to a Stock product (linked ones already deduct on packing).
+function pkgConfirmRunPacked() {
+  if (userRole !== 'owner') { alert('Only the owner can deduct packaging stock.'); return; }
+  const pk = ensurePackaging();
+  const todo = [], skipped = [];
+  pk.plans.forEach(pl => {
+    const qty = Number(pk.planQty[pl.id]) || 0; if (qty <= 0) return;
+    if (pl.productId && pl.autoDeduct !== false) skipped.push(pl.name); else todo.push({ pl, qty });
+  });
+  if (todo.length === 0) {
+    alert(skipped.length ? `${skipped.join(', ')} ${skipped.length === 1 ? 'is' : 'are'} linked to Stock — materials are deducted automatically when you log packing, so nothing to do here.` : 'Enter a planned quantity first.');
+    return;
+  }
+  const summary = todo.map(t => `${t.qty} × ${t.pl.name}`).join('\n');
+  if (!confirm(`Deduct packaging materials for:\n\n${summary}\n\nThis reduces material stock now.`)) return;
+  const lowMats = new Map();
+  todo.forEach(t => { pkgConsumeForPlan(t.pl, t.qty, 'Manual run packed').forEach(m => lowMats.set(m.id, m)); pk.planQty[t.pl.id] = 0; });
+  pkgPersist();
+  updateStatus(`✅ Materials deducted for ${todo.length} product${todo.length === 1 ? '' : 's'}`);
+  if (lowMats.size > 0) alert('⚠️ Now low / out of stock:\n' + Array.from(lowMats.values()).map(m => `• ${m.name} — ${pkgRound(m.stockQty)} left`).join('\n'));
+}
+window.pkgConfirmRunPacked = pkgConfirmRunPacked;
+
+// ---- Material stock tab ----
+function pkgRenderStock() {
+  const body = $('pkgStockBody'); if (!body) return;
+  const pk = ensurePackaging();
+  const order = { container: 0, label: 1, silica: 2, other: 3 };
+  const list = pk.materials.slice().sort((a, b) => (order[a.category] ?? 9) - (order[b.category] ?? 9));
+  if (list.length === 0) {
+    body.innerHTML = '<tr><td colspan="8" style="text-align:center;opacity:.55;padding:16px;">No materials yet — add one above.</td></tr>';
+  } else {
+    body.innerHTML = list.map(m => {
+      const st = pkgMatStatus(m);
+      const used = pkgPlansUsing(m.id).length;
+      const val = Math.max(0, Number(m.stockQty) || 0) * (Number(m.unitCost) || 0);
+      const stockColor = st === 'out' ? 'var(--bad)' : (st === 'low' ? 'var(--warn)' : 'inherit');
+      return `<tr>
+        <td><strong>${escapeHtmlSafe(m.name)}</strong></td>
+        <td><span class="hint">${PKG_CAT_LABELS[m.category] || 'Other'}</span></td>
+        <td class="num"><strong style="color:${stockColor};">${pkgRound(m.stockQty)}</strong> ${pkgStatusBadge(m)}</td>
+        <td><input type="number" min="0" step="0.01" value="${Number(m.unitCost) || 0}" style="width:84px;text-align:right;" onchange="pkgEditMaterial('${m.id}','unitCost',this)"></td>
+        <td><input type="number" min="0" step="1" value="${Number(m.reorderLevel) || 0}" style="width:70px;text-align:right;" onchange="pkgEditMaterial('${m.id}','reorderLevel',this)"></td>
+        <td class="num">${fmt(val)}</td>
+        <td>${used ? used + ' product' + (used === 1 ? '' : 's') : '<span class="hint">not in a recipe</span>'}</td>
+        <td style="white-space:nowrap;">
+          <button type="button" class="btn btn-xs btn-primary" onclick="pkgOpenStockModal('${m.id}')"><i class="business-icon icon-inline" data-lucide="plus" aria-hidden="true"></i> Stock</button>
+          <button type="button" class="btn btn-xs btn-danger" onclick="pkgDeleteMaterial('${m.id}')"><i class="business-icon icon-inline" data-lucide="trash-2" aria-hidden="true"></i></button>
+        </td>
+      </tr>`;
+    }).join('');
+  }
+  const ex = $('pkgExtras');
+  if (ex) {
+    const have = new Set(pk.materials.map(m => m.name.trim().toLowerCase()));
+    ex.innerHTML = PKG_EXTRAS.map((e, i) => have.has(e.name.toLowerCase())
+      ? ''
+      : `<button type="button" class="btn btn-xs" onclick="pkgQuickAddExtra(${i})">+ ${escapeHtmlSafe(e.name)}</button>`).join('') || '<span class="hint">All suggestions already added.</span>';
+  }
+}
+
+function pkgAddMaterial() {
+  if (userRole !== 'owner') { alert('Only the owner can add materials.'); return; }
+  const name = ($('pkgNewName').value || '').trim();
+  if (!name) { alert('Enter a name for this material (e.g. "Chips 250g Bottle").'); return; }
+  const pk = ensurePackaging();
+  if (pk.materials.some(m => m.name.trim().toLowerCase() === name.toLowerCase())) { alert('A material with this name already exists.'); return; }
+  const m = {
+    id: pkgUid('pm'), name, category: $('pkgNewCat').value || 'other', unit: 'pcs',
+    stockQty: Math.max(0, Number($('pkgNewStock').value) || 0),
+    unitCost: Math.max(0, Number($('pkgNewCost').value) || 0),
+    reorderLevel: Math.max(0, Number($('pkgNewReorder').value) || 0)
+  };
+  pk.materials.push(m);
+  if (m.stockQty > 0) pkgLog(m, 'purchase', m.stockQty, m.unitCost, 'Opening stock');
+  $('pkgNewName').value = ''; $('pkgNewStock').value = 0; $('pkgNewCost').value = 0;
+  pkgPersist();
+}
+window.pkgAddMaterial = pkgAddMaterial;
+
+function pkgQuickAddExtra(i) {
+  if (userRole !== 'owner') return;
+  const e = PKG_EXTRAS[i]; if (!e) return;
+  const pk = ensurePackaging();
+  if (pk.materials.some(m => m.name.trim().toLowerCase() === e.name.toLowerCase())) return;
+  pk.materials.push({ id: pkgUid('pm'), name: e.name, category: e.category, unit: 'pcs', stockQty: 0, unitCost: 0, reorderLevel: 0 });
+  pkgPersist();
+}
+window.pkgQuickAddExtra = pkgQuickAddExtra;
+
+function pkgEditMaterial(id, field, el) {
+  const m = pkgMat(id); if (!m) return;
+  m[field] = Math.max(0, Number(el.value) || 0);
+  pkgPersist();
+}
+window.pkgEditMaterial = pkgEditMaterial;
+
+function pkgDeleteMaterial(id) {
+  if (userRole !== 'owner') return;
+  const m = pkgMat(id); if (!m) return;
+  const used = pkgPlansUsing(id);
+  const msg = used.length
+    ? `"${m.name}" is used in ${used.length} product recipe${used.length === 1 ? '' : 's'} (${used.map(p => p.name).join(', ')}). Delete it and remove it from those recipes?`
+    : `Delete "${m.name}"?`;
+  if (!confirm(msg)) return;
+  const pk = ensurePackaging();
+  pk.materials = pk.materials.filter(x => x.id !== id);
+  pk.plans.forEach(pl => { pl.lines = (pl.lines || []).filter(l => l.materialId !== id); });
+  pkgPersist();
+}
+window.pkgDeleteMaterial = pkgDeleteMaterial;
+
+// ---- Stock modal (purchase / wastage / manual use / correction) ----
+function pkgOpenStockModal(materialId) {
+  if (userRole !== 'owner') { alert('Only the owner can update packaging stock.'); return; }
+  const m = pkgMat(materialId); if (!m) return;
+  pkgModalCtx = { materialId };
+  $('pkgModalTitle').textContent = m.name;
+  $('pkgModalSub').textContent = `In stock: ${pkgRound(m.stockQty)} pcs · current cost ${fmt(Number(m.unitCost) || 0)} / pc`;
+  $('pkgModalMode').value = 'purchase';
+  $('pkgModalQty').value = 0; $('pkgModalTotal').value = 0; $('pkgModalNote').value = '';
+  pkgOnModalModeChange();
+  $('pkgStockModal').classList.add('active');
+}
+window.pkgOpenStockModal = pkgOpenStockModal;
+
+function pkgOnModalModeChange() {
+  const mode = $('pkgModalMode').value;
+  $('pkgModalCostField').style.display = mode === 'purchase' ? '' : 'none';
+  $('pkgModalQtyLabel').textContent = mode === 'correct' ? 'Counted Stock (pcs)' : 'Quantity (pcs)';
+  if (mode === 'correct') { const m = pkgMat(pkgModalCtx.materialId); if (m) $('pkgModalQty').value = pkgRound(m.stockQty); }
+  pkgModalRecalc();
+}
+window.pkgOnModalModeChange = pkgOnModalModeChange;
+
+function pkgModalRecalc() {
+  const m = pkgMat(pkgModalCtx.materialId); const pv = $('pkgModalPreview'); if (!m || !pv) return;
+  const mode = $('pkgModalMode').value, qty = Number($('pkgModalQty').value) || 0;
+  if (mode === 'purchase') {
+    const total = Number($('pkgModalTotal').value) || 0;
+    const unit = qty > 0 ? total / qty : 0;
+    const oldQty = Math.max(0, Number(m.stockQty) || 0), oldCost = Number(m.unitCost) || 0;
+    const newAvg = (oldQty + qty) > 0 ? (oldQty * oldCost + qty * unit) / (oldQty + qty) : unit;
+    pv.textContent = qty > 0 ? `This lot: ${fmt(unit)} / pc → new average cost ${fmt(newAvg)} / pc · stock becomes ${pkgRound((Number(m.stockQty) || 0) + qty)}` : '';
+  } else if (mode === 'correct') {
+    pv.textContent = `Stock changes by ${pkgRound(qty - (Number(m.stockQty) || 0))} pcs (to ${pkgRound(qty)}).`;
+  } else {
+    pv.textContent = qty > 0 ? `Stock becomes ${pkgRound((Number(m.stockQty) || 0) - qty)}.` : '';
+  }
+}
+window.pkgModalRecalc = pkgModalRecalc;
+
+function pkgSaveStockModal() {
+  if (userRole !== 'owner') return;
+  const m = pkgMat(pkgModalCtx.materialId); if (!m) return;
+  const mode = $('pkgModalMode').value;
+  const qty = Number($('pkgModalQty').value) || 0;
+  const note = ($('pkgModalNote').value || '').trim();
+  if (mode !== 'correct' && qty <= 0) { alert('Enter a quantity greater than 0.'); return; }
+  if (mode === 'correct' && qty < 0) { alert('Counted stock cannot be negative.'); return; }
+  if (mode === 'purchase') {
+    const total = Math.max(0, Number($('pkgModalTotal').value) || 0);
+    const unit = total / qty;
+    const oldQty = Math.max(0, Number(m.stockQty) || 0), oldCost = Number(m.unitCost) || 0;
+    m.unitCost = Math.round((((oldQty + qty) > 0) ? (oldQty * oldCost + qty * unit) / (oldQty + qty) : unit) * 100) / 100;
+    m.stockQty = pkgRound((Number(m.stockQty) || 0) + qty);
+    pkgLog(m, 'purchase', qty, unit, note || 'Stock purchase');
+  } else if (mode === 'correct') {
+    const delta = qty - (Number(m.stockQty) || 0);
+    m.stockQty = pkgRound(qty);
+    pkgLog(m, 'correct', delta, m.unitCost, note || 'Stock count correction');
+  } else {
+    m.stockQty = pkgRound((Number(m.stockQty) || 0) - qty);
+    pkgLog(m, mode === 'wastage' ? 'wastage' : 'use', -qty, m.unitCost, note || (mode === 'wastage' ? 'Damaged / wasted' : 'Manual use'));
+  }
+  closeModal('pkgStockModal');
+  pkgPersist();
+  updateStatus(`✅ ${m.name} stock updated`);
+}
+window.pkgSaveStockModal = pkgSaveStockModal;
+
+// ---- Recipes tab ----
+function pkgRenderRecipes() {
+  const wrap = $('pkgRecipesWrap'); if (!wrap) return;
+  const pk = ensurePackaging();
+  if (pk.plans.length === 0) { wrap.innerHTML = '<p class="sub">No product recipes yet — add one below.</p>'; return; }
+  const matOptions = sel => pk.materials.map(m => `<option value="${m.id}"${m.id === sel ? ' selected' : ''}>${escapeHtmlSafe(m.name)}</option>`).join('');
+  const prodOptions = sel => '<option value="">— Not linked —</option>' + (products || []).map(p => `<option value="${p.id}"${String(p.id) === String(sel) ? ' selected' : ''}>${escapeHtmlSafe(p.name)}</option>`).join('');
+  const keyOptions = sel => '<option value="">— none —</option>' + Object.keys(PACKS).map(k => `<option value="${k}"${String(k) === String(sel) ? ' selected' : ''}>${PACKS[k].label} pack</option>`).join('');
+  const groupLabel = { chips: 'Chips', pieces: 'Pieces', other: 'Other' };
+  wrap.innerHTML = pk.plans.map(pl => {
+    const cost = pkgPlanCost(pl);
+    const lines = (pl.lines || []).map((l, i) => {
+      const m = pkgMat(l.materialId);
+      const lc = m ? (Number(m.unitCost) || 0) * (Number(l.qty) || 0) : 0;
+      return `<tr>
+        <td><select onchange="pkgLineMaterial('${pl.id}',${i},this)">${matOptions(l.materialId)}</select></td>
+        <td><input type="number" min="0" step="0.001" value="${Number(l.qty) || 0}" style="width:84px;text-align:right;" onchange="pkgLineQty('${pl.id}',${i},this)"></td>
+        <td class="num">${fmt(lc)}</td>
+        <td><button type="button" class="btn btn-xs btn-danger" onclick="pkgRemoveLine('${pl.id}',${i})"><i class="business-icon icon-inline" data-lucide="x" aria-hidden="true"></i></button></td>
+      </tr>`;
+    }).join('') || '<tr><td colspan="4" style="text-align:center;opacity:.55;padding:10px;">No materials in this recipe yet.</td></tr>';
+    return `<div class="pkg-plan" style="border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
+        <div><strong>${escapeHtmlSafe(pl.name)}</strong> <span class="badge" style="margin-left:4px;">${groupLabel[pl.group] || 'Other'}${pl.weightG ? ' · ' + escapeHtmlSafe(pl.weightG) + 'g' : ''}</span></div>
+        <div><span class="hint">Packaging cost / unit</span> <strong>${fmt(cost)}</strong>
+          <button type="button" class="btn btn-xs btn-danger" style="margin-left:8px;" onclick="pkgDeletePlan('${pl.id}')"><i class="business-icon icon-inline" data-lucide="trash-2" aria-hidden="true"></i></button></div>
+      </div>
+      <div class="grid-3">
+        <div class="field"><label>Linked Stock Product ${pl.autoLinked && pl.productId ? '<span class="hint">(matched from Pack Sizes)</span>' : ''}</label>
+          <select onchange="pkgPlanField('${pl.id}','productId',this)">${prodOptions(pl.productId)}</select></div>
+        <div class="field"><label>Auto-deduct when packed</label>
+          <select onchange="pkgPlanField('${pl.id}','autoDeduct',this)"><option value="1"${pl.autoDeduct !== false ? ' selected' : ''}>Yes — deduct materials</option><option value="0"${pl.autoDeduct === false ? ' selected' : ''}>No — don't deduct</option></select></div>
+        <div class="field"><label>Use cost in Costing tab as <span class="hint">(optional)</span></label>
+          <select onchange="pkgPlanField('${pl.id}','costingKey',this)">${keyOptions(pl.costingKey)}</select></div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Material</th><th>Qty per unit</th><th class="num">Cost</th><th></th></tr></thead>
+          <tbody>${lines}</tbody>
+        </table>
+      </div>
+      <div class="grid-3" style="margin-top:8px;" data-owner-only>
+        <div class="field"><label>Add material to this recipe</label><select id="pkgNewLineMat_${pl.id}">${matOptions('')}</select></div>
+        <div class="field"><label>Qty per unit</label><input type="number" min="0" step="0.001" value="1" id="pkgNewLineQty_${pl.id}"></div>
+        <div class="field"><label>&nbsp;</label><button type="button" class="btn btn-sm" style="width:100%;" onclick="pkgAddLine('${pl.id}')"><i class="business-icon icon-inline" data-lucide="plus" aria-hidden="true"></i> Add</button></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function pkgPlanField(planId, field, el) {
+  const pl = pkgPlan(planId); if (!pl) return;
+  if (field === 'autoDeduct') pl.autoDeduct = el.value !== '0';
+  else if (field === 'productId') { pl.productId = el.value; pl.autoLinked = false; }
+  else if (field === 'costingKey') pl.costingKey = el.value;
+  pkgPersist();
+}
+window.pkgPlanField = pkgPlanField;
+
+function pkgLineMaterial(planId, idx, el) {
+  const pl = pkgPlan(planId); if (!pl || !pl.lines[idx]) return;
+  pl.lines[idx].materialId = el.value;
+  pkgPersist();
+}
+window.pkgLineMaterial = pkgLineMaterial;
+function pkgLineQty(planId, idx, el) {
+  const pl = pkgPlan(planId); if (!pl || !pl.lines[idx]) return;
+  pl.lines[idx].qty = Math.max(0, Number(el.value) || 0);
+  pkgPersist();
+}
+window.pkgLineQty = pkgLineQty;
+function pkgRemoveLine(planId, idx) {
+  const pl = pkgPlan(planId); if (!pl) return;
+  pl.lines.splice(idx, 1);
+  pkgPersist();
+}
+window.pkgRemoveLine = pkgRemoveLine;
+function pkgAddLine(planId) {
+  const pl = pkgPlan(planId); if (!pl) return;
+  const matId = $('pkgNewLineMat_' + planId) && $('pkgNewLineMat_' + planId).value;
+  const qty = Number($('pkgNewLineQty_' + planId) && $('pkgNewLineQty_' + planId).value) || 0;
+  if (!matId) { alert('Add a material in the Material Stock tab first.'); return; }
+  if (qty <= 0) { alert('Enter a quantity per unit greater than 0.'); return; }
+  if ((pl.lines || []).some(l => l.materialId === matId)) { alert('This material is already in the recipe — change its quantity in the table instead.'); return; }
+  pl.lines.push({ materialId: matId, qty });
+  pkgPersist();
+}
+window.pkgAddLine = pkgAddLine;
+
+function pkgAddPlan() {
+  if (userRole !== 'owner') { alert('Only the owner can add recipes.'); return; }
+  const name = ($('pkgNewPlanName').value || '').trim();
+  if (!name) { alert('Enter a product name.'); return; }
+  const pk = ensurePackaging();
+  pk.plans.push({
+    id: pkgUid('pl'), name, group: $('pkgNewPlanGroup').value || 'other',
+    weightG: Math.max(0, Number($('pkgNewPlanWeight').value) || 0), costingKey: '', productId: '', autoDeduct: true, lines: []
+  });
+  $('pkgNewPlanName').value = ''; $('pkgNewPlanWeight').value = '';
+  pkgPersist();
+}
+window.pkgAddPlan = pkgAddPlan;
+
+function pkgDeletePlan(id) {
+  if (userRole !== 'owner') return;
+  const pl = pkgPlan(id); if (!pl) return;
+  if (!confirm(`Delete the recipe for "${pl.name}"? Material stock is not changed.`)) return;
+  const pk = ensurePackaging();
+  pk.plans = pk.plans.filter(p => p.id !== id);
+  delete pk.planQty[id];
+  pkgPersist();
+}
+window.pkgDeletePlan = pkgDeletePlan;
+
+// ---- History ----
+function pkgRenderHistory() {
+  const body = $('pkgHistoryBody'); if (!body) return;
+  const log = ensurePackaging().log.slice(0, 100);
+  if (log.length === 0) { body.innerHTML = '<tr><td colspan="6" style="text-align:center;opacity:.5;padding:14px;">No movements yet.</td></tr>'; return; }
+  const typeLabel = { purchase: 'Purchase', use: 'Used', restore: 'Restored', wastage: 'Wasted', correct: 'Correction' };
+  body.innerHTML = log.map(e => {
+    const when = new Date(e.ts).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    const q = Number(e.qty) || 0;
+    return `<tr>
+      <td>${when}</td><td>${escapeHtmlSafe(e.name || '')}</td>
+      <td><span class="badge ${q >= 0 ? 'badge-good' : 'badge-warn'}">${typeLabel[e.type] || e.type}</span></td>
+      <td class="num" style="color:${q >= 0 ? 'var(--green)' : 'var(--bad)'};">${q > 0 ? '+' : ''}${pkgRound(q)}</td>
+      <td class="num">${e.unitCost ? fmt(e.unitCost) : '—'}</td>
+      <td style="white-space:normal;">${escapeHtmlSafe(e.note || '')}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ---- Tabs + costing toggle ----
+function pkgApplyTab() {
+  ['plan', 'stock', 'recipes', 'daily', 'history'].forEach(t => { const p = $('pkgPanel-' + t); if (p) p.style.display = (t === pkgActiveTab) ? '' : 'none'; });
+  document.querySelectorAll('.pkg-tabbtn').forEach(b => b.classList.toggle('btn-primary', b.getAttribute('data-pkg-tab') === pkgActiveTab));
+}
+function pkgSwitchTab(tab) { pkgActiveTab = tab; pkgApplyTab(); if (tab === 'daily') pkgRenderDaily(); }
+window.pkgSwitchTab = pkgSwitchTab;
+
+function pkgToggleUseInCosting(el) {
+  if (userRole !== 'owner') { el.checked = !el.checked; return; }
+  ensurePackaging().useInCosting = !!el.checked;
+  try { calcAll(); } catch (e) { console.warn(e); }
+  scheduleAutoSave();
+  pkgRenderUseInCostingNote();
+  updateStatus(el.checked ? '✅ Costing tab now uses your packaging recipe costs' : 'Costing tab back to fixed packaging costs');
+}
+window.pkgToggleUseInCosting = pkgToggleUseInCosting;
+
+// ==================== PACKAGING — DAILY HISTORY (auto-saved snapshots) ====================
+// One compact snapshot per day in state.packaging.snapshots (synced with the
+// rest of `state` through the app_data blob — no SQL). A day's snapshot is
+// created the first time the owner's app loads/opens the module that day and
+// is then UPDATED IN PLACE every time stock or a cost changes, so it always
+// ends the day holding the day's final numbers. Each snapshot keeps:
+//   d   date (YYYY-MM-DD, local)      val  total stock value (Rs.)
+//   sp  Rs. bought that day           us   Rs. of materials used (packing/manual, net of restores)
+//   ws  Rs. wasted/damaged            low  materials low or out of stock
+//   m   { materialId: [stock, cost/pc] }   p  { planId: packaging cost/unit }
+// pk.names keeps id → name for every material/recipe ever snapshotted so old
+// days stay readable after something is renamed or deleted.
+const PKG_SNAP_MAX = 180;
+let pkgDailyRange = 30;
+let pkgViewDate = '';
+let pkgCostChartInst = null, pkgFlowChartInst = null;
+const PKG_LINE_COLORS = ['#10b981', '#38bdf8', '#fbbf24', '#f472b6', '#a78bfa', '#fb923c', '#34d399', '#f87171'];
+
+function pkgR2(n) { return Math.round((Number(n) || 0) * 100) / 100; }
+
+function pkgDayTotals(dateStr) {
+  const t = { spent: 0, used: 0, waste: 0 };
+  ensurePackaging().log.forEach(e => {
+    if (!e || !e.ts || toLocalDateStr(new Date(e.ts)) !== dateStr) return;
+    const q = Number(e.qty) || 0, c = Number(e.unitCost) || 0;
+    if (e.type === 'purchase') t.spent += q * c;
+    else if (e.type === 'use') t.used += -q * c;        // qty is negative
+    else if (e.type === 'restore') t.used -= q * c;     // qty is positive → undoes use
+    else if (e.type === 'wastage') t.waste += -q * c;
+  });
+  return t;
+}
+
+function pkgBuildSnapshot(dateStr) {
+  const pk = ensurePackaging();
+  const m = {}, p = {}; let val = 0, low = 0;
+  pk.materials.forEach(x => {
+    const stock = Number(x.stockQty) || 0, cost = Number(x.unitCost) || 0;
+    m[x.id] = [pkgRound(stock), cost];
+    val += Math.max(0, stock) * cost;
+    if (pkgMatStatus(x) !== 'ok') low++;
+    pk.names[x.id] = x.name;
+  });
+  pk.plans.forEach(pl => { p[pl.id] = pkgR2(pkgPlanCost(pl)); pk.names[pl.id] = pl.name; });
+  const t = pkgDayTotals(dateStr);
+  return { d: dateStr, val: pkgR2(val), sp: pkgR2(t.spent), us: pkgR2(t.used), ws: pkgR2(t.waste), low, m, p };
+}
+
+// Creates/updates today's snapshot. Returns true when something changed
+// (caller decides whether to trigger a save).
+function pkgSnapshotToday() {
+  if (userRole !== 'owner') return false;
+  const pk = ensurePackaging();
+  if (pk.materials.length === 0 && pk.plans.length === 0) return false;
+  const d = todayIso();
+  const snap = pkgBuildSnapshot(d);
+  const i = pk.snapshots.findIndex(s => s.d === d);
+  if (i >= 0) {
+    if (JSON.stringify(pk.snapshots[i]) === JSON.stringify(snap)) return false;
+    pk.snapshots[i] = snap;
+  } else {
+    pk.snapshots.push(snap);
+    pk.snapshots.sort((a, b) => (a.d < b.d ? -1 : a.d > b.d ? 1 : 0));
+  }
+  if (pk.snapshots.length > PKG_SNAP_MAX) pk.snapshots = pk.snapshots.slice(-PKG_SNAP_MAX);
+  return true;
+}
+
+function pkgSnapsInRange() {
+  const snaps = ensurePackaging().snapshots;
+  return snaps.slice(-pkgDailyRange);
+}
+
+function pkgRenderDaily() {
+  const body = $('pkgDailyBody'); if (!body) return;
+  const pk = ensurePackaging();
+  const all = pk.snapshots;
+  const set = (id, v) => { const el = $(id); if (el) el.textContent = v; };
+  const monthPrefix = todayIso().slice(0, 7);
+  const monthSnaps = all.filter(s => s.d.startsWith(monthPrefix));
+  set('pkgDailyStatDays', all.length);
+  set('pkgDailyStatBought', fmt(monthSnaps.reduce((s, x) => s + (x.sp || 0), 0)));
+  set('pkgDailyStatUsed', fmt(monthSnaps.reduce((s, x) => s + (x.us || 0), 0)));
+  // Stock value now vs the newest snapshot at least 7 days old.
+  const chgEl = $('pkgDailyStatChg');
+  if (chgEl) {
+    const latest = all[all.length - 1];
+    const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 7);
+    const cutoffStr = toLocalDateStr(cutoff);
+    const past = all.filter(s => s.d <= cutoffStr).pop();
+    if (latest && past) {
+      const diff = latest.val - past.val;
+      chgEl.textContent = (diff > 0 ? '+' : diff < 0 ? '−' : '') + fmt(Math.abs(diff));
+      chgEl.style.color = diff < 0 ? 'var(--bad)' : '';
+    } else { chgEl.textContent = '—'; chgEl.style.color = ''; }
+  }
+  const rangeEl = $('pkgDailyRange'); if (rangeEl) rangeEl.value = String(pkgDailyRange);
+
+  const rows = pkgSnapsInRange().slice().reverse();
+  if (rows.length === 0) {
+    body.innerHTML = '<tr><td colspan="7" style="text-align:center;opacity:.55;padding:16px;">No saved days yet — your first snapshot is saved automatically once materials exist.</td></tr>';
+  } else {
+    body.innerHTML = rows.map(s => `<tr${s.d === pkgViewDate ? ' style="background:var(--green-subtle);"' : ''}>
+      <td><strong>${s.d}</strong>${s.d === todayIso() ? ' <span class="badge badge-good">Today</span>' : ''}</td>
+      <td class="num">${fmt(s.val)}</td>
+      <td class="num">${s.sp ? fmt(s.sp) : '—'}</td>
+      <td class="num">${s.us ? fmt(s.us) : '—'}</td>
+      <td class="num">${s.ws ? fmt(s.ws) : '—'}</td>
+      <td class="num">${s.low ? '<span class="badge badge-warn">' + s.low + '</span>' : '0'}</td>
+      <td style="white-space:nowrap;">
+        <button type="button" class="btn btn-xs" onclick="pkgViewDay('${s.d}')">View</button>
+        <button type="button" class="btn btn-xs btn-danger" data-owner-only onclick="pkgDeleteSnapshot('${s.d}')"><i class="business-icon icon-inline" data-lucide="trash-2" aria-hidden="true"></i></button>
+      </td>
+    </tr>`).join('');
+  }
+  pkgRenderDayDetail();
+  if (pkgActiveTab === 'daily') pkgRenderDailyCharts();
+}
+
+function pkgRenderDailyCharts() {
+  const pk = ensurePackaging();
+  const snaps = pkgSnapsInRange();
+  const colors = getChartColors();
+  const labels = snaps.map(s => s.d.slice(5)); // MM-DD
+  const scaleOpts = (extra) => Object.assign({ ticks: { color: colors.text, font: { size: 10 } }, grid: { color: colors.grid }, border: { color: colors.border } }, extra || {});
+  const legend = { position: 'bottom', labels: { boxWidth: 10, font: { size: 11 }, color: colors.text, usePointStyle: true } };
+
+  if (pkgCostChartInst) { try { pkgCostChartInst.destroy(); } catch (e) {} pkgCostChartInst = null; }
+  if (pkgFlowChartInst) { try { pkgFlowChartInst.destroy(); } catch (e) {} pkgFlowChartInst = null; }
+
+  const planIds = [];
+  snaps.forEach(s => Object.keys(s.p || {}).forEach(id => { if (!planIds.includes(id)) planIds.push(id); }));
+  const costChart = safeRenderChart('pkgCostChart', () => new Chart($('pkgCostChart'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: planIds.map((id, i) => ({
+        label: pk.names[id] || id,
+        data: snaps.map(s => (s.p && s.p[id] != null) ? s.p[id] : null),
+        borderColor: PKG_LINE_COLORS[i % PKG_LINE_COLORS.length],
+        backgroundColor: PKG_LINE_COLORS[i % PKG_LINE_COLORS.length],
+        borderWidth: 2, pointRadius: snaps.length > 40 ? 0 : 3, tension: 0.25, spanGaps: true
+      }))
+    },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend }, scales: { x: scaleOpts(), y: scaleOpts({ beginAtZero: true, title: { display: true, text: 'Rs. / unit', color: colors.text } }) } }
+  }));
+  pkgCostChartInst = costChart || null;
+
+  const flowChart = safeRenderChart('pkgFlowChart', () => new Chart($('pkgFlowChart'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { type: 'bar', label: 'Bought (Rs.)', data: snaps.map(s => s.sp || 0), backgroundColor: 'rgba(56,189,248,.65)', yAxisID: 'y' },
+        { type: 'bar', label: 'Used (Rs.)', data: snaps.map(s => s.us || 0), backgroundColor: 'rgba(251,191,36,.7)', yAxisID: 'y' },
+        { type: 'line', label: 'Stock Value (Rs.)', data: snaps.map(s => s.val || 0), borderColor: '#10b981', backgroundColor: '#10b981', borderWidth: 2, pointRadius: snaps.length > 40 ? 0 : 3, tension: 0.25, yAxisID: 'y1' }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, plugins: { legend },
+      scales: {
+        x: scaleOpts(),
+        y: scaleOpts({ beginAtZero: true, position: 'left', title: { display: true, text: 'Bought / Used', color: colors.text } }),
+        y1: scaleOpts({ beginAtZero: true, position: 'right', grid: { drawOnChartArea: false, color: colors.grid }, title: { display: true, text: 'Stock Value', color: colors.text } })
+      }
+    }
+  }));
+  pkgFlowChartInst = flowChart || null;
+}
+
+// Selected day vs now: stock and cost/pc per material, cost/unit per recipe.
+function pkgViewDay(dateStr) {
+  pkgViewDate = dateStr;
+  pkgRenderDaily();
+  const el = $('pkgDayDetail'); if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+window.pkgViewDay = pkgViewDay;
+
+function pkgRenderDayDetail() {
+  const el = $('pkgDayDetail'); if (!el) return;
+  const pk = ensurePackaging();
+  const snap = pk.snapshots.find(s => s.d === pkgViewDate);
+  if (!snap) { el.innerHTML = pk.snapshots.length ? '<p class="sub">Tap <strong>View</strong> on a day to compare it with today.</p>' : ''; return; }
+  const arrow = (then, now) => {
+    const d = pkgR2(now - then);
+    if (d === 0) return '<span class="hint">same</span>';
+    return `<span style="color:${d > 0 ? 'var(--bad)' : 'var(--green)'};">${d > 0 ? '▲ +' : '▼ −'}${pkgR2(Math.abs(d))}</span>`;
+  };
+  const planRows = Object.keys(snap.p || {}).map(id => {
+    const now = pkgPlan(id);
+    return `<tr><td>${escapeHtmlSafe(pk.names[id] || id)}</td><td class="num">${fmt(snap.p[id])}</td><td class="num">${now ? fmt(pkgPlanCost(now)) : '<span class="hint">removed</span>'}</td><td class="num">${now ? arrow(snap.p[id], pkgPlanCost(now)) : '—'}</td></tr>`;
+  }).join('');
+  const matRows = Object.keys(snap.m || {}).map(id => {
+    const [stock, cost] = snap.m[id]; const now = pkgMat(id);
+    return `<tr><td>${escapeHtmlSafe(pk.names[id] || id)}</td>
+      <td class="num">${pkgRound(stock)}</td><td class="num">${now ? pkgRound(now.stockQty) : '<span class="hint">removed</span>'}</td>
+      <td class="num">${fmt(cost)}</td><td class="num">${now ? fmt(Number(now.unitCost) || 0) : '—'}</td>
+      <td class="num">${now ? arrow(cost, Number(now.unitCost) || 0) : '—'}</td></tr>`;
+  }).join('');
+  el.innerHTML = `<div style="border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
+      <strong>${snap.d} <span class="hint">vs today</span></strong>
+      <button type="button" class="btn btn-xs" onclick="pkgViewDay('')">Close</button>
+    </div>
+    <h3 style="margin:4px 0 6px;">Packaging cost per unit</h3>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Product</th><th class="num">That day</th><th class="num">Now</th><th class="num">Change</th></tr></thead>
+      <tbody>${planRows || '<tr><td colspan="4" style="text-align:center;opacity:.5;">No recipes saved that day.</td></tr>'}</tbody>
+    </table></div>
+    <h3 style="margin:14px 0 6px;">Materials</h3>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Material</th><th class="num">Stock then</th><th class="num">Stock now</th><th class="num">Cost/pc then</th><th class="num">Cost/pc now</th><th class="num">Cost change</th></tr></thead>
+      <tbody>${matRows}</tbody>
+    </table></div>
+  </div>`;
+}
+
+function pkgOnDailyRange(el) {
+  pkgDailyRange = Number(el.value) || 30;
+  pkgRenderDaily();
+}
+window.pkgOnDailyRange = pkgOnDailyRange;
+
+function pkgDeleteSnapshot(dateStr) {
+  if (userRole !== 'owner') return;
+  if (!confirm(`Delete the saved snapshot for ${dateStr}? (Today's snapshot is recreated automatically.)`)) return;
+  const pk = ensurePackaging();
+  pk.snapshots = pk.snapshots.filter(s => s.d !== dateStr);
+  if (pkgViewDate === dateStr) pkgViewDate = '';
+  pkgSnapshotToday();
+  scheduleAutoSave();
+  pkgRenderDaily();
+}
+window.pkgDeleteSnapshot = pkgDeleteSnapshot;
+
+// Explicit "save right now": refreshes today's snapshot, writes local
+// storage and pushes to the cloud immediately instead of waiting for the
+// short auto-save delay.
+async function pkgSaveNow() {
+  if (userRole !== 'owner') { alert('Only the owner can save packaging history.'); return; }
+  pkgSnapshotToday();
+  try { saveAll(); } catch (e) { console.warn(e); }
+  if (currentUser) {
+    try { await cloudSaveSilent(); updateStatus("✅ Packaging history saved to cloud"); }
+    catch (e) { updateStatus('⚠️ Saved on this device — cloud save failed'); }
+  } else { updateStatus('✅ Packaging history saved on this device'); }
+  pkgRenderDaily();
+}
+window.pkgSaveNow = pkgSaveNow;
+
+// Long-format CSV (one row per day per material/recipe) — opens cleanly in Excel/Sheets.
+function pkgExportHistoryCsv() {
+  const pk = ensurePackaging();
+  if (pk.snapshots.length === 0) { alert('Nothing saved yet.'); return; }
+  const q = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+  const rows = [['Date', 'Kind', 'Name', 'Stock', 'Cost per pc / Packaging cost per unit (Rs.)', 'Day Stock Value (Rs.)', 'Day Bought (Rs.)', 'Day Used (Rs.)', 'Day Wasted (Rs.)']];
+  pk.snapshots.forEach(s => {
+    Object.keys(s.m || {}).forEach(id => rows.push([s.d, 'Material', pk.names[id] || id, s.m[id][0], s.m[id][1], s.val, s.sp, s.us, s.ws]));
+    Object.keys(s.p || {}).forEach(id => rows.push([s.d, 'Product recipe', pk.names[id] || id, '', s.p[id], s.val, s.sp, s.us, s.ws]));
+  });
+  const csv = '\ufeff' + rows.map(r => r.map(q).join(',')).join('\r\n');
+  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  const a = document.createElement('a');
+  a.href = url; a.download = `packaging-history-${todayIso()}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+window.pkgExportHistoryCsv = pkgExportHistoryCsv;
 
 async function loadDailyProductBatches() {
   if (!currentUser || userRole !== 'owner') { dailyProductBatchesCache = []; return dailyProductBatchesCache; }
@@ -6288,7 +7245,7 @@ async function applyStockMovementDirect(productId, delta, movementType, note, sa
   return resultingStock;
 }
 
-async function applyStockMovement(productId, delta, movementType, note, saleId) {
+async function applyStockMovement(productId, delta, movementType, note, saleId, opts) {
   if (!productId) { return { ok: false, reason: 'no-product' }; }
   if (!delta) { return { ok: false, reason: 'zero-delta' }; }
   if (!(await ensureFreshSession())) {
@@ -6307,6 +7264,8 @@ async function applyStockMovement(productId, delta, movementType, note, saleId) 
     if (error) throw error;
     await loadProductsFromCloud();
     renderProducts();
+    // Packaging materials (bottles/labels/silica) follow packed units — see "PACKAGING MATERIALS".
+    if (movementType === 'production' && !(opts && opts.skipPackaging)) packagingOnProductionMovement(productId, delta, note);
     return { ok: true, via: 'rpc' };
   } catch (e) {
     if (isMissingRpcError(e)) {
@@ -6315,6 +7274,7 @@ async function applyStockMovement(productId, delta, movementType, note, saleId) 
         await applyStockMovementDirect(productId, delta, movementType, note, saleId);
         await loadProductsFromCloud();
         renderProducts();
+        if (movementType === 'production' && !(opts && opts.skipPackaging)) packagingOnProductionMovement(productId, delta, note);
         return { ok: true, via: 'fallback' };
       } catch (e2) {
         showStockMovementError(`Stock update failed for this product — ${e2.message || e2}`);
@@ -8753,7 +9713,7 @@ async function saveDirectBatchUse() {
   productionBatchUsage.push(usageRow);
 
   const p = (products || []).find(x => String(x.id) === String(productId));
-  await applyStockMovement(productId, kg, 'production', `${b.batchNo} used directly (no grinding) — ${fmt2(kg)}kg${notes ? ' — ' + notes : ''}`);
+  await applyStockMovement(productId, kg, 'production', `${b.batchNo} used directly (no grinding) — ${fmt2(kg)}kg${notes ? ' — ' + notes : ''}`, null, { skipPackaging: true });
 
   renderProductionBatches();
   renderGrindSourcePicker();
@@ -13240,6 +14200,7 @@ async function cloudLoad() {
     calcProduction();
     renderHistory();
     saveAll();
+    try { renderPackagingModule(); } catch (e) { console.warn('Packaging refresh after cloud load:', e); }
     // customers/orders/expenses live in their own tables — refresh those too
     await Promise.all([userRole==='owner'?loadCustomersFromCloud():Promise.resolve(), loadOrdersFromCloud(), loadExpensesFromCloud(), loadProductsFromCloud(), userRole==='owner'?loadPackPricesFromCloud():Promise.resolve()]);
     renderOrders();
@@ -16648,6 +17609,8 @@ function activateAppTab(tabId){
     renderChipPackTypesManager();
     renderChipsPackingInputs();
     loadDailyChipsPackBatches();
+    // Packaging Materials — Costing Plan & Stock (owner-only card)
+    renderPackagingModule();
     // Stage 6 "Stock — Confirmed Today": needs today's already-logged
     // product batches (normally only fetched when the "Add Today's Product
     // Batch" modal opens) so the summary is accurate as soon as the tab

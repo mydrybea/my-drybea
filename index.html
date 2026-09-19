@@ -2854,6 +2854,179 @@
       </div>
     </div>
 
+    <!-- ============ PACKAGING MATERIALS — COSTING PLAN & STOCK ============ -->
+    <!-- Owner-only. Bottles / bags / pouches, labels, silica packets (and any
+         extras) as a costed stock, plus a "recipe" per finished product that
+         says which materials one unit uses. Packing a product that is linked
+         to Stock automatically deducts these materials. All data lives in
+         state.packaging (synced via the existing app_data blob — no SQL to
+         run). See "PACKAGING MATERIALS" in app.js. -->
+    <div class="card" id="pkgCard" style="margin-top:16px;">
+      <h2><span class="pro-title-icon orange" aria-hidden="true"><i class="business-icon" data-lucide="package-open" aria-hidden="true"></i></span><span>Packaging Materials — Costing Plan &amp; Stock</span></h2>
+      <p class="pro-subtitle orange">Bottles, bags, labels &amp; silica packets for every Maldive Fish product — costed per unit, kept in stock, and used up automatically as you pack.</p>
+
+      <div class="stat-grid" id="pkgStatGrid">
+        <div class="stat"><div class="k">Materials Tracked</div><div class="v" id="pkgStatCount">0</div></div>
+        <div class="stat accent"><div class="k">Stock Value</div><div class="v" id="pkgStatValue">Rs. 0</div></div>
+        <div class="stat" id="pkgStatLowBox"><div class="k">Low / Out of Stock</div><div class="v" id="pkgStatLow">0</div></div>
+        <div class="stat"><div class="k">Packing Bottleneck</div><div class="v" id="pkgStatBottleneck" style="font-size:.95rem;">—</div></div>
+      </div>
+
+      <div class="btn-row pkg-tabs" style="margin:14px 0 10px;">
+        <button type="button" class="btn btn-sm pkg-tabbtn btn-primary" data-pkg-tab="plan" onclick="pkgSwitchTab('plan')"><i class="business-icon icon-inline" data-lucide="calculator" aria-hidden="true"></i> Costing Plan</button>
+        <button type="button" class="btn btn-sm pkg-tabbtn" data-pkg-tab="stock" onclick="pkgSwitchTab('stock')"><i class="business-icon icon-inline" data-lucide="warehouse" aria-hidden="true"></i> Material Stock</button>
+        <button type="button" class="btn btn-sm pkg-tabbtn" data-pkg-tab="recipes" onclick="pkgSwitchTab('recipes')"><i class="business-icon icon-inline" data-lucide="layers" aria-hidden="true"></i> Product Recipes</button>
+        <button type="button" class="btn btn-sm pkg-tabbtn" data-pkg-tab="daily" onclick="pkgSwitchTab('daily')"><i class="business-icon icon-inline" data-lucide="calendar-days" aria-hidden="true"></i> Daily History</button>
+        <button type="button" class="btn btn-sm pkg-tabbtn" data-pkg-tab="history" onclick="pkgSwitchTab('history')"><i class="business-icon icon-inline" data-lucide="history" aria-hidden="true"></i> Movement Log</button>
+      </div>
+
+      <!-- ===== TAB 1: COSTING PLAN ===== -->
+      <div id="pkgPanel-plan">
+        <h3 style="margin:6px 0 8px;">Packaging Cost per Product</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Product</th><th>Materials used per unit</th><th class="num">Packaging Cost</th><th class="num">MRP</th><th class="num">% of MRP</th><th>Can Pack Now</th><th>Stock Link</th></tr></thead>
+            <tbody id="pkgPlanBody"><tr><td colspan="7" style="text-align:center;opacity:.5;padding:14px;">Loading…</td></tr></tbody>
+          </table>
+        </div>
+
+        <div class="notice" style="margin-top:12px;">
+          <label style="display:flex;gap:8px;align-items:flex-start;cursor:pointer;">
+            <input type="checkbox" id="pkgUseInCosting" onchange="pkgToggleUseInCosting(this)" style="margin-top:3px;">
+            <span><strong>Use these packaging costs in the Costing tab</strong><br>
+            <span class="sub" id="pkgUseInCostingNote">Off — Costing tab keeps its fixed packaging cost (50g Rs.13.5 · 100g Rs.43 · 500g Rs.130 · 1kg Rs.140).</span></span>
+          </label>
+        </div>
+
+        <h3 style="margin:20px 0 8px;">Plan a Run — What Do I Need to Buy?</h3>
+        <p class="sub" style="margin:0 0 8px;">Enter how many of each product you plan to pack. Shows total packaging cost and exactly what to buy.</p>
+        <div class="grid-3" id="pkgRunInputs"></div>
+
+        <div class="stat-grid" style="margin:12px 0;" id="pkgRunTotals">
+          <div class="stat"><div class="k">Packaging Cost for Run</div><div class="v" id="pkgRunCost">Rs. 0</div></div>
+          <div class="stat" id="pkgRunShortBox"><div class="k">Materials Short</div><div class="v" id="pkgRunShort">0</div></div>
+          <div class="stat accent"><div class="k">Est. Cost to Buy Shortfall</div><div class="v" id="pkgRunBuyCost">Rs. 0</div></div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Material</th><th class="num">Needed</th><th class="num">In Stock</th><th class="num">Short By</th><th class="num">Est. Buy Cost</th></tr></thead>
+            <tbody id="pkgRunBody"><tr><td colspan="5" style="text-align:center;opacity:.5;padding:14px;">Enter a planned quantity above.</td></tr></tbody>
+          </table>
+        </div>
+        <div class="btn-row" style="margin:10px 0 0;" data-owner-only>
+          <button type="button" class="btn btn-primary btn-sm" onclick="pkgConfirmRunPacked()"><i class="business-icon icon-inline" data-lucide="check" aria-hidden="true"></i> Confirm Packed — Deduct Materials</button>
+          <button type="button" class="btn btn-sm" onclick="pkgClearRun()">Clear</button>
+        </div>
+        <small style="display:block;margin-top:6px;opacity:.7;">Products that are linked to Stock (Recipes tab) deduct their materials automatically when you log packing above — this button skips them so nothing is counted twice. Use it for products that aren't linked.</small>
+      </div>
+
+      <!-- ===== TAB 2: MATERIAL STOCK ===== -->
+      <div id="pkgPanel-stock" style="display:none;">
+        <h3 style="margin:6px 0 8px;">Add a Material</h3>
+        <div class="grid-3" data-owner-only>
+          <div class="field"><label>Name</label><input type="text" id="pkgNewName" placeholder="e.g. Chips 250g Bottle"></div>
+          <div class="field"><label>Type</label>
+            <select id="pkgNewCat">
+              <option value="container">Bottle / Bag / Pouch</option>
+              <option value="label">Label</option>
+              <option value="silica">Silica Packet</option>
+              <option value="other">Other (carton, tape, seal…)</option>
+            </select>
+          </div>
+          <div class="field"><label>Reorder When Stock ≤ <span class="hint">(pcs)</span></label><input type="number" id="pkgNewReorder" min="0" step="1" value="50"></div>
+        </div>
+        <div class="grid-3" data-owner-only>
+          <div class="field"><label>Opening Stock <span class="hint">(pcs)</span></label><input type="number" id="pkgNewStock" min="0" step="1" value="0"></div>
+          <div class="field"><label>Cost per Piece <span class="hint">(Rs.)</span></label><input type="number" id="pkgNewCost" min="0" step="0.01" value="0"></div>
+          <div class="field"><label>&nbsp;</label><button type="button" class="btn btn-primary btn-sm" style="width:100%;" onclick="pkgAddMaterial()"><i class="business-icon icon-inline" data-lucide="plus" aria-hidden="true"></i> Add Material</button></div>
+        </div>
+
+        <div style="margin:6px 0 14px;" data-owner-only>
+          <span class="sub" style="display:block;margin-bottom:6px;">💡 Often forgotten — tap to add (then put it in a recipe):</span>
+          <div id="pkgExtras" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+        </div>
+
+        <h3 style="margin:14px 0 8px;">Materials in Stock</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Material</th><th>Type</th><th class="num">In Stock</th><th>Cost / pc (Rs.)</th><th>Reorder At</th><th class="num">Value</th><th>Used In</th><th></th></tr></thead>
+            <tbody id="pkgStockBody"><tr><td colspan="8" style="text-align:center;opacity:.5;padding:14px;">Loading…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ===== TAB 3: PRODUCT RECIPES ===== -->
+      <div id="pkgPanel-recipes" style="display:none;">
+        <p class="sub" style="margin:0 0 10px;">A recipe = the materials ONE unit of a product uses. Link a recipe to its product in Stock and every pack you log uses up these materials automatically.</p>
+        <div id="pkgRecipesWrap"></div>
+
+        <h3 style="margin:18px 0 8px;">Add a New Product Recipe</h3>
+        <div class="grid-3" data-owner-only>
+          <div class="field"><label>Product Name</label><input type="text" id="pkgNewPlanName" placeholder="e.g. Chips 250g Jar"></div>
+          <div class="field"><label>Group</label>
+            <select id="pkgNewPlanGroup">
+              <option value="chips">Umbalakada Chips</option>
+              <option value="pieces">Large / Medium Pieces</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div class="field"><label>Pack Weight <span class="hint">(g)</span></label><input type="number" id="pkgNewPlanWeight" min="0" step="1" placeholder="e.g. 250"></div>
+        </div>
+        <div class="btn-row" data-owner-only>
+          <button type="button" class="btn btn-primary btn-sm" onclick="pkgAddPlan()"><i class="business-icon icon-inline" data-lucide="plus" aria-hidden="true"></i> Add Product Recipe</button>
+        </div>
+      </div>
+
+      <!-- ===== TAB: DAILY HISTORY (auto-saved snapshots) ===== -->
+      <div id="pkgPanel-daily" style="display:none;">
+        <p class="sub" style="margin:0 0 10px;">Saved automatically — one snapshot per day (updated whenever stock or a cost changes), so you can see how packaging cost and stock moved over time. Keeps the last 180 days; use Export to keep a longer record.</p>
+
+        <div class="stat-grid" style="margin-bottom:12px;">
+          <div class="stat"><div class="k">Days Saved</div><div class="v" id="pkgDailyStatDays">0</div></div>
+          <div class="stat"><div class="k">Bought This Month</div><div class="v" id="pkgDailyStatBought">Rs. 0</div></div>
+          <div class="stat"><div class="k">Used This Month</div><div class="v" id="pkgDailyStatUsed">Rs. 0</div></div>
+          <div class="stat accent"><div class="k">Stock Value vs 7 Days Ago</div><div class="v" id="pkgDailyStatChg">—</div></div>
+        </div>
+
+        <div class="btn-row" style="margin:0 0 10px;align-items:flex-end;">
+          <div class="field" style="margin:0;min-width:150px;"><label>Show</label>
+            <select id="pkgDailyRange" onchange="pkgOnDailyRange(this)">
+              <option value="30">Last 30 days</option>
+              <option value="90">Last 90 days</option>
+              <option value="180">All saved (180 days)</option>
+            </select>
+          </div>
+          <button type="button" class="btn btn-primary btn-sm" data-owner-only onclick="pkgSaveNow()"><i class="business-icon icon-inline" data-lucide="cloud-upload" aria-hidden="true"></i> Save Now</button>
+          <button type="button" class="btn btn-sm" onclick="pkgExportHistoryCsv()"><i class="business-icon icon-inline" data-lucide="download" aria-hidden="true"></i> Export CSV</button>
+        </div>
+
+        <h3 style="margin:10px 0 0;">Packaging Cost per Unit</h3>
+        <div class="chart-wrap"><canvas id="pkgCostChart"></canvas></div>
+        <h3 style="margin:16px 0 0;">Daily Buying / Using &amp; Stock Value</h3>
+        <div class="chart-wrap"><canvas id="pkgFlowChart"></canvas></div>
+
+        <h3 style="margin:18px 0 8px;">Saved Days</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Date</th><th class="num">Stock Value</th><th class="num">Bought</th><th class="num">Used</th><th class="num">Wasted</th><th class="num">Low / Out</th><th></th></tr></thead>
+            <tbody id="pkgDailyBody"><tr><td colspan="7" style="text-align:center;opacity:.5;padding:14px;">No saved days yet.</td></tr></tbody>
+          </table>
+        </div>
+        <div id="pkgDayDetail" style="margin-top:14px;"></div>
+      </div>
+
+      <!-- ===== TAB 4: HISTORY ===== -->
+      <div id="pkgPanel-history" style="display:none;">
+        <p class="sub" style="margin:0 0 8px;">Latest 100 stock movements — purchases, packing usage, wastage and corrections (see Daily History for the day-by-day picture).</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>When</th><th>Material</th><th>Type</th><th class="num">Qty</th><th class="num">Cost / pc</th><th>Note</th></tr></thead>
+            <tbody id="pkgHistoryBody"><tr><td colspan="6" style="text-align:center;opacity:.5;padding:14px;">No movements yet.</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
     <!-- ============ DAILY FISH PURCHASE BILLS ============ -->
     <div class="card" style="margin-top:16px;">
       <h2><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="receipt-text" aria-hidden="true"></i></span><span>Daily Fish Purchase Bills</span></h2>
@@ -2957,6 +3130,35 @@
       <div class="btn-row">
         <button class="btn btn-primary" onclick="saveFishBill()"><i class="business-icon icon-inline" data-lucide="save" aria-hidden="true"></i> Save Bill</button>
         <button class="btn" onclick="closeModal('fishBillModal')">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Packaging Material — Add Stock / Adjust Modal -->
+  <div class="modal-backdrop" id="pkgStockModal">
+    <div class="modal" style="max-width:460px;">
+      <h3><span class="pro-title-icon orange" aria-hidden="true"><i class="business-icon" data-lucide="package-plus" aria-hidden="true"></i></span><span id="pkgModalTitle">Stock Update</span></h3>
+      <p class="pro-subtitle orange" id="pkgModalSub">—</p>
+
+      <div class="field">
+        <label>What happened?</label>
+        <select id="pkgModalMode" onchange="pkgOnModalModeChange()">
+          <option value="purchase">Bought / received stock (+)</option>
+          <option value="wastage">Damaged / wasted (−)</option>
+          <option value="use">Used manually (−)</option>
+          <option value="correct">Stock count correction (set exact count)</option>
+        </select>
+      </div>
+      <div class="grid-2">
+        <div class="field"><label id="pkgModalQtyLabel">Quantity (pcs)</label><input type="number" id="pkgModalQty" min="0" step="1" value="0" oninput="pkgModalRecalc()"></div>
+        <div class="field" id="pkgModalCostField"><label>Total Price Paid <span class="hint">(Rs.)</span></label><input type="number" id="pkgModalTotal" min="0" step="0.01" value="0" oninput="pkgModalRecalc()"></div>
+      </div>
+      <p class="sub" id="pkgModalPreview" style="margin:0 0 10px;"></p>
+      <div class="field"><label>Supplier / Note (optional)</label><input type="text" id="pkgModalNote" placeholder="e.g. Kandy Packaging Traders"></div>
+
+      <div class="btn-row">
+        <button type="button" class="btn btn-primary" onclick="pkgSaveStockModal()"><i class="business-icon icon-inline" data-lucide="save" aria-hidden="true"></i> Save</button>
+        <button type="button" class="btn" onclick="closeModal('pkgStockModal')">Cancel</button>
       </div>
     </div>
   </div>

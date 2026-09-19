@@ -3185,3 +3185,9 @@ input.grsrc-price.is-empty, input.grrm-price.is-empty{ border-left-color:var(--w
 .om-catalog-stock.is-low{ color:#c98a1a; }
 .om-catalog-stock.is-out{ color:#d45d55; }
 .om-catalog-card.is-disabled{ opacity:.5; filter:grayscale(.6); }
+
+/* ---- Packaging Materials — Costing Plan & Stock (Production tab, owner) ---- */
+.pkg-tabs{display:flex;flex-wrap:wrap;gap:6px}
+.pkg-plan .field select,.pkg-plan .field input{width:100%}
+#pkgStatBottleneck{line-height:1.3;word-break:break-word}
+@media(max-width:680px){.pkg-tabs .btn{flex:1 1 calc(50% - 6px);justify-content:center}}
