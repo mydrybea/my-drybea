@@ -3162,3 +3162,26 @@ input.grsrc-price.is-empty, input.grrm-price.is-empty{ border-left-color:var(--w
 @media(max-width:480px){
   .profit-gold-stats strong{ font-size:.82rem; }
 }
+
+/* ============================================================
+   LIVE STOCK HINTS — Sales modal (Product field) + New Order modal
+   Shows how much stock is left and what it will be after this
+   sale/order. Purely presentational; toggled from app.js
+   (updateSaleStockHint / updateOrderStockHint).
+   ============================================================ */
+.stock-hint{
+  display:flex; align-items:center; gap:6px;
+  margin-top:6px; padding:8px 11px; border-radius:10px;
+  font-size:.74rem; font-weight:700; line-height:1.35;
+  border:1px solid transparent;
+}
+.stock-hint.is-ok  { background:rgba(16,185,129,.10); color:#047857; border-color:rgba(16,185,129,.28); }
+.stock-hint.is-low { background:rgba(217,119,6,.10);  color:#b45309; border-color:rgba(217,119,6,.30); }
+.stock-hint.is-out { background:rgba(220,38,38,.10);  color:#b91c1c; border-color:rgba(220,38,38,.30); }
+.stock-hint.is-info{ background:rgba(100,116,139,.10);color:#475569; border-color:rgba(100,116,139,.25); }
+
+/* Stock line on each catalog card in the New Order modal */
+.om-catalog-stock{ font-size:.58rem; font-weight:800; margin-top:2px; color:#0a8f43; }
+.om-catalog-stock.is-low{ color:#c98a1a; }
+.om-catalog-stock.is-out{ color:#d45d55; }
+.om-catalog-card.is-disabled{ opacity:.5; filter:grayscale(.6); }

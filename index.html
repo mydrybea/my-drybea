@@ -4049,6 +4049,7 @@
         <label style="font-size:.72rem;opacity:.7;display:block;margin-bottom:6px;">Or pick from your Product Catalog (sets price automatically)</label>
         <div id="orderProductPicker" style="display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;"></div>
       </div>
+      <div id="orderStockHint" class="stock-hint" style="display:none;margin-top:10px;" aria-live="polite"></div>
 
       <div class="grid-2" style="margin-top:14px;">
         <div class="field" style="margin-bottom:0;">
@@ -4163,6 +4164,7 @@
       <label>Product</label>
       <input type="text" id="saleProduct" list="saleProductList" placeholder="e.g. 100g Fish Floss Pack" oninput="onSaleProductPick()">
       <datalist id="saleProductList"></datalist>
+      <div id="saleStockHint" class="stock-hint" style="display:none;" aria-live="polite"></div>
     </div>
     <div class="field">
       <label>Customer (optional)</label>

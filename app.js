@@ -6206,10 +6206,28 @@ function showStockMovementError(msg) {
     banner.style.display = 'block';
     banner.className = 'dpl-stock-banner dpl-stock-error';
     banner.innerHTML = `⚠️ ${msg} <span class="dpl-stock-dismiss" onclick="clearStockMovementError()">Dismiss</span>`;
+  } else {
+    // There is no #stockMovementErrorBanner element in the page, so before
+    // this fallback every stock failure was invisible (console only). Surface
+    // it as a real notification so the person knows stock did NOT change.
+    notifyStockIssue(msg, true);
   }
   console.error('Stock movement failed:', msg);
 }
 window.showStockMovementError = showStockMovementError;
+
+// Visible feedback for stock problems/notices on any tab. Uses the app's
+// existing notification toast (same look as every other alert in the app).
+function notifyStockIssue(msg, isError) {
+  try {
+    if (typeof showAppNotification === 'function' && $('appNotifyContainer')) {
+      showAppNotification(isError ? 'Stock NOT updated' : 'Stock notice', msg, 'warn', { tab: 'products' });
+      return;
+    }
+  } catch (e) { /* fall through to status line */ }
+  if (typeof updateStatus === 'function') updateStatus((isError ? '⚠️ ' : 'ℹ️ ') + msg);
+}
+window.notifyStockIssue = notifyStockIssue;
 
 // Not a failure — just "this didn't reach Stock because nothing's linked
 // yet", which used to be completely silent. Same banner spot, amber instead
@@ -6220,6 +6238,8 @@ function showStockLinkWarning(msg) {
     banner.style.display = 'block';
     banner.className = 'dpl-stock-banner dpl-stock-warning';
     banner.innerHTML = `ℹ️ ${msg} <span class="dpl-stock-dismiss" onclick="clearStockMovementError()">Dismiss</span>`;
+  } else {
+    notifyStockIssue(msg, false);
   }
 }
 window.showStockLinkWarning = showStockLinkWarning;
@@ -6306,6 +6326,175 @@ async function applyStockMovement(productId, delta, movementType, note, saleId) 
   }
 }
 window.applyStockMovement = applyStockMovement;
+
+// ==================== STOCK SAFETY & SYNC (Sales tab + Staff orders) ====================
+// Shared helpers that sit on top of applyStockMovement() so that:
+//   • Sales Tab (owner)  → saving / editing / deleting a sale moves stock
+//   • Staff page orders  → placing an order moves stock
+// both use ONE consistent set of rules: case-insensitive product matching,
+// a fresh stock check BEFORE saving, and visible feedback if stock can't move.
+
+// true  = a staff order must be tied to a catalog product (so stock is always
+//         accurate). false = staff may still place an untracked order.
+const STAFF_ORDER_REQUIRES_CATALOG_PRODUCT = true;
+
+function normalizeProductName(s) {
+  return String(s || '').trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+// "Fish Floss 100g" typed as "fish floss 100G " must still hit the catalog
+// item — an exact-case match used to silently skip the stock deduction.
+function findCatalogProductByName(name) {
+  const key = normalizeProductName(name);
+  if (!key) return null;
+  return (products || []).find(p => normalizeProductName(p.name) === key) || null;
+}
+window.findCatalogProductByName = findCatalogProductByName;
+
+function fmtQty(n) {
+  return (Number(n) || 0).toLocaleString(undefined, { maximumFractionDigits: 3 });
+}
+
+// Re-reads the catalog from Supabase so the availability check uses the real
+// number (another staff member / device may have sold some since page load).
+async function getFreshStock(productId) {
+  await loadProductsFromCloud(); // handles its own errors; keeps cached list on failure
+  const p = (products || []).find(x => String(x.id) === String(productId));
+  return p ? (Number(p.stockQty) || 0) : null;
+}
+
+// "100g Pack" / "1kg" / "Chips 500 g" -> 100 / 1000 / 500 (only the 4 pack sizes the order form supports).
+function inferPackSizeFromName(name) {
+  const m = String(name || '').match(/(\d+(?:\.\d+)?)\s*(kg|g)\b/i);
+  if (!m) return null;
+  const grams = Math.round(parseFloat(m[1]) * (m[2].toLowerCase() === 'kg' ? 1000 : 1));
+  return [50, 100, 500, 1000].includes(grams) ? grams : null;
+}
+
+// Which catalog product does the Order form's current selection refer to?
+//   1) a catalog card the person tapped         (most reliable)
+//   2) the owner's Pack→Product link for that size (state.packProductMap)
+//   3) exactly ONE catalog product whose name mentions that size ("100g", "1kg")
+// Returns { product, via } — product is null when nothing (or more than one
+// thing) matches, so we never guess and deduct the wrong item.
+function resolveOrderCatalogProduct(sizeG) {
+  const find = id => (products || []).find(p => String(p.id) === String(id)) || null;
+
+  const pickedId = $('orderProductId') ? $('orderProductId').value : '';
+  if (pickedId) { const p = find(pickedId); if (p) return { product: p, via: 'catalog' }; }
+
+  const map = (typeof state !== 'undefined' && state && state.packProductMap) || {};
+  if (map[String(sizeG)]) { const p = find(map[String(sizeG)]); if (p) return { product: p, via: 'pack-link' }; }
+
+  const tokens = sizeG >= 1000 && sizeG % 1000 === 0 ? [`${sizeG / 1000}kg`, `${sizeG}g`] : [`${sizeG}g`];
+  const esc = t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp('(^|[^0-9.])(' + tokens.map(esc).join('|') + ')(?![a-z0-9])', 'i');
+  const hits = (products || []).filter(p => re.test(String(p.name || '').replace(/(\d)\s+(kg|g)\b/gi, '$1$2')));
+  if (hits.length === 1) return { product: hits[0], via: 'name-match' };
+
+  return { product: null, via: hits.length > 1 ? 'ambiguous' : 'none' };
+}
+window.resolveOrderCatalogProduct = resolveOrderCatalogProduct;
+
+// Staff can't write to `products` directly (RLS), so the deduction goes through
+// the staff_commit_order_stock() database function (stock-sync-setup.sql). It
+// deducts stock, logs the movement AND stamps product_id/items onto the order
+// in one atomic step — that stamp is what lets the owner's Cancel / Delete
+// later put the stock back. If the function isn't installed yet, fall back to
+// the shared adjust_product_stock() path so stock still moves.
+async function commitStaffOrderStock(orderRow, product, qty, unitPrice, sizeG) {
+  const ref = orderRow.order_ref_no || orderRow.id;
+  const note = `Staff order ${ref}`;
+  const items = [{ productId: product.id, name: product.name, sizeG: sizeG || 0, qty, unitPrice, total: qty * unitPrice }];
+  try {
+    const { error } = await withSessionRetry(() => supabase.rpc('staff_commit_order_stock', {
+      p_order_id: String(orderRow.id),
+      p_product_id: String(product.id),
+      p_qty: qty,
+      p_note: note
+    }));
+    if (error) throw error;
+    await loadProductsFromCloud();
+    renderProducts();
+    return { ok: true, via: 'secure-rpc', items };
+  } catch (e) {
+    if (isMissingRpcError(e)) {
+      console.warn('staff_commit_order_stock() is not installed — using adjust_product_stock() fallback. Run stock-sync-setup.sql so cancelled staff orders can restore stock.');
+      const r = await applyStockMovement(product.id, -qty, 'order', note);
+      return { ok: !!r.ok, via: 'fallback', items };
+    }
+    showStockMovementError(`Order ${ref} was saved, but its stock could not be reduced — ${e.message || e}. Tell the owner so they can adjust stock manually.`);
+    return { ok: false, via: 'error', items };
+  }
+}
+
+// ---- Live stock hint under the Sales modal's Product field ----
+function setStockHint(el, kind, text) {
+  if (!el) return;
+  if (!text) { el.style.display = 'none'; el.textContent = ''; return; }
+  el.className = 'stock-hint is-' + kind;
+  el.style.display = 'flex';
+  el.textContent = text;
+}
+
+// Everything the Sales modal needs to know about how THIS sale relates to stock.
+function getSaleStockContext() {
+  const name = ($('saleProduct')?.value || '').trim();
+  const product = findCatalogProductByName(name);
+  const qty = Number($('saleQty')?.value) || 0;
+  const editId = $('saleEditId')?.value || '';
+  const old = editId ? (sales || []).find(s => s.id === editId) : null;
+  // A sale auto-logged from a delivered Order doesn't own any stock — the
+  // Order deducted it when it was placed (see createOrder()).
+  const managedByOrder = !!(old && old.linkedOrderId);
+  // Units this same sale has ALREADY taken out of stock (editing keeps them).
+  const alreadyDeducted = (old && !managedByOrder && old.productId && product && String(old.productId) === String(product.id))
+    ? (Number(old.qty) || 0) : 0;
+  return { name, product, qty, editId, old, managedByOrder, alreadyDeducted };
+}
+
+function updateSaleStockHint() {
+  const el = $('saleStockHint');
+  if (!el) return;
+  const c = getSaleStockContext();
+  if (!c.name) { setStockHint(el, 'info', ''); return; }
+  if (c.managedByOrder) {
+    setStockHint(el, 'info', '🔗 Auto-logged from a delivered order — stock was already reduced when that order was placed.');
+    return;
+  }
+  if (!c.product) {
+    setStockHint(el, 'info', (products || []).length ? 'ℹ️ Not in your Product Catalog — stock will not change. Pick it from the list to track stock.' : '');
+    return;
+  }
+  const available = (Number(c.product.stockQty) || 0) + c.alreadyDeducted;
+  const after = available - c.qty;
+  const kind = after < 0 ? 'out' : (after <= 10 ? 'low' : 'ok');
+  setStockHint(el, kind, `📦 ${fmtQty(available)} in stock · after this sale: ${fmtQty(after)}${after < 0 ? ' — not enough stock' : ''}`);
+}
+window.updateSaleStockHint = updateSaleStockHint;
+
+// ---- Live stock hint in the New Order modal ----
+function updateOrderStockHint() {
+  const el = $('orderStockHint');
+  if (!el) return;
+  if (!(products || []).length) { setStockHint(el, 'info', ''); return; }
+  const sizeG = Number($('orderProduct')?.value) || 0;
+  const r = resolveOrderCatalogProduct(sizeG);
+  const isStaff = userRole === 'staff';
+  if (!r.product) {
+    setStockHint(el, 'info', (isStaff && STAFF_ORDER_REQUIRES_CATALOG_PRODUCT)
+      ? 'ℹ️ Pick the product from the catalog above so stock can be updated for this order.' : '');
+    return;
+  }
+  // Owner/distributor orders only move stock for a catalog card they picked.
+  if (!isStaff && r.via !== 'catalog') { setStockHint(el, 'info', ''); return; }
+  const stock = Number(r.product.stockQty) || 0;
+  const qty = Math.max(0, Number($('orderQty')?.value) || 0);
+  const after = stock - qty;
+  const kind = after < 0 ? 'out' : (after <= 10 ? 'low' : 'ok');
+  setStockHint(el, kind, `📦 ${r.product.name}: ${fmtQty(stock)} in stock` + (qty > 0 ? ` · after this order: ${fmtQty(after)}` : '') + (after < 0 ? ' — not enough stock' : ''));
+}
+window.updateOrderStockHint = updateOrderStockHint;
 
 async function restockProduct(id) {
   if (userRole !== 'owner') { alert('Only the business owner can manage stock.'); return; }
@@ -6531,10 +6720,12 @@ function populateSaleProductDatalist() {
 
 function onSaleProductPick() {
   const val = ($('saleProduct').value || '').trim();
-  const match = products.find(p => p.name === val);
+  const match = findCatalogProductByName(val);
   if (match) {
     $('saleUnitPrice').value = match.retailPrice;
     recalcSaleModal();
+  } else {
+    updateSaleStockHint();
   }
 }
 
@@ -6548,17 +6739,25 @@ function renderOrderProductPicker() {
   const selectedId = $('orderProductId') ? $('orderProductId').value : '';
   holder.innerHTML = products.map(p => {
     const isSelected = String(selectedId) === String(p.id) && String(selectedId) !== '';
+    const stockQty = Number(p.stockQty) || 0;
+    const isOut = stockQty <= 0;
+    const isLow = !isOut && stockQty <= 10;
+    // Staff can't order something that's out of stock; the owner still can
+    // (e.g. stock not yet recorded) and gets a warning at submit time.
+    const blocked = isOut && userRole === 'staff';
     return `
-    <div class="om-catalog-card" data-pid="${p.id}" onclick="selectOrderProduct('${p.id}')" style="flex:0 0 auto;width:96px;text-align:center;cursor:pointer;border:2px solid ${isSelected ? '#0ea472' : 'var(--border-color,#3333)'};background:${isSelected ? 'rgba(14,164,114,.08)' : 'transparent'};border-radius:10px;padding:6px;position:relative;transition:border-color .15s,background .15s;">
+    <div class="om-catalog-card${blocked ? ' is-disabled' : ''}" data-pid="${p.id}" ${blocked ? 'aria-disabled="true"' : `onclick="selectOrderProduct('${p.id}')"`} style="flex:0 0 auto;width:96px;text-align:center;cursor:${blocked ? 'not-allowed' : 'pointer'};border:2px solid ${isSelected ? '#0ea472' : 'var(--border-color,#3333)'};background:${isSelected ? 'rgba(14,164,114,.08)' : 'transparent'};border-radius:10px;padding:6px;position:relative;transition:border-color .15s,background .15s;">
       ${isSelected ? `<div style="position:absolute;top:4px;right:4px;width:16px;height:16px;border-radius:50%;background:#0ea472;color:#fff;font-size:11px;line-height:16px;">✓</div>` : ''}
       ${p.imageUrl
         ? `<div style="width:100%;height:80px;border-radius:6px;background:#f5f5f5;display:flex;align-items:center;justify-content:center;overflow:hidden;"><img src="${p.imageUrl}" style="max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;"></div>`
         : `<div style="width:100%;height:80px;border-radius:6px;background:#f0f0f0;"></div>`}
       <div style="font-size:.62rem;margin-top:4px;line-height:1.2;">${p.name}</div>
       <div style="font-size:.62rem;opacity:.7;">Rs. ${p.retailPrice.toLocaleString()}</div>
+      <div class="om-catalog-stock${isOut ? ' is-out' : (isLow ? ' is-low' : '')}">${isOut ? 'Out of stock' : fmtQty(stockQty) + ' in stock'}</div>
     </div>
   `;
   }).join('');
+  if (typeof updateOrderStockHint === 'function') updateOrderStockHint();
 }
 
 function selectOrderProduct(id) {
@@ -6569,8 +6768,15 @@ function selectOrderProduct(id) {
   if (already) {
     $('orderProductId').value = '';
   } else {
+    if (userRole === 'staff' && (Number(p.stockQty) || 0) <= 0) {
+      notifyStockIssue(`“${p.name}” is out of stock right now, so it can't be ordered.`, false);
+      return;
+    }
     $('orderProductId').value = p.id;
     $('orderUnitPrice').value = p.retailPrice;
+    // Keep the pack-size chip consistent with the product picked ("100g Pack" -> 100g).
+    const inferred = inferPackSizeFromName(p.name);
+    if (inferred && $('orderProduct')) { $('orderProduct').value = String(inferred); syncOrderSizeChips(); }
   }
   renderOrderProductPicker();
   if (typeof updateOrderTotal === 'function') updateOrderTotal();
@@ -8932,6 +9138,8 @@ function openNewSale() {
   togglePaymentMethodFields();
   recalcSaleModal();
   $('saleModal').classList.add('active');
+  // Pull the latest stock so the hint under "Product" is never stale.
+  loadProductsFromCloud().then(updateSaleStockHint);
 }
 
 // Shows/hides the Cheque or Deposit detail block based on the chosen
@@ -8970,6 +9178,7 @@ function editSale(id) {
   togglePaymentMethodFields();
   recalcSaleModal();
   $('saleModal').classList.add('active');
+  loadProductsFromCloud().then(updateSaleStockHint);
 }
 
 // Keeps Total in sync with Qty × Unit Price unless the user is editing
@@ -8988,6 +9197,7 @@ function recalcSaleModal(skipAuto) {
   const pending = Math.max(0, total - paid);
   if ($('saleLiveProfit')) $('saleLiveProfit').textContent = fmt(profit);
   if ($('saleLivePending')) $('saleLivePending').textContent = fmt(pending);
+  updateSaleStockHint();
 }
 
 async function saveSale() {
@@ -9019,12 +9229,30 @@ async function saveSale() {
   if (paid > 0 && paymentMethod === 'cheque' && !chequeNumber) { alert('Enter the cheque number!'); return; }
   if (paid > 0 && paymentMethod === 'deposit' && !depositRef) { alert('Enter the deposit slip / reference number!'); return; }
 
-  const matchedProduct = products.find(p => p.name === product);
+  const matchedProduct = findCatalogProductByName(product);
   const oldSale = editId ? sales.find(s => s.id === editId) : null;
+  // A sale auto-logged from a delivered Order never owns stock — the Order
+  // already deducted it. Touching it here would double-count.
+  const stockManagedByOrder = !!(oldSale && oldSale.linkedOrderId);
+
+  // ---- Stock availability check (uses FRESH stock, and gives back whatever
+  // this same sale already took out when it's an edit of the same product) ----
+  if (matchedProduct && !stockManagedByOrder && qty > 0) {
+    const freshStock = await getFreshStock(matchedProduct.id);
+    if (freshStock !== null) {
+      const alreadyDeducted = (oldSale && oldSale.productId && String(oldSale.productId) === String(matchedProduct.id)) ? (Number(oldSale.qty) || 0) : 0;
+      const available = freshStock + alreadyDeducted;
+      if (qty > available) {
+        const ok = confirm(`⚠️ Not enough stock for "${matchedProduct.name}".\n\nIn stock: ${fmtQty(available)}\nThis sale: ${fmtQty(qty)}\n\nSave anyway? Stock will go to ${fmtQty(available - qty)}.`);
+        if (!ok) return;
+      }
+    }
+  }
+
   const row = {
     user_id: businessId,
     sale_date: date,
-    product_name: product,
+    product_name: matchedProduct ? matchedProduct.name : product,
     product_id: matchedProduct ? matchedProduct.id : null,
     customer_name: customer || null,
     quantity: qty,
@@ -9048,6 +9276,7 @@ async function saveSale() {
   };
 
   if (!(await ensureFreshSession())) return;
+  let savedSaleId = editId || null;
   try {
     if (editId) {
       let { data, error } = await supabase.from('sales').update(row).eq('id', editId).select().single();
@@ -9065,6 +9294,7 @@ async function saveSale() {
         ({ data, error } = await supabase.from('sales').insert(fallback).select().single());
       }
       if (error) throw error;
+      savedSaleId = data.id;
       sales.unshift(dbSaleToLocal(data));
     }
   } catch (e) {
@@ -9078,29 +9308,57 @@ async function saveSale() {
   updateStatus(editId ? '✅ Sale updated' : '✅ Sale saved to diary');
 
   // Inventory reconciliation — deduct/adjust stock for whichever product
-  // this sale is now tied to. Runs after the sale itself is safely saved,
-  // and never blocks or rolls back the sale if inventory isn't set up yet.
+  // this sale is now tied to. Runs after the sale itself is safely saved and
+  // never rolls the sale back, but any failure is now shown (toast) instead
+  // of silently leaving stock untouched.
   const newProductId = matchedProduct ? matchedProduct.id : null;
-  const newSaleId = editId || (sales[0] && sales[0].id);
-  if (editId && oldSale) {
+  const newSaleId = savedSaleId;
+  let stockMsg = '';
+  if (stockManagedByOrder) {
+    // Stock belongs to the delivered Order — nothing to move here.
+  } else if (editId && oldSale) {
     if (oldSale.productId && oldSale.productId === newProductId) {
       const delta = (oldSale.qty || 0) - qty; // net stock change vs the original deduction
-      if (delta !== 0) await applyStockMovement(newProductId, delta, 'sale', `Sale updated (${date})`, newSaleId);
+      if (delta !== 0) {
+        const r = await applyStockMovement(newProductId, delta, 'sale', `Sale updated (${date})`, newSaleId);
+        if (r.ok) stockMsg = delta > 0 ? `${fmtQty(delta)} returned to stock` : `stock reduced by another ${fmtQty(-delta)}`;
+      }
     } else {
-      if (oldSale.productId) await applyStockMovement(oldSale.productId, oldSale.qty || 0, 'adjustment', `Sale product changed away from this item (${date})`, newSaleId);
-      if (newProductId) await applyStockMovement(newProductId, -qty, 'sale', `Sale updated (${date})`, newSaleId);
+      let ok = true;
+      if (oldSale.productId) {
+        const r1 = await applyStockMovement(oldSale.productId, oldSale.qty || 0, 'adjustment', `Sale product changed away from this item (${date})`, newSaleId);
+        ok = ok && r1.ok;
+      }
+      if (newProductId && qty > 0) {
+        const r2 = await applyStockMovement(newProductId, -qty, 'sale', `Sale updated (${date})`, newSaleId);
+        ok = ok && r2.ok;
+        if (r2.ok) stockMsg = `${matchedProduct.name} stock reduced by ${fmtQty(qty)}`;
+      }
+      if (ok && !stockMsg && oldSale.productId) stockMsg = 'previous product’s stock restored';
     }
-  } else if (!editId && newProductId) {
-    await applyStockMovement(newProductId, -qty, 'sale', `Sale on ${date}${customer ? ' to ' + customer : ''}`, newSaleId);
+  } else if (!editId && newProductId && qty > 0) {
+    const r = await applyStockMovement(newProductId, -qty, 'sale', `Sale on ${date}${customer ? ' to ' + customer : ''}`, newSaleId);
+    if (r.ok) stockMsg = `${matchedProduct.name} stock reduced by ${fmtQty(qty)}`;
+  } else if (!editId && !newProductId && (products || []).length) {
+    // Typed a name that isn't in the catalog — make that visible, not silent.
+    showStockLinkWarning(`“${product}” isn't in your Product Catalog, so this sale did not change any stock. Pick the product from the list next time to track stock.`);
   }
+  if (stockMsg) updateStatus(`✅ ${editId ? 'Sale updated' : 'Sale saved'} · ${stockMsg}`);
 }
 
 async function deleteSale(id) {
   if (userRole !== 'owner') { alert('Only the owner can delete sales.'); return; }
-  if (!confirm('Delete this sale entry?')) return;
+  const existing = sales.find(s => s.id === id);
+  // Stock only comes back for sales that own their stock. A sale auto-logged
+  // from a delivered Order does not — the Order still holds that stock, so
+  // deleting the diary entry must not "restock" units that are really gone.
+  const returnsStock = !!(existing && existing.productId && existing.qty && !existing.linkedOrderId);
+  const confirmMsg = 'Delete this sale entry?' + (returnsStock
+    ? `\n\n${fmtQty(existing.qty)} × ${existing.product} will be returned to stock.`
+    : '');
+  if (!confirm(confirmMsg)) return;
   if (!currentUser) { alert('Please login first.'); return; }
   if (!(await ensureFreshSession())) return;
-  const existing = sales.find(s => s.id === id);
   try {
     const { error } = await supabase.from('sales').delete().eq('id', id);
     if (error) throw error;
@@ -9112,8 +9370,9 @@ async function deleteSale(id) {
   sales = sales.filter(s => s.id !== id);
   renderSales();
   updateStatus('🗑️ Sale deleted');
-  if (existing && existing.productId && existing.qty) {
-    await applyStockMovement(existing.productId, existing.qty, 'adjustment', `Sale deleted (${existing.date})`, id);
+  if (returnsStock) {
+    const r = await applyStockMovement(existing.productId, existing.qty, 'adjustment', `Sale deleted (${existing.date})`, id);
+    if (r.ok) updateStatus(`🗑️ Sale deleted · ${fmtQty(existing.qty)} returned to stock`);
   }
 }
 
@@ -9713,6 +9972,7 @@ function updateOrderTotal() {
     ? `${itemCount} products`
     : (qty + ' × ' + ((typeof fmt === 'function') ? fmt(price) : ('Rs. ' + price)));
   updateDistributorCommissionPreview();
+  updateOrderStockHint();
 }
 
 // Keeps the Customer field's hint text honest: a distributor-attributed sale
@@ -9834,6 +10094,8 @@ function openNewOrder() {
   updateOrderCustomerHint();
   updateOrderTotal();
   $('orderModal').classList.add('active');
+  // Always show current stock on the catalog cards (re-renders the picker + hint when it lands).
+  loadProductsFromCloud();
   if(window.lucide) lucide.createIcons({attrs:{'stroke-width':1.9,'stroke-linecap':'round','stroke-linejoin':'round'}});
 }
 
@@ -9895,6 +10157,31 @@ async function createOrder() {
     if (!customerName) { alert('Customer name is required.'); return; }
     if (!address) { alert('Delivery address is required.'); return; }
 
+    // ---- STOCK: work out which catalog product this order is for, and make
+    // sure there's enough of it BEFORE the order is created. ----
+    const sizeG = Number(product) || 0;
+    let stockProduct = null;
+    if ((products || []).length) {
+      await loadProductsFromCloud(); // fresh stock + catalog
+      const resolved = resolveOrderCatalogProduct(sizeG);
+      stockProduct = resolved.product;
+      if (!stockProduct && STAFF_ORDER_REQUIRES_CATALOG_PRODUCT) {
+        alert(resolved.via === 'ambiguous'
+          ? '⚠️ More than one catalog product matches this pack size.\n\nPlease tap the exact product in the Product Catalog list (under the size buttons) so the right stock is reduced.'
+          : '⚠️ Please pick the product from the Product Catalog list (under the size buttons).\n\nThat is how stock is reduced for your order.');
+        return;
+      }
+      if (stockProduct) {
+        const available = Number(stockProduct.stockQty) || 0;
+        if (qty > available) {
+          alert(available <= 0
+            ? `❌ "${stockProduct.name}" is out of stock, so this order can't be placed.`
+            : `❌ Not enough stock for "${stockProduct.name}".\n\nIn stock: ${fmtQty(available)}\nYou entered: ${fmtQty(qty)}\n\nLower the quantity and try again.`);
+          return;
+        }
+      }
+    }
+
     try {
       // Server creates the immutable random SALE REF and the pending commission claim atomically.
       const { data, error } = await withSessionRetry(() => supabase.rpc('create_staff_sale_secure', {
@@ -9908,11 +10195,17 @@ async function createOrder() {
       }));
       if (error) throw error;
       const row = data;
+      // Order exists -> reduce stock for it (atomic on the server; also stamps
+      // product_id/items onto the order so cancel/delete can restore it).
+      let stockResult = null;
+      if (stockProduct) stockResult = await commitStaffOrderStock(row, stockProduct, qty, unitPrice, sizeG);
       orders.unshift({
         id: row.id,
         customerId: row.customer_id || null,
         customerName: row.customer_name_snapshot || customerName,
         customerPhone: row.customer_phone_snapshot || customerPhone,
+        productId: (stockResult && stockResult.ok) ? stockProduct.id : null,
+        items: (stockResult && stockResult.ok) ? stockResult.items : null,
         product, qty, unitPrice, total: Number(row.total)||qty*unitPrice,
         address: row.customer_address_snapshot || address,
         notes: row.notes || notes,
@@ -9931,8 +10224,10 @@ async function createOrder() {
       $('staffOrderCustomerName').value=''; $('staffOrderCustomerPhone').value='';
       $('orderQty').value=1; $('orderUnitPrice').value=350; $('orderAddress').value=''; $('orderNotes').value='';
       if ($('orderProduct')) $('orderProduct').value = '50';
+      if ($('orderProductId')) $('orderProductId').value = '';
+      renderOrderProductPicker();
       syncOrderSizeChips(); updateOrderTotal();
-      updateStatus(`🔐 Sale ${row.order_ref_no} created · pending owner verification`);
+      updateStatus(`🔐 Sale ${row.order_ref_no} created · pending owner verification` + ((stockResult && stockResult.ok) ? ` · ${stockProduct.name} stock reduced by ${fmtQty(qty)}` : ''));
     } catch (e) {
       console.error('Secure staff sale error:', e);
       alert('❌ Could not create secure sale: ' + e.message);
