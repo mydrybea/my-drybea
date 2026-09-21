@@ -7093,6 +7093,63 @@ function dbProductToLocal(p) {
   };
 }
 
+// ---- Owner-only product COST prices (staff commission = 12% of PROFIT) ----
+// Stored in their own owner-only table (product_costs), NOT on `products`,
+// because staff and distributors can read the product catalog. Run
+// product-cost-commission-setup.sql once so this table exists.
+window.productCostMap = window.productCostMap || {};
+
+async function loadProductCosts() {
+  if (!currentUser || userRole !== 'owner') return;
+  try {
+    const { data, error } = await supabase
+      .from('product_costs')
+      .select('product_id, cost_price')
+      .eq('owner_id', currentUser.id);
+    if (error) throw error;
+    const map = {};
+    (data || []).forEach(r => { map[String(r.product_id)] = Number(r.cost_price) || 0; });
+    window.productCostMap = map;
+  } catch (e) {
+    console.warn('Load product costs error (has product-cost-commission-setup.sql been run?):', e);
+  }
+}
+
+// null = no cost price set yet for this product.
+function getProductCost(id) {
+  const v = (window.productCostMap || {})[String(id)];
+  return v === undefined ? null : v;
+}
+
+async function saveProductCost(productId, costPrice) {
+  if (!productId) return null;
+  try {
+    if (costPrice === null) {
+      const { error } = await supabase.from('product_costs')
+        .delete().eq('owner_id', businessId).eq('product_id', String(productId));
+      if (error) throw error;
+    } else {
+      const { error } = await supabase.from('product_costs').upsert(
+        { owner_id: businessId, product_id: String(productId), cost_price: costPrice, updated_at: new Date().toISOString() },
+        { onConflict: 'owner_id,product_id' });
+      if (error) throw error;
+    }
+    return null;
+  } catch (e) {
+    console.error('Save product cost error:', e);
+    return (e && e.message) || String(e);
+  }
+}
+
+function productCostLineHTML(p) {
+  const c = getProductCost(p.id);
+  if (c === null) {
+    return '<div style="font-size:.72rem;color:#c98a1a;font-weight:700;">⚠️ No cost price — set it so staff commission can be approved</div>';
+  }
+  const profit = (Number(p.retailPrice) || 0) - c;
+  return `<div style="font-size:.72rem;opacity:.7;">Cost: Rs. ${c.toLocaleString()} · Retail profit: Rs. ${profit.toLocaleString()}</div>`;
+}
+
 async function loadProductsFromCloud() {
   if (!currentUser) return;
   try {
@@ -7104,6 +7161,7 @@ async function loadProductsFromCloud() {
       .order('created_at', { ascending: false });
     if (error) throw error;
     products = (data || []).map(dbProductToLocal);
+    if (userRole === 'owner') await loadProductCosts();
     populateSaleProductDatalist();
     renderOrderProductPicker();
   } catch (e) {
@@ -7130,6 +7188,7 @@ function renderProducts() {
       <div style="font-weight:700;margin-top:8px;font-size:.85rem;">${p.name}</div>
       <div style="font-size:.72rem;opacity:.7;margin-top:4px;">Wholesale: Rs. ${p.wholesalePrice.toLocaleString()}</div>
       <div style="font-size:.72rem;opacity:.7;">Retail: Rs. ${p.retailPrice.toLocaleString()}</div>
+      ${isOwner ? productCostLineHTML(p) : ''}
       <div style="font-size:.78rem;font-weight:700;margin-top:4px;color:${p.stockQty <= 0 ? '#d45d55' : (p.stockQty <= 10 ? '#c98a1a' : '#0a8f43')};">Stock: ${p.stockQty.toLocaleString()}${p.stockQty <= 0 ? ' · Out of stock' : (p.stockQty <= 10 ? ' · Low' : '')}</div>
       ${isOwner ? `<div class="btn-row" style="margin-top:8px;justify-content:flex-end;">
         ${actionMenuHTML([
@@ -7528,6 +7587,7 @@ function openNewProduct() {
   $('productName').value = '';
   $('productWholesalePrice').value = 0;
   $('productRetailPrice').value = 0;
+  if ($('productCostPrice')) $('productCostPrice').value = '';
   $('productImageFile').value = '';
   productImageFile = null;
   const preview = $('productImagePreview');
@@ -7544,6 +7604,7 @@ function openEditProduct(id) {
   $('productName').value = p.name;
   $('productWholesalePrice').value = p.wholesalePrice;
   $('productRetailPrice').value = p.retailPrice;
+  if ($('productCostPrice')) { const pc = getProductCost(p.id); $('productCostPrice').value = pc === null ? '' : pc; }
   $('productImageFile').value = '';
   productImageFile = null;
   const preview = $('productImagePreview');
@@ -7614,6 +7675,9 @@ async function saveProduct() {
   const name = $('productName').value.trim();
   const wholesalePrice = Number($('productWholesalePrice').value) || 0;
   const retailPrice = Number($('productRetailPrice').value) || 0;
+  const costRaw = ($('productCostPrice') ? $('productCostPrice').value : '').trim();
+  const costPrice = costRaw === '' ? null : Number(costRaw);
+  if (costPrice !== null && (!isFinite(costPrice) || costPrice < 0)) { alert('Cost price must be 0 or more.'); return; }
   if (!name) { alert('Product name is required!'); return; }
   if (!currentUser) { alert('Please login first.'); return; }
 
@@ -7621,6 +7685,7 @@ async function saveProduct() {
   if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving...'; }
   if (!(await ensureFreshSession())) { if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save Product'; } return; }
 
+  let costSaveError = null;
   try {
     let imageUrl = $('productExistingImageUrl').value || null;
     if (productImageFile) {
@@ -7634,13 +7699,17 @@ async function saveProduct() {
 
     const row = { user_id: businessId, name, image_url: imageUrl, wholesale_price: wholesalePrice, retail_price: retailPrice, active: true };
 
+    let savedProductId = editId || null;
     if (editId) {
       const { error } = await supabase.from('products').update(row).eq('id', editId).eq('user_id', businessId);
       if (error) throw error;
     } else {
-      const { error } = await supabase.from('products').insert(row);
+      const { data: inserted, error } = await supabase.from('products').insert(row).select('id').single();
       if (error) throw error;
+      savedProductId = inserted && inserted.id;
     }
+    // Cost price lives in the owner-only product_costs table.
+    costSaveError = await saveProductCost(savedProductId, costPrice);
   } catch (e) {
     console.error('Save product error:', e);
     alert('❌ Could not save product: ' + e.message);
@@ -7650,6 +7719,7 @@ async function saveProduct() {
   if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save Product'; }
   closeModal('productModal');
   updateStatus('✅ Product saved');
+  if (costSaveError) alert('⚠️ Product saved, but its cost price could not be saved:\n' + costSaveError + '\n\nStaff commission cannot be approved until the cost price is set.');
   await loadProductsFromCloud();
   renderProducts();
 }
@@ -11334,7 +11404,7 @@ function renderOrders() {
     const index = orderIndexById.get(String(order.id));
     const claim = claimsByOrderKey.get(String(order.orderRefNo || '') + '|' + String(order.id));
     const commissionCell = claim?.status === 'approved'
-      ? `<div style="font-weight:900;color:#087b3e;">+ ${fmt(Number(claim.commission_amount)||0)}</div><small style="color:#087b3e;">12% Verified</small>`
+      ? `<div style="font-weight:900;color:#087b3e;">+ ${fmt(Number(claim.commission_amount)||0)}</div><small style="color:#087b3e;">12% of profit</small>`
       : (claim?.status === 'pending' ? '<small style="color:#a27b1b;font-weight:800;">Pending verification</small>' : '<small style="opacity:.45;">—</small>');
     const actions = userRole === 'owner'
       ? actionMenuHTML([
@@ -15579,7 +15649,7 @@ function renderOwnerStaffPerformance(){
     const eligible=claims.filter(c=>String(c.staff_id)===String(st.id));
     const sales=eligible.reduce((a,c)=>a+(Number(c.order_total)||0),0),commission=eligible.reduce((a,c)=>a+(Number(c.commission_amount)||0),0);totalSales+=sales;totalCommission+=commission;
     const open=(getMyStaffDataState().tasks||[]).filter(t=>String(t.staff_id)===String(st.id)&&!taskDone(t)).length,p=perf[st.id]||{};
-    return `<tr><td><strong>${escapeHtmlSafe(st.display_name||'(no name)')}</strong><br><small>${escapeHtmlSafe(st.staff_reference||st.id||'')}</small></td><td><select id="staffStatus_${st.id}" class="staff-edit-input"><option value="active" ${(p.status||'active')==='active'?'selected':''}>Active</option><option value="paused" ${p.status==='paused'?'selected':''}>Paused</option></select></td><td>${eligible.length}</td><td>${fmt(sales)}</td><td><strong>12%</strong><br><small>Owner verified</small></td><td>${fmt(commission)}</td><td>${open}</td><td><input id="staffTarget_${st.id}" class="staff-edit-input" type="number" min="0" value="${Number(p.target)||0}" placeholder="Rs."></td><td><input id="staffNote_${st.id}" class="staff-edit-input" value="${escapeHtmlSafe(p.note||p.notes||'')}" placeholder="Owner note"></td><td><button class="btn btn-sm btn-primary" data-action="editOwnerStaffPerformance" data-id="${st.id}"><i class="business-icon" data-lucide="save"></i></button></td></tr>`;
+    return `<tr><td><strong>${escapeHtmlSafe(st.display_name||'(no name)')}</strong><br><small>${escapeHtmlSafe(st.staff_reference||st.id||'')}</small></td><td><select id="staffStatus_${st.id}" class="staff-edit-input"><option value="active" ${(p.status||'active')==='active'?'selected':''}>Active</option><option value="paused" ${p.status==='paused'?'selected':''}>Paused</option></select></td><td>${eligible.length}</td><td>${fmt(sales)}</td><td><strong>12%</strong><br><small>of profit · Owner verified</small></td><td>${fmt(commission)}</td><td>${open}</td><td><input id="staffTarget_${st.id}" class="staff-edit-input" type="number" min="0" value="${Number(p.target)||0}" placeholder="Rs."></td><td><input id="staffNote_${st.id}" class="staff-edit-input" value="${escapeHtmlSafe(p.note||p.notes||'')}" placeholder="Owner note"></td><td><button class="btn btn-sm btn-primary" data-action="editOwnerStaffPerformance" data-id="${st.id}"><i class="business-icon" data-lucide="save"></i></button></td></tr>`;
   }).join('')||'<tr><td colspan="10" style="text-align:center;opacity:.5;padding:18px;">No staff added yet.</td></tr>';
   if($('ownerStaffPerformanceBody'))$('ownerStaffPerformanceBody').innerHTML=rows;if($('ownerStaffCount'))$('ownerStaffCount').textContent=list.length;if($('ownerStaffSales'))$('ownerStaffSales').textContent=fmt(totalSales);if($('ownerStaffCommission'))$('ownerStaffCommission').textContent=fmt(totalCommission);if($('ownerCommissionTotal2'))$('ownerCommissionTotal2').textContent=fmt(totalCommission);
   if($('ownerCommissionBody'))$('ownerCommissionBody').innerHTML=list.map(st=>{const cs=claims.filter(c=>String(c.staff_id)===String(st.id));const sales=cs.reduce((a,c)=>a+(Number(c.order_total)||0),0),commission=cs.reduce((a,c)=>a+(Number(c.commission_amount)||0),0);return `<tr><td>${escapeHtmlSafe(st.display_name||'(no name)')}</td><td>${fmt(sales)}</td><td>${fmt(commission)}</td></tr>`;}).join('')||'<tr><td colspan="3" style="text-align:center;opacity:.5;padding:18px;">No owner-verified commission sales this month.</td></tr>';
@@ -16093,6 +16163,20 @@ function renderDistributorHome() {
 }
 window.renderDistributorHome = renderDistributorHome;
 
+// Owner-only audit rows written by verify_staff_commission_claim():
+// revenue, product cost and profit each approved commission was based on.
+window.commissionProfitLog = window.commissionProfitLog || {};
+async function loadCommissionProfitLog(){
+  if(!currentUser || userRole!=='owner') return;
+  try{
+    const {data,error}=await supabase.from('staff_commission_profit_log')
+      .select('claim_id,revenue,cost_total,profit').eq('owner_id',currentUser.id);
+    if(error) throw error;
+    const m={}; (data||[]).forEach(r=>{ m[String(r.claim_id)]=r; });
+    window.commissionProfitLog=m;
+  }catch(e){ console.warn('Commission profit log load (has product-cost-commission-setup.sql been run?):',e); }
+}
+
 async function loadCommissionClaims(){
   if(currentUser && userRole==='owner' && !commissionRealtimeChannel) startCommissionRealtime();
   if(!currentUser) return [];
@@ -16102,6 +16186,7 @@ async function loadCommissionClaims(){
       : supabase.from('staff_commission_claims').select('*').eq('staff_id',currentUser.id).order('submitted_at',{ascending:false});
     const {data,error}=await q; if(error) throw error;
     window.staffCommissionClaims=data||[];
+    if(userRole==='owner') await loadCommissionProfitLog();
     renderCommissionClaims();
     return data||[];
   }catch(e){console.error('Commission claims load:',e); return [];}
@@ -16110,7 +16195,7 @@ async function loadCommissionClaims(){
 function renderCommissionClaims(){
   const body=$('ownerCommissionClaimsBody'); if(body && userRole==='owner'){
     const list=window.staffCommissionClaims||[];
-    body.innerHTML=list.map(c=>`<tr><td><strong>${escapeHtmlSafe(c.staff_reference||'-')}</strong></td><td><strong>${escapeHtmlSafe(c.order_ref_no||'-')}</strong><br><small>${escapeHtmlSafe(c.order_id||'-')}</small></td><td>${escapeHtmlSafe(c.customer_name||'-')}</td><td>${fmt(Number(c.order_total)||0)}</td><td>${c.status==='approved'?fmt(Number(c.commission_amount)||0):'—'}</td><td><span class="status-pill ${c.status==='approved'?'approved':c.status==='rejected'?'rejected':'pending'}">${escapeHtmlSafe(c.status)}</span></td><td>${c.status==='pending'?`<button type="button" class="btn btn-xs btn-primary" onclick="verifyCommissionClaim('${c.id}','approved')">Approve</button> <button type="button" class="btn btn-xs btn-danger" onclick="verifyCommissionClaim('${c.id}','rejected')">Reject</button>`:'Verified'}</td></tr>`).join('')||'<tr><td colspan="7" style="text-align:center;opacity:.5;padding:18px;">No commission claims.</td></tr>';
+    body.innerHTML=list.map(c=>`<tr><td><strong>${escapeHtmlSafe(c.staff_reference||'-')}</strong></td><td><strong>${escapeHtmlSafe(c.order_ref_no||'-')}</strong><br><small>${escapeHtmlSafe(c.order_id||'-')}</small></td><td>${escapeHtmlSafe(c.customer_name||'-')}</td><td>${fmt(Number(c.order_total)||0)}</td><td>${c.status==='approved'?fmt(Number(c.commission_amount)||0)+((window.commissionProfitLog||{})[String(c.id)]?'<br><small style="opacity:.65;">profit '+fmt(Number((window.commissionProfitLog||{})[String(c.id)].profit)||0)+'</small>':''):'—'}</td><td><span class="status-pill ${c.status==='approved'?'approved':c.status==='rejected'?'rejected':'pending'}">${escapeHtmlSafe(c.status)}</span></td><td>${c.status==='pending'?`<button type="button" class="btn btn-xs btn-primary" onclick="verifyCommissionClaim('${c.id}','approved')">Approve</button> <button type="button" class="btn btn-xs btn-danger" onclick="verifyCommissionClaim('${c.id}','rejected')">Reject</button>`:'Verified'}</td></tr>`).join('')||'<tr><td colspan="7" style="text-align:center;opacity:.5;padding:18px;">No commission claims.</td></tr>';
   }
 }
 
@@ -16866,7 +16951,7 @@ function nbNewSaleToVerify(r){
   return ['🧾 New sale to verify', `${r.customer_name||'A sale'} · Rs. ${fmt(Number(r.order_total)||0)} awaiting verification`, 'info', { tab:'my-staff', details:[
     {label:'Staff ref', value: r.staff_reference || '-'}, {label:'Order', value: r.order_ref_no || '-'},
     {label:'Customer', value: r.customer_name || '-'}, {label:'Sale total', value: 'Rs. '+fmt(Number(r.order_total)||0)},
-    {label:'Commission (12%)', value: 'Rs. '+fmt(Number(r.order_total)*0.12||0)}
+    {label:'Commission', value: '12% of profit — worked out when you approve'}
   ]}];
 }
 // Mirrors notifyDriverNewDelivery() (the in-tab/native-Notification version
@@ -17281,7 +17366,7 @@ async function verifyCommissionClaim(id,status){
   if(userRole!=='owner') { alert('Only the owner can verify a commission claim.'); return; }
   if(!id || !['approved','rejected'].includes(status)) { alert('Invalid commission action.'); return; }
   const note=status==='approved'?'Approved after owner verification':'Rejected by owner';
-  if(!confirm(status==='approved'?'Verify this sale and add 12% commission?':'Reject this commission claim?')) return;
+  if(!confirm(status==='approved'?'Verify this sale and add 12% commission on its PROFIT?\n\n(Profit = selling price − product cost price.)':'Reject this commission claim?')) return;
   const btn=document.querySelector(`button[onclick="verifyCommissionClaim('${id}','${status}')"]`);
   if(btn){ btn.disabled=true; btn.dataset.originalText=btn.textContent; btn.textContent=status==='approved'?'Verifying…':'Rejecting…'; }
   if(!(await ensureFreshSession()))return;try{
@@ -17293,7 +17378,7 @@ async function verifyCommissionClaim(id,status){
       renderCommissionClaims();
     }
     await refreshCommissionRealtime();
-    updateStatus(status==='approved'?'✅ Approved · 12% commission added · LIVE SYNC':'❌ Rejected · LIVE SYNC');
+    updateStatus(status==='approved'?('✅ Approved · '+(data?('Rs. '+fmt(Number(data.commission_amount)||0)+' '):'')+'commission (12% of profit) added · LIVE SYNC'):'❌ Rejected · LIVE SYNC');
   }catch(e){
     console.error('Commission verification failed:',e);
     alert('❌ Approve / Reject failed:\n'+(e?.message||String(e)));

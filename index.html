@@ -1150,23 +1150,23 @@
   <!-- ============ MY COMMISSION TAB (staff-only) ============ -->
   <section id="my-commission" class="tab-panel" role="tabpanel" style="display:none;">
     <div class="mobile-greeting no-print" style="padding:0 0 8px;">
-      <div><span class="eyebrow">STAFF EARNINGS</span><h2><span class="pro-title-icon gold"><i class="business-icon" data-lucide="badge-percent"></i></span><span>My Commission</span></h2><p class="pro-subtitle gold">Earn 12% commission on eligible sales made through your customer reference.</p></div>
+      <div><span class="eyebrow">STAFF EARNINGS</span><h2><span class="pro-title-icon gold"><i class="business-icon" data-lucide="badge-percent"></i></span><span>My Commission</span></h2><p class="pro-subtitle gold">Earn 12% of the profit on eligible sales made through your customer reference.</p></div>
       <div class="profile-dot"><i class="business-icon" data-lucide="badge-percent"></i></div>
     </div>
     <div class="commission-hero">
       <span class="eyebrow">THIS MONTH</span>
       <div class="commission-value" id="commissionMonthTotal">Rs. 0</div>
-      <div style="opacity:.78;font-size:.75rem;">12% referral commission</div>
+      <div style="opacity:.78;font-size:.75rem;">12% of profit · referral commission</div>
       <div class="commission-grid">
         <div class="stat"><div class="k">Eligible Sales</div><div class="v" id="commissionSalesTotal">Rs. 0</div></div>
         <div class="stat"><div class="k">Sales Count</div><div class="v" id="commissionSalesCount">0</div></div>
         <div class="stat"><div class="k">Rate</div><div class="v">12%</div></div>
       </div>
     </div>
-    <div class="notice" style="margin-top:12px;"><i class="business-icon icon-inline" data-lucide="info"></i><strong> Commission rule:</strong> eligible non-cancelled sales attributed to your staff reference generate 12%. Refund/cancelled orders are excluded.</div>
+    <div class="notice" style="margin-top:12px;"><i class="business-icon icon-inline" data-lucide="info"></i><strong> Commission rule:</strong> eligible non-cancelled sales attributed to your staff reference earn 12% of the sale's profit (selling price minus product cost). Refund/cancelled orders are excluded.</div>
     <div class="card" style="margin-top:16px;">
       <h2><span class="pro-title-icon green"><i class="business-icon" data-lucide="receipt-text"></i></span><span>Commission History</span></h2>
-      <div class="table-wrap" style="margin-top:10px;"><table><thead><tr><th>Date</th><th>Customer</th><th>Sale</th><th>12%</th><th>Status</th></tr></thead><tbody id="commissionHistoryBody"></tbody></table></div>
+      <div class="table-wrap" style="margin-top:10px;"><table><thead><tr><th>Date</th><th>Customer</th><th>Sale</th><th>12% of profit</th><th>Status</th></tr></thead><tbody id="commissionHistoryBody"></tbody></table></div>
     </div>
   </section>
 
@@ -1229,7 +1229,7 @@
     <div class="stat-grid" style="margin-top:10px;">
       <div class="stat accent"><div class="k">This Month Daily Pay</div><div class="v" id="mySalSumDaily">Rs. 0</div></div>
       <div class="stat"><div class="k">Bonuses</div><div class="v" id="mySalSumBonus">Rs. 0</div></div>
-      <div class="stat accent"><div class="k">12% Commission</div><div class="v" id="mySalSumCommission">Rs. 0</div></div>
+      <div class="stat accent"><div class="k">Commission (12% of profit)</div><div class="v" id="mySalSumCommission">Rs. 0</div></div>
       <div class="stat"><div class="k">Advances / Deductions</div><div class="v" id="mySalSumMinus">Rs. 0</div></div>
       <div class="stat accent"><div class="k">Net Payable (Month)</div><div class="v" id="mySalSumNet">Rs. 0</div></div>
     </div>
@@ -1380,7 +1380,7 @@
         <div class="staff-mini"><div class="mini-icon"><i class="business-icon" data-lucide="users-round"></i></div><strong id="ownerStaffCount">0</strong><span>Active staff</span></div>
         <div class="staff-mini"><div class="mini-icon"><i class="business-icon" data-lucide="clock-3"></i></div><strong id="ownerStaffWorkingNow">0</strong><span>Working now</span></div>
         <div class="staff-mini"><div class="mini-icon"><i class="business-icon" data-lucide="shopping-bag"></i></div><strong id="ownerStaffSales">Rs. 0</strong><span>Referral sales this month</span></div>
-        <div class="staff-mini"><div class="mini-icon"><i class="business-icon" data-lucide="badge-percent"></i></div><strong id="ownerStaffCommission">Rs. 0</strong><span>12% commission this month</span></div>
+        <div class="staff-mini"><div class="mini-icon"><i class="business-icon" data-lucide="badge-percent"></i></div><strong id="ownerStaffCommission">Rs. 0</strong><span>commission this month (12% of profit)</span></div>
         <div class="staff-mini"><div class="mini-icon"><i class="business-icon" data-lucide="hand-coins"></i></div><strong id="ownerPendingAdvances">0</strong><span>Pending advances</span></div>
       </div>
     </div>
@@ -1444,11 +1444,11 @@
 
     <div class="card" style="margin-top:16px;">
       <h2><span class="pro-title-icon gold"><i class="business-icon" data-lucide="badge-percent"></i></span><span>Referral Commission Control</span></h2>
-      <div class="stat-grid"><div class="stat accent"><div class="k">Commission Rate</div><div class="v">12%</div></div><div class="stat"><div class="k">Eligible Rule</div><div class="v" style="font-size:.9rem;">Customer Reference × Sale</div></div><div class="stat"><div class="k">This Month</div><div class="v" id="ownerCommissionTotal2">Rs. 0</div></div></div>
+      <div class="stat-grid"><div class="stat accent"><div class="k">Commission Rate</div><div class="v">12%</div></div><div class="stat"><div class="k">Eligible Rule</div><div class="v" style="font-size:.9rem;">Customer Reference × Profit</div></div><div class="stat"><div class="k">This Month</div><div class="v" id="ownerCommissionTotal2">Rs. 0</div></div></div>
       <div class="card" style="margin-top:14px;border-color:rgba(201,164,77,.28);">
         <h3><span class="pro-title-icon gold"><i class="business-icon" data-lucide="shield-check"></i></span><span>Commission Verification Queue</span></h3>
         <p class="staff-section-note">Staff sends the staff reference + customer + order details here. Commission is <strong>not added</strong> until the owner verifies the sale.</p>
-        <div class="table-wrap" style="margin-top:10px;"><table><thead><tr><th>Staff Ref</th><th>Order</th><th>Customer</th><th>Sale</th><th>12%</th><th>Status</th><th>Owner</th></tr></thead><tbody id="ownerCommissionClaimsBody"><tr><td colspan="7" style="text-align:center;opacity:.5;padding:18px;">No pending commission claims.</td></tr></tbody></table></div>
+        <div class="table-wrap" style="margin-top:10px;"><table><thead><tr><th>Staff Ref</th><th>Order</th><th>Customer</th><th>Sale</th><th>12% of profit</th><th>Status</th><th>Owner</th></tr></thead><tbody id="ownerCommissionClaimsBody"><tr><td colspan="7" style="text-align:center;opacity:.5;padding:18px;">No pending commission claims.</td></tr></tbody></table></div>
       </div>
       <div class="table-wrap" style="margin-top:10px;"><table><thead><tr><th>Staff</th><th>Referral Sales</th><th>Commission</th></tr></thead><tbody id="ownerCommissionBody"><tr><td colspan="3" style="text-align:center;opacity:.5;padding:18px;">No referral sales this month.</td></tr></tbody></table></div>
     </div>
@@ -1699,8 +1699,8 @@
 
     <div class="card" data-owner-only style="margin-top:16px;">
       <h2><span class="pro-title-icon gold"><i class="business-icon" data-lucide="badge-percent"></i></span><span>Staff Referral Commission</span></h2>
-      <p class="pro-subtitle gold">Global staff referral rate is fixed at <strong>12%</strong>. Staff sales are attributed from their account and shown in My Commission.</p>
-      <div class="stat-grid"><div class="stat accent"><div class="k">Commission Rate</div><div class="v">12%</div></div><div class="stat"><div class="k">Rule</div><div class="v" style="font-size:.95rem;">Sale × 12%</div></div></div>
+      <p class="pro-subtitle gold">Global staff referral rate is fixed at <strong>12% of profit</strong>. Staff sales are attributed from their account and shown in My Commission.</p>
+      <div class="stat-grid"><div class="stat accent"><div class="k">Commission Rate</div><div class="v">12%</div></div><div class="stat"><div class="k">Rule</div><div class="v" style="font-size:.95rem;">Profit × 12%</div></div></div>
       <div class="notice" style="margin-bottom:0;"><i class="business-icon icon-inline" data-lucide="shield-check"></i> Cancelled/refunded orders are excluded. Commission is an additional earning and can be included in final salary approval.</div>
     </div>
 
@@ -3800,7 +3800,7 @@
   <!-- New / Edit Product Modal -->
   <div class="modal-backdrop" id="productModal">
     <div class="modal">
-      <h3><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="package" aria-hidden="true"></i></span><span id="productModalTitle">New Product</span></h3><p class="pro-subtitle green">Image, wholesale &amp; retail price for this product.</p>
+      <h3><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="package" aria-hidden="true"></i></span><span id="productModalTitle">New Product</span></h3><p class="pro-subtitle green">Image, wholesale, retail &amp; cost price for this product.</p>
       <input type="hidden" id="productEditId" value="">
       <input type="hidden" id="productExistingImageUrl" value="">
       <div class="field">
@@ -3821,6 +3821,11 @@
           <label>Retail Price (Rs.)</label>
           <input type="number" id="productRetailPrice" value="0" min="0">
         </div>
+      </div>
+      <div class="field">
+        <label>Cost Price (Rs.) — owner only</label>
+        <input type="number" id="productCostPrice" min="0" step="0.01" placeholder="What one unit costs you">
+        <small style="display:block;opacity:.7;margin-top:4px;">Staff commission is 12% of profit (selling price − this cost). Staff and distributors can't see it.</small>
       </div>
       <div class="btn-row">
         <button class="btn btn-primary" id="productSaveBtn" onclick="saveProduct()"><i class="business-icon icon-inline" data-lucide="save" aria-hidden="true"></i> Save Product</button>
