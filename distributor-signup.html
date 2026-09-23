@@ -28,6 +28,37 @@
   .ds-success{text-align:center;padding:40px 10px;}
   .ds-success .icon{width:64px;height:64px;border-radius:50%;background:var(--green-subtle);color:var(--green);display:flex;align-items:center;justify-content:center;margin:0 auto 16px;font-size:32px;}
   .ds-setup-warning{background:var(--bad-bg);color:var(--bad);border-radius:var(--radius-sm);padding:16px;margin:20px 0;font-size:.85rem;line-height:1.6;}
+
+  /* ---- Step wizard ---- */
+  .ds-steps{display:flex;align-items:center;justify-content:center;gap:6px;margin:18px 0 4px;}
+  .ds-step-dot{display:flex;align-items:center;gap:6px;flex:1;max-width:110px;}
+  .ds-step-dot .circle{width:26px;height:26px;border-radius:50%;background:var(--bg-elevated);border:1.5px solid var(--border-strong);color:var(--text-muted);font-size:.72rem;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:var(--transition);}
+  .ds-step-dot .line{height:2px;flex:1;background:var(--border);}
+  .ds-step-dot:last-child .line{display:none;}
+  .ds-step-dot.done .circle{background:var(--green);border-color:var(--green);color:#fff;}
+  .ds-step-dot.done .line{background:var(--green);}
+  .ds-step-dot.active .circle{background:linear-gradient(135deg,var(--gold-light),var(--gold));border-color:var(--gold);color:#1a1305;box-shadow:0 0 12px var(--gold-glow);}
+  .ds-step-labels{display:flex;justify-content:space-between;font-size:.65rem;color:var(--text-muted);margin:4px 2px 0;text-align:center;}
+  .ds-step-labels span{flex:1;}
+  .ds-panel{display:none;}
+  .ds-panel.active{display:block;animation:dsFadeIn .25s ease;}
+  @keyframes dsFadeIn{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:translateY(0);}}
+  .ds-nav-row{display:flex;gap:10px;margin-top:16px;}
+  .ds-nav-row .btn{flex:1;}
+  .ds-field-error{color:var(--bad);font-size:.72rem;margin-top:5px;display:none;}
+  .ds-field-error.show{display:block;}
+  .field.has-error input,.field.has-error textarea{border-color:var(--bad)!important;}
+  .ds-field-warn{color:#a86a00;background:#fff6e0;border-radius:6px;padding:8px 10px;font-size:.72rem;margin-top:6px;display:none;line-height:1.5;}
+  .ds-field-warn.show{display:block;}
+  .ds-review-card{background:var(--bg-elevated);border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:10px;}
+  .ds-review-row{display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px solid var(--border);font-size:.82rem;}
+  .ds-review-row:last-child{border-bottom:none;}
+  .ds-review-row .k{color:var(--text-muted);}
+  .ds-review-row .v{font-weight:600;text-align:right;word-break:break-word;}
+  .ds-review-photos{display:flex;gap:8px;margin-top:8px;}
+  .ds-review-photos img{width:70px;height:70px;object-fit:cover;border-radius:8px;border:1px solid var(--border);}
+  .ds-edit-link{font-size:.72rem;color:var(--gold);cursor:pointer;text-decoration:underline;background:none;border:none;padding:0;font-weight:700;}
+  .ds-share-btn{width:100%;margin-top:10px;background:#25D366!important;color:#fff!important;border:none!important;font-weight:700!important;}
 </style>
 </head>
 <body>
@@ -57,72 +88,110 @@
     ⚠️ This signup page isn't configured yet. The shop owner needs to open <b>Manage Staff → Distributor Applications</b> in the app, copy their <b>Owner ID</b>, and paste it into <code>TARGET_OWNER_ID</code> at the top of <code>distributor-signup.html</code>.
   </div>
 
-
   <hr class="ds-divider">
+
   <form id="dsForm" style="margin-top:6px;">
-    <div class="field">
-      <label>Full Name *</label>
-      <input type="text" id="dsName" required placeholder="As on your ID card">
+
+    <!-- Step indicator -->
+    <div class="ds-steps" id="dsSteps">
+      <div class="ds-step-dot active" data-step-dot="1"><div class="circle">1</div><div class="line"></div></div>
+      <div class="ds-step-dot" data-step-dot="2"><div class="circle">2</div><div class="line"></div></div>
+      <div class="ds-step-dot" data-step-dot="3"><div class="circle">3</div><div class="line"></div></div>
     </div>
-    <div class="field">
-      <label>NIC / ID Number *</label>
-      <input type="text" id="dsNic" required placeholder="e.g. 991234567V">
-    </div>
-    <div class="field">
-      <label>Phone Number *</label>
-      <input type="tel" id="dsPhone" required placeholder="07XXXXXXXX">
-    </div>
-    <div class="field">
-      <label>Address *</label>
-      <input type="text" id="dsAddress" required placeholder="Home / shop address">
-    </div>
-    <div class="field">
-      <label>Shop / Business Name (optional)</label>
-      <input type="text" id="dsShop" placeholder="If you run a shop">
+    <div class="ds-step-labels"><span>Your Details</span><span>ID Photos</span><span>Review &amp; Submit</span></div>
+
+    <!-- STEP 1: personal details -->
+    <div class="ds-panel active" data-panel="1" style="margin-top:18px;">
+      <div class="field">
+        <label>Full Name *</label>
+        <input type="text" id="dsName" required placeholder="As on your ID card">
+        <div class="ds-field-error" id="dsNameErr">Please enter your full name (at least 3 letters).</div>
+      </div>
+      <div class="field">
+        <label>NIC / ID Number *</label>
+        <input type="text" id="dsNic" required placeholder="e.g. 991234567V or 200012345678">
+        <div class="ds-field-error" id="dsNicErr">Please enter a valid NIC number.</div>
+        <div class="ds-field-warn" id="dsNicWarn">⚠️ We already have an application on file with this NIC. You can still continue if this is correct — the owner will review it.</div>
+      </div>
+      <div class="field">
+        <label>Phone Number *</label>
+        <input type="tel" id="dsPhone" required placeholder="07XXXXXXXX">
+        <div class="ds-field-error" id="dsPhoneErr">Please enter a valid 10-digit phone number (e.g. 0771234567).</div>
+      </div>
+      <div class="field">
+        <label>Address *</label>
+        <input type="text" id="dsAddress" required placeholder="Home / shop address">
+        <div class="ds-field-error" id="dsAddressErr">Please enter your address.</div>
+      </div>
+      <div class="field">
+        <label>Shop / Business Name (optional)</label>
+        <input type="text" id="dsShop" placeholder="If you run a shop">
+      </div>
+      <div class="ds-nav-row">
+        <button type="button" class="btn btn-primary ds-submit-gold" onclick="dsGoToStep(2)" style="width:100%;">Next: ID Photos →</button>
+      </div>
     </div>
 
-    <div class="field">
-      <label>ID Card — Front Photo *</label>
-      <label class="ds-upload" id="dsFrontLabel">
-        <span id="dsFrontText">📷 Tap to take / choose photo</span>
-        <input type="file" id="dsFrontFile" accept="image/*" capture="environment" required>
-      </label>
-      <img id="dsFrontPreview" class="ds-preview">
-      <div class="ds-filename" id="dsFrontName"></div>
+    <!-- STEP 2: ID photos -->
+    <div class="ds-panel" data-panel="2" style="margin-top:18px;">
+      <div class="field">
+        <label>ID Card — Front Photo *</label>
+        <label class="ds-upload" id="dsFrontLabel">
+          <span id="dsFrontText">📷 Tap to take / choose photo</span>
+          <input type="file" id="dsFrontFile" accept="image/*" capture="environment" required>
+        </label>
+        <img id="dsFrontPreview" class="ds-preview">
+        <div class="ds-filename" id="dsFrontName"></div>
+        <div class="ds-field-error" id="dsFrontErr">Please add a photo of the front of your ID card.</div>
+      </div>
+
+      <div class="field">
+        <label>ID Card — Back Photo (recommended)</label>
+        <label class="ds-upload" id="dsBackLabel">
+          <span id="dsBackText">📷 Tap to take / choose photo</span>
+          <input type="file" id="dsBackFile" accept="image/*" capture="environment">
+        </label>
+        <img id="dsBackPreview" class="ds-preview">
+        <div class="ds-filename" id="dsBackName"></div>
+      </div>
+
+      <div class="field">
+        <label>Message to Owner (optional)</label>
+        <textarea id="dsNote" rows="2" placeholder="Anything you'd like the owner to know"></textarea>
+      </div>
+
+      <div class="notice" style="font-size:.72rem;">
+        <i class="business-icon icon-inline" data-lucide="shield-check"></i>
+        Your photos are uploaded straight to our secure storage and are only ever visible to the shop owner — they are never kept on this device or in this app's offline cache.
+      </div>
+
+      <div class="ds-nav-row">
+        <button type="button" class="btn" onclick="dsGoToStep(1)" style="flex:0 0 90px;">← Back</button>
+        <button type="button" class="btn btn-primary ds-submit-gold" onclick="dsGoToStep(3)" style="width:100%;">Next: Review →</button>
+      </div>
     </div>
 
-    <div class="field">
-      <label>ID Card — Back Photo (recommended)</label>
-      <label class="ds-upload" id="dsBackLabel">
-        <span id="dsBackText">📷 Tap to take / choose photo</span>
-        <input type="file" id="dsBackFile" accept="image/*" capture="environment">
-      </label>
-      <img id="dsBackPreview" class="ds-preview">
-      <div class="ds-filename" id="dsBackName"></div>
+    <!-- STEP 3: review & submit -->
+    <div class="ds-panel" data-panel="3" style="margin-top:18px;">
+      <div class="ds-review-card" id="dsReviewCard"></div>
+      <button type="button" class="ds-edit-link" onclick="dsGoToStep(1)">✏️ Edit my details</button>
+
+      <div id="dsError" style="display:none;color:var(--bad);font-size:.82rem;margin-top:12px;"></div>
+
+      <div class="ds-nav-row">
+        <button type="button" class="btn" onclick="dsGoToStep(2)" style="flex:0 0 90px;">← Back</button>
+        <button type="submit" class="btn ds-submit-gold" id="dsSubmitBtn" style="width:100%;">🚀 අයදුම් කරන්න — Apply Now</button>
+      </div>
+      <p class="ds-trust-line">🔒 ඔබේ තොරතුරු සුරක්ෂිතයි — කේවලම business owner ට pahala. අදම ඔබේ order ගමන පටන් ගන්න!</p>
     </div>
 
-    <div class="field">
-      <label>Message to Owner (optional)</label>
-      <textarea id="dsNote" rows="2" placeholder="Anything you'd like the owner to know"></textarea>
-    </div>
-
-    <div class="notice" style="font-size:.72rem;">
-      <i class="business-icon icon-inline" data-lucide="shield-check"></i>
-      Your photos are uploaded straight to our secure storage and are only ever visible to the shop owner — they are never kept on this device or in this app's offline cache.
-    </div>
-
-    <div id="dsError" style="display:none;color:var(--bad);font-size:.82rem;margin-top:8px;"></div>
-
-    <div class="btn-row" style="margin-top:14px;">
-      <button type="submit" class="btn ds-submit-gold" id="dsSubmitBtn" style="width:100%;">🚀 අයදුම් කරන්න — Apply Now</button>
-    </div>
-    <p class="ds-trust-line">🔒 ඔබේ තොරතුරු සුරක්ෂිතයි — කේවලම business owner ට pahala. අදම ඔබේ order ගමන පටන් ගන්න!</p>
   </form>
 
   <div id="dsSuccess" class="ds-success" style="display:none;">
     <div class="icon">✅</div>
     <h2>ස්තූතියි! අයදුම්පත සාර්ථකයි 🎉</h2>
     <p style="color:var(--text-muted);margin-top:8px;">ඔබේ අයදුම්පත ලැබී ඇත — business owner ඉක්මනින්ම සම්බන්ධ වේවි. ඔබේ දිනුම් ගමන ළඟදීම ආරම්භ කරමු!</p>
+    <button type="button" class="btn ds-share-btn" id="dsShareBtn" onclick="dsShareLink()">📲 Share this opportunity with a friend</button>
   </div>
 
 </div></div>
@@ -147,6 +216,110 @@ if (!TARGET_OWNER_ID || TARGET_OWNER_ID.indexOf('PASTE_') === 0) {
   document.getElementById('dsForm').style.display = 'none';
 }
 
+// ==================== STEP WIZARD ====================
+let dsCurrentStep = 1;
+
+function dsGoToStep(step) {
+  if (step > dsCurrentStep) {
+    // Validate every step between current and target before allowing forward nav.
+    for (let s = dsCurrentStep; s < step; s++) {
+      if (!dsValidateStep(s)) return;
+    }
+  }
+  if (step === 3) dsRenderReview();
+  dsCurrentStep = step;
+  document.querySelectorAll('.ds-panel').forEach(p => p.classList.toggle('active', Number(p.dataset.panel) === step));
+  document.querySelectorAll('[data-step-dot]').forEach(d => {
+    const n = Number(d.dataset.stepDot);
+    d.classList.toggle('active', n === step);
+    d.classList.toggle('done', n < step);
+  });
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+window.dsGoToStep = dsGoToStep;
+
+function dsShowFieldError(id, show) {
+  const errEl = document.getElementById(id + 'Err');
+  const inputEl = document.getElementById(id);
+  if (errEl) errEl.classList.toggle('show', !!show);
+  if (inputEl) inputEl.closest('.field')?.classList.toggle('has-error', !!show);
+}
+
+// Accepts old (9 digits + V/X) and new (12-digit) Sri Lankan NIC formats.
+function dsIsValidNic(v) {
+  return /^[0-9]{9}[vVxX]$/.test(v) || /^[0-9]{12}$/.test(v);
+}
+// Accepts local 07X/0XX 10-digit mobile/landline formats, with or without spaces/dashes.
+function dsIsValidPhone(v) {
+  return /^0\d{9}$/.test(v.replace(/[\s-]/g, ''));
+}
+
+function dsValidateStep(step) {
+  let ok = true;
+  if (step === 1) {
+    const name = document.getElementById('dsName').value.trim();
+    const nic = document.getElementById('dsNic').value.trim();
+    const phone = document.getElementById('dsPhone').value.trim();
+    const address = document.getElementById('dsAddress').value.trim();
+    const nameOk = name.length >= 3;
+    const nicOk = dsIsValidNic(nic);
+    const phoneOk = dsIsValidPhone(phone);
+    const addressOk = address.length >= 4;
+    dsShowFieldError('dsName', !nameOk);
+    dsShowFieldError('dsNic', !nicOk);
+    dsShowFieldError('dsPhone', !phoneOk);
+    dsShowFieldError('dsAddress', !addressOk);
+    ok = nameOk && nicOk && phoneOk && addressOk;
+  } else if (step === 2) {
+    const frontOk = !!dsFrontBlob;
+    dsShowFieldError('dsFront', !frontOk);
+    ok = frontOk;
+  }
+  return ok;
+}
+
+function dsRenderReview() {
+  const name = document.getElementById('dsName').value.trim();
+  const nic = document.getElementById('dsNic').value.trim();
+  const phone = document.getElementById('dsPhone').value.trim();
+  const address = document.getElementById('dsAddress').value.trim();
+  const shop = document.getElementById('dsShop').value.trim();
+  const rows = [
+    ['Name', name], ['NIC', nic], ['Phone', phone], ['Address', address],
+  ];
+  if (shop) rows.push(['Shop', shop]);
+  const card = document.getElementById('dsReviewCard');
+  card.innerHTML = rows.map(([k, v]) => `<div class="ds-review-row"><span class="k">${k}</span><span class="v">${dsEsc(v)}</span></div>`).join('')
+    + `<div class="ds-review-photos">
+        ${dsFrontBlob ? `<img src="${document.getElementById('dsFrontPreview').src}" alt="ID front">` : ''}
+        ${dsBackBlob ? `<img src="${document.getElementById('dsBackPreview').src}" alt="ID back">` : ''}
+       </div>`;
+}
+function dsEsc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+
+// ==================== DUPLICATE APPLICATION CHECK ====================
+// Calls a security-definer RPC (returns only true/false — never exposes any
+// applicant's data to the public) so we can warn someone who already has a
+// pending/approved application on file with this owner, without letting the
+// public page read the applications table directly.
+let dsNicCheckTimer = null;
+document.getElementById('dsNic').addEventListener('input', () => {
+  document.getElementById('dsNicWarn').classList.remove('show');
+  clearTimeout(dsNicCheckTimer);
+  const nic = document.getElementById('dsNic').value.trim();
+  if (!dsIsValidNic(nic)) return;
+  dsNicCheckTimer = setTimeout(async () => {
+    try {
+      const { data, error } = await sb.rpc('check_duplicate_distributor_application', {
+        p_owner_id: TARGET_OWNER_ID, p_nic: nic
+      });
+      if (!error && data === true) {
+        document.getElementById('dsNicWarn').classList.add('show');
+      }
+    } catch (e) { /* silent — this is a nice-to-have, never blocks the form */ }
+  }, 500);
+});
+
 // ==================== FILE PREVIEW / COMPRESSION ====================
 // Photos are resized+compressed in this browser tab only (never written to
 // localStorage, IndexedDB, or the app's offline cache) and the compressed
@@ -164,7 +337,7 @@ async function compressImage(file, maxDim = 1600, quality = 0.82) {
   return await new Promise(res => canvas.toBlob(res, 'image/jpeg', quality));
 }
 
-function wireUpload(fileInputId, previewId, nameId, textId, setBlob) {
+function wireUpload(fileInputId, previewId, nameId, textId, setBlob, errKey) {
   const input = document.getElementById(fileInputId);
   input.addEventListener('change', async () => {
     const file = input.files[0];
@@ -185,14 +358,16 @@ function wireUpload(fileInputId, previewId, nameId, textId, setBlob) {
       img.onload = () => URL.revokeObjectURL(url); // free memory once painted
       document.getElementById(nameId).textContent = `${file.name} — ${(blob.size/1024).toFixed(0)} KB (compressed)`;
       document.getElementById(textId).textContent = '📷 Photo selected — tap to change';
+      if (errKey) dsShowFieldError(errKey, false);
     } catch (e) {
       console.error('Compress error:', e);
       setBlob(file); // fall back to the original file untouched
       document.getElementById(textId).textContent = '📷 Photo selected — tap to change';
+      if (errKey) dsShowFieldError(errKey, false);
     }
   });
 }
-wireUpload('dsFrontFile', 'dsFrontPreview', 'dsFrontName', 'dsFrontText', b => dsFrontBlob = b);
+wireUpload('dsFrontFile', 'dsFrontPreview', 'dsFrontName', 'dsFrontText', b => dsFrontBlob = b, 'dsFront');
 wireUpload('dsBackFile', 'dsBackPreview', 'dsBackName', 'dsBackText', b => dsBackBlob = b);
 
 // ==================== SUBMIT ====================
@@ -201,23 +376,16 @@ document.getElementById('dsForm').addEventListener('submit', async (e) => {
   const errEl = document.getElementById('dsError');
   errEl.style.display = 'none';
 
+  // Final full validation (in case someone jumped steps via keyboard nav).
+  if (!dsValidateStep(1)) { dsGoToStep(1); return; }
+  if (!dsValidateStep(2)) { dsGoToStep(2); return; }
+
   const name = document.getElementById('dsName').value.trim();
   const nic = document.getElementById('dsNic').value.trim();
   const phone = document.getElementById('dsPhone').value.trim();
   const address = document.getElementById('dsAddress').value.trim();
   const shop = document.getElementById('dsShop').value.trim();
   const note = document.getElementById('dsNote').value.trim();
-
-  if (!name || !nic || !phone || !address) {
-    errEl.textContent = 'Please fill all required (*) fields.';
-    errEl.style.display = 'block';
-    return;
-  }
-  if (!dsFrontBlob) {
-    errEl.textContent = 'Please add a photo of the front of your ID card.';
-    errEl.style.display = 'block';
-    return;
-  }
 
   const btn = document.getElementById('dsSubmitBtn');
   btn.disabled = true; btn.textContent = 'Uploading…';
@@ -272,6 +440,19 @@ document.getElementById('dsForm').addEventListener('submit', async (e) => {
     btn.disabled = false; btn.textContent = '🚀 අයදුම් කරන්න — Apply Now';
   }
 });
+
+// ==================== SHARE (viral growth loop) ====================
+function dsShareLink() {
+  const url = window.location.href.split('?')[0];
+  const text = 'MY DRYBEA Product Distributor — 6% to 12% commission, trusted brand, cash payments. Apply here:';
+  if (navigator.share) {
+    navigator.share({ title: 'MY DRYBEA Product Distributor', text, url }).catch(() => {});
+  } else {
+    const waUrl = 'https://wa.me/?text=' + encodeURIComponent(text + ' ' + url);
+    window.open(waUrl, '_blank');
+  }
+}
+window.dsShareLink = dsShareLink;
 </script>
 </body>
 </html>

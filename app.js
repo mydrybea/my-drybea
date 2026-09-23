@@ -600,8 +600,22 @@ async function removeStaffMember(uid) {
 //   for select to authenticated using (bucket_id = 'distributor-ids' and (storage.foldername(name))[1] = auth.uid()::text);
 // create policy "Owner can delete own distributor ID photos" on storage.objects
 //   for delete to authenticated using (bucket_id = 'distributor-ids' and (storage.foldername(name))[1] = auth.uid()::text);
+//
+// ---- MASTER UPGRADE: run this once too, so the public signup page can warn
+// applicants about a duplicate NIC without ever reading anyone else's data.
+// security definer + a boolean-only return keeps this safe for anon to call. ----
+// create or replace function public.check_duplicate_distributor_application(p_owner_id uuid, p_nic text)
+// returns boolean language sql security definer set search_path = public as $$
+//   select exists(select 1 from public.distributor_applications
+//     where owner_id = p_owner_id and nic_number = p_nic and status in ('pending','approved'));
+// $$;
+// grant execute on function public.check_duplicate_distributor_application(uuid, text) to anon, authenticated;
 
 let distributorApplicationsCache = [];
+let distAppFilterStatus = 'all';   // 'all' | 'pending' | 'approved' | 'rejected'
+let distAppSearchText = '';
+let distAppSelectedIds = new Set();
+let distAppCurrentViewId = null;   // which application the view modal is currently showing
 
 async function loadDistributorApplications() {
   if (userRole !== 'owner' || !currentUser) return;
@@ -614,7 +628,31 @@ async function loadDistributorApplications() {
     console.warn('Load distributor applications:', e.message);
     distributorApplicationsCache = [];
   }
+  // Selections can go stale once the list reloads (an approved/deleted row
+  // shouldn't stay "selected" invisibly) — drop anything no longer present.
+  const liveIds = new Set(distributorApplicationsCache.map(a => a.id));
+  distAppSelectedIds.forEach(id => { if (!liveIds.has(id)) distAppSelectedIds.delete(id); });
   renderDistributorApplications();
+}
+
+function setDistAppFilter(status) {
+  distAppFilterStatus = status;
+  document.querySelectorAll('.dist-filter-tab').forEach(btn => btn.classList.toggle('active', btn.dataset.distFilter === status));
+  renderDistributorApplications();
+}
+window.setDistAppFilter = setDistAppFilter;
+
+function filterDistApplications(text) {
+  distAppSearchText = (text || '').trim().toLowerCase();
+  renderDistributorApplications();
+}
+window.filterDistApplications = filterDistApplications;
+
+function distAppMatchesFilters(a) {
+  if (distAppFilterStatus !== 'all' && a.status !== distAppFilterStatus) return false;
+  if (!distAppSearchText) return true;
+  const hay = [a.full_name, a.nic_number, a.phone, a.shop_name].filter(Boolean).join(' ').toLowerCase();
+  return hay.includes(distAppSearchText);
 }
 
 function renderDistributorApplications() {
@@ -624,14 +662,25 @@ function renderDistributorApplications() {
   const pendingCount = list.filter(a => a.status === 'pending').length;
   const countBadge = $('distApplicationsPendingBadge');
   if (countBadge) { countBadge.textContent = pendingCount; countBadge.style.display = pendingCount ? 'inline-block' : 'none'; }
+
+  const visible = list.filter(distAppMatchesFilters);
+
   if (!list.length) {
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;opacity:.5;padding:14px;">No applications yet — share the signup link above.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;opacity:.5;padding:14px;">No applications yet — share the signup link above.</td></tr>';
+    updateDistAppBulkBar();
     return;
   }
+  if (!visible.length) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;opacity:.5;padding:14px;">No applications match this filter/search.</td></tr>';
+    updateDistAppBulkBar();
+    return;
+  }
+
   const statusBadge = { pending: '<span class="badge badge-warn">Pending</span>', approved: '<span class="badge badge-good">Approved</span>', rejected: '<span class="badge badge-bad">Rejected</span>' };
-  tbody.innerHTML = list.map(a => `
+  tbody.innerHTML = visible.map(a => `
     <tr>
-      <td><strong>${escapeHtmlSafe(a.full_name)}</strong>${a.shop_name ? '<br><span style="font-size:.72rem;opacity:.7;">' + escapeHtmlSafe(a.shop_name) + '</span>' : ''}</td>
+      <td><input type="checkbox" class="dist-app-checkbox" ${distAppSelectedIds.has(a.id) ? 'checked' : ''} onchange="toggleDistAppSelected('${a.id}', this.checked)"></td>
+      <td><strong>${escapeHtmlSafe(a.full_name)}</strong>${a.shop_name ? '<br><span style="font-size:.72rem;opacity:.7;">' + escapeHtmlSafe(a.shop_name) + '</span>' : ''}${a.reviewer_note ? '<span class="dist-app-note-dot" title="You have a private note on this application"></span>' : ''}</td>
       <td>${escapeHtmlSafe(a.nic_number)}</td>
       <td>${escapeHtmlSafe(a.phone)}</td>
       <td style="font-size:.78rem;">${a.created_at ? new Date(a.created_at).toLocaleDateString() : '—'}</td>
@@ -645,17 +694,81 @@ function renderDistributorApplications() {
     </tr>
   `).join('');
   if (window.lucide) lucide.createIcons({ attrs: { 'stroke-width': 1.9 } });
+  updateDistAppBulkBar();
 }
+
+// ---- Bulk selection ----
+function toggleDistAppSelected(id, checked) {
+  if (checked) distAppSelectedIds.add(id); else distAppSelectedIds.delete(id);
+  updateDistAppBulkBar();
+  const allBox = $('distAppSelectAll');
+  if (allBox) {
+    const visibleIds = distributorApplicationsCache.filter(distAppMatchesFilters).map(a => a.id);
+    allBox.checked = visibleIds.length > 0 && visibleIds.every(vid => distAppSelectedIds.has(vid));
+  }
+}
+window.toggleDistAppSelected = toggleDistAppSelected;
+
+function toggleDistAppSelectAll(checked) {
+  const visibleIds = distributorApplicationsCache.filter(distAppMatchesFilters).map(a => a.id);
+  if (checked) visibleIds.forEach(id => distAppSelectedIds.add(id));
+  else visibleIds.forEach(id => distAppSelectedIds.delete(id));
+  renderDistributorApplications();
+}
+window.toggleDistAppSelectAll = toggleDistAppSelectAll;
+
+function clearDistAppSelection() {
+  distAppSelectedIds.clear();
+  renderDistributorApplications();
+}
+window.clearDistAppSelection = clearDistAppSelection;
+
+function updateDistAppBulkBar() {
+  const bar = $('distAppBulkBar');
+  const countEl = $('distAppSelectedCount');
+  if (!bar) return;
+  const n = distAppSelectedIds.size;
+  bar.style.display = n ? 'flex' : 'none';
+  if (countEl) countEl.textContent = n + (n === 1 ? ' selected' : ' selected');
+}
+
+async function bulkDecideDistributorApplications(status) {
+  const ids = [...distAppSelectedIds];
+  if (!ids.length) return;
+  const label = status === 'approved' ? 'approve' : 'reject';
+  if (!confirm(`${label === 'approve' ? 'Approve' : 'Reject'} ${ids.length} selected application(s)?`)) return;
+  try {
+    const { error } = await supabase.from('distributor_applications')
+      .update({ status, reviewed_at: new Date().toISOString() })
+      .in('id', ids).eq('owner_id', currentUser.id);
+    if (error) throw error;
+    updateStatus(`✅ ${ids.length} application(s) marked ${status}`);
+    distAppSelectedIds.clear();
+    await loadDistributorApplications();
+  } catch (e) {
+    alert(`❌ Could not ${label} selected: ` + e.message);
+  }
+}
+window.bulkDecideDistributorApplications = bulkDecideDistributorApplications;
 
 async function viewDistributorApplication(id) {
   const app = distributorApplicationsCache.find(a => a.id === id);
   if (!app) return;
+  distAppCurrentViewId = id;
   $('distAppViewName').textContent = app.full_name;
   $('distAppViewNic').textContent = app.nic_number;
   $('distAppViewPhone').textContent = app.phone;
   $('distAppViewAddress').textContent = app.address || '—';
   $('distAppViewShop').textContent = app.shop_name || '—';
   $('distAppViewNote').textContent = app.applicant_note || '—';
+  $('distAppViewApplied').textContent = app.created_at ? new Date(app.created_at).toLocaleString() : '—';
+  const statusEl = $('distAppViewStatusBadge');
+  if (statusEl) {
+    const badge = { pending: '<span class="badge badge-warn">Pending</span>', approved: '<span class="badge badge-good">Approved</span>', rejected: '<span class="badge badge-bad">Rejected</span>' };
+    statusEl.innerHTML = badge[app.status] || app.status;
+  }
+  const noteBox = $('distAppViewReviewerNote');
+  if (noteBox) noteBox.value = app.reviewer_note || '';
   const frontImg = $('distAppViewFront'), backImg = $('distAppViewBack');
   frontImg.src = ''; backImg.style.display = 'none'; backImg.src = '';
   frontImg.alt = 'Loading…';
@@ -676,12 +789,52 @@ async function viewDistributorApplication(id) {
   }
 }
 
+// Private note only the owner can see (reviewer_note column) — separate from
+// approve/reject so a note can be jotted down without changing status.
+async function saveDistApplicationNote() {
+  const id = distAppCurrentViewId;
+  if (!id) return;
+  const note = ($('distAppViewReviewerNote')?.value || '').trim();
+  try {
+    const { error } = await supabase.from('distributor_applications')
+      .update({ reviewer_note: note || null }).eq('id', id).eq('owner_id', currentUser.id);
+    if (error) throw error;
+    const app = distributorApplicationsCache.find(a => a.id === id);
+    if (app) app.reviewer_note = note || null;
+    updateStatus('📝 Note saved');
+    renderDistributorApplications();
+  } catch (e) {
+    alert('❌ Could not save note: ' + e.message);
+  }
+}
+window.saveDistApplicationNote = saveDistApplicationNote;
+
+// One-tap WhatsApp to the applicant, with a message that matches their
+// current status — no backend/API keys needed, just a wa.me click-to-chat
+// link the owner sends themselves.
+function openWhatsAppForApplicant() {
+  const app = distributorApplicationsCache.find(a => a.id === distAppCurrentViewId);
+  if (!app || !app.phone) { alert('No phone number on file for this applicant.'); return; }
+  const digits = String(app.phone).replace(/\D/g, '').replace(/^0/, '94'); // Sri Lanka local -> international
+  let msg;
+  if (app.status === 'approved') {
+    msg = `Hi ${app.full_name}, your MY DRYBEA Product Distributor application has been approved! 🎉 Please create your login account and share your Supabase User ID with us so we can activate your distributor dashboard.`;
+  } else if (app.status === 'rejected') {
+    msg = `Hi ${app.full_name}, thank you for applying to be a MY DRYBEA Product Distributor. Unfortunately we're unable to proceed with your application at this time.`;
+  } else {
+    msg = `Hi ${app.full_name}, thanks for applying to be a MY DRYBEA Product Distributor! We're reviewing your application and will get back to you soon.`;
+  }
+  window.open(`https://wa.me/${digits}?text=${encodeURIComponent(msg)}`, '_blank');
+}
+window.openWhatsAppForApplicant = openWhatsAppForApplicant;
+
 function closeDistApplicationViewModal() {
   $('distApplicationViewModal').classList.remove('active');
   // Drop the signed-URL image references now that the modal is closed —
   // nothing about the photo is kept in app state either way.
   $('distAppViewFront').src = '';
   $('distAppViewBack').src = '';
+  distAppCurrentViewId = null;
 }
 
 async function decideDistributorApplication(id, status) {
@@ -692,7 +845,7 @@ async function decideDistributorApplication(id, status) {
       .update({ status, reviewed_at: new Date().toISOString() }).eq('id', id).eq('owner_id', currentUser.id);
     if (error) throw error;
     if (status === 'approved') {
-      alert('✅ Marked approved. Ask them to create a login account, share their Supabase User ID with you, then add them above with role "Product Distributor".');
+      alert('✅ Marked approved. Ask them to create a login account, share their Supabase User ID with you, then add them above with role "Product Distributor". Tip: open the application again and tap WhatsApp to send them the invite message.');
     }
     await loadDistributorApplications();
   } catch (e) {
@@ -708,6 +861,7 @@ async function deleteDistributorApplication(id) {
     if (paths.length) await supabase.storage.from('distributor-ids').remove(paths);
     const { error } = await supabase.from('distributor_applications').delete().eq('id', id).eq('owner_id', currentUser.id);
     if (error) throw error;
+    distAppSelectedIds.delete(id);
     await loadDistributorApplications();
     updateStatus('🗑️ Application deleted');
   } catch (e) {
@@ -773,6 +927,10 @@ window.deleteDistributorApplication = deleteDistributorApplication;
 window.copyDistSignupLink = copyDistSignupLink;
 window.copyDistSignupOwnerId = copyDistSignupOwnerId;
 window.downloadConfiguredSignupPage = downloadConfiguredSignupPage;
+// (search/filter/bulk/notes/WhatsApp exposures live inline, right after
+// each function above — see the PERMANENT SAFETY NET near the bottom of
+// this file, which would flag any missed one as "referenced in the DOM
+// but not exposed on window.")
 
 // ==================== STAFF SALARY (owner-only) ====================
 let staffListCache = [];
@@ -17212,6 +17370,12 @@ function nbCorrectionDecided(r){
   ]}];
 }
 
+function nbNewDistributorApplication(r){
+  return ['🏷️ New distributor application', `${r.full_name||'Someone'} applied to become a distributor`, 'info', { tab:'my-staff', details:[
+    {label:'Name', value: r.full_name || '-'}, {label:'NIC', value: r.nic_number || '-'},
+    {label:'Phone', value: r.phone || '-'}, {label:'Shop', value: r.shop_name || '-'}
+  ]}];
+}
 function nbDistSaleToVerify(r){
   return ['🧾 New distributor sale', `${r.distributor_reference||'A distributor'} · Rs. ${fmt(Number(r.order_total)||0)} — commission pending`, 'info', { tab:'delivery', details:[
     {label:'Distributor', value: r.distributor_reference || '-'}, {label:'Order', value: r.order_ref_no || '-'},
@@ -17431,6 +17595,13 @@ function startAppNotifyRealtime(){
       // A distributor submitting a sale for commission — same "needs owner
       // verification" shape as a staff sale, just a different source table.
       ch.on('postgres_changes',{event:'INSERT',schema:'public',table:'distributor_commission_claims',filter:`owner_id=eq.${currentUser.id}`},(p)=> showAppNotification(...nbDistSaleToVerify(p.new||{})));
+      // New public distributor-signup application — refresh the Distributor
+      // Applications panel live (so it appears without a manual reload) as
+      // well as firing the usual toast/sound/push.
+      ch.on('postgres_changes',{event:'INSERT',schema:'public',table:'distributor_applications',filter:`owner_id=eq.${currentUser.id}`},(p)=>{
+        showAppNotification(...nbNewDistributorApplication(p.new||{}));
+        loadDistributorApplications();
+      });
     } else if(userRole === 'staff'){
       ch.on('postgres_changes',{event:'UPDATE',schema:'public',table:'advance_requests',filter:`staff_id=eq.${currentUser.id}`},(p)=>{
         const r=p.new||{}, o=p.old||{};
@@ -17516,13 +17687,14 @@ async function catchUpMissedNotifications(){
   catchUpBusy = true;
   try{
     if(userRole === 'owner'){
-      const [advs, att, corr, claims, handovers, distClaims] = await Promise.all([
+      const [advs, att, corr, claims, handovers, distClaims, distApps] = await Promise.all([
         supabase.from('advance_requests').select('*').eq('owner_id',currentUser.id).gt('requested_at',lastSeen).order('requested_at',{ascending:true}),
         supabase.from('attendance').select('*').eq('owner_id',currentUser.id).or(`check_in.gt.${lastSeen},check_out.gt.${lastSeen}`).order('work_date',{ascending:true}),
         supabase.from('attendance_corrections').select('*').eq('owner_id',currentUser.id).gt('requested_at',lastSeen).order('requested_at',{ascending:true}),
         supabase.from('staff_commission_claims').select('*').eq('owner_id',currentUser.id).gt('submitted_at',lastSeen).order('submitted_at',{ascending:true}),
         supabase.from('driver_cod_handovers').select('*').eq('owner_id',currentUser.id).gt('created_at',lastSeen).order('created_at',{ascending:true}),
-        supabase.from('distributor_commission_claims').select('*').eq('owner_id',currentUser.id).gt('submitted_at',lastSeen).order('submitted_at',{ascending:true})
+        supabase.from('distributor_commission_claims').select('*').eq('owner_id',currentUser.id).gt('submitted_at',lastSeen).order('submitted_at',{ascending:true}),
+        supabase.from('distributor_applications').select('*').eq('owner_id',currentUser.id).gt('created_at',lastSeen).order('created_at',{ascending:true})
       ]);
       (advs.data||[]).forEach(r=> showAppNotification(...nbAdvanceRequested(r)));
       (att.data||[]).forEach(r=>{
@@ -17533,6 +17705,7 @@ async function catchUpMissedNotifications(){
       (claims.data||[]).forEach(r=> showAppNotification(...nbNewSaleToVerify(r)));
       (handovers.data||[]).forEach(r=> showAppNotification(...nbCodHandover(r)));
       (distClaims.data||[]).forEach(r=> showAppNotification(...nbDistSaleToVerify(r)));
+      (distApps.data||[]).forEach(r=> showAppNotification(...nbNewDistributorApplication(r)));
     } else if(userRole === 'staff'){
       const queries = [
         supabase.from('advance_requests').select('*').eq('staff_id',currentUser.id).not('decided_at','is',null).gt('decided_at',lastSeen).order('decided_at',{ascending:true}),

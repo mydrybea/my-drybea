@@ -1726,10 +1726,31 @@
         <button class="btn btn-primary" id="distSignupDownloadBtn" onclick="downloadConfiguredSignupPage()" style="width:100%;"><i class="business-icon icon-inline" data-lucide="download" aria-hidden="true"></i> ⬇️ Download Ready-to-Use Signup Page</button>
         <p class="pro-subtitle" style="margin-top:6px;font-size:.72rem;">This fetches your live distributor-signup.html and fills in your Owner ID automatically — just upload the downloaded file to GitHub, replacing the old one. No typing an ID anywhere.</p>
       </div>
+
+      <div class="ds-owner-toolbar" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:14px;">
+        <input type="text" id="distAppSearchInput" placeholder="🔍 Search name / NIC / phone…" oninput="filterDistApplications(this.value)" style="flex:1;min-width:180px;padding:8px 10px;border-radius:var(--radius-sm);border:1px solid var(--border-strong);background:var(--bg-elevated);color:inherit;font-size:.82rem;">
+      </div>
+      <div class="ds-status-tabs" style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
+        <button type="button" class="btn btn-sm dist-filter-tab active" data-dist-filter="all" onclick="setDistAppFilter('all')">All</button>
+        <button type="button" class="btn btn-sm dist-filter-tab" data-dist-filter="pending" onclick="setDistAppFilter('pending')">Pending</button>
+        <button type="button" class="btn btn-sm dist-filter-tab" data-dist-filter="approved" onclick="setDistAppFilter('approved')">Approved</button>
+        <button type="button" class="btn btn-sm dist-filter-tab" data-dist-filter="rejected" onclick="setDistAppFilter('rejected')">Rejected</button>
+      </div>
+
+      <div id="distAppBulkBar" style="display:none;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px;background:var(--bg-elevated);border-radius:var(--radius-sm);padding:8px 10px;">
+        <span id="distAppSelectedCount" style="font-size:.78rem;font-weight:700;">0 selected</span>
+        <button type="button" class="btn btn-sm btn-primary" onclick="bulkDecideDistributorApplications('approved')"><i class="business-icon icon-inline" data-lucide="check" aria-hidden="true"></i> Approve Selected</button>
+        <button type="button" class="btn btn-sm btn-danger" onclick="bulkDecideDistributorApplications('rejected')"><i class="business-icon icon-inline" data-lucide="x" aria-hidden="true"></i> Reject Selected</button>
+        <button type="button" class="btn btn-sm" onclick="clearDistAppSelection()">Cancel</button>
+      </div>
+
       <div class="table-wrap" style="margin-top:10px;">
         <table>
-          <thead><tr><th>Applicant</th><th>NIC</th><th>Phone</th><th>Applied</th><th>Status</th><th>Actions</th></tr></thead>
-          <tbody id="distApplicationsBody"><tr><td colspan="6" style="text-align:center;opacity:.5;padding:14px;">No applications yet.</td></tr></tbody>
+          <thead><tr>
+            <th style="width:28px;"><input type="checkbox" id="distAppSelectAll" onchange="toggleDistAppSelectAll(this.checked)"></th>
+            <th>Applicant</th><th>NIC</th><th>Phone</th><th>Applied</th><th>Status</th><th>Actions</th>
+          </tr></thead>
+          <tbody id="distApplicationsBody"><tr><td colspan="7" style="text-align:center;opacity:.5;padding:14px;">No applications yet.</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -3337,14 +3358,15 @@
   <!-- Distributor Application View Modal -->
   <div class="modal-backdrop" id="distApplicationViewModal">
     <div class="modal" style="max-width:520px;">
-      <h3><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="id-card" aria-hidden="true"></i></span><span>Distributor Application</span></h3>
+      <h3><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="id-card" aria-hidden="true"></i></span><span>Distributor Application</span> <span id="distAppViewStatusBadge"></span></h3>
       <p class="pro-subtitle gold">ID photos are fetched fresh on a temporary secure link and are not stored anywhere in this app.</p>
       <div class="field"><label>Name</label><div id="distAppViewName">—</div></div>
       <div class="field"><label>NIC / ID Number</label><div id="distAppViewNic">—</div></div>
       <div class="field"><label>Phone</label><div id="distAppViewPhone">—</div></div>
       <div class="field"><label>Address</label><div id="distAppViewAddress">—</div></div>
       <div class="field"><label>Shop / Business</label><div id="distAppViewShop">—</div></div>
-      <div class="field"><label>Message</label><div id="distAppViewNote">—</div></div>
+      <div class="field"><label>Message from Applicant</label><div id="distAppViewNote">—</div></div>
+      <div class="field"><label>Applied</label><div id="distAppViewApplied">—</div></div>
       <div class="field">
         <label>ID Card — Front</label>
         <img id="distAppViewFront" style="max-width:100%;border-radius:var(--radius-sm);display:block;" alt="Loading…">
@@ -3353,7 +3375,13 @@
         <label>ID Card — Back</label>
         <img id="distAppViewBack" style="max-width:100%;border-radius:var(--radius-sm);display:none;" alt="ID back">
       </div>
+      <div class="field">
+        <label>Your Private Note <span class="hint">(only you can see this)</span></label>
+        <textarea id="distAppViewReviewerNote" rows="2" placeholder="e.g. Called on 21st, said they'd confirm stock area…"></textarea>
+        <button type="button" class="btn btn-sm" style="margin-top:6px;" onclick="saveDistApplicationNote()"><i class="business-icon icon-inline" data-lucide="save" aria-hidden="true"></i> Save Note</button>
+      </div>
       <div class="btn-row">
+        <button class="btn btn-sm" id="distAppViewWhatsappBtn" onclick="openWhatsAppForApplicant()"><i class="business-icon icon-inline" data-lucide="message-circle" aria-hidden="true"></i> WhatsApp</button>
         <button class="btn" onclick="closeDistApplicationViewModal()">Close</button>
       </div>
     </div>
