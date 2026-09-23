@@ -193,9 +193,14 @@ let currentUser = null;
 let userProfile = null;
 let userRole = 'owner';   // 'owner' | 'staff' | 'driver' | 'distributor'
 let businessId = null;    // the effective account whose data everyone on the team shares
+let distAppGateStatus = null; // null | 'pending' | 'rejected' — set by loadUserProfile() when
+                               // this login belongs to an unapproved distributor application;
+                               // the DOMContentLoaded init checks this right after loadUserProfile()
+                               // and shows a waiting/rejected screen instead of the real dashboard.
 
 async function loadUserProfile() {
   if (!currentUser) return;
+  distAppGateStatus = null;
   try {
     const { data, error } = await supabase
       .from('profiles')
@@ -205,12 +210,49 @@ async function loadUserProfile() {
     if (error) throw error;
 
     if (!data) {
-      // First-ever login for this account: they become an "owner" of their own business.
-      const { error: insertErr } = await supabase
-        .from('profiles')
-        .insert({ id: currentUser.id, role: 'owner' });
-      if (insertErr) throw insertErr;
-      userProfile = { id: currentUser.id, role: 'owner', owner_id: null };
+      // No profile row yet. Before assuming this is a brand-new business
+      // owner signing up for the first time, check whether this login
+      // actually belongs to a Distributor Signup application that's still
+      // waiting on the shop owner — that page creates the login account
+      // immediately (so applicants can log in right after applying to
+      // check status), but the account shouldn't get full dashboard access,
+      // let alone an auto-created independent "owner" business, until the
+      // owner approves it.
+      const { data: myApp } = await supabase
+        .from('distributor_applications')
+        .select('status, owner_id, full_name')
+        .eq('auth_user_id', currentUser.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (myApp && myApp.status === 'pending') {
+        distAppGateStatus = 'pending';
+        return;
+      }
+      if (myApp && myApp.status === 'rejected') {
+        distAppGateStatus = 'rejected';
+        return;
+      }
+      if (myApp && myApp.status === 'approved') {
+        // Self-heal: approving an application should already have created
+        // this profile via activateApprovedDistributor(). If it's missing
+        // anyway (e.g. that step failed once), create it now instead of
+        // falling through to "new independent owner".
+        const { error: healErr } = await supabase.from('profiles').upsert({
+          id: currentUser.id, role: 'distributor', owner_id: myApp.owner_id, display_name: myApp.full_name || null
+        });
+        if (healErr) throw healErr;
+        userProfile = { id: currentUser.id, role: 'distributor', owner_id: myApp.owner_id, display_name: myApp.full_name || null };
+      } else {
+        // No distributor application on file at all — genuinely a first-ever
+        // login, so they become an "owner" of their own business, as before.
+        const { error: insertErr } = await supabase
+          .from('profiles')
+          .insert({ id: currentUser.id, role: 'owner' });
+        if (insertErr) throw insertErr;
+        userProfile = { id: currentUser.id, role: 'owner', owner_id: null };
+      }
     } else {
       userProfile = data;
     }
@@ -554,6 +596,32 @@ async function removeStaffMember(uid) {
   }
 }
 
+// Shown instead of the real dashboard when this login belongs to a
+// distributor application that's still pending, or was rejected — see the
+// gate check right after loadUserProfile() in the DOMContentLoaded init.
+function showDistApplicationGateScreen(status) {
+  const overlay = $('distAppGateOverlay');
+  if (!overlay) return; // markup not present — fail open rather than break login entirely
+  const icon = $('distAppGateIcon'), title = $('distAppGateTitle'), msg = $('distAppGateMsg');
+  if (status === 'rejected') {
+    if (icon) icon.textContent = '✖️';
+    if (title) title.textContent = 'Application Not Approved';
+    if (msg) msg.textContent = "Your Product Distributor application wasn't approved. If you think this is a mistake, please contact the shop directly.";
+  } else {
+    if (icon) icon.textContent = '⏳';
+    if (title) title.textContent = 'Application Under Review';
+    if (msg) msg.textContent = "Thanks for applying! Your Product Distributor application is still being reviewed by the shop owner. You'll be able to log in to your dashboard as soon as it's approved.";
+  }
+  overlay.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+
+async function distAppGateLogout() {
+  try { await supabase.auth.signOut(); } catch (e) { console.error('Sign out error:', e); }
+  window.location.replace('login.html');
+}
+window.distAppGateLogout = distAppGateLogout;
+
 // ==================== DISTRIBUTOR SIGNUP APPLICATIONS (owner-only) ====================
 // Public prospective-distributor form lives in a separate, no-login page
 // (distributor-signup.html) since Product Distributors take stock on credit
@@ -620,6 +688,12 @@ async function removeStaffMember(uid) {
 // existed before applicants could create a login on the signup page ----
 // alter table public.distributor_applications add column if not exists email text;
 // alter table public.distributor_applications add column if not exists auth_user_id uuid;
+//
+// ---- UPGRADE: run this once too — lets a logged-in applicant check their
+// OWN application's status (used by the "Application Under Review" gate
+// screen in the main app), without exposing any other applicant's data. ----
+// create policy "Applicant can view own application" on public.distributor_applications
+//   for select to authenticated using (auth_user_id = auth.uid());
 
 let distributorApplicationsCache = [];
 let distAppFilterStatus = 'all';   // 'all' | 'pending' | 'approved' | 'rejected'
@@ -14764,6 +14838,10 @@ async function authAction() {
     updateAuthUI();
     // Load cloud data after login
     await loadUserProfile();
+    if (distAppGateStatus) {
+      showDistApplicationGateScreen(distAppGateStatus);
+      return;
+    }
     await cloudLoad();
     updateStatus('✅ Logged in as ' + currentUser.email);
   } catch (e) {
@@ -18277,6 +18355,17 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   currentUser = session.user;
   await loadUserProfile();
+
+  // ---- DISTRIBUTOR APPLICATION GATE ----
+  // Set inside loadUserProfile() when this login belongs to a distributor
+  // application that's still pending, or was rejected. Show that screen and
+  // stop here — none of the dashboard data loads below should run for an
+  // account that isn't approved yet.
+  if (distAppGateStatus) {
+    showDistApplicationGateScreen(distAppGateStatus);
+    return;
+  }
+
   loadState();
   loadHistory();
   loadOrders();
@@ -18391,6 +18480,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
       currentUser = session.user;
       await loadUserProfile();
+      if (distAppGateStatus) {
+        showDistApplicationGateScreen(distAppGateStatus);
+        return;
+      }
       updateAuthUI();
       if (appInitialized) {
         await cloudLoad();

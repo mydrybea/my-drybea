@@ -510,6 +510,17 @@
 </head>
 <body>
 
+<!-- Shown instead of the dashboard when a distributor login isn't approved
+     yet — see showDistApplicationGateScreen() in app.js. Hidden by default. -->
+<div id="distAppGateOverlay" style="display:none;position:fixed;inset:0;z-index:99999;background:var(--bg-app,#0b1220);align-items:center;justify-content:center;text-align:center;padding:24px;">
+  <div style="max-width:420px;">
+    <div id="distAppGateIcon" style="font-size:48px;margin-bottom:14px;">⏳</div>
+    <h2 id="distAppGateTitle" style="color:var(--text-primary,#fff);">Application Under Review</h2>
+    <p id="distAppGateMsg" style="opacity:.75;margin-top:10px;line-height:1.6;color:var(--text-secondary,#ccc);"></p>
+    <button class="btn btn-primary" style="margin-top:22px;" onclick="distAppGateLogout()">Log Out</button>
+  </div>
+</div>
+
 <div id="appNotifyContainer" class="app-notify-container" aria-live="polite" aria-atomic="false"></div>
 
 <div class="app-container">
