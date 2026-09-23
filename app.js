@@ -872,7 +872,14 @@ async function deleteDistributorApplication(id) {
 function renderDistSignupLinkBox() {
   const linkEl = $('distSignupLinkText');
   const ownerEl = $('distSignupOwnerIdText');
-  if (linkEl) linkEl.textContent = new URL('./distributor-signup.html', window.location.href).href;
+  if (linkEl) {
+    // The owner's ID travels inside the link itself (?owner=<uuid>), so the
+    // signup page needs zero manual configuration — whoever opens this
+    // exact link is automatically tied to this owner's account.
+    const url = new URL('./distributor-signup.html', window.location.href);
+    if (currentUser) url.searchParams.set('owner', currentUser.id);
+    linkEl.textContent = url.href;
+  }
   if (ownerEl) ownerEl.textContent = currentUser ? currentUser.id : '—';
 }
 
@@ -890,43 +897,12 @@ async function copyDistSignupOwnerId() {
   catch (e) { prompt('Copy this Owner ID:', el.textContent); }
 }
 
-// One-click setup: fetches the currently-deployed distributor-signup.html
-// (same site, same folder), swaps in the logged-in owner's ID wherever the
-// TARGET_OWNER_ID placeholder appears, and downloads the ready-to-use file —
-// so the owner never has to open a code editor or type an ID by hand. They
-// just upload the downloaded file to GitHub, replacing the old one.
-async function downloadConfiguredSignupPage() {
-  if (!currentUser) { alert('Please login first.'); return; }
-  const btn = $('distSignupDownloadBtn');
-  if (btn) { btn.disabled = true; btn.textContent = 'Preparing…'; }
-  try {
-    const res = await fetch('./distributor-signup.html', { cache: 'no-store' });
-    if (!res.ok) throw new Error('Could not fetch the current signup page (HTTP ' + res.status + ').');
-    let html = await res.text();
-    const re = /const TARGET_OWNER_ID = '[^']*';/;
-    if (!re.test(html)) throw new Error('Could not find the TARGET_OWNER_ID line — the file on the site may already be edited differently.');
-    html = html.replace(re, `const TARGET_OWNER_ID = '${currentUser.id}';`);
-    const blob = new Blob([html], { type: 'text/html' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'distributor-signup.html';
-    a.click();
-    URL.revokeObjectURL(a.href);
-    alert('✅ Downloaded! Now upload this file to your GitHub repo (drag & drop), replacing the old distributor-signup.html — no editing needed.');
-  } catch (e) {
-    alert('❌ Could not prepare the file: ' + e.message + '\n\nMake sure distributor-signup.html is already live on your site, then try again.');
-  } finally {
-    if (btn) { btn.disabled = false; btn.textContent = '⬇️ Download Ready-to-Use Signup Page'; }
-  }
-}
-
 window.viewDistributorApplication = viewDistributorApplication;
 window.closeDistApplicationViewModal = closeDistApplicationViewModal;
 window.decideDistributorApplication = decideDistributorApplication;
 window.deleteDistributorApplication = deleteDistributorApplication;
 window.copyDistSignupLink = copyDistSignupLink;
 window.copyDistSignupOwnerId = copyDistSignupOwnerId;
-window.downloadConfiguredSignupPage = downloadConfiguredSignupPage;
 // (search/filter/bulk/notes/WhatsApp exposures live inline, right after
 // each function above — see the PERMANENT SAFETY NET near the bottom of
 // this file, which would flag any missed one as "referenced in the DOM

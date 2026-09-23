@@ -1708,23 +1708,18 @@
       <h2><span class="pro-title-icon gold"><i class="business-icon" data-lucide="id-card"></i></span><span>Distributor Applications</span><span class="badge badge-warn" id="distApplicationsPendingBadge" style="display:none;margin-left:6px;">0</span></h2>
       <p class="pro-subtitle gold">Since distributors buy on credit (Nayata), share this link so new applicants submit their details and ID card photo once — saved straight to your Supabase account, never kept on their phone or in this app's offline storage. Review, then approve or reject below.</p>
       <div class="field">
-        <label>Public Signup Link (share on WhatsApp)</label>
+        <label>Public Signup Link (share on WhatsApp) <span class="hint">(your ID is already built into this link — no setup needed)</span></label>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
           <span id="distSignupLinkText" style="font-size:.78rem;word-break:break-all;opacity:.85;">—</span>
           <button class="btn btn-sm" onclick="copyDistSignupLink()"><i class="business-icon icon-inline" data-lucide="copy" aria-hidden="true"></i> Copy</button>
         </div>
       </div>
       <div class="field">
-        <label>Your Owner ID <span class="hint">(paste into distributor-signup.html's TARGET_OWNER_ID once — one-time setup)</span></label>
+        <label>Your Owner ID <span class="hint">(only for support/troubleshooting — the link above already includes it)</span></label>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
           <span id="distSignupOwnerIdText" style="font-size:.78rem;word-break:break-all;opacity:.85;">—</span>
           <button class="btn btn-sm" onclick="copyDistSignupOwnerId()"><i class="business-icon icon-inline" data-lucide="copy" aria-hidden="true"></i> Copy</button>
         </div>
-      </div>
-      <div class="field">
-        <label>One-Click Setup <span class="hint">(easier — no file editing needed)</span></label>
-        <button class="btn btn-primary" id="distSignupDownloadBtn" onclick="downloadConfiguredSignupPage()" style="width:100%;"><i class="business-icon icon-inline" data-lucide="download" aria-hidden="true"></i> ⬇️ Download Ready-to-Use Signup Page</button>
-        <p class="pro-subtitle" style="margin-top:6px;font-size:.72rem;">This fetches your live distributor-signup.html and fills in your Owner ID automatically — just upload the downloaded file to GitHub, replacing the old one. No typing an ID anywhere.</p>
       </div>
 
       <div class="ds-owner-toolbar" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:14px;">

@@ -85,7 +85,7 @@
   <p class="ds-cta-line">👇 විනාඩි 2කින් පහත විස්තර සම්පූර්ණ කරලා, අදම ඔබේ දිනුම් ගමන ආරම්භ කරමු</p>
 
   <div id="setupWarning" class="ds-setup-warning" style="display:none;">
-    ⚠️ This signup page isn't configured yet. The shop owner needs to open <b>Manage Staff → Distributor Applications</b> in the app, copy their <b>Owner ID</b>, and paste it into <code>TARGET_OWNER_ID</code> at the top of <code>distributor-signup.html</code>.
+    ⚠️ This link is missing or has an invalid shop owner ID, so we don't know who to send this application to. Please use the exact link the shop owner shared with you (e.g. on WhatsApp) instead of typing this page's address by hand. If you're the shop owner: open <b>Manage Staff → Distributor Applications</b> in the app and use the <b>Copy</b> button next to <b>Public Signup Link</b> — that link already has your ID built in.
   </div>
 
   <hr class="ds-divider">
@@ -203,15 +203,24 @@
 // Same project as the main app (safe to reuse — protected by Row Level Security).
 const SUPABASE_URL = 'https://dztuyfiiyxllnvciunjv.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR6dHV5ZmlpeXhsbG52Y2l1bmp2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgwMDg3NjUsImV4cCI6MjEwMzU4NDc2NX0.NT5_fvlwZZr_MQMgerYaIZYHeeJ9l9SrConqcN50M84';
-// The shop owner's own Supabase auth User ID. Find it in the app under
-// Profile → Manage Staff → "Distributor Applications" (shown there with a
-// Copy button once this feature is live) — paste it here before sharing
-// this page's link with anyone.
-const TARGET_OWNER_ID = 'PASTE_YOUR_OWNER_USER_ID_HERE';
+// The shop owner's own Supabase auth User ID. No manual editing needed —
+// this page reads it straight from the link's ?owner=<uuid> query string.
+// That query string is added automatically by the app under
+// Manage Staff → Distributor Applications → "Public Signup Link" → Copy,
+// so every applicant who opens the shared link already carries the right
+// owner ID with them. FALLBACK_OWNER_ID is only used if someone opens this
+// page with no ?owner= param at all (e.g. a bookmarked/typed URL) — leave
+// it blank unless you specifically want one fixed default owner.
+const FALLBACK_OWNER_ID = '';
+const rawOwnerParam = new URLSearchParams(window.location.search).get('owner') || FALLBACK_OWNER_ID;
+// Basic UUID shape check — catches a truncated/mistyped link early instead
+// of silently sending applications to a broken owner_id.
+const isValidOwnerId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawOwnerParam);
+const TARGET_OWNER_ID = isValidOwnerId ? rawOwnerParam : '';
 
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-if (!TARGET_OWNER_ID || TARGET_OWNER_ID.indexOf('PASTE_') === 0) {
+if (!TARGET_OWNER_ID) {
   document.getElementById('setupWarning').style.display = 'block';
   document.getElementById('dsForm').style.display = 'none';
 }
