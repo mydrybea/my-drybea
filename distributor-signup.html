@@ -140,7 +140,7 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 // this page's link with anyone.
 const TARGET_OWNER_ID = 'PASTE_YOUR_OWNER_USER_ID_HERE';
 
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 if (!TARGET_OWNER_ID || TARGET_OWNER_ID.indexOf('PASTE_') === 0) {
   document.getElementById('setupWarning').style.display = 'block';
@@ -230,18 +230,18 @@ document.getElementById('dsForm').addEventListener('submit', async (e) => {
   let frontPath = null, backPath = null;
   try {
     frontPath = `${TARGET_OWNER_ID}/${appId}/front.jpg`;
-    const { error: fErr } = await supabase.storage.from('distributor-ids')
+    const { error: fErr } = await sb.storage.from('distributor-ids')
       .upload(frontPath, dsFrontBlob, { contentType: 'image/jpeg', upsert: false });
     if (fErr) throw fErr;
 
     if (dsBackBlob) {
       backPath = `${TARGET_OWNER_ID}/${appId}/back.jpg`;
-      const { error: bErr } = await supabase.storage.from('distributor-ids')
+      const { error: bErr } = await sb.storage.from('distributor-ids')
         .upload(backPath, dsBackBlob, { contentType: 'image/jpeg', upsert: false });
       if (bErr) throw bErr;
     }
 
-    const { error: insErr } = await supabase.from('distributor_applications').insert({
+    const { error: insErr } = await sb.from('distributor_applications').insert({
       id: appId,
       owner_id: TARGET_OWNER_ID,
       full_name: name,
@@ -265,8 +265,8 @@ document.getElementById('dsForm').addEventListener('submit', async (e) => {
   } catch (err) {
     console.error('Application submit error:', err);
     // Best-effort cleanup so a failed application doesn't leave an orphaned photo in storage.
-    if (frontPath) supabase.storage.from('distributor-ids').remove([frontPath]).catch(()=>{});
-    if (backPath) supabase.storage.from('distributor-ids').remove([backPath]).catch(()=>{});
+    if (frontPath) sb.storage.from('distributor-ids').remove([frontPath]).catch(()=>{});
+    if (backPath) sb.storage.from('distributor-ids').remove([backPath]).catch(()=>{});
     errEl.textContent = 'Could not submit: ' + (err.message || 'please try again.');
     errEl.style.display = 'block';
     btn.disabled = false; btn.textContent = '🚀 අයදුම් කරන්න — Apply Now';
