@@ -560,10 +560,13 @@ async function removeStaffMember(uid) {
 // (Nayata) and their personal data + ID card photo need to be on file first.
 // That page writes straight to Supabase (table + private storage bucket) —
 // nothing about the applicant, including their ID photos, is ever stored in
-// this app's own local/offline cache. Approving an applicant here only marks
-// their status; turning them into a real login account still uses the
-// existing "Add Team Member" box above (Supabase User ID + role), same as
-// staff/drivers, once they've created their own login and shared their ID.
+// this app's own local/offline cache. The applicant also creates their own
+// login (email + password) right there on the signup page, via Supabase
+// Auth's own signUp() — so their password is hashed by Supabase itself and
+// never seen by, or stored in, our own table or code. Approving an
+// application here automatically links that already-created account to this
+// business as a distributor (a normal profiles upsert, same as the existing
+// "Add Team Member" box above) — no separate account-creation step needed.
 //
 // ---- Run once in Supabase SQL editor before this panel will work ----
 // create table if not exists public.distributor_applications (
@@ -575,6 +578,8 @@ async function removeStaffMember(uid) {
 //   address text not null,
 //   shop_name text,
 //   applicant_note text,
+//   email text,
+//   auth_user_id uuid,
 //   id_photo_front_path text not null,
 //   id_photo_back_path text,
 //   status text not null default 'pending',
@@ -610,6 +615,11 @@ async function removeStaffMember(uid) {
 //     where owner_id = p_owner_id and nic_number = p_nic and status in ('pending','approved'));
 // $$;
 // grant execute on function public.check_duplicate_distributor_application(uuid, text) to anon, authenticated;
+//
+// ---- UPGRADE: run this once if your distributor_applications table already
+// existed before applicants could create a login on the signup page ----
+// alter table public.distributor_applications add column if not exists email text;
+// alter table public.distributor_applications add column if not exists auth_user_id uuid;
 
 let distributorApplicationsCache = [];
 let distAppFilterStatus = 'all';   // 'all' | 'pending' | 'approved' | 'rejected'
@@ -680,7 +690,7 @@ function renderDistributorApplications() {
   tbody.innerHTML = visible.map(a => `
     <tr>
       <td><input type="checkbox" class="dist-app-checkbox" ${distAppSelectedIds.has(a.id) ? 'checked' : ''} onchange="toggleDistAppSelected('${a.id}', this.checked)"></td>
-      <td><strong>${escapeHtmlSafe(a.full_name)}</strong>${a.shop_name ? '<br><span style="font-size:.72rem;opacity:.7;">' + escapeHtmlSafe(a.shop_name) + '</span>' : ''}${a.reviewer_note ? '<span class="dist-app-note-dot" title="You have a private note on this application"></span>' : ''}</td>
+      <td><strong>${escapeHtmlSafe(a.full_name)}</strong>${a.auth_user_id ? ' <span title="Login account ready" style="font-size:11px;">🔑</span>' : ''}${a.shop_name ? '<br><span style="font-size:.72rem;opacity:.7;">' + escapeHtmlSafe(a.shop_name) + '</span>' : ''}${a.reviewer_note ? '<span class="dist-app-note-dot" title="You have a private note on this application"></span>' : ''}</td>
       <td>${escapeHtmlSafe(a.nic_number)}</td>
       <td>${escapeHtmlSafe(a.phone)}</td>
       <td style="font-size:.78rem;">${a.created_at ? new Date(a.created_at).toLocaleDateString() : '—'}</td>
@@ -738,11 +748,38 @@ async function bulkDecideDistributorApplications(status) {
   const label = status === 'approved' ? 'approve' : 'reject';
   if (!confirm(`${label === 'approve' ? 'Approve' : 'Reject'} ${ids.length} selected application(s)?`)) return;
   try {
+    const appsBeingDecided = distributorApplicationsCache.filter(a => ids.includes(a.id));
     const { error } = await supabase.from('distributor_applications')
       .update({ status, reviewed_at: new Date().toISOString() })
       .in('id', ids).eq('owner_id', currentUser.id);
     if (error) throw error;
-    updateStatus(`✅ ${ids.length} application(s) marked ${status}`);
+
+    if (status === 'approved') {
+      // Activate every approved applicant's already-created login. Done
+      // quietly (no per-row alert) with one summary at the end, since this
+      // can be several at once.
+      let activated = 0, manual = 0, failed = 0;
+      for (const app of appsBeingDecided) {
+        if (!app.auth_user_id) { manual++; continue; }
+        try {
+          const { error: profErr } = await supabase.from('profiles').upsert({
+            id: app.auth_user_id, role: 'distributor', owner_id: currentUser.id, display_name: app.full_name || null
+          });
+          if (profErr) throw profErr;
+          activated++;
+        } catch (e) {
+          console.error('Bulk activate distributor login error:', e);
+          failed++;
+        }
+      }
+      let msg = `✅ ${ids.length} application(s) approved.`;
+      if (activated) msg += ` ${activated} distributor login(s) activated automatically.`;
+      if (manual) msg += ` ${manual} older application(s) need the manual "Add Team Member" step.`;
+      if (failed) msg += ` ⚠️ ${failed} login(s) could not be activated — open them individually to retry.`;
+      updateStatus(msg);
+    } else {
+      updateStatus(`✅ ${ids.length} application(s) marked ${status}`);
+    }
     distAppSelectedIds.clear();
     await loadDistributorApplications();
   } catch (e) {
@@ -762,6 +799,12 @@ async function viewDistributorApplication(id) {
   $('distAppViewShop').textContent = app.shop_name || '—';
   $('distAppViewNote').textContent = app.applicant_note || '—';
   $('distAppViewApplied').textContent = app.created_at ? new Date(app.created_at).toLocaleString() : '—';
+  const emailEl = $('distAppViewEmail');
+  if (emailEl) emailEl.textContent = app.email || '—';
+  const loginEl = $('distAppViewLogin');
+  if (loginEl) loginEl.innerHTML = app.auth_user_id
+    ? '<span class="badge badge-good">🔑 Ready — login created</span>'
+    : '<span class="badge badge-warn">Manual setup needed</span>';
   const statusEl = $('distAppViewStatusBadge');
   if (statusEl) {
     const badge = { pending: '<span class="badge badge-warn">Pending</span>', approved: '<span class="badge badge-good">Approved</span>', rejected: '<span class="badge badge-bad">Rejected</span>' };
@@ -818,7 +861,7 @@ function openWhatsAppForApplicant() {
   const digits = String(app.phone).replace(/\D/g, '').replace(/^0/, '94'); // Sri Lanka local -> international
   let msg;
   if (app.status === 'approved') {
-    msg = `Hi ${app.full_name}, your MY DRYBEA Product Distributor application has been approved! 🎉 Please create your login account and share your Supabase User ID with us so we can activate your distributor dashboard.`;
+    msg = `Hi ${app.full_name}, your MY DRYBEA Product Distributor application has been approved! 🎉 Your login is already active — just open the MY DRYBEA app and sign in with the email & password you used to apply.`;
   } else if (app.status === 'rejected') {
     msg = `Hi ${app.full_name}, thank you for applying to be a MY DRYBEA Product Distributor. Unfortunately we're unable to proceed with your application at this time.`;
   } else {
@@ -840,16 +883,42 @@ function closeDistApplicationViewModal() {
 async function decideDistributorApplication(id, status) {
   const label = status === 'approved' ? 'approve' : 'reject';
   if (!confirm(`Mark this application as ${status}?`)) return;
+  const app = distributorApplicationsCache.find(a => a.id === id);
   try {
     const { error } = await supabase.from('distributor_applications')
       .update({ status, reviewed_at: new Date().toISOString() }).eq('id', id).eq('owner_id', currentUser.id);
     if (error) throw error;
     if (status === 'approved') {
-      alert('✅ Marked approved. Ask them to create a login account, share their Supabase User ID with you, then add them above with role "Product Distributor". Tip: open the application again and tap WhatsApp to send them the invite message.');
+      await activateApprovedDistributor(app);
     }
     await loadDistributorApplications();
   } catch (e) {
     alert(`❌ Could not ${label}: ` + e.message);
+  }
+}
+
+// Links an approved applicant's already-created login (from the public
+// signup page's email/password step) to this business, the same way the
+// "Add Team Member" box above does — just automatic, since the applicant's
+// account ID is already on file. Falls back to the old manual instructions
+// for applications submitted before that signup-page step existed.
+async function activateApprovedDistributor(app) {
+  if (app && app.auth_user_id) {
+    try {
+      const { error: profErr } = await supabase.from('profiles').upsert({
+        id: app.auth_user_id,
+        role: 'distributor',
+        owner_id: currentUser.id,
+        display_name: app.full_name || null
+      });
+      if (profErr) throw profErr;
+      alert('✅ Approved! Their login is already active — they can open the MY DRYBEA app now and sign in with the email & password they used to apply.');
+    } catch (e) {
+      console.error('Activate distributor login error:', e);
+      alert('⚠️ Marked approved, but could not activate their login automatically: ' + e.message + '\n\nYou can still add them manually above with their Supabase User ID and role "Product Distributor".');
+    }
+  } else {
+    alert('✅ Marked approved. This application was submitted before login accounts were added to the signup form — ask them to create one, share their Supabase User ID with you, then add them above with role "Product Distributor".');
   }
 }
 

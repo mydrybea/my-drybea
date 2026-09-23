@@ -127,6 +127,32 @@
         <label>Shop / Business Name (optional)</label>
         <input type="text" id="dsShop" placeholder="If you run a shop">
       </div>
+
+      <hr class="ds-divider">
+      <p class="ds-cta-line" style="margin:0 0 12px;text-align:left;">🔐 Create your login (used to access the app once approved)</p>
+
+      <div class="field">
+        <label>Email *</label>
+        <input type="email" id="dsEmail" required placeholder="you@example.com" autocomplete="email">
+        <div class="ds-field-error" id="dsEmailErr">Please enter a valid email address.</div>
+      </div>
+      <div class="field">
+        <label>Password *</label>
+        <div style="position:relative;">
+          <input type="password" id="dsPassword" required placeholder="At least 6 characters" autocomplete="new-password" style="padding-right:56px;">
+          <button type="button" onclick="dsTogglePw('dsPassword',this)" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--text-muted);font-size:.7rem;font-weight:700;cursor:pointer;padding:4px 6px;">SHOW</button>
+        </div>
+        <div class="ds-field-error" id="dsPasswordErr">Password must be at least 6 characters.</div>
+      </div>
+      <div class="field">
+        <label>Confirm Password *</label>
+        <div style="position:relative;">
+          <input type="password" id="dsPasswordConfirm" required placeholder="Re-type your password" autocomplete="new-password" style="padding-right:56px;">
+          <button type="button" onclick="dsTogglePw('dsPasswordConfirm',this)" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--text-muted);font-size:.7rem;font-weight:700;cursor:pointer;padding:4px 6px;">SHOW</button>
+        </div>
+        <div class="ds-field-error" id="dsPasswordConfirmErr">Passwords don't match.</div>
+      </div>
+
       <div class="ds-nav-row">
         <button type="button" class="btn btn-primary ds-submit-gold" onclick="dsGoToStep(2)" style="width:100%;">Next: ID Photos →</button>
       </div>
@@ -191,6 +217,7 @@
     <div class="icon">✅</div>
     <h2>ස්තූතියි! අයදුම්පත සාර්ථකයි 🎉</h2>
     <p style="color:var(--text-muted);margin-top:8px;">ඔබේ අයදුම්පත ලැබී ඇත — business owner ඉක්මනින්ම සම්බන්ධ වේවි. ඔබේ දිනුම් ගමන ළඟදීම ආරම්භ කරමු!</p>
+    <p style="color:var(--text-muted);margin-top:8px;font-size:.8rem;">🔑 Your login is ready with the email &amp; password you just set. If you get a confirmation email, please tap the link in it — then once the owner approves you, just open the MY DRYBEA app and log in.</p>
     <button type="button" class="btn ds-share-btn" id="dsShareBtn" onclick="dsShareLink()">📲 Share this opportunity with a friend</button>
   </div>
 
@@ -262,6 +289,17 @@ function dsIsValidNic(v) {
 function dsIsValidPhone(v) {
   return /^0\d{9}$/.test(v.replace(/[\s-]/g, ''));
 }
+function dsIsValidEmail(v) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+}
+
+function dsTogglePw(id, btn) {
+  const input = document.getElementById(id);
+  const show = input.type === 'password';
+  input.type = show ? 'text' : 'password';
+  btn.textContent = show ? 'HIDE' : 'SHOW';
+}
+window.dsTogglePw = dsTogglePw;
 
 function dsValidateStep(step) {
   let ok = true;
@@ -270,15 +308,24 @@ function dsValidateStep(step) {
     const nic = document.getElementById('dsNic').value.trim();
     const phone = document.getElementById('dsPhone').value.trim();
     const address = document.getElementById('dsAddress').value.trim();
+    const email = document.getElementById('dsEmail').value.trim();
+    const password = document.getElementById('dsPassword').value;
+    const passwordConfirm = document.getElementById('dsPasswordConfirm').value;
     const nameOk = name.length >= 3;
     const nicOk = dsIsValidNic(nic);
     const phoneOk = dsIsValidPhone(phone);
     const addressOk = address.length >= 4;
+    const emailOk = dsIsValidEmail(email);
+    const passwordOk = password.length >= 6;
+    const passwordConfirmOk = passwordOk && password === passwordConfirm;
     dsShowFieldError('dsName', !nameOk);
     dsShowFieldError('dsNic', !nicOk);
     dsShowFieldError('dsPhone', !phoneOk);
     dsShowFieldError('dsAddress', !addressOk);
-    ok = nameOk && nicOk && phoneOk && addressOk;
+    dsShowFieldError('dsEmail', !emailOk);
+    dsShowFieldError('dsPassword', !passwordOk);
+    dsShowFieldError('dsPasswordConfirm', !passwordConfirmOk);
+    ok = nameOk && nicOk && phoneOk && addressOk && emailOk && passwordOk && passwordConfirmOk;
   } else if (step === 2) {
     const frontOk = !!dsFrontBlob;
     dsShowFieldError('dsFront', !frontOk);
@@ -293,10 +340,12 @@ function dsRenderReview() {
   const phone = document.getElementById('dsPhone').value.trim();
   const address = document.getElementById('dsAddress').value.trim();
   const shop = document.getElementById('dsShop').value.trim();
+  const email = document.getElementById('dsEmail').value.trim();
   const rows = [
     ['Name', name], ['NIC', nic], ['Phone', phone], ['Address', address],
   ];
   if (shop) rows.push(['Shop', shop]);
+  rows.push(['Email (login)', email]);
   const card = document.getElementById('dsReviewCard');
   card.innerHTML = rows.map(([k, v]) => `<div class="ds-review-row"><span class="k">${k}</span><span class="v">${dsEsc(v)}</span></div>`).join('')
     + `<div class="ds-review-photos">
@@ -395,9 +444,44 @@ document.getElementById('dsForm').addEventListener('submit', async (e) => {
   const address = document.getElementById('dsAddress').value.trim();
   const shop = document.getElementById('dsShop').value.trim();
   const note = document.getElementById('dsNote').value.trim();
+  const email = document.getElementById('dsEmail').value.trim();
+  const password = document.getElementById('dsPassword').value;
 
   const btn = document.getElementById('dsSubmitBtn');
-  btn.disabled = true; btn.textContent = 'Uploading…';
+  btn.disabled = true; btn.textContent = 'Creating your account…';
+
+  // ---- Step A: create (or recover) the applicant's own login account ----
+  // This uses Supabase Auth directly, so the password is hashed by Supabase
+  // and never touches our own table or code — we only ever handle the
+  // resulting account's ID, never the password itself, from this point on.
+  let authUserId = null;
+  try {
+    const { data: signUpData, error: signUpErr } = await sb.auth.signUp({ email, password });
+    if (signUpErr) {
+      if (/already registered|already exists|user already/i.test(signUpErr.message || '')) {
+        // Likely a retry after an earlier attempt's photo upload / save step
+        // failed partway through — the login account was already created
+        // then, so recover its ID instead of treating this as a hard error.
+        const { data: signInData, error: signInErr } = await sb.auth.signInWithPassword({ email, password });
+        if (signInErr) throw new Error('This email is already registered. If it\'s yours, go back and use the same password you used before, or apply again with a different email.');
+        authUserId = signInData.user?.id || null;
+      } else {
+        throw signUpErr;
+      }
+    } else {
+      authUserId = signUpData.user?.id || null;
+    }
+    if (!authUserId) throw new Error('Could not create your login account. Please try a different email.');
+  } catch (accErr) {
+    console.error('Account creation error:', accErr);
+    errEl.textContent = 'Could not create your login: ' + (accErr.message || 'please try again.');
+    errEl.style.display = 'block';
+    btn.disabled = false; btn.textContent = '🚀 අයදුම් කරන්න — Apply Now';
+    dsGoToStep(1);
+    return;
+  }
+
+  btn.textContent = 'Uploading…';
 
   const appId = (crypto.randomUUID && crypto.randomUUID()) ||
     'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
@@ -427,6 +511,8 @@ document.getElementById('dsForm').addEventListener('submit', async (e) => {
       address: address,
       shop_name: shop || null,
       applicant_note: note || null,
+      email: email,
+      auth_user_id: authUserId,
       id_photo_front_path: frontPath,
       id_photo_back_path: backPath,
       status: 'pending'
@@ -444,7 +530,10 @@ document.getElementById('dsForm').addEventListener('submit', async (e) => {
     // Best-effort cleanup so a failed application doesn't leave an orphaned photo in storage.
     if (frontPath) sb.storage.from('distributor-ids').remove([frontPath]).catch(()=>{});
     if (backPath) sb.storage.from('distributor-ids').remove([backPath]).catch(()=>{});
-    errEl.textContent = 'Could not submit: ' + (err.message || 'please try again.');
+    // Note: the login account itself (authUserId) is deliberately left in
+    // place even if this step fails — resubmitting will recover it via the
+    // sign-in fallback above instead of erroring as "already registered".
+    errEl.textContent = 'Could not submit: ' + (err.message || 'please try again.') + ' Your login was created — just try submitting again.';
     errEl.style.display = 'block';
     btn.disabled = false; btn.textContent = '🚀 අයදුම් කරන්න — Apply Now';
   }
