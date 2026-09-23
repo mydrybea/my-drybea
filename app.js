@@ -415,6 +415,8 @@ async function loadStaffList() {
       .order('created_at', { ascending: false });
     if (error) throw error;
     renderStaffList(data || []); staffListCache = data || []; if (typeof renderOwnerStaffPerformance === 'function') renderOwnerStaffPerformance();
+    renderDistSignupLinkBox();
+    loadDistributorApplications();
   } catch (e) {
     console.error('Load staff error:', e);
   }
@@ -551,6 +553,195 @@ async function removeStaffMember(uid) {
     }
   }
 }
+
+// ==================== DISTRIBUTOR SIGNUP APPLICATIONS (owner-only) ====================
+// Public prospective-distributor form lives in a separate, no-login page
+// (distributor-signup.html) since Product Distributors take stock on credit
+// (Nayata) and their personal data + ID card photo need to be on file first.
+// That page writes straight to Supabase (table + private storage bucket) —
+// nothing about the applicant, including their ID photos, is ever stored in
+// this app's own local/offline cache. Approving an applicant here only marks
+// their status; turning them into a real login account still uses the
+// existing "Add Team Member" box above (Supabase User ID + role), same as
+// staff/drivers, once they've created their own login and shared their ID.
+//
+// ---- Run once in Supabase SQL editor before this panel will work ----
+// create table if not exists public.distributor_applications (
+//   id uuid primary key default gen_random_uuid(),
+//   owner_id uuid not null references auth.users(id) on delete cascade,
+//   full_name text not null,
+//   nic_number text not null,
+//   phone text not null,
+//   address text not null,
+//   shop_name text,
+//   applicant_note text,
+//   id_photo_front_path text not null,
+//   id_photo_back_path text,
+//   status text not null default 'pending',
+//   reviewer_note text,
+//   created_at timestamptz not null default now(),
+//   reviewed_at timestamptz
+// );
+// alter table public.distributor_applications enable row level security;
+// create policy "Public can submit applications" on public.distributor_applications
+//   for insert to anon with check (true);
+// create policy "Owner can view own applications" on public.distributor_applications
+//   for select to authenticated using (owner_id::text = auth.uid()::text);
+// create policy "Owner can update own applications" on public.distributor_applications
+//   for update to authenticated using (owner_id::text = auth.uid()::text) with check (owner_id::text = auth.uid()::text);
+// create policy "Owner can delete own applications" on public.distributor_applications
+//   for delete to authenticated using (owner_id::text = auth.uid()::text);
+//
+// insert into storage.buckets (id, name, public) values ('distributor-ids','distributor-ids', false)
+//   on conflict (id) do nothing;
+// create policy "Public can upload distributor ID photos" on storage.objects
+//   for insert to anon with check (bucket_id = 'distributor-ids');
+// create policy "Owner can view own distributor ID photos" on storage.objects
+//   for select to authenticated using (bucket_id = 'distributor-ids' and (storage.foldername(name))[1] = auth.uid()::text);
+// create policy "Owner can delete own distributor ID photos" on storage.objects
+//   for delete to authenticated using (bucket_id = 'distributor-ids' and (storage.foldername(name))[1] = auth.uid()::text);
+
+let distributorApplicationsCache = [];
+
+async function loadDistributorApplications() {
+  if (userRole !== 'owner' || !currentUser) return;
+  try {
+    const { data, error } = await supabase.from('distributor_applications')
+      .select('*').eq('owner_id', currentUser.id).order('created_at', { ascending: false });
+    if (error) throw error;
+    distributorApplicationsCache = data || [];
+  } catch (e) {
+    console.warn('Load distributor applications:', e.message);
+    distributorApplicationsCache = [];
+  }
+  renderDistributorApplications();
+}
+
+function renderDistributorApplications() {
+  const tbody = $('distApplicationsBody');
+  if (!tbody) return;
+  const list = distributorApplicationsCache;
+  const pendingCount = list.filter(a => a.status === 'pending').length;
+  const countBadge = $('distApplicationsPendingBadge');
+  if (countBadge) { countBadge.textContent = pendingCount; countBadge.style.display = pendingCount ? 'inline-block' : 'none'; }
+  if (!list.length) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;opacity:.5;padding:14px;">No applications yet — share the signup link above.</td></tr>';
+    return;
+  }
+  const statusBadge = { pending: '<span class="badge badge-warn">Pending</span>', approved: '<span class="badge badge-good">Approved</span>', rejected: '<span class="badge badge-bad">Rejected</span>' };
+  tbody.innerHTML = list.map(a => `
+    <tr>
+      <td><strong>${escapeHtmlSafe(a.full_name)}</strong>${a.shop_name ? '<br><span style="font-size:.72rem;opacity:.7;">' + escapeHtmlSafe(a.shop_name) + '</span>' : ''}</td>
+      <td>${escapeHtmlSafe(a.nic_number)}</td>
+      <td>${escapeHtmlSafe(a.phone)}</td>
+      <td style="font-size:.78rem;">${a.created_at ? new Date(a.created_at).toLocaleDateString() : '—'}</td>
+      <td>${statusBadge[a.status] || a.status}</td>
+      <td>
+        <button class="btn btn-sm" aria-label="View ID" onclick="viewDistributorApplication('${a.id}')"><i class="business-icon" data-lucide="eye" aria-hidden="true"></i></button>
+        ${a.status === 'pending' ? `<button class="btn btn-sm btn-primary" aria-label="Approve" onclick="decideDistributorApplication('${a.id}','approved')"><i class="business-icon" data-lucide="check" aria-hidden="true"></i></button>
+        <button class="btn btn-sm btn-danger" aria-label="Reject" onclick="decideDistributorApplication('${a.id}','rejected')"><i class="business-icon" data-lucide="x" aria-hidden="true"></i></button>` : ''}
+        <button class="btn btn-sm btn-danger" aria-label="Delete" onclick="deleteDistributorApplication('${a.id}')"><i class="business-icon" data-lucide="trash-2" aria-hidden="true"></i></button>
+      </td>
+    </tr>
+  `).join('');
+  if (window.lucide) lucide.createIcons({ attrs: { 'stroke-width': 1.9 } });
+}
+
+async function viewDistributorApplication(id) {
+  const app = distributorApplicationsCache.find(a => a.id === id);
+  if (!app) return;
+  $('distAppViewName').textContent = app.full_name;
+  $('distAppViewNic').textContent = app.nic_number;
+  $('distAppViewPhone').textContent = app.phone;
+  $('distAppViewAddress').textContent = app.address || '—';
+  $('distAppViewShop').textContent = app.shop_name || '—';
+  $('distAppViewNote').textContent = app.applicant_note || '—';
+  const frontImg = $('distAppViewFront'), backImg = $('distAppViewBack');
+  frontImg.src = ''; backImg.style.display = 'none'; backImg.src = '';
+  frontImg.alt = 'Loading…';
+  $('distApplicationViewModal').classList.add('active');
+  try {
+    if (app.id_photo_front_path) {
+      const { data, error } = await supabase.storage.from('distributor-ids').createSignedUrl(app.id_photo_front_path, 300);
+      if (error) throw error;
+      frontImg.src = data.signedUrl;
+    }
+    if (app.id_photo_back_path) {
+      const { data: bd, error: be } = await supabase.storage.from('distributor-ids').createSignedUrl(app.id_photo_back_path, 300);
+      if (!be) { backImg.src = bd.signedUrl; backImg.style.display = 'block'; }
+    }
+  } catch (e) {
+    console.error('Load ID photo error:', e);
+    frontImg.alt = 'Could not load photo';
+  }
+}
+
+function closeDistApplicationViewModal() {
+  $('distApplicationViewModal').classList.remove('active');
+  // Drop the signed-URL image references now that the modal is closed —
+  // nothing about the photo is kept in app state either way.
+  $('distAppViewFront').src = '';
+  $('distAppViewBack').src = '';
+}
+
+async function decideDistributorApplication(id, status) {
+  const label = status === 'approved' ? 'approve' : 'reject';
+  if (!confirm(`Mark this application as ${status}?`)) return;
+  try {
+    const { error } = await supabase.from('distributor_applications')
+      .update({ status, reviewed_at: new Date().toISOString() }).eq('id', id).eq('owner_id', currentUser.id);
+    if (error) throw error;
+    if (status === 'approved') {
+      alert('✅ Marked approved. Ask them to create a login account, share their Supabase User ID with you, then add them above with role "Product Distributor".');
+    }
+    await loadDistributorApplications();
+  } catch (e) {
+    alert(`❌ Could not ${label}: ` + e.message);
+  }
+}
+
+async function deleteDistributorApplication(id) {
+  const app = distributorApplicationsCache.find(a => a.id === id);
+  if (!confirm('Delete this application permanently? This also removes their stored ID photos.')) return;
+  try {
+    const paths = [app?.id_photo_front_path, app?.id_photo_back_path].filter(Boolean);
+    if (paths.length) await supabase.storage.from('distributor-ids').remove(paths);
+    const { error } = await supabase.from('distributor_applications').delete().eq('id', id).eq('owner_id', currentUser.id);
+    if (error) throw error;
+    await loadDistributorApplications();
+    updateStatus('🗑️ Application deleted');
+  } catch (e) {
+    alert('❌ Could not delete: ' + e.message);
+  }
+}
+
+function renderDistSignupLinkBox() {
+  const linkEl = $('distSignupLinkText');
+  const ownerEl = $('distSignupOwnerIdText');
+  if (linkEl) linkEl.textContent = new URL('./distributor-signup.html', window.location.href).href;
+  if (ownerEl) ownerEl.textContent = currentUser ? currentUser.id : '—';
+}
+
+async function copyDistSignupLink() {
+  const el = $('distSignupLinkText');
+  if (!el) return;
+  try { await navigator.clipboard.writeText(el.textContent); updateStatus('🔗 Signup link copied'); }
+  catch (e) { prompt('Copy this link:', el.textContent); }
+}
+
+async function copyDistSignupOwnerId() {
+  const el = $('distSignupOwnerIdText');
+  if (!el) return;
+  try { await navigator.clipboard.writeText(el.textContent); updateStatus('🆔 Owner ID copied'); }
+  catch (e) { prompt('Copy this Owner ID:', el.textContent); }
+}
+
+window.viewDistributorApplication = viewDistributorApplication;
+window.closeDistApplicationViewModal = closeDistApplicationViewModal;
+window.decideDistributorApplication = decideDistributorApplication;
+window.deleteDistributorApplication = deleteDistributorApplication;
+window.copyDistSignupLink = copyDistSignupLink;
+window.copyDistSignupOwnerId = copyDistSignupOwnerId;
 
 // ==================== STAFF SALARY (owner-only) ====================
 let staffListCache = [];

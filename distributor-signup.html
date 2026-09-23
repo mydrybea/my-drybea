@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Become a Product Distributor — MY DRYBEA</title>
+<link rel="icon" href="./icon-192.png">
+<link rel="stylesheet" href="./style.css">
+<style>
+  .ds-wrap{max-width:560px;margin:0 auto;padding:20px 14px 48px;}
+  .ds-header{text-align:center;padding:22px 0 14px;}
+  .ds-header img{width:64px;height:64px;border-radius:16px;object-fit:cover;box-shadow:var(--shadow-sm);}
+  .ds-header h1{font-family:var(--font-display);font-size:1.35rem;margin-top:10px;}
+  .ds-header p{color:var(--text-muted);font-size:.85rem;margin-top:4px;}
+  .ds-upload{border:1.5px dashed var(--border-strong);border-radius:var(--radius-sm);padding:14px;text-align:center;cursor:pointer;transition:var(--transition);background:var(--bg-elevated);}
+  .ds-upload:hover{background:var(--bg-card-hover);}
+  .ds-upload input{display:none;}
+  .ds-preview{margin-top:10px;max-width:100%;max-height:180px;border-radius:var(--radius-sm);display:none;object-fit:cover;}
+  .ds-filename{font-size:.72rem;color:var(--text-muted);margin-top:6px;word-break:break-all;}
+  .ds-success{text-align:center;padding:40px 10px;}
+  .ds-success .icon{width:64px;height:64px;border-radius:50%;background:var(--green-subtle);color:var(--green);display:flex;align-items:center;justify-content:center;margin:0 auto 16px;font-size:32px;}
+  .ds-setup-warning{background:var(--bad-bg);color:var(--bad);border-radius:var(--radius-sm);padding:16px;margin:20px 0;font-size:.85rem;line-height:1.6;}
+</style>
+</head>
+<body>
+<div class="ds-wrap">
+  <div class="ds-header">
+    <img src="./icon-192.png" alt="MY DRYBEA" onerror="this.style.display='none'">
+    <h1>Become a Product Distributor</h1>
+    <p>Apply to sell MY DRYBEA products on credit (Nayata). We keep your ID on file for verification — fill this once, we review and contact you.</p>
+  </div>
+
+  <div id="setupWarning" class="ds-setup-warning" style="display:none;">
+    ⚠️ This signup page isn't configured yet. The shop owner needs to open <b>Manage Staff → Distributor Applications</b> in the app, copy their <b>Owner ID</b>, and paste it into <code>TARGET_OWNER_ID</code> at the top of <code>distributor-signup.html</code>.
+  </div>
+
+  <form id="dsForm" class="card" style="margin-top:6px;">
+    <div class="field">
+      <label>Full Name *</label>
+      <input type="text" id="dsName" required placeholder="As on your ID card">
+    </div>
+    <div class="field">
+      <label>NIC / ID Number *</label>
+      <input type="text" id="dsNic" required placeholder="e.g. 991234567V">
+    </div>
+    <div class="field">
+      <label>Phone Number *</label>
+      <input type="tel" id="dsPhone" required placeholder="07XXXXXXXX">
+    </div>
+    <div class="field">
+      <label>Address *</label>
+      <input type="text" id="dsAddress" required placeholder="Home / shop address">
+    </div>
+    <div class="field">
+      <label>Shop / Business Name (optional)</label>
+      <input type="text" id="dsShop" placeholder="If you run a shop">
+    </div>
+
+    <div class="field">
+      <label>ID Card — Front Photo *</label>
+      <label class="ds-upload" id="dsFrontLabel">
+        <span id="dsFrontText">📷 Tap to take / choose photo</span>
+        <input type="file" id="dsFrontFile" accept="image/*" capture="environment" required>
+      </label>
+      <img id="dsFrontPreview" class="ds-preview">
+      <div class="ds-filename" id="dsFrontName"></div>
+    </div>
+
+    <div class="field">
+      <label>ID Card — Back Photo (recommended)</label>
+      <label class="ds-upload" id="dsBackLabel">
+        <span id="dsBackText">📷 Tap to take / choose photo</span>
+        <input type="file" id="dsBackFile" accept="image/*" capture="environment">
+      </label>
+      <img id="dsBackPreview" class="ds-preview">
+      <div class="ds-filename" id="dsBackName"></div>
+    </div>
+
+    <div class="field">
+      <label>Message to Owner (optional)</label>
+      <textarea id="dsNote" rows="2" placeholder="Anything you'd like the owner to know"></textarea>
+    </div>
+
+    <div class="notice" style="font-size:.72rem;">
+      <i class="business-icon icon-inline" data-lucide="shield-check"></i>
+      Your photos are uploaded straight to our secure storage and are only ever visible to the shop owner — they are never kept on this device or in this app's offline cache.
+    </div>
+
+    <div id="dsError" style="display:none;color:var(--bad);font-size:.82rem;margin-top:8px;"></div>
+
+    <div class="btn-row" style="margin-top:14px;">
+      <button type="submit" class="btn btn-primary" id="dsSubmitBtn" style="width:100%;">Submit Application</button>
+    </div>
+  </form>
+
+  <div id="dsSuccess" class="ds-success card" style="display:none;">
+    <div class="icon">✅</div>
+    <h2>Application Submitted</h2>
+    <p style="color:var(--text-muted);margin-top:8px;">Thank you! The shop owner will review your details and contact you soon.</p>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+// ==================== CONFIG ====================
+// Same project as the main app (safe to reuse — protected by Row Level Security).
+const SUPABASE_URL = 'https://dztuyfiiyxllnvciunjv.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR6dHV5ZmlpeXhsbG52Y2l1bmp2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgwMDg3NjUsImV4cCI6MjEwMzU4NDc2NX0.NT5_fvlwZZr_MQMgerYaIZYHeeJ9l9SrConqcN50M84';
+// The shop owner's own Supabase auth User ID. Find it in the app under
+// Profile → Manage Staff → "Distributor Applications" (shown there with a
+// Copy button once this feature is live) — paste it here before sharing
+// this page's link with anyone.
+const TARGET_OWNER_ID = 'PASTE_YOUR_OWNER_USER_ID_HERE';
+
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+if (!TARGET_OWNER_ID || TARGET_OWNER_ID.indexOf('PASTE_') === 0) {
+  document.getElementById('setupWarning').style.display = 'block';
+  document.getElementById('dsForm').style.display = 'none';
+}
+
+// ==================== FILE PREVIEW / COMPRESSION ====================
+// Photos are resized+compressed in this browser tab only (never written to
+// localStorage, IndexedDB, or the app's offline cache) and the compressed
+// blob is discarded the moment the upload finishes.
+let dsFrontBlob = null, dsBackBlob = null;
+
+async function compressImage(file, maxDim = 1600, quality = 0.82) {
+  const bitmap = await createImageBitmap(file);
+  const scale = Math.min(1, maxDim / Math.max(bitmap.width, bitmap.height));
+  const w = Math.round(bitmap.width * scale), h = Math.round(bitmap.height * scale);
+  const canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  canvas.getContext('2d').drawImage(bitmap, 0, 0, w, h);
+  bitmap.close && bitmap.close();
+  return await new Promise(res => canvas.toBlob(res, 'image/jpeg', quality));
+}
+
+function wireUpload(fileInputId, previewId, nameId, textId, setBlob) {
+  const input = document.getElementById(fileInputId);
+  input.addEventListener('change', async () => {
+    const file = input.files[0];
+    if (!file) return;
+    if (file.size > 15 * 1024 * 1024) {
+      alert('That photo is too large (max 15MB). Please choose a smaller one.');
+      input.value = '';
+      return;
+    }
+    document.getElementById(textId).textContent = 'Processing photo…';
+    try {
+      const blob = await compressImage(file);
+      setBlob(blob);
+      const url = URL.createObjectURL(blob);
+      const img = document.getElementById(previewId);
+      img.src = url;
+      img.style.display = 'block';
+      img.onload = () => URL.revokeObjectURL(url); // free memory once painted
+      document.getElementById(nameId).textContent = `${file.name} — ${(blob.size/1024).toFixed(0)} KB (compressed)`;
+      document.getElementById(textId).textContent = '📷 Photo selected — tap to change';
+    } catch (e) {
+      console.error('Compress error:', e);
+      setBlob(file); // fall back to the original file untouched
+      document.getElementById(textId).textContent = '📷 Photo selected — tap to change';
+    }
+  });
+}
+wireUpload('dsFrontFile', 'dsFrontPreview', 'dsFrontName', 'dsFrontText', b => dsFrontBlob = b);
+wireUpload('dsBackFile', 'dsBackPreview', 'dsBackName', 'dsBackText', b => dsBackBlob = b);
+
+// ==================== SUBMIT ====================
+document.getElementById('dsForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const errEl = document.getElementById('dsError');
+  errEl.style.display = 'none';
+
+  const name = document.getElementById('dsName').value.trim();
+  const nic = document.getElementById('dsNic').value.trim();
+  const phone = document.getElementById('dsPhone').value.trim();
+  const address = document.getElementById('dsAddress').value.trim();
+  const shop = document.getElementById('dsShop').value.trim();
+  const note = document.getElementById('dsNote').value.trim();
+
+  if (!name || !nic || !phone || !address) {
+    errEl.textContent = 'Please fill all required (*) fields.';
+    errEl.style.display = 'block';
+    return;
+  }
+  if (!dsFrontBlob) {
+    errEl.textContent = 'Please add a photo of the front of your ID card.';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  const btn = document.getElementById('dsSubmitBtn');
+  btn.disabled = true; btn.textContent = 'Uploading…';
+
+  const appId = (crypto.randomUUID && crypto.randomUUID()) ||
+    'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+      const r = Math.random()*16|0, v = c==='x'?r:(r&0x3|0x8); return v.toString(16);
+    });
+
+  let frontPath = null, backPath = null;
+  try {
+    frontPath = `${TARGET_OWNER_ID}/${appId}/front.jpg`;
+    const { error: fErr } = await supabase.storage.from('distributor-ids')
+      .upload(frontPath, dsFrontBlob, { contentType: 'image/jpeg', upsert: false });
+    if (fErr) throw fErr;
+
+    if (dsBackBlob) {
+      backPath = `${TARGET_OWNER_ID}/${appId}/back.jpg`;
+      const { error: bErr } = await supabase.storage.from('distributor-ids')
+        .upload(backPath, dsBackBlob, { contentType: 'image/jpeg', upsert: false });
+      if (bErr) throw bErr;
+    }
+
+    const { error: insErr } = await supabase.from('distributor_applications').insert({
+      id: appId,
+      owner_id: TARGET_OWNER_ID,
+      full_name: name,
+      nic_number: nic,
+      phone: phone,
+      address: address,
+      shop_name: shop || null,
+      applicant_note: note || null,
+      id_photo_front_path: frontPath,
+      id_photo_back_path: backPath,
+      status: 'pending'
+    });
+    if (insErr) throw insErr;
+
+    // Discard everything from this tab's memory now that it's safely saved.
+    dsFrontBlob = null; dsBackBlob = null;
+    document.getElementById('dsFrontFile').value = '';
+    document.getElementById('dsBackFile').value = '';
+    document.getElementById('dsForm').style.display = 'none';
+    document.getElementById('dsSuccess').style.display = 'block';
+  } catch (err) {
+    console.error('Application submit error:', err);
+    // Best-effort cleanup so a failed application doesn't leave an orphaned photo in storage.
+    if (frontPath) supabase.storage.from('distributor-ids').remove([frontPath]).catch(()=>{});
+    if (backPath) supabase.storage.from('distributor-ids').remove([backPath]).catch(()=>{});
+    errEl.textContent = 'Could not submit: ' + (err.message || 'please try again.');
+    errEl.style.display = 'block';
+    btn.disabled = false; btn.textContent = 'Submit Application';
+  }
+});
+</script>
+</body>
+</html>

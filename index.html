@@ -1705,6 +1705,31 @@
     </div>
 
     <div class="card" data-owner-only style="margin-top:16px;">
+      <h2><span class="pro-title-icon gold"><i class="business-icon" data-lucide="id-card"></i></span><span>Distributor Applications</span><span class="badge badge-warn" id="distApplicationsPendingBadge" style="display:none;margin-left:6px;">0</span></h2>
+      <p class="pro-subtitle gold">Since distributors buy on credit (Nayata), share this link so new applicants submit their details and ID card photo once — saved straight to your Supabase account, never kept on their phone or in this app's offline storage. Review, then approve or reject below.</p>
+      <div class="field">
+        <label>Public Signup Link (share on WhatsApp)</label>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <span id="distSignupLinkText" style="font-size:.78rem;word-break:break-all;opacity:.85;">—</span>
+          <button class="btn btn-sm" onclick="copyDistSignupLink()"><i class="business-icon icon-inline" data-lucide="copy" aria-hidden="true"></i> Copy</button>
+        </div>
+      </div>
+      <div class="field">
+        <label>Your Owner ID <span class="hint">(paste into distributor-signup.html's TARGET_OWNER_ID once — one-time setup)</span></label>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <span id="distSignupOwnerIdText" style="font-size:.78rem;word-break:break-all;opacity:.85;">—</span>
+          <button class="btn btn-sm" onclick="copyDistSignupOwnerId()"><i class="business-icon icon-inline" data-lucide="copy" aria-hidden="true"></i> Copy</button>
+        </div>
+      </div>
+      <div class="table-wrap" style="margin-top:10px;">
+        <table>
+          <thead><tr><th>Applicant</th><th>NIC</th><th>Phone</th><th>Applied</th><th>Status</th><th>Actions</th></tr></thead>
+          <tbody id="distApplicationsBody"><tr><td colspan="6" style="text-align:center;opacity:.5;padding:14px;">No applications yet.</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card" data-owner-only style="margin-top:16px;">
       <h2><span class="pro-title-icon gold"><i class="business-icon" data-lucide="store"></i></span><span>Product Distributors</span></h2>
       <p class="pro-subtitle gold">Product Agents earn a <strong>6%–12%</strong> commission on orders you attribute to them. The rate is calculated automatically from their Marketing Level (total sales volume), Business Quality (average order size) and this order's value — pick a distributor in the Orders → New Order screen to add it.</p>
       <div class="table-wrap" style="margin-top:10px;">
@@ -3300,6 +3325,31 @@
       <div class="btn-row no-print" style="margin-top:14px;">
         <button class="btn btn-primary" onclick="window.print()"><i class="business-icon icon-inline" data-lucide="printer" aria-hidden="true"></i> Print Bill</button>
         <button class="btn" onclick="closeModal('fishBillViewModal')">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Distributor Application View Modal -->
+  <div class="modal-backdrop" id="distApplicationViewModal">
+    <div class="modal" style="max-width:520px;">
+      <h3><span class="pro-title-icon gold" aria-hidden="true"><i class="business-icon" data-lucide="id-card" aria-hidden="true"></i></span><span>Distributor Application</span></h3>
+      <p class="pro-subtitle gold">ID photos are fetched fresh on a temporary secure link and are not stored anywhere in this app.</p>
+      <div class="field"><label>Name</label><div id="distAppViewName">—</div></div>
+      <div class="field"><label>NIC / ID Number</label><div id="distAppViewNic">—</div></div>
+      <div class="field"><label>Phone</label><div id="distAppViewPhone">—</div></div>
+      <div class="field"><label>Address</label><div id="distAppViewAddress">—</div></div>
+      <div class="field"><label>Shop / Business</label><div id="distAppViewShop">—</div></div>
+      <div class="field"><label>Message</label><div id="distAppViewNote">—</div></div>
+      <div class="field">
+        <label>ID Card — Front</label>
+        <img id="distAppViewFront" style="max-width:100%;border-radius:var(--radius-sm);display:block;" alt="Loading…">
+      </div>
+      <div class="field">
+        <label>ID Card — Back</label>
+        <img id="distAppViewBack" style="max-width:100%;border-radius:var(--radius-sm);display:none;" alt="ID back">
+      </div>
+      <div class="btn-row">
+        <button class="btn" onclick="closeDistApplicationViewModal()">Close</button>
       </div>
     </div>
   </div>
