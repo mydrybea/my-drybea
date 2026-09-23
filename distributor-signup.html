@@ -7,16 +7,24 @@
 <link rel="icon" href="./icon-192.png">
 <link rel="stylesheet" href="./style.css">
 <style>
-  .ds-wrap{max-width:560px;margin:0 auto;padding:20px 14px 48px;}
-  .ds-header{text-align:center;padding:22px 0 14px;}
-  .ds-header img{width:64px;height:64px;border-radius:16px;object-fit:cover;box-shadow:var(--shadow-sm);}
-  .ds-header h1{font-family:var(--font-display);font-size:1.35rem;margin-top:10px;}
-  .ds-header p{color:var(--text-muted);font-size:.85rem;margin-top:4px;}
+  .ds-wrap{max-width:600px;margin:0 auto;padding:20px 14px 48px;}
+  .ds-goldframe{padding:3px;border-radius:22px;background:linear-gradient(135deg,var(--gold-light),var(--gold) 45%,var(--gold-dark));box-shadow:0 0 40px var(--gold-glow),var(--shadow-lg);}
+  .ds-goldframe-inner{background:var(--bg-card);border-radius:19px;padding:24px 16px 30px;}
+  .ds-header{text-align:center;padding:4px 0 6px;}
+  .ds-logo-ring{width:92px;height:92px;border-radius:50%;margin:0 auto;padding:4px;background:linear-gradient(135deg,var(--gold-light),var(--gold),var(--gold-dark));box-shadow:0 0 26px var(--gold-glow);}
+  .ds-logo-ring img{width:100%;height:100%;border-radius:50%;object-fit:cover;display:block;background:var(--bg-card);}
+  .ds-eyebrow-gold{display:block;color:var(--gold);font-size:.72rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;margin-top:12px;}
+  .ds-header h1{font-family:var(--font-display);font-size:1.5rem;margin-top:6px;}
+  .ds-tagline{color:var(--text-secondary);font-size:.85rem;margin-top:8px;line-height:1.7;}
+  .ds-cta-line{text-align:center;color:var(--gold);font-weight:800;font-size:.85rem;margin:20px 0 10px;letter-spacing:.02em;}
+  .ds-divider{border:none;border-top:1px solid var(--border);margin:18px 0;}
   .ds-upload{border:1.5px dashed var(--border-strong);border-radius:var(--radius-sm);padding:14px;text-align:center;cursor:pointer;transition:var(--transition);background:var(--bg-elevated);}
   .ds-upload:hover{background:var(--bg-card-hover);}
   .ds-upload input{display:none;}
   .ds-preview{margin-top:10px;max-width:100%;max-height:180px;border-radius:var(--radius-sm);display:none;object-fit:cover;}
   .ds-filename{font-size:.72rem;color:var(--text-muted);margin-top:6px;word-break:break-all;}
+  .ds-submit-gold{background:linear-gradient(135deg,var(--gold-light),var(--gold) 55%,var(--gold-dark))!important;color:#1a1305!important;border:none!important;font-weight:800!important;font-size:.95rem!important;box-shadow:0 8px 24px var(--gold-glow)!important;padding:14px!important;}
+  .ds-trust-line{text-align:center;font-size:.7rem;color:var(--text-muted);margin-top:10px;}
   .ds-success{text-align:center;padding:40px 10px;}
   .ds-success .icon{width:64px;height:64px;border-radius:50%;background:var(--green-subtle);color:var(--green);display:flex;align-items:center;justify-content:center;margin:0 auto 16px;font-size:32px;}
   .ds-setup-warning{background:var(--bad-bg);color:var(--bad);border-radius:var(--radius-sm);padding:16px;margin:20px 0;font-size:.85rem;line-height:1.6;}
@@ -24,17 +32,34 @@
 </head>
 <body>
 <div class="ds-wrap">
+<div class="ds-goldframe"><div class="ds-goldframe-inner">
   <div class="ds-header">
-    <img src="./icon-192.png" alt="MY DRYBEA" onerror="this.style.display='none'">
-    <h1>Become a Product Distributor</h1>
-    <p>Apply to sell MY DRYBEA products on credit (Nayata). We keep your ID on file for verification — fill this once, we review and contact you.</p>
+    <div class="ds-logo-ring"><img src="./icon-192.png" alt="MY DRYBEA" onerror="this.style.display='none'"></div>
+    <span class="ds-eyebrow-gold">ඔබත් අපත් එකට 🤝 Join Our Distributor Family</span>
+    <h1>MY DRYBEA Product Distributor</h1>
+    <p class="ds-tagline">Umbalakada වෙළඳාමේ ලාභදායීම අවස්ථාව ඔබටත්! විශ්වාසනීය සන්නාමයක්, <b>Nayata (credit)</b> පහසුකම් සමඟ බඩු ලබාගෙන, ඔබේ ප්‍රදේශයේ order ගන්න ගන්න ඉපයීම වැඩි කරගන්න — අදම අයදුම් කරන්න!</p>
   </div>
+
+  <div class="commission-hero" style="margin-top:16px;">
+    <span class="eyebrow">ඇයි අප එක්ක Distribute කරන්නේ?</span>
+    <div class="commission-value" style="font-size:1.55rem;">6% – 12% Commission</div>
+    <div style="opacity:.8;font-size:.75rem;">වැඩිපුර විකුණනවනම්, වැඩිපුර උපයනවා — කිසිම සීමාවක් නැහැ</div>
+    <div class="commission-grid">
+      <div class="stat"><div class="k">Nayata</div><div class="v">Credit ✓</div></div>
+      <div class="stat"><div class="k">Brand</div><div class="v">Trusted ✓</div></div>
+      <div class="stat"><div class="k">Support</div><div class="v">Full ✓</div></div>
+    </div>
+  </div>
+
+  <p class="ds-cta-line">👇 විනාඩි 2කින් පහත විස්තර සම්පූර්ණ කරලා, අදම ඔබේ දිනුම් ගමන ආරම්භ කරමු</p>
 
   <div id="setupWarning" class="ds-setup-warning" style="display:none;">
     ⚠️ This signup page isn't configured yet. The shop owner needs to open <b>Manage Staff → Distributor Applications</b> in the app, copy their <b>Owner ID</b>, and paste it into <code>TARGET_OWNER_ID</code> at the top of <code>distributor-signup.html</code>.
   </div>
 
-  <form id="dsForm" class="card" style="margin-top:6px;">
+
+  <hr class="ds-divider">
+  <form id="dsForm" style="margin-top:6px;">
     <div class="field">
       <label>Full Name *</label>
       <input type="text" id="dsName" required placeholder="As on your ID card">
@@ -89,15 +114,18 @@
     <div id="dsError" style="display:none;color:var(--bad);font-size:.82rem;margin-top:8px;"></div>
 
     <div class="btn-row" style="margin-top:14px;">
-      <button type="submit" class="btn btn-primary" id="dsSubmitBtn" style="width:100%;">Submit Application</button>
+      <button type="submit" class="btn ds-submit-gold" id="dsSubmitBtn" style="width:100%;">🚀 අයදුම් කරන්න — Apply Now</button>
     </div>
+    <p class="ds-trust-line">🔒 ඔබේ තොරතුරු සුරක්ෂිතයි — කේවලම business owner ට pahala. Nayata පහසුකම් සමඟ අදම ඔබේ order ගමන පටන් ගන්න!</p>
   </form>
 
-  <div id="dsSuccess" class="ds-success card" style="display:none;">
+  <div id="dsSuccess" class="ds-success" style="display:none;">
     <div class="icon">✅</div>
-    <h2>Application Submitted</h2>
-    <p style="color:var(--text-muted);margin-top:8px;">Thank you! The shop owner will review your details and contact you soon.</p>
+    <h2>ස්තූතියි! අයදුම්පත සාර්ථකයි 🎉</h2>
+    <p style="color:var(--text-muted);margin-top:8px;">ඔබේ අයදුම්පත ලැබී ඇත — business owner ඉක්මනින්ම සම්බන්ධ වේවි. ඔබේ දිනුම් ගමන ළඟදීම ආරම්භ කරමු!</p>
   </div>
+
+</div></div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -241,7 +269,7 @@ document.getElementById('dsForm').addEventListener('submit', async (e) => {
     if (backPath) supabase.storage.from('distributor-ids').remove([backPath]).catch(()=>{});
     errEl.textContent = 'Could not submit: ' + (err.message || 'please try again.');
     errEl.style.display = 'block';
-    btn.disabled = false; btn.textContent = 'Submit Application';
+    btn.disabled = false; btn.textContent = '🚀 අයදුම් කරන්න — Apply Now';
   }
 });
 </script>
