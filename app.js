@@ -17880,11 +17880,11 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 
-async function verifyCommissionClaim(id,status){
+async function verifyCommissionClaim(id,status,skipConfirm){
   if(userRole!=='owner') { alert('Only the owner can verify a commission claim.'); return; }
   if(!id || !['approved','rejected'].includes(status)) { alert('Invalid commission action.'); return; }
   const note=status==='approved'?'Approved after owner verification':'Rejected by owner';
-  if(!confirm(status==='approved'?'Verify this sale and add 12% commission on its PROFIT?\n\n(Profit = selling price − product cost price.)':'Reject this commission claim?')) return;
+  if(!skipConfirm && !confirm(status==='approved'?'Verify this sale and add 12% commission on its PROFIT?\n\n(Profit = selling price − product cost price.)':'Reject this commission claim?')) return;
   const btn=document.querySelector(`button[onclick="verifyCommissionClaim('${id}','${status}')"]`);
   if(btn){ btn.disabled=true; btn.dataset.originalText=btn.textContent; btn.textContent=status==='approved'?'Verifying…':'Rejecting…'; }
   if(!(await ensureFreshSession()))return;try{
@@ -17899,13 +17899,92 @@ async function verifyCommissionClaim(id,status){
     updateStatus(status==='approved'?('✅ Approved · '+(data?('Rs. '+fmt(Number(data.commission_amount)||0)+' '):'')+'commission (12% of profit) added · LIVE SYNC'):'❌ Rejected · LIVE SYNC');
   }catch(e){
     console.error('Commission verification failed:',e);
-    alert('❌ Approve / Reject failed:\n'+(e?.message||String(e)));
+    const _msg=(e?.message||String(e));
+    if(status==='approved' && /no catalog product linked/i.test(_msg)){
+      // The sale was saved without a catalog product, so profit can't be worked out.
+      // Instead of a dead-end error, let the owner link the right product and retry.
+      const linked=await promptLinkProductForClaim(id);
+      if(linked){ setTimeout(()=>verifyCommissionClaim(id,status,true),0); }
+    } else {
+      alert('❌ Approve / Reject failed:\n'+_msg);
+    }
     try{ await loadCommissionClaims(); }catch(_e){}
   }finally{
     const b=document.querySelector(`button[onclick="verifyCommissionClaim('${id}','${status}')"]`);
     if(b){b.disabled=false;b.textContent=b.dataset.originalText || (status==='approved'?'Approve':'Reject');}
   }
 }
+// ---- Link a catalog product to a staff sale that was saved without one ----
+// verify_staff_commission_claim() needs orders.product_id/items (to look up the
+// product's cost price) before it can compute 12% of PROFIT. Staff sales made
+// without picking a catalog product (or whose stock step failed) had none, so the
+// owner could only Reject. This lets the owner pick the product, sets its cost if
+// missing, stamps the order, then the caller retries the approval automatically.
+function promptLinkProductForClaim(claimId){
+  return new Promise(async (resolve)=>{
+    const claim=(window.staffCommissionClaims||[]).find(c=>String(c.id)===String(claimId));
+    const order=(orders||[]).find(o=>String(o.id)===String(claim?.order_id));
+    if(!claim||!order){ alert('Could not find the order for this claim. Refresh and try again.'); return resolve(false); }
+    try{ await loadProductCosts(); }catch(_e){}
+    const qty=Number(order.qty)||1, unit=Number(order.unitPrice)||0, sizeG=Number(order.product)||0;
+    const list=(products||[]).slice().sort((a,b)=>String(a.name).localeCompare(String(b.name)));
+    if(!list.length){ alert('No products in the Product Catalog yet. Add the product first (Products tab), then approve.'); return resolve(false); }
+    const ov=document.createElement('div');
+    ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;';
+    ov.innerHTML=`<div style="background:var(--card-bg,#fff);color:var(--text,#111);max-width:440px;width:100%;border-radius:14px;padding:20px;box-shadow:0 10px 40px rgba(0,0,0,.35);font-size:14px;">
+      <h3 style="margin:0 0 6px;">Link product to this sale</h3>
+      <p style="margin:0 0 12px;opacity:.75;font-size:12.5px;">${escapeHtmlSafe(order.orderRefNo||order.id)} · ${escapeHtmlSafe(claim.customer_name||'')} · ${qty} × Rs. ${fmt(unit)} = Rs. ${fmt(qty*unit)}<br>Profit can only be calculated once a product (with a cost price) is linked.</p>
+      <label style="font-weight:600;font-size:12px;">Catalog product</label>
+      <select id="lkProd" style="width:100%;padding:9px;margin:4px 0 10px;border-radius:8px;border:1px solid #bbb;">
+        <option value="">-- Select product --</option>
+        ${list.map(p=>`<option value="${escapeHtmlSafe(p.id)}">${escapeHtmlSafe(p.name)}${getProductCost(p.id)===null?' (no cost set)':''}</option>`).join('')}
+      </select>
+      <label style="font-weight:600;font-size:12px;">Cost price per unit (Rs.)</label>
+      <input id="lkCost" type="number" min="0" step="0.01" placeholder="Cost price" style="width:100%;padding:9px;margin:4px 0 10px;border-radius:8px;border:1px solid #bbb;box-sizing:border-box;">
+      <label style="display:flex;gap:8px;align-items:center;font-size:12.5px;margin-bottom:14px;"><input id="lkStock" type="checkbox"> Also reduce this product's stock by ${qty}</label>
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button type="button" id="lkCancel" class="btn btn-sm">Cancel</button>
+        <button type="button" id="lkOk" class="btn btn-sm btn-primary">Link &amp; Approve</button>
+      </div></div>`;
+    document.body.appendChild(ov);
+    const $$=id=>ov.querySelector('#'+id);
+    const done=(v)=>{ ov.remove(); resolve(v); };
+    $$('lkProd').addEventListener('change',()=>{ const c=getProductCost($$('lkProd').value); $$('lkCost').value=(c===null?'':c); });
+    $$('lkCancel').addEventListener('click',()=>done(false));
+    $$('lkOk').addEventListener('click',async()=>{
+      const pid=$$('lkProd').value, cost=$$('lkCost').value==='' ? null : Number($$('lkCost').value);
+      if(!pid){ alert('Select a product.'); return; }
+      if(cost===null || !isFinite(cost) || cost<0){ alert('Enter the product cost price (per unit) so profit can be calculated.'); return; }
+      const prod=list.find(p=>String(p.id)===String(pid));
+      const okBtn=$$('lkOk'); okBtn.disabled=true; okBtn.textContent='Saving…';
+      try{
+        if(getProductCost(pid)!==cost){
+          const ce=await saveProductCost(pid,cost);
+          if(ce) throw new Error('Cost price not saved: '+ce);
+          window.productCostMap=window.productCostMap||{}; window.productCostMap[String(pid)]=cost;
+        }
+        const items=[{productId:pid,name:prod.name,sizeG,qty,unitPrice:unit,total:qty*unit}];
+        let {error}=await supabase.from('orders').update({product_id:pid,items}).eq('id',String(order.id));
+        if(error && /column|schema|does not exist/i.test(error.message||'')){
+          ({error}=await supabase.from('orders').update({product_id:pid}).eq('id',String(order.id)));
+        }
+        if(error) throw error;
+        order.productId=pid; order.items=items; try{saveOrders();}catch(_e){}
+        if($$('lkStock').checked){
+          try{ await applyStockMovement(pid,-qty,'order',`Staff order ${order.orderRefNo||order.id} (linked at approval)`); await loadProductsFromCloud(); renderProducts(); }
+          catch(se){ console.warn('Stock reduce failed',se); alert('Product linked, but stock could not be reduced: '+(se.message||se)); }
+        }
+        done(true);
+      }catch(err){
+        console.error('Link product failed',err);
+        alert('❌ Could not link product:\n'+(err.message||err));
+        okBtn.disabled=false; okBtn.textContent='Link & Approve';
+      }
+    });
+  });
+}
+window.promptLinkProductForClaim = promptLinkProductForClaim;
+
 // Explicitly expose on window so inline onclick="verifyCommissionClaim(...)" handlers
 // can never fail to find this function, regardless of load order or bundling.
 window.verifyCommissionClaim = verifyCommissionClaim;
