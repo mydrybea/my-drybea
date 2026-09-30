@@ -183,12 +183,33 @@
     if (q <= LOW_STOCK) return { key: 'low', cls: 'low', label: t('stock.low'), max: p.backorder ? Infinity : q, blocked: false };
     return { key: 'in', cls: 'in', label: t('stock.in'), max: p.backorder ? Infinity : q, blocked: false };
   }
+  // Finds the app Product (Products tab) whose name looks like this catalogue item,
+  // e.g. "Tuna Maldive Fish 100g" -> tuna + 100g. L-size must match L-size.
+  function matchAppProduct(p) {
+    const list = (G('products') || []).filter(x => x && x.imageUrl);
+    const fish = p.fish.toLowerCase(), isL = /l-?\s?size/i.test(p.pack + ' ' + p.name);
+    const bulk = p.kind === 'bulk';
+    const size = bulk ? '1kg' : ((p.pack.toLowerCase().match(/\d+\s?(kg|g)/) || [''])[0].replace(/\s/g, ''));
+    if (!size) return null;
+    const re = new RegExp('(^|[^0-9])' + size);
+    let best = null, bs = 0;
+    list.forEach(x => {
+      const n = String(x.name).toLowerCase(), nn = n.replace(/\s/g, '');
+      if (!n.includes(fish) || !re.test(nn)) return;
+      const xL = /l-?\s?size|large/.test(n);
+      if (bulk ? xL : xL !== isL) return;
+      const sc = 1 + (/maldive/.test(n) ? 1 : 0);
+      if (sc > bs) { bs = sc; best = x; }
+    });
+    return best;
+  }
   function productImage(p) {
     if (p.image) return p.image;
     const l = p.linked && (G('products') || []).find(x => String(x.id) === String(p.linked));
-    return (l && l.imageUrl) || '';
+    if (l && l.imageUrl) return l.imageUrl;
+    const m = matchAppProduct(p);
+    return (m && m.imageUrl) || '';
   }
-
   /* ------------------------------------------------------------- cart */
   const saveCart = () => lsSet(CART_KEY, S.cart); // ids + quantities only — never prices
   function addToCart(id, qty) {
@@ -409,7 +430,7 @@
   }
   function adminPrices() {
     return '<div class="ws-actions"><button class="ws-btn sm" data-act="pedit" data-t="">+ New product</button>' +
-      (S.dbReady ? '<button class="ws-btn sm ghost" data-act="seed">Save default prices to database</button>' : '') + '</div>' +
+      (S.dbReady ? '<button class="ws-btn sm ghost" data-act="seed">Save default prices to database</button><button class="ws-btn sm ghost" data-act="automatch">Auto-match photos from Products</button>' : '') + '</div>' +
       '<div class="ws-table"><table><thead><tr><th>Product</th><th>Pack</th><th class="r">Base</th><th class="r">Tiers</th><th>Stock link</th><th>Active</th><th></th></tr></thead><tbody>' +
       S.products.map(p => '<tr><td><b>' + esc(p.name) + '</b></td><td>' + esc(p.pack) + '</td><td class="r">' + fmt(basePrice(p)) + '</td><td class="r">' + (p.kind === 'bulk' ? 'fixed' : tiersFor(p).length) + '</td><td>' +
         (p.linked ? '✓' : '—') + '</td><td>' + (p.active ? 'Yes' : 'No') + '</td><td><button class="ws-btn sm ghost" data-act="pedit" data-t="' + p.id + '">Edit</button></td></tr>').join('') + '</tbody></table></div>';
@@ -485,17 +506,64 @@
     S.editing = p;
     const inv = (G('products') || []);
     const tr = (x, i) => '<div class="ws-trow"><input type="number" data-tf="min" data-i="' + i + '" value="' + x.min + '" placeholder="min"><input type="number" data-tf="max" data-i="' + i + '" value="' + (x.max == null ? '' : x.max) + '" placeholder="max (blank=∞)"><input type="number" data-tf="price" data-i="' + i + '" value="' + x.price + '" placeholder="Rs."><button data-act="trm" data-t="' + i + '">✕</button></div>';
+    const withImg = inv.filter(x => x.imageUrl);
+    const imgBlock = q => '<div class="ws-field"><label>Product photo (packaging is never altered — only resized)</label><div class="ws-imgpick">' +
+      '<img id="wsImgPrev" alt="" ' + (q.image ? 'src="' + esc(q.image) + '"' : 'style="visibility:hidden"') + '><div class="ws-imgctl">' +
+      '<label class="ws-btn sm">' + icon('upload') + ' Upload photo<input id="wsImgFile" type="file" accept="image/*" hidden></label>' +
+      '<select id="wsImgPick"><option value="">Use photo from Products tab…</option>' + withImg.map(x => '<option value="' + esc(x.imageUrl) + '">' + esc(x.name) + '</option>').join('') + '</select>' +
+      '<input data-pf="image" type="text" placeholder="…or paste image URL" value="' + esc(q.image || '') + '"></div></div></div>';
     const f = (k, label, val, type) => '<div class="ws-field"><label>' + label + '</label><input data-pf="' + k + '" type="' + (type || 'text') + '" value="' + esc(val == null ? '' : val) + '"></div>';
     modal('<h3>' + (id ? 'Edit product' : 'New product') + '</h3>' + f('name', 'Product name', p.name) + '<div class="ws-two">' + f('fish', 'Fish type', p.fish) + f('pack', 'Pack size', p.pack) + '</div>' +
       '<div class="ws-two">' + f('cat', 'Filter category (50g/100g/500g/1kg/L-SIZE/BULK)', p.cat) + f('min', 'Minimum quantity', p.min, 'number') + '</div>' +
       '<div class="ws-two">' + f('quoteFrom', 'Special business quote from qty (blank = never)', p.quoteFrom, 'number') + f('fixed', 'Fixed price per kg (bulk only)', p.fixed, 'number') + '</div>' +
-      f('image', 'Image URL (blank = use linked product photo)', p.image) +
+      imgBlock(p) +
       '<div class="ws-field"><label>Kind</label><select data-pf="kind"><option value="wholesale"' + (p.kind === 'wholesale' ? ' selected' : '') + '>Wholesale (tiers)</option><option value="bulk"' + (p.kind === 'bulk' ? ' selected' : '') + '>Bulk business (fixed / kg)</option></select></div>' +
       '<div class="ws-field"><label>Inventory link</label><select data-pf="linked"><option value="">— none (untracked) —</option>' + inv.map(x => '<option value="' + esc(x.id) + '"' + (String(p.linked) === String(x.id) ? ' selected' : '') + '>' + esc(x.name) + ' (stock ' + (x.stockQty || 0) + ')</option>').join('') + '</select></div>' +
       '<label class="ws-check"><input type="checkbox" data-pf="backorder"' + (p.backorder ? ' checked' : '') + '> Allow backorder when out of stock</label>' +
       '<label class="ws-check"><input type="checkbox" data-pf="active"' + (p.active ? ' checked' : '') + '> Active (visible in catalogue)</label>' +
       '<div class="ws-h">Quantity tiers (standard price list)</div><div id="wsTrows">' + p.tiers.map(tr).join('') + '</div><button class="ws-btn sm ghost" data-act="tadd">+ Add tier</button>' +
       '<div class="ws-actions"><button class="ws-btn" data-act="psave">' + t('common.save') + '</button><button class="ws-btn ghost" data-act="mclose">' + t('common.cancel') + '</button></div>');
+  }
+  function setEditorImage(url) {
+    const inp = document.querySelector('#wsModal [data-pf="image"]'); if (inp) inp.value = url || '';
+    const pv = $('wsImgPrev'); if (pv) { if (url) { pv.src = url; pv.style.visibility = 'visible'; } else pv.style.visibility = 'hidden'; }
+  }
+  function compressImage(file, max) {
+    return new Promise((res, rej) => {
+      const img = new Image(), u = URL.createObjectURL(file);
+      img.onload = () => {
+        const r = Math.min(1, max / Math.max(img.width, img.height)), c = document.createElement('canvas');
+        c.width = Math.round(img.width * r); c.height = Math.round(img.height * r);
+        const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); x.drawImage(img, 0, 0, c.width, c.height);
+        c.toBlob(b => { URL.revokeObjectURL(u); b ? res(b) : rej(new Error('Could not process image')); }, 'image/jpeg', 0.85);
+      };
+      img.onerror = () => rej(new Error('Not a valid image')); img.src = u;
+    });
+  }
+  async function uploadImage(file) {
+    if (!file) return;
+    toast('Uploading photo…');
+    try {
+      const blob = await compressImage(file, 900);
+      const path = BID() + '/ws-' + Date.now() + '.jpg';
+      const sb = G('supabase');
+      const up = await sb.storage.from('product-images').upload(path, blob, { upsert: true, contentType: 'image/jpeg' });
+      if (up.error) throw up.error;
+      setEditorImage(sb.storage.from('product-images').getPublicUrl(path).data.publicUrl);
+      toast('Photo uploaded — press Save');
+    } catch (e) { toast('Upload failed: ' + (e.message || e)); }
+  }
+  async function autoMatchPhotos() {
+    if (!S.dbReady) return toast('Run wholesale-setup.sql first');
+    let n = 0; const sb = G('supabase');
+    for (const p of S.products) {
+      if (p.image) continue;
+      const m = matchAppProduct(p); if (!m) continue;
+      const r = await sb.from('wholesale_products').update({ image_url: m.imageUrl }).eq('id', p.id);
+      if (!r.error) { p.image = m.imageUrl; n++; }
+    }
+    lsSet(CACHE_KEY, { bid: BID(), at: Date.now(), products: S.products, dbReady: S.dbReady });
+    render(); toast(n ? n + ' photos matched from Products' : 'No matching product photos found — upload manually');
   }
   function collectEditor() {
     const p = S.editing;
@@ -694,6 +762,7 @@
       case 'trm': { const d = collectEditor(); d.tiers.splice(Number(id), 1); return openProductEditor(null, d); }
       case 'psave': return saveProduct();
       case 'seed': return seedDefaults();
+      case 'automatch': return autoMatchPhotos();
     }
   }
   function onInput(e) {
@@ -701,7 +770,7 @@
     if (el.id === 'wsSearch') { S.q = el.value; const g = $('wsGrid'); const list = filtered(); const main = root().querySelector('.ws-main'); const old = g ? g.outerHTML : root().querySelector('.ws-empty'); const html = list.length ? '<div class="ws-grid" id="wsGrid">' + list.map(cardHtml).join('') + '</div>' : '<div class="ws-empty">' + t('catalogue.empty') + '</div>'; if (old && (g || root().querySelector('.ws-empty'))) { (g || root().querySelector('.ws-empty')).outerHTML = html; } list.forEach(p => { const lv = root().querySelector('[data-live="' + p.id + '"]'), q = qtyInput(p.id); if (lv && q) lv.innerHTML = liveHtml(p, q.value); }); refreshIcons(); return; }
     if (el.dataset && el.dataset.qty) onQtyChange(el.dataset.qty);
   }
-  function onChangeQty(e) { const el = e.target; if (el.dataset && el.dataset.qty && S.view === 'cart') onQtyChange(el.dataset.qty); }
+  function onChangeQty(e) { const el = e.target; if (el.id === 'wsImgFile') return void uploadImage(el.files[0]); if (el.id === 'wsImgPick') return setEditorImage(el.value); if (el.dataset && el.dataset.qty && S.view === 'cart') onQtyChange(el.dataset.qty); }
 
   /* ------------------------------------------------------------ mount */
   let mounted = false;
@@ -731,7 +800,7 @@
     if (which === 'tools') mount();
     refreshIcons();
   };
-  window.WS = { priceFor, DEFAULTS, mount, state: S }; // exposed for testing / future tools
+  window.WS = { matchAppProduct, priceFor, DEFAULTS, mount, state: S }; // exposed for testing / future tools
 
   // Shared-link support: …/index.html#wholesale opens Products → Tools once signed in.
   function deepLink() {

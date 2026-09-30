@@ -148,3 +148,8 @@
 #productsSubTabs button{flex:1;border:none;background:transparent;padding:10px 8px;border-radius:10px;font-weight:800;font-size:.8rem;color:var(--bn-accent-ink,#065f46);display:flex;align-items:center;justify-content:center;gap:6px;font-family:inherit;cursor:pointer}
 #productsSubTabs button.is-active{background:#fff;color:#065f46;box-shadow:0 2px 10px rgba(15,23,42,.14)}
 @media print{.ws-float,.ws-hero-btns{display:none}}
+
+.ws-imgpick{display:flex;gap:12px;align-items:flex-start}
+.ws-imgpick img{width:96px;height:96px;object-fit:contain;background:var(--bg);border:1px solid var(--line);border-radius:12px;flex:0 0 auto}
+.ws-imgctl{display:grid;gap:6px;flex:1;min-width:0}
+.ws-imgctl select,.ws-imgctl input[type=text]{width:100%;padding:9px;border:1.5px solid var(--line);border-radius:8px;font-size:.8rem;font-family:inherit;background:#fff;color:var(--ink)}
