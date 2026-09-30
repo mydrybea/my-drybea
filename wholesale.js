@@ -109,7 +109,7 @@
 
   /* ------------------------------------------------------------- state */
   const S = {
-    bid: null, products: [], loaded: false, dbReady: false, view: 'catalogue', detailId: null, order: null, orders: [],
+    appProducts: [], bid: null, products: [], loaded: false, dbReady: false, view: 'catalogue', detailId: null, order: null, orders: [],
     q: '', cat: 'ALL', fish: 'ALL', otype: 'ALL', favOnly: false, cart: [], favs: [],
     adminTab: 'orders', adminOrders: [], events: [], modal: null, toast: '', busy: false, backendMissing: false, ownerWa: ''
   };
@@ -119,6 +119,16 @@
   const G = name => { try { return (0, eval)(name); } catch (e) { return undefined; } }; // reads app.js top-level let/const
   const BID = () => S.bid || G('businessId');
   const isGuest = () => !G('currentUser');
+  // Own query for the app's Products (name / photo / stock). Not read from app.js globals:
+  // the name `products` also resolves to the <section id="products"> element on this page.
+  const appProducts = () => S.appProducts;
+  async function loadAppProducts() {
+    if (isGuest()) return;
+    try {
+      const { data, error } = await G('supabase').from('products').select('id,name,image_url,stock_qty').eq('user_id', BID()).eq('active', true);
+      if (!error && Array.isArray(data)) S.appProducts = data.map(r => ({ id: r.id, name: r.name || '', imageUrl: r.image_url || '', stockQty: Number(r.stock_qty) || 0 }));
+    } catch (e) { /* photos/stock link are optional */ }
+  }
   const uid = () => (G('currentUser') || {}).id || 'guest';
   const isOwner = () => G('userRole') === 'owner';
   const byId = id => S.products.find(p => p.id === id);
@@ -176,7 +186,7 @@
   /* -------------------------------------------------------- inventory */
   function stockInfo(p) {
     if (p.kind === 'bulk') return { key: 'quote', cls: 'quote', label: t('stock.quote'), max: Infinity, blocked: false };
-    const linked = p.linked && (G('products') || []).find(x => String(x.id) === String(p.linked));
+    const linked = p.linked && appProducts().find(x => String(x.id) === String(p.linked));
     if (!linked) return { key: 'in', cls: 'in', label: t('stock.in'), max: Infinity, blocked: false };
     const q = Number(linked.stockQty) || 0;
     if (q <= 0) return { key: 'out', cls: 'out', label: t('stock.out'), max: p.backorder ? Infinity : 0, blocked: !p.backorder };
@@ -186,7 +196,7 @@
   // Finds the app Product (Products tab) whose name looks like this catalogue item,
   // e.g. "Tuna Maldive Fish 100g" -> tuna + 100g. L-size must match L-size.
   function matchAppProduct(p) {
-    const list = (G('products') || []).filter(x => x && x.imageUrl);
+    const list = appProducts().filter(x => x && x.imageUrl);
     const fish = p.fish.toLowerCase(), isL = /l-?\s?size/i.test(p.pack + ' ' + p.name);
     const bulk = p.kind === 'bulk';
     const size = bulk ? '1kg' : ((p.pack.toLowerCase().match(/\d+\s?(kg|g)/) || [''])[0].replace(/\s/g, ''));
@@ -205,7 +215,7 @@
   }
   function productImage(p) {
     if (p.image) return p.image;
-    const l = p.linked && (G('products') || []).find(x => String(x.id) === String(p.linked));
+    const l = p.linked && appProducts().find(x => String(x.id) === String(p.linked));
     if (l && l.imageUrl) return l.imageUrl;
     const m = matchAppProduct(p);
     return (m && m.imageUrl) || '';
@@ -504,7 +514,7 @@
   function openProductEditor(id, draft) {
     const p = draft || (id ? JSON.parse(JSON.stringify(byId(id))) : mk('', '', '50g', { id: '', name: '', tiers: [{ min: 1, max: null, price: 0 }], sort: S.products.length }));
     S.editing = p;
-    const inv = (G('products') || []);
+    const inv = appProducts();
     const tr = (x, i) => '<div class="ws-trow"><input type="number" data-tf="min" data-i="' + i + '" value="' + x.min + '" placeholder="min"><input type="number" data-tf="max" data-i="' + i + '" value="' + (x.max == null ? '' : x.max) + '" placeholder="max (blank=∞)"><input type="number" data-tf="price" data-i="' + i + '" value="' + x.price + '" placeholder="Rs."><button data-act="trm" data-t="' + i + '">✕</button></div>';
     const withImg = inv.filter(x => x.imageUrl);
     const imgBlock = q => '<div class="ws-field"><label>Product photo (packaging is never altered — only resized)</label><div class="ws-imgpick">' +
@@ -782,11 +792,12 @@
       r.addEventListener('click', onClick); r.addEventListener('input', onInput); r.addEventListener('change', onChangeQty);
       r.innerHTML = '<div class="ws-loading">Loading catalogue…</div>';
       loadOwnerWa();
+      await loadAppProducts();
       await loadCatalogue(false);
       // drop cart lines for products that no longer exist
       S.cart = S.cart.filter(x => byId(x.id)); saveCart(); render();
       track('catalogue_view');
-    } else { render(); refreshInBackground(); track('catalogue_view'); }
+    } else { render(); refreshInBackground(); loadAppProducts().then(render); track('catalogue_view'); }
   }
 
   /* ------------------------------------------------ Products sub-tabs */
