@@ -104,6 +104,7 @@
 
 
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="wholesale.css">
 
 
 
@@ -3840,6 +3841,11 @@
     <div class="mobile-greeting no-print" style="padding:0 0 8px;">
       <div><span class="eyebrow">CATALOG</span><h2><span class="pro-title-icon green" aria-hidden="true"><i class="business-icon" data-lucide="package" aria-hidden="true"></i></span><span>Products</span></h2><p class="pro-subtitle green">Product images, wholesale &amp; retail pricing — auto-fills into Sales &amp; Orders.</p></div>
     </div>
+    <div id="productsSubTabs" class="no-print" role="tablist" aria-label="Products sections">
+      <button type="button" class="is-active" data-psub="list" onclick="switchProductsSub('list')"><i class="business-icon" data-lucide="package" aria-hidden="true"></i> Products</button>
+      <button type="button" data-psub="tools" onclick="switchProductsSub('tools')"><i class="business-icon" data-lucide="wrench" aria-hidden="true"></i> Tools</button>
+    </div>
+    <div id="productsListPane">
     <div class="card">
       <div class="btn-row" style="margin-bottom:14px;" data-owner-only>
         <button class="btn btn-primary btn-sm" onclick="openNewProduct()"><i class="business-icon icon-inline" data-lucide="plus" aria-hidden="true"></i> Add Product</button>
@@ -3848,6 +3854,11 @@
       <div id="productsGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px;">
         <div style="grid-column:1/-1;text-align:center;opacity:.5;padding:20px;">Loading…</div>
       </div>
+    </div>
+    </div><!-- /productsListPane -->
+    <!-- TOOLS: Wholesale Price Catalogue (wholesale.js renders into #wsRoot) -->
+    <div id="productsToolsPane" style="display:none;">
+      <div id="wsRoot"></div>
     </div>
   </section>
 
@@ -4819,6 +4830,7 @@
 
 
 <script defer src="app.js"></script>
+<script defer src="wholesale.js"></script>
 
 </body>
 </html>

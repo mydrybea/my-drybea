@@ -46,6 +46,7 @@ const APP_SHELL = [
   './index.html',
   './login.html',
   './distributor-signup.html',
+  './wholesale.html',
   './manifest.json',
 ];
 
@@ -59,6 +60,8 @@ const STATIC_ASSETS = [
   './icon-512-maskable.png',
   './style.css',
   './app.js',
+  './wholesale.js',
+  './wholesale.css',
   './login.css',
   './login.js',
 ];
